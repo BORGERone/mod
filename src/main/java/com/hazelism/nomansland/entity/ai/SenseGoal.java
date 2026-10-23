@@ -49,7 +49,7 @@ public class SenseGoal extends TargetGoal {
 
         Player player = this.mob.level().getNearestPlayer(
                 this.mob.getX(), this.mob.getY(), this.mob.getZ(), UndeadEntity.FOLLOW_RANGE,
-                e -> e instanceof Player p && p != this.mob && isSensiblePlayer(p));
+                e -> e instanceof Player p && isSensiblePlayer(p));
         if (player != null) {
             if (this.mob.distanceToSqr(player) <= SMELL_RANGE_SQR || this.mob.getSensing().hasLineOfSight(player)) {
                 this.mob.setTarget(player);
