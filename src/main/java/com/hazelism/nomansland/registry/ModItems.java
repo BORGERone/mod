@@ -26,5 +26,8 @@ public final class ModItems {
     public static final DeferredItem<Item> UNDEAD_SPAWN_EGG = ITEMS.registerItem("undead_spawn_egg",
             props -> new net.neoforged.neoforge.common.DeferredSpawnEggItem(ModEntities.UNDEAD, 0x4A5D23, 0x8B0000, props));
 
+    public static final DeferredItem<Item> BANNER_BEARER_SPAWN_EGG = ITEMS.registerItem("banner_bearer_spawn_egg",
+            props -> new net.neoforged.neoforge.common.DeferredSpawnEggItem(ModEntities.BANNER_BEARER, 0x5D1A1A, 0xD8C690, props));
+
     private ModItems() {}
 }

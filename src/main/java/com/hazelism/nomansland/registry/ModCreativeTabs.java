@@ -23,6 +23,7 @@ public final class ModCreativeTabs {
                         output.accept(ModItems.SPRUCE_RESIN.get());
                         output.accept(ModItems.WOODEN_BARRICADE.get());
                         output.accept(ModItems.UNDEAD_SPAWN_EGG.get());
+                        output.accept(ModItems.BANNER_BEARER_SPAWN_EGG.get());
                     })
                     .build());
 

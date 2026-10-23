@@ -7,5 +7,7 @@
   "item.nomansland.spruce_resin": "Spruce Resin",
   "item.nomansland.wooden_barricade": "Wooden Barricade",
   "item.nomansland.undead_spawn_egg": "Spawn Undead",
-  "entity.nomansland.undead": "Undead"
+  "entity.nomansland.undead": "Undead",
+  "item.nomansland.banner_bearer_spawn_egg": "Spawn Banner Bearer",
+  "entity.nomansland.banner_bearer": "Banner Bearer"
 }

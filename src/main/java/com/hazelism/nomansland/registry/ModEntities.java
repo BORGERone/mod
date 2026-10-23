@@ -1,6 +1,7 @@
 package com.hazelism.nomansland.registry;
 
 import com.hazelism.nomansland.NoMansLand;
+import com.hazelism.nomansland.entity.BannerBearerEntity;
 import com.hazelism.nomansland.entity.UndeadEntity;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.world.entity.EntityType;
@@ -18,6 +19,13 @@ public final class ModEntities {
                     .sized(0.6F, 1.8F)
                     .clientTrackingRange(8)
                     .build("undead"));
+
+    /** Support mob of the horde; same humanoid footprint. Model is a placeholder for now. */
+    public static final DeferredHolder<EntityType<?>, EntityType<BannerBearerEntity>> BANNER_BEARER = ENTITY_TYPES.register("banner_bearer",
+            () -> EntityType.Builder.of(BannerBearerEntity::new, MobCategory.MONSTER)
+                    .sized(0.6F, 1.8F)
+                    .clientTrackingRange(8)
+                    .build("banner_bearer"));
 
     private ModEntities() {}
 }

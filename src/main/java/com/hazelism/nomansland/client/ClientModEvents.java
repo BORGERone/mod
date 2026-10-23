@@ -1,6 +1,7 @@
 package com.hazelism.nomansland.client;
 
 import com.hazelism.nomansland.NoMansLand;
+import com.hazelism.nomansland.client.renderer.BannerBearerRenderer;
 import com.hazelism.nomansland.client.renderer.UndeadRenderer;
 import com.hazelism.nomansland.registry.ModEntities;
 import net.neoforged.api.distmarker.Dist;
@@ -18,6 +19,7 @@ public final class ClientModEvents {
     @SubscribeEvent
     public static void registerRenderers(EntityRenderersEvent.RegisterRenderers event) {
         event.registerEntityRenderer(ModEntities.UNDEAD.get(), UndeadRenderer::new);
+        event.registerEntityRenderer(ModEntities.BANNER_BEARER.get(), BannerBearerRenderer::new);
     }
 
     private ClientModEvents() {}

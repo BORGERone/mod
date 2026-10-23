@@ -25,7 +25,6 @@ import java.util.List;
  */
 public class EncirclementGoal extends Goal {
     private static final int SLOT_COUNT = 8;
-    private static final double RING_RADIUS = 2.0D;
     private static final double ENGAGE_DISTANCE_SQR = 2.4D * 2.4D;
     private static final double RELEASE_DISTANCE_SQR = 2.2D * 2.2D;
     private static final int QUERY_INTERVAL = 10;
@@ -36,10 +35,19 @@ public class EncirclementGoal extends Goal {
     private int slotIndex = -1;
     private int packSize;
     private int targetId = -1;
+    // Organic-ring noise, fixed per entity in the constructor (stable between
+    // repaths, otherwise the zombie would jitter its slot every cycle).
+    private final double angleJitter;
+    private final double radiusJitter;
 
     public EncirclementGoal(UndeadEntity mob) {
         this.mob = mob;
         this.setFlags(EnumSet.of(Flag.MOVE, Flag.LOOK));
+        // Deterministic hash spread of the entity id -> +-0.33 rad / 1.7-2.3 blocks.
+        // No RandomSource allocation, and identical on every tick.
+        int id = mob.getId();
+        this.angleJitter = (((id * 37) % 13) - 6) * 0.055D;
+        this.radiusJitter = 1.7D + ((id * 53) % 11) * 0.06D;
     }
 
     @Override
@@ -82,9 +90,10 @@ public class EncirclementGoal extends Goal {
         }
         if (this.repathCooldown-- <= 0) {
             this.repathCooldown = QUERY_INTERVAL;
-            double angle = (Math.PI * 2.0D / SLOT_COUNT) * (this.slotIndex % SLOT_COUNT);
-            double slotX = target.getX() + Math.sin(angle) * RING_RADIUS;
-            double slotZ = target.getZ() + Math.cos(angle) * RING_RADIUS;
+            double angle = (Math.PI * 2.0D / SLOT_COUNT) * (this.slotIndex % SLOT_COUNT) + this.angleJitter
+                    + Math.sin((this.mob.tickCount + this.mob.getId() * 31L) * 0.01D) * 0.12D; // slow breathing drift
+            double slotX = target.getX() + Math.sin(angle) * this.radiusJitter;
+            double slotZ = target.getZ() + Math.cos(angle) * this.radiusJitter;
             this.mob.getNavigation().moveTo(slotX, target.getY(), slotZ, 1.05D);
         }
     }

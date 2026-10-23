@@ -1,5 +1,6 @@
 package com.hazelism.nomansland;
 
+import com.hazelism.nomansland.entity.BannerBearerEntity;
 import com.hazelism.nomansland.entity.UndeadEntity;
 import com.hazelism.nomansland.registry.ModCreativeTabs;
 import com.hazelism.nomansland.registry.ModEntities;
@@ -47,11 +48,15 @@ public final class NoMansLand {
 
     private void registerAttributes(EntityAttributeCreationEvent event) {
         event.put(ModEntities.UNDEAD.get(), UndeadEntity.createAttributes().build());
+        event.put(ModEntities.BANNER_BEARER.get(), BannerBearerEntity.createAttributes().build());
     }
 
     private void registerSpawnPlacements(RegisterSpawnPlacementsEvent event) {
         // Cheap vanilla ground check; moon-phase gating will be added per-mob in a later stage
         // inside checkSpawnRules overrides, not by scanning the world.
+        event.register(ModEntities.BANNER_BEARER.get(), SpawnPlacementTypes.ON_GROUND,
+                Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                BannerBearerEntity::checkBannerBearerSpawnRules, RegisterSpawnPlacementsEvent.Operation.REPLACE);
         event.register(ModEntities.UNDEAD.get(), SpawnPlacementTypes.ON_GROUND,
                 Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
                 UndeadEntity::checkUndeadSpawnRules, RegisterSpawnPlacementsEvent.Operation.REPLACE);
