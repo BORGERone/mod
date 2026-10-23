@@ -20,11 +20,38 @@ Usage:
 """
 import base64
 import json
+import math
 import os
+import re
 import sys
 
 # Poses/variants present in the model but not part of the default look.
 HIDDEN_BONES = {"arms", "left_shoulder", "short_left_arm", "left_arm_stomp"}
+
+# Bedrock Molang sway expressions commonly authored in Blockbench, e.g.
+# "math.sin(query.anim_time * 50) * -5". GeckoLib's runtime Molang dialect is not
+# guaranteed to match, so the converter bakes them into numeric keyframes by
+# sampling one full period (360 / frequency seconds, math.sin takes degrees).
+_MOLANG_RE = re.compile(
+    r"math\.(sin|cos)\(query\.anim_time \* (-?[\d.]+)\) \* (-?[\d.]+)(?:\s*([+-])\s*([\d.]+))?")
+_SAMPLE_STEP = 0.2
+
+
+def _eval_molang(expr, t):
+    m = _MOLANG_RE.fullmatch(expr.strip())
+    if not m:
+        return None
+    fn, freq, amp, sign, offset = m.groups()
+    wave = math.sin(math.radians(float(freq) * t)) if fn == "sin" else math.cos(math.radians(float(freq) * t))
+    value = wave * float(amp)
+    if offset is not None:
+        value += float(offset) if sign == "+" else -float(offset)
+    return value
+
+
+def _molang_period(expr):
+    m = _MOLANG_RE.fullmatch(expr.strip())
+    return 360.0 / abs(float(m.group(2))) if m else None
 
 
 def mirror_pivot(p):
@@ -86,9 +113,36 @@ def convert_model(data, model_name):
     return {"format_version": "1.12.0", "minecraft:geometry": [{"description": desc, "bones": bones}]}
 
 
+def _vec(point, times):
+    """Convert one keyframe data point at the given sample times -> {time: vec}."""
+    raw = [point["x"], point["y"], point["z"]]
+
+    def value_at(component, t):
+        v = component
+        if isinstance(v, str):
+            baked = _eval_molang(v, t)
+            if baked is None:
+                raise ValueError(f"unsupported Molang expression, cannot bake: {v!r}")
+            return baked
+        return float(v)
+
+    return {f"{t:.4g}": [value_at(c, t) for c in raw] for t in times}
+
+
 def convert_animations(data, model_name):
     animations = {}
     for anim in data.get("animations", []):
+        # Locate Molang expressions first: they define the true loop length.
+        loop_length = float(anim.get("length", 1) or 0)
+        for animator in anim.get("animators", {}).values():
+            for kf in animator.get("keyframes", []):
+                for point in kf.get("data_points", []):
+                    for component in point.values():
+                        if isinstance(component, str):
+                            period = _molang_period(component)
+                            if period:
+                                loop_length = max(loop_length, round(period, 4))
+
         bones = {}
         for animator in anim.get("animators", {}).values():
             if animator.get("type") != "bone":
@@ -96,17 +150,23 @@ def convert_animations(data, model_name):
             channels = {}
             for kf in animator.get("keyframes", []):
                 point = kf["data_points"][0]
-                vec = [float(point["x"]), float(point["y"]), float(point["z"])]
-                if kf["channel"] == "rotation":
-                    vec = [-vec[0], -vec[1], vec[2]]
-                elif kf["channel"] == "position":
-                    vec = [-vec[0], vec[1], vec[2]]
-                channels.setdefault(kf["channel"], {})[f"{kf['time']:.4g}"] = vec
+                has_molang = any(isinstance(c, str) for c in point.values())
+                if has_molang:
+                    steps = max(2, int(round(loop_length / _SAMPLE_STEP)))
+                    times = [i * loop_length / steps for i in range(steps)] + [loop_length]
+                else:
+                    times = [float(kf["time"])]
+                for time_key, vec in _vec(point, times).items():
+                    if kf["channel"] == "rotation":
+                        vec = [-vec[0], -vec[1], vec[2]]
+                    elif kf["channel"] == "position":
+                        vec = [-vec[0], vec[1], vec[2]]
+                    channels.setdefault(kf["channel"], {})[time_key] = vec
             if channels:
                 bones[animator["name"]] = channels
         animations[f"animation.{model_name}.{anim['name']}"] = {
             "loop": anim.get("loop") in (True, "loop"),
-            "animation_length": anim.get("length", 1),
+            "animation_length": loop_length if loop_length > 0 else 1,
             "bones": bones,
         }
     return {"format_version": "1.10.0", "animations": animations}

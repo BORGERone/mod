@@ -44,8 +44,7 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  * </ul>
  *
  * Cast state is synced with a single boolean in SynchedEntityData that drives the
- * client-side cast animation; no custom packets. Placeholder assets are the
- * corrupted illager's until the dedicated model arrives.
+ * client-side cast animation; no custom packets. Uses the undead herald model.
  */
 public class BannerBearerEntity extends Monster implements GeoEntity {
 
@@ -57,8 +56,9 @@ public class BannerBearerEntity extends Monster implements GeoEntity {
     private static final EntityDataAccessor<Boolean> DATA_CASTING =
             SynchedEntityData.defineId(BannerBearerEntity.class, EntityDataSerializers.BOOLEAN);
 
-    protected static final RawAnimation WALK = RawAnimation.begin().thenLoop("animation.corrupted_illager.walk");
-    protected static final RawAnimation CAST = RawAnimation.begin().thenLoop("animation.banner_bearer.cast");
+    protected static final RawAnimation IDLE = RawAnimation.begin().thenLoop("animation.banner_bearer.misc.idle");
+    protected static final RawAnimation WALK = RawAnimation.begin().thenLoop("animation.banner_bearer.move.walk");
+    protected static final RawAnimation CAST = RawAnimation.begin().thenPlay("animation.banner_bearer.misc.interact");
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
@@ -204,7 +204,7 @@ public class BannerBearerEntity extends Monster implements GeoEntity {
         if (this.isCasting()) {
             return state.setAndContinue(CAST);
         }
-        return state.isMoving() ? state.setAndContinue(WALK) : PlayState.STOP;
+        return state.isMoving() ? state.setAndContinue(WALK) : state.setAndContinue(IDLE);
     }
 
     @Override
