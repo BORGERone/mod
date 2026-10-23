@@ -16,7 +16,9 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
@@ -76,6 +78,9 @@ public class UndeadEntity extends Monster implements GeoEntity {
 
     // The corrupted illager model ships a single walk cycle; idle is the bind pose.
     protected static final RawAnimation WALK = RawAnimation.begin().thenLoop("animation.corrupted_illager.walk");
+
+    /** Lying body footprint: the model is tipped over by the renderer, interaction must match it. */
+    private static final EntityDimensions CORPSE_DIMENSIONS = EntityDimensions.scalable(1.7F, 0.5F);
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
@@ -141,6 +146,20 @@ public class UndeadEntity extends Monster implements GeoEntity {
         this.setNoAi(true);
         this.setDeltaMovement(0.0D, Math.min(this.getDeltaMovement().y, 0.0D), 0.0D);
         this.setYHeadRot(this.getYRot());
+        // The renderer tips the model over, but interaction uses the entity box.
+        // Without this the corpse visually lies 1.8 blocks long while clicks only
+        // register on the old standing box at its feet.
+        this.refreshDimensions();
+    }
+
+    @Override
+    public EntityDimensions getDimensions(Pose pose) {
+        return this.isCorpse() ? CORPSE_DIMENSIONS : super.getDimensions(pose);
+    }
+
+    @Override
+    public float getPickRadius() {
+        return this.isCorpse() ? 0.4F : super.getPickRadius();
     }
 
     @Override
@@ -353,6 +372,7 @@ public class UndeadEntity extends Monster implements GeoEntity {
         if (tag.getBoolean("Corpse")) {
             this.entityData.set(DATA_CORPSE, true);
             this.setNoAi(true);
+            this.refreshDimensions();
         }
     }
 

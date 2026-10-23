@@ -2,6 +2,7 @@ package com.hazelism.nomansland.entity.ai;
 
 import com.hazelism.nomansland.NMLConfig;
 import com.hazelism.nomansland.entity.UndeadEntity;
+import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
@@ -45,6 +46,7 @@ public class HordeClimbGoal extends Goal {
     private int queryCooldown;
     private int climbTicks;
     private int fatigueTicks;
+    private int mantleCooldown;
     private boolean hordeMateAhead;
     private boolean supportedFromBelow;
     private int hordeMatesNearby;
@@ -117,8 +119,16 @@ public class HordeClimbGoal extends Goal {
         }
 
         boolean wantsClimb = (this.mob.horizontalCollision || this.hordeMateAhead) && isTargetAbove(target);
+        if (!wantsClimb) {
+            return;
+        }
+        // Mounting the lip comes first: step-up physics never triggers mid-air,
+        // which is why climbers used to cling to the edge forever.
+        if (tryMantle(target)) {
+            return;
+        }
         boolean supported = this.supportedFromBelow || this.hordeMatesNearby >= 2;
-        if (!wantsClimb || !supported) {
+        if (!supported) {
             return;
         }
 
@@ -170,6 +180,59 @@ public class HordeClimbGoal extends Goal {
                 this.supportedFromBelow = true;
             }
         }
+    }
+
+    /**
+     * If the obstacle in front of us tops out within reach, pull up and over it:
+     * place the mob on the ledge (after a no-collision check) with a small forward
+     * push. Runs at most once per 10 ticks per mob and only while pressed to a wall.
+     */
+    private boolean tryMantle(LivingEntity target) {
+        if (this.mantleCooldown-- > 0 || !this.mob.horizontalCollision) {
+            return false;
+        }
+        double dirX = target.getX() - this.mob.getX();
+        double dirZ = target.getZ() - this.mob.getZ();
+        double length = Math.sqrt(dirX * dirX + dirZ * dirZ);
+        if (length < 0.001D) {
+            return false;
+        }
+        dirX /= length;
+        dirZ /= length;
+
+        BlockPos front = BlockPos.containing(
+                this.mob.getX() + dirX * 0.9D, this.mob.getY() + 0.2D, this.mob.getZ() + dirZ * 0.9D);
+        if (isFree(front)) {
+            return false; // nothing to mantle over in front of us
+        }
+        int topY = -1;
+        for (int dy = 1; dy <= 3; dy++) {
+            if (isFree(front.above(dy))) {
+                topY = front.getY() + dy;
+                break;
+            }
+        }
+        if (topY < 0 || topY - this.mob.getY() > 1.4D || topY - this.mob.getY() < 0.1D) {
+            return false; // ledge is not within arm's reach yet - keep climbing
+        }
+
+        double landX = this.mob.getX() + dirX * 0.75D;
+        double landZ = this.mob.getZ() + dirZ * 0.75D;
+        var landingBox = this.mob.getDimensions(this.mob.getPose())
+                .makeBoundingBox(new net.minecraft.world.phys.Vec3(landX, topY, landZ));
+        if (!this.mob.level().noCollision(this.mob, landingBox)) {
+            return false;
+        }
+        this.mob.setPos(landX, topY, landZ);
+        this.mob.setDeltaMovement(dirX * 0.18D, 0.06D, dirZ * 0.18D);
+        this.mob.fallDistance = 0.0F;
+        this.mantleCooldown = 10;
+        this.climbTicks = 0;
+        return true;
+    }
+
+    private boolean isFree(BlockPos pos) {
+        return this.mob.level().getBlockState(pos).getCollisionShape(this.mob.level(), pos).isEmpty();
     }
 
     private boolean isTargetAbove(LivingEntity target) {
