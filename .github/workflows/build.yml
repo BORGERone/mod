@@ -23,7 +23,19 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
 
       - name: Build
-        run: ./gradlew build --no-daemon --stacktrace
+        run: |
+          set -o pipefail
+          ./gradlew build --no-daemon --stacktrace 2>&1 | tee build.log
+
+      - name: Build log summary
+        if: always()
+        run: |
+          {
+            echo '## Gradle build (last 120 lines)'
+            echo '```'
+            tail -n 120 build.log 2>/dev/null || echo 'no build.log'
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
       - name: Upload jar
         uses: actions/upload-artifact@v4
