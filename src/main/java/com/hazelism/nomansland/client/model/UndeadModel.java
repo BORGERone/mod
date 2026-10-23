@@ -3,6 +3,7 @@ package com.hazelism.nomansland.client.model;
 import com.hazelism.nomansland.NoMansLand;
 import com.hazelism.nomansland.entity.UndeadEntity;
 import net.minecraft.resources.ResourceLocation;
+import software.bernie.geckolib.animation.AnimationState;
 import software.bernie.geckolib.model.GeoModel;
 
 /**
@@ -28,6 +29,20 @@ public class UndeadModel extends GeoModel<UndeadEntity> {
     @Override
     public ResourceLocation getAnimationResource(UndeadEntity animatable) {
         return ANIMATIONS;
+    }
+
+    /**
+     * Left-arm break stages drive bone visibility (synced from the server):
+     * 0 = left_arm, 1 = short_left_arm, 2 = left_arm_stomp.
+     * Crossed-arms bones stay hidden via neverRender in the geometry.
+     */
+    @Override
+    public void setCustomAnimations(UndeadEntity animatable, long instanceId, AnimationState<UndeadEntity> state) {
+        super.setCustomAnimations(animatable, instanceId, state);
+        int stage = animatable.getLeftArmStage();
+        getBone("left_arm").ifPresent(bone -> bone.setHidden(stage != 0));
+        getBone("short_left_arm").ifPresent(bone -> bone.setHidden(stage != 1));
+        getBone("left_arm_stomp").ifPresent(bone -> bone.setHidden(stage != 2));
     }
 
     // Alternative limb bones (short_left_arm, left_arm_stomp, crossed arms) carry
