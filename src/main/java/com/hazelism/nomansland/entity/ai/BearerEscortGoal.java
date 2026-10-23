@@ -77,7 +77,7 @@ public class BearerEscortGoal extends Goal {
             double len = Math.max(0.001D, Math.sqrt(dx * dx + dz * dz));
             double run = (FLEE_DISTANCE + 5.0D - distance) / len;
             this.mob.getNavigation().moveTo(
-                    this.mob.getX() + dx * run * 2.0D, this.mob.getY(), this.mob.getZ() + dz * run * 2.0D, 1.45D);
+                    this.mob.getX() + dx * run * 2.0D, this.mob.getY(), this.mob.getZ() + dz * run * 2.0D, 1.25D); // even fleeing he only shuffles - frail bones
         } else if (distance > FOLLOW_DISTANCE) {
             this.repathCooldown = REPATH_NORMAL_TICKS;
             this.mob.getNavigation().moveTo(this.threat, 1.0D);

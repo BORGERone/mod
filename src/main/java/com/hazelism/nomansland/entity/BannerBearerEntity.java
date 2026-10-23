@@ -73,9 +73,9 @@ public class BannerBearerEntity extends Monster implements GeoEntity {
 
     public static AttributeSupplier.Builder createAttributes() {
         return Monster.createMonsterAttributes()
-                .add(Attributes.MAX_HEALTH, 30.0D)
+                .add(Attributes.MAX_HEALTH, 20.0D) // a frail, hunched skeleton - two solid hits and he folds
                 .add(Attributes.ATTACK_DAMAGE, 0.0D) // never attacks; kept so modifiers stay sane
-                .add(Attributes.MOVEMENT_SPEED, 0.34D)
+                .add(Attributes.MOVEMENT_SPEED, 0.23D) // shuffling gait, slower than the horde he buffs
                 .add(Attributes.FOLLOW_RANGE, 32.0D);
     }
 

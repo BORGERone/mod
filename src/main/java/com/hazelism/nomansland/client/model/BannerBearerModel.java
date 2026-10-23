@@ -3,6 +3,7 @@ package com.hazelism.nomansland.client.model;
 import com.hazelism.nomansland.NoMansLand;
 import com.hazelism.nomansland.entity.BannerBearerEntity;
 import net.minecraft.resources.ResourceLocation;
+import software.bernie.geckolib.animation.AnimationState;
 import software.bernie.geckolib.model.GeoModel;
 
 /**
@@ -29,5 +30,21 @@ public class BannerBearerModel extends GeoModel<BannerBearerEntity> {
     @Override
     public ResourceLocation getAnimationResource(BannerBearerEntity animatable) {
         return ANIMATIONS;
+    }
+
+    /**
+     * Permanent hunch: this is a frail, stooped skeleton, so the torso and head are
+     * pitched forward on top of whatever the animations do (radians, ~20 and ~12
+     * degrees). Skipped while casting - the cast pose rears up with the banner.
+     * If the dedicated herald model arrives already hunched, delete this override.
+     */
+    @Override
+    public void setCustomAnimations(BannerBearerEntity animatable, long instanceId, AnimationState<BannerBearerEntity> state) {
+        super.setCustomAnimations(animatable, instanceId, state);
+        if (animatable.isCasting()) {
+            return;
+        }
+        getBone("body").ifPresent(bone -> bone.setRotX(bone.getRotX() + 0.35F));
+        getBone("head").ifPresent(bone -> bone.setRotX(bone.getRotX() + 0.21F));
     }
 }
