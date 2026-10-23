@@ -1,0 +1,24 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " f ",
+    "prp",
+    " p "
+  ],
+  "key": {
+    "f": {
+      "item": "minecraft:flint"
+    },
+    "r": {
+      "item": "nomansland:spruce_resin"
+    },
+    "p": {
+      "item": "minecraft:clay_ball"
+    }
+  },
+  "result": {
+    "id": "nomansland:fire_pot",
+    "count": 1
+  }
+}

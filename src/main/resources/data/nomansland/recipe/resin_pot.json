@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " r ",
+    "prp",
+    " p "
+  ],
+  "key": {
+    "r": {
+      "item": "nomansland:spruce_resin"
+    },
+    "p": {
+      "item": "minecraft:clay_ball"
+    }
+  },
+  "result": {
+    "id": "nomansland:resin_pot",
+    "count": 1
+  }
+}

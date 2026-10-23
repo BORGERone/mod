@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " l ",
+    "iii",
+    " i "
+  ],
+  "key": {
+    "l": {
+      "item": "minecraft:lead"
+    },
+    "i": {
+      "item": "minecraft:iron_nugget"
+    }
+  },
+  "result": {
+    "id": "nomansland:rattle",
+    "count": 1
+  }
+}

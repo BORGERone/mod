@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    "lwl",
+    "www",
+    "lwl"
+  ],
+  "key": {
+    "l": {
+      "item": "minecraft:lead"
+    },
+    "w": {
+      "tag": "minecraft:logs"
+    }
+  },
+  "result": {
+    "id": "nomansland:wooden_barricade",
+    "count": 1
+  }
+}

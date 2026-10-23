@@ -1,0 +1,21 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "category": "equipment",
+  "pattern": [
+    " c ",
+    "pcp",
+    " p "
+  ],
+  "key": {
+    "c": {
+      "item": "minecraft:charcoal"
+    },
+    "p": {
+      "item": "minecraft:clay_ball"
+    }
+  },
+  "result": {
+    "id": "nomansland:smoke_pot",
+    "count": 1
+  }
+}
