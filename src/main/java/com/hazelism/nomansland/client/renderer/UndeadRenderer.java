@@ -8,7 +8,6 @@ import com.mojang.blaze3d.vertex.VertexConsumer;
 import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import org.joml.Matrix3f;
 import org.joml.Matrix4f;
-import org.joml.Vector3f;
 import software.bernie.geckolib.cache.object.GeoBone;
 import software.bernie.geckolib.cache.object.GeoCube;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
@@ -21,14 +20,11 @@ import software.bernie.geckolib.renderer.GeoEntityRenderer;
  * transformed into the bone's animated space, so the pre-baked Bedrock vertices
  * (absolute model-space coords - same convention as Bedrock cubes) can be emitted
  * directly through the same VertexConsumer. Per frame: no allocations besides
- * GeckoLib's own - the two temp vectors are reused instance fields (rendering is
- * single-threaded on the client).
+ * GeckoLib's own - the transform is plain float math on local variables.
  */
 public class UndeadRenderer extends GeoEntityRenderer<UndeadEntity> {
     private static final String POLYMESH_MODEL = "undead";
 
-    private final Vector3f tmpPos = new Vector3f();
-    private final Vector3f tmpNormal = new Vector3f();
 
     public UndeadRenderer(EntityRendererProvider.Context context) {
         super(context, new UndeadModel());
@@ -57,12 +53,20 @@ public class UndeadRenderer extends GeoEntityRenderer<UndeadEntity> {
         Matrix3f normalMatrix = pose.normal();
         int stride = PolyMeshCache.stride();
 
+        // Manual matrix transform (JOML accessor API only - stable across versions, no allocation).
         for (int i = 0; i < mesh.length; i += stride) {
-            tmpPos.set(mesh[i], mesh[i + 1], mesh[i + 2]).transformPosition(matrix);
-            tmpNormal.set(mesh[i + 3], mesh[i + 4], mesh[i + 5]).transform(normalMatrix);
-            buffer.addVertex(tmpPos.x(), tmpPos.y(), tmpPos.z(), colour,
-                    mesh[i + 6], mesh[i + 7], packedOverlay, packedLight,
-                    tmpNormal.x(), tmpNormal.y(), tmpNormal.z());
+            float x = mesh[i], y = mesh[i + 1], z = mesh[i + 2];
+            float px = matrix.m00() * x + matrix.m10() * y + matrix.m20() * z + matrix.m30();
+            float py = matrix.m01() * x + matrix.m11() * y + matrix.m21() * z + matrix.m31();
+            float pz = matrix.m02() * x + matrix.m12() * y + matrix.m22() * z + matrix.m32();
+
+            float nx = mesh[i + 3], ny = mesh[i + 4], nz = mesh[i + 5];
+            float tx = normalMatrix.m00() * nx + normalMatrix.m10() * ny + normalMatrix.m20() * nz;
+            float ty = normalMatrix.m01() * nx + normalMatrix.m11() * ny + normalMatrix.m21() * nz;
+            float tz = normalMatrix.m02() * nx + normalMatrix.m12() * ny + normalMatrix.m22() * nz;
+
+            buffer.addVertex(px, py, pz, colour,
+                    mesh[i + 6], mesh[i + 7], packedOverlay, packedLight, tx, ty, tz);
         }
     }
 }
