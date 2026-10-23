@@ -1,5 +1,6 @@
 package com.hazelism.nomansland.entity;
 
+import com.hazelism.nomansland.entity.ai.EncirclementGoal;
 import com.hazelism.nomansland.entity.ai.HordeClimbGoal;
 import com.hazelism.nomansland.entity.ai.InvestigateGoal;
 import com.hazelism.nomansland.entity.ai.SenseGoal;
@@ -8,22 +9,20 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.syncher.EntityDataAccessor;
 import net.minecraft.network.syncher.EntityDataSerializers;
 import net.minecraft.network.syncher.SynchedEntityData;
-import net.minecraft.server.level.ServerLevel;
-import net.minecraft.tags.DamageTypeTags;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.Difficulty;
 import net.minecraft.world.DifficultyInstance;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.entity.EntityDimensions;
 import net.minecraft.world.entity.EntityType;
-import net.minecraft.world.entity.Pose;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.entity.SpawnGroupData;
 import net.minecraft.world.entity.ai.attributes.AttributeSupplier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
+import net.minecraft.world.entity.ai.goal.BreakDoorGoal;
 import net.minecraft.world.entity.ai.goal.FloatGoal;
 import net.minecraft.world.entity.ai.goal.LookAtPlayerGoal;
 import net.minecraft.world.entity.ai.goal.MeleeAttackGoal;
@@ -31,11 +30,8 @@ import net.minecraft.world.entity.ai.goal.RandomLookAroundGoal;
 import net.minecraft.world.entity.ai.goal.WaterAvoidingRandomStrollGoal;
 import net.minecraft.world.entity.ai.goal.target.HurtByTargetGoal;
 import net.minecraft.world.entity.animal.IronGolem;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.entity.monster.Monster;
 import net.minecraft.world.entity.player.Player;
-import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import org.jetbrains.annotations.Nullable;
@@ -49,29 +45,35 @@ import software.bernie.geckolib.animation.RawAnimation;
 import software.bernie.geckolib.util.GeckoLibUtil;
 
 /**
- * Port of Bedrock {@code bp:undead} (HP 40, damage 3, follow range 20).
+ * Port of Bedrock {@code bp:undead} (HP 40, damage 3, follow range 20), running
+ * the corrupted illager model, plus the Horde Mind behaviour layer:
  *
- * <p>Behaviour ported so far: smell/sight targeting of moving, non-sneaking prey
- * ({@link SenseGoal}), investigating smelled spots ({@link InvestigateGoal}),
- * wall climbing while chasing, pack anger broadcast on being attacked,
- * a breakable left arm (the only limb the corrupted illager model has variants
- * for) and the corpse system: at HP &lt;= 20 the mob collapses for 90s and can
- * be looted by a sneaking player, exactly like the original's undead:dead state.
+ * <ul>
+ *   <li><b>Senses</b> - {@link SenseGoal}: line-of-sight acquisition of moving prey,
+ *       smell points are only investigated (stealth belongs to external mods).</li>
+ *   <li><b>Encirclement</b> - {@link EncirclementGoal}: undead sharing a target take
+ *       slots around it instead of queueing up single-file.</li>
+ *   <li><b>Alert wave</b> - a hunting undead periodically points nearby pack members
+ *       at its prey's position; they investigate, then acquire on sight.</li>
+ *   <li><b>Separation</b> - gentle push-apart inside the crowd so the horde reads as
+ *       a mass of bodies, not one stacked blob (suspended while piling up to climb).</li>
+ *   <li><b>Pack rage</b> - when an undead dies, nearby pack members speed up and
+ *       turn on the killer.</li>
+ *   <li><b>Horde Climbing</b> - {@link HordeClimbGoal}: pile up under elevated prey.</li>
+ * </ul>
  *
- * <p>No per-tick allocations: animations are static constants, scans are
- * throttled to once per 10 ticks and only run while targetless.
+ * Death is vanilla: the corpse system from earlier versions was removed by
+ * request - loot comes from the standard entity loot table.
+ *
+ * <p>Performance: every horde query is throttled (5-20 ticks) and staggered by
+ * entity id; nothing here scans per tick or allocates on hot paths.
  */
 public class UndeadEntity extends Monster implements GeoEntity {
 
     public static final double FOLLOW_RANGE = 20.0D;
-    /** Below this the mob does not die - it becomes a lootable corpse (original: health<=20). */
-    private static final float CORPSE_THRESHOLD = 20.0F;
-    private static final int CORPSE_LIFETIME_TICKS = 90 * 20;
-    private static final int INVESTIGATE_MEMORY_TICKS = 10 * 20;
     private static final float LIMB_BREAK_CHANCE = 0.25F;
+    private static final int INVESTIGATE_MEMORY_TICKS = 10 * 20;
 
-    private static final EntityDataAccessor<Boolean> DATA_CORPSE =
-            SynchedEntityData.defineId(UndeadEntity.class, EntityDataSerializers.BOOLEAN);
     /** 0 = intact, 1 = shortened (short_left_arm), 2 = stump (left_arm_stomp). */
     private static final EntityDataAccessor<Integer> DATA_LEFT_ARM =
             SynchedEntityData.defineId(UndeadEntity.class, EntityDataSerializers.INT);
@@ -79,16 +81,12 @@ public class UndeadEntity extends Monster implements GeoEntity {
     // The corrupted illager model ships a single walk cycle; idle is the bind pose.
     protected static final RawAnimation WALK = RawAnimation.begin().thenLoop("animation.corrupted_illager.walk");
 
-    /** Lying body footprint: the model is tipped over by the renderer, interaction must match it. */
-    private static final EntityDimensions CORPSE_DIMENSIONS = EntityDimensions.scalable(1.7F, 0.5F);
-
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
     // Server-side only investigation memory (never synced - the client does not need it).
     @Nullable
     private BlockPos investigatePos;
     private long investigateExpiryTick;
-    private int corpseTicks;
 
     public UndeadEntity(EntityType<? extends Monster> type, Level level) {
         super(type, level);
@@ -109,16 +107,17 @@ public class UndeadEntity extends Monster implements GeoEntity {
     @Override
     protected void defineSynchedData(SynchedEntityData.Builder builder) {
         super.defineSynchedData(builder);
-        builder.define(DATA_CORPSE, false);
         builder.define(DATA_LEFT_ARM, 0);
     }
 
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(0, new FloatGoal(this));
-        this.goalSelector.addGoal(1, new HordeClimbGoal(this)); // preempts melee while prey is out of reach above
-        this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.1D, false)); // original melee speed_multiplier 1.1
+        this.goalSelector.addGoal(1, new HordeClimbGoal(this)); // preempts others while prey is out of reach above
+        this.goalSelector.addGoal(2, new EncirclementGoal(this)); // take a slot around the prey...
+        this.goalSelector.addGoal(3, new MeleeAttackGoal(this, 1.1D, false)); // ...then strike from it
         this.goalSelector.addGoal(5, new InvestigateGoal(this));
+        this.goalSelector.addGoal(6, new BreakDoorGoal(this, difficulty -> difficulty == Difficulty.HARD));
         this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 0.5D));
         this.goalSelector.addGoal(8, new LookAtPlayerGoal(this, Player.class, 8.0F));
         this.goalSelector.addGoal(8, new RandomLookAroundGoal(this));
@@ -127,59 +126,80 @@ public class UndeadEntity extends Monster implements GeoEntity {
         this.targetSelector.addGoal(2, new SenseGoal(this));
     }
 
-    // ------------------------------------------------------------------ corpse system
-
-    public boolean isCorpse() {
-        return this.entityData.get(DATA_CORPSE);
-    }
-
-    private void enterCorpse() {
-        this.entityData.set(DATA_CORPSE, true);
-        this.corpseTicks = 0;
-        this.setTarget(null);
-        this.clearInvestigatePos();
-        this.getNavigation().stop();
-        // Hard immobilisation. Note: overriding customServerAiStep is NOT enough -
-        // NeoForge calls it after the goal/target selectors have already ticked,
-        // so a corpse kept turning towards players and even attacking. NoAi stops
-        // goal, look and move control entirely; the corpse timer runs in tick().
-        this.setNoAi(true);
-        this.setDeltaMovement(0.0D, Math.min(this.getDeltaMovement().y, 0.0D), 0.0D);
-        this.setYHeadRot(this.getYRot());
-        // The renderer tips the model over, but interaction uses the entity box.
-        // Without this the corpse visually lies 1.8 blocks long while clicks only
-        // register on the old standing box at its feet.
-        this.refreshDimensions();
-    }
+    // ------------------------------------------------------------------ Horde Mind
 
     @Override
-    protected EntityDimensions getDefaultDimensions(Pose pose) {
-        return this.isCorpse() ? CORPSE_DIMENSIONS : super.getDefaultDimensions(pose);
+    public void tick() {
+        super.tick();
+        if (this.level().isClientSide || !this.isAlive()) {
+            return;
+        }
+        supportOnHorde();
+        sharePreyWithPack();
+        separateFromPack();
     }
 
-    @Override
-    public float getPickRadius() {
-        return this.isCorpse() ? 0.4F : super.getPickRadius();
+    /** Alert wave: pack members without a target are pointed at our prey's position. */
+    private void sharePreyWithPack() {
+        LivingEntity target = this.getTarget();
+        if (target == null || (this.tickCount + this.getId()) % 20 != 0) {
+            return;
+        }
+        for (UndeadEntity mate : this.level().getEntitiesOfClass(UndeadEntity.class,
+                this.getBoundingBox().inflate(10.0D, 4.0D, 10.0D),
+                u -> u != this && u.isAlive() && u.getTarget() == null)) {
+            mate.setInvestigatePos(target.blockPosition());
+        }
     }
+
+    /** Gentle push-apart so the horde does not collapse into a single stacked blob. */
+    private void separateFromPack() {
+        LivingEntity target = this.getTarget();
+        if ((this.tickCount + this.getId()) % 5 != 0
+                || (target != null && target.getY() > this.getY() + 1.2D)) {
+            return; // suspended while piling up to climb
+        }
+        double pushX = 0.0D;
+        double pushZ = 0.0D;
+        for (UndeadEntity mate : this.level().getEntitiesOfClass(UndeadEntity.class,
+                this.getBoundingBox().inflate(0.9D, 0.5D, 0.9D),
+                u -> u != this && u.isAlive())) {
+            double dx = this.getX() - mate.getX();
+            double dz = this.getZ() - mate.getZ();
+            double distSqr = dx * dx + dz * dz;
+            if (distSqr > 0.0001D && distSqr < 0.81D) {
+                double scale = 0.03D / distSqr;
+                pushX += dx * scale;
+                pushZ += dz * scale;
+            }
+        }
+        if (pushX != 0.0D || pushZ != 0.0D) {
+            var movement = this.getDeltaMovement();
+            this.setDeltaMovement(movement.x + pushX, movement.y, movement.z + pushZ);
+        }
+    }
+
+    /** Pack rage: our death enrages nearby pack members and turns them on the killer. */
+    @Override
+    public void die(DamageSource source) {
+        super.die(source);
+        if (this.level().isClientSide || !(source.getEntity() instanceof LivingEntity killer) || killer == this) {
+            return;
+        }
+        for (UndeadEntity mate : this.level().getEntitiesOfClass(UndeadEntity.class,
+                this.getBoundingBox().inflate(12.0D, 5.0D, 12.0D),
+                u -> u != this && u.isAlive())) {
+            mate.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SPEED, 10 * 20, 0, false, true));
+            if (mate.getTarget() == null) {
+                mate.setTarget(killer);
+            }
+        }
+    }
+
+    // ------------------------------------------------------------------ combat feedback
 
     @Override
     public boolean hurt(DamageSource source, float amount) {
-        if (this.isCorpse()) {
-            // Corpses take no damage (original damage_sensor deals_damage=false);
-            // admin/kill damage types still work.
-            return source.is(DamageTypeTags.BYPASSES_INVULNERABILITY) && super.hurt(source, amount);
-        }
-        if (!this.level().isClientSide && !source.is(DamageTypeTags.BYPASSES_INVULNERABILITY)
-                && this.getHealth() > CORPSE_THRESHOLD && this.getHealth() - amount <= CORPSE_THRESHOLD) {
-            // Cap the blow so the mob collapses instead of dying, like the original.
-            boolean hit = super.hurt(source, this.getHealth() - CORPSE_THRESHOLD);
-            if (hit) {
-                this.setHealth(CORPSE_THRESHOLD);
-                onHitEffects(source);
-                enterCorpse();
-            }
-            return hit;
-        }
         boolean hit = super.hurt(source, amount);
         if (hit && !this.level().isClientSide) {
             onHitEffects(source);
@@ -187,7 +207,7 @@ public class UndeadEntity extends Monster implements GeoEntity {
         return hit;
     }
 
-    /** Limb breaking + pack anger, shared by the normal and corpse-threshold hit paths. */
+    /** Limb breaking + pack anger, from the Bedrock original. */
     private void onHitEffects(DamageSource source) {
         Entity attacker = source.getEntity();
         if (attacker instanceof Player || attacker instanceof IronGolem) {
@@ -201,61 +221,19 @@ public class UndeadEntity extends Monster implements GeoEntity {
             }
         }
         if (attacker instanceof LivingEntity living && living != this) {
-            broadcastAnger(living);
-        }
-    }
-
-    /** Original minecraft:angry with broadcast_anger: nearby undead join the fight. */
-    private void broadcastAnger(LivingEntity attacker) {
-        for (UndeadEntity ally : this.level().getEntitiesOfClass(UndeadEntity.class,
-                this.getBoundingBox().inflate(10.0D), u -> u != this && !u.isCorpse() && u.getTarget() == null)) {
-            ally.setTarget(attacker);
-        }
-    }
-
-    @Override
-    protected void customServerAiStep() {
-        if (this.isCorpse()) {
-            return; // unreachable in practice (NoAi skips AI), kept as a safety net
-        }
-        super.customServerAiStep();
-    }
-
-    @Override
-    public boolean doHurtTarget(Entity target) {
-        return !this.isCorpse() && super.doHurtTarget(target); // corpses never attack
-    }
-
-    @Override
-    public boolean isPushable() {
-        return !this.isCorpse() && super.isPushable(); // original undead:dead is not pushable
-    }
-
-    @Override
-    public void tick() {
-        super.tick();
-        if (this.level().isClientSide) {
-            return;
-        }
-        if (this.isCorpse()) {
-            // Corpses saved by older versions may not have NoAi set yet.
-            if (!this.isNoAi()) {
-                this.setNoAi(true);
+            // minecraft:angry broadcast_anger: nearby undead join the fight.
+            for (UndeadEntity ally : this.level().getEntitiesOfClass(UndeadEntity.class,
+                    this.getBoundingBox().inflate(10.0D), u -> u != this && u.isAlive() && u.getTarget() == null)) {
+                ally.setTarget(living);
             }
-            if (++this.corpseTicks >= CORPSE_LIFETIME_TICKS) {
-                this.discard(); // original: 90s timer -> despawn
-            }
-            return;
         }
-        supportOnHorde();
     }
 
     /**
      * Pile support for Horde Climbing: undead are not solid blocks in Java, so a
      * climber would sink through the mob below. If another undead's head is right
      * under our feet while we are falling, cancel the fall - the pile behaves like
-     * a soft, writhing staircase. Throttled to every 3 ticks (staggered per entity)
-     * and only relevant in a horde situation, so the spatial query stays cheap.
+     * a soft, writhing staircase. Throttled to every 3 ticks (staggered per entity).
      */
     private void supportOnHorde() {
         if (this.onGround() || this.getTarget() == null || (this.tickCount + this.getId()) % 3 != 0) {
@@ -267,7 +245,7 @@ public class UndeadEntity extends Monster implements GeoEntity {
         }
         for (UndeadEntity mate : this.level().getEntitiesOfClass(UndeadEntity.class,
                 this.getBoundingBox().inflate(0.3D, 0.6D, 0.3D),
-                u -> u != this && !u.isCorpse() && u.isAlive())) {
+                u -> u != this && u.isAlive())) {
             double mateHead = mate.getY() + mate.getBbHeight();
             double feet = this.getY();
             if (feet > mateHead - 0.75D && feet < mateHead + 0.25D) {
@@ -286,39 +264,6 @@ public class UndeadEntity extends Monster implements GeoEntity {
     @Override
     public boolean causeFallDamage(float fallDistance, float multiplier, DamageSource source) {
         return false; // original damage_sensor negates fall damage
-    }
-
-    @Override
-    public InteractionResult mobInteract(Player player, InteractionHand hand) {
-        if (this.isCorpse() && player.isShiftKeyDown()) {
-            if (!this.level().isClientSide) {
-                spawnCorpseLoot();
-                this.discard(); // original: drop_loot -> 0.1s despawn timer
-            }
-            return InteractionResult.SUCCESS;
-        }
-        return super.mobInteract(player, hand);
-    }
-
-    /** undead_surprise loot table from the original: junk + always rotten flesh. */
-    private void spawnCorpseLoot() {
-        if (!(this.level() instanceof ServerLevel serverLevel)) {
-            return;
-        }
-        net.minecraft.world.item.Item junk = switch (this.getRandom().nextInt(4)) {
-            case 0 -> Items.STICK;
-            case 1 -> Items.STRING;
-            case 2 -> Items.LEATHER;
-            default -> Items.BONE;
-        };
-        dropItem(serverLevel, new ItemStack(junk));
-        dropItem(serverLevel, new ItemStack(Items.ROTTEN_FLESH));
-    }
-
-    private void dropItem(ServerLevel level, ItemStack stack) {
-        ItemEntity drop = new ItemEntity(level, this.getX(), this.getY() + 0.5D, this.getZ(), stack);
-        drop.setDefaultPickUpDelay();
-        level.addFreshEntity(drop);
     }
 
     // ------------------------------------------------------------------ investigation memory
@@ -362,18 +307,12 @@ public class UndeadEntity extends Monster implements GeoEntity {
     public void addAdditionalSaveData(CompoundTag tag) {
         super.addAdditionalSaveData(tag);
         tag.putInt("LeftArmStage", this.getLeftArmStage());
-        tag.putBoolean("Corpse", this.isCorpse());
     }
 
     @Override
     public void readAdditionalSaveData(CompoundTag tag) {
         super.readAdditionalSaveData(tag);
         this.entityData.set(DATA_LEFT_ARM, Math.min(2, Math.max(0, tag.getInt("LeftArmStage"))));
-        if (tag.getBoolean("Corpse")) {
-            this.entityData.set(DATA_CORPSE, true);
-            this.setNoAi(true);
-            this.refreshDimensions();
-        }
     }
 
     // ------------------------------------------------------------------ GeckoLib
@@ -385,9 +324,6 @@ public class UndeadEntity extends Monster implements GeoEntity {
 
     /** Runs on the client only, every frame - keep it allocation-free. */
     protected PlayState animationPredicate(AnimationState<UndeadEntity> state) {
-        if (this.isCorpse()) {
-            return PlayState.STOP; // lying flat is done by the renderer's corpse rotation
-        }
         // No idle clip in the model: STOP leaves the bind pose untouched.
         return state.isMoving() ? state.setAndContinue(WALK) : PlayState.STOP;
     }

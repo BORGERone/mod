@@ -40,7 +40,7 @@ public class SenseGoal extends TargetGoal {
     @Override
     public boolean canUse() {
         UndeadEntity undead = (UndeadEntity) this.mob;
-        if (undead.isCorpse() || this.mob.getTarget() != null) {
+        if (this.mob.getTarget() != null) {
             return false;
         }
         if (this.scanCooldown-- > 0) {

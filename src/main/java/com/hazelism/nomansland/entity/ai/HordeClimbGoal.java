@@ -58,7 +58,7 @@ public class HordeClimbGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        if (!NMLConfig.HORDE_CLIMBING.getAsBoolean() || this.mob.isCorpse()) {
+        if (!NMLConfig.HORDE_CLIMBING.getAsBoolean()) {
             return false;
         }
         LivingEntity target = this.mob.getTarget();
@@ -154,7 +154,7 @@ public class HordeClimbGoal extends Goal {
     private void queryHorde(LivingEntity target) {
         List<UndeadEntity> near = this.mob.level().getEntitiesOfClass(UndeadEntity.class,
                 this.mob.getBoundingBox().inflate(4.0D, 2.0D, 4.0D),
-                u -> u != this.mob && !u.isCorpse() && u.isAlive());
+                u -> u != this.mob && u.isAlive());
         this.hordeMatesNearby = near.size();
 
         double dirX = target.getX() - this.mob.getX();

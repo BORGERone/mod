@@ -26,7 +26,7 @@ public class InvestigateGoal extends Goal {
 
     @Override
     public boolean canUse() {
-        return !this.mob.isCorpse() && this.mob.getTarget() == null && this.mob.hasFreshInvestigatePos();
+        return this.mob.getTarget() == null && this.mob.hasFreshInvestigatePos();
     }
 
     @Override
