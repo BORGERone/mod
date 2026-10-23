@@ -153,8 +153,8 @@ public class UndeadEntity extends Monster implements GeoEntity {
     }
 
     @Override
-    public EntityDimensions getDimensions(Pose pose) {
-        return this.isCorpse() ? CORPSE_DIMENSIONS : super.getDimensions(pose);
+    protected EntityDimensions getDefaultDimensions(Pose pose) {
+        return this.isCorpse() ? CORPSE_DIMENSIONS : super.getDefaultDimensions(pose);
     }
 
     @Override
