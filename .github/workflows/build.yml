@@ -36,6 +36,11 @@ jobs:
             tail -n 120 build.log 2>/dev/null || echo 'no build.log'
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
+          # Surface the useful lines as annotations (readable via the API when raw logs are unreachable)
+          grep -nE "error:|FAILED|Execution failed|What went wrong|Caused by|Could not (resolve|find)|Could not GET" build.log 2>/dev/null | head -n 40 | while IFS= read -r line; do
+            esc=$(printf '%s' "$line" | sed -e 's/%/%25/g' -e 's/\r/%0D/g')
+            echo "::error::${esc}"
+          done
 
       - name: Upload jar
         uses: actions/upload-artifact@v4
