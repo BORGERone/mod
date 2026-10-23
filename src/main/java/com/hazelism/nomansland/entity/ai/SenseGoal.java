@@ -15,11 +15,13 @@ import java.util.List;
  * {@code nearest_attackable_target} with must_see=false, follow range 20.
  *
  * <ul>
- *   <li>Players are only sensed while <b>moving and not sneaking</b>
- *       (revenge after being hit is handled separately by HurtByTargetGoal).</li>
- *   <li>Without line of sight a player is only fully targeted within smell
- *       range (16 blocks, the original behavior.sniff radius); further away
- *       the mob only walks over to investigate the spot.</li>
+ *   <li>Players are only sensed while <b>moving</b> (revenge after being hit is
+ *       handled separately by HurtByTargetGoal). There is deliberately no
+ *       sneaking/stealth rule here: stealth is provided by the Hack and Slash
+ *       mod in the author's pack - this goal respects it by only acquiring a
+ *       target with line of sight.</li>
+ *   <li>Without line of sight the mob never targets directly, it only walks
+ *       over to investigate the spot where it smelled/heard the player.</li>
  *   <li>Villagers, iron golems and raiders are targeted while moving.</li>
  * </ul>
  *
@@ -27,7 +29,6 @@ import java.util.List;
  * below is the vanilla spatial index, not a world scan.
  */
 public class SenseGoal extends TargetGoal {
-    private static final double SMELL_RANGE_SQR = 16.0D * 16.0D;
     private static final int SCAN_INTERVAL = 10;
 
     private int scanCooldown;
@@ -51,7 +52,7 @@ public class SenseGoal extends TargetGoal {
                 this.mob.getX(), this.mob.getY(), this.mob.getZ(), UndeadEntity.FOLLOW_RANGE,
                 e -> e instanceof Player p && isSensiblePlayer(p));
         if (player != null) {
-            if (this.mob.distanceToSqr(player) <= SMELL_RANGE_SQR || this.mob.getSensing().hasLineOfSight(player)) {
+            if (this.mob.getSensing().hasLineOfSight(player)) {
                 this.mob.setTarget(player);
             } else {
                 undead.setInvestigatePos(player.blockPosition());
@@ -68,7 +69,7 @@ public class SenseGoal extends TargetGoal {
     }
 
     private boolean isSensiblePlayer(Player player) {
-        if (!player.isAlive() || player.isCreative() || player.isSpectator() || player.isShiftKeyDown()) {
+        if (!player.isAlive() || player.isCreative() || player.isSpectator()) {
             return false;
         }
         // "is_moving" in the original filters. Sprinting always counts (noise).

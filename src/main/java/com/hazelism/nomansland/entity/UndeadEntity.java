@@ -1,5 +1,6 @@
 package com.hazelism.nomansland.entity;
 
+import com.hazelism.nomansland.entity.ai.HordeClimbGoal;
 import com.hazelism.nomansland.entity.ai.InvestigateGoal;
 import com.hazelism.nomansland.entity.ai.SenseGoal;
 import net.minecraft.core.BlockPos;
@@ -110,6 +111,7 @@ public class UndeadEntity extends Monster implements GeoEntity {
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(0, new FloatGoal(this));
+        this.goalSelector.addGoal(1, new HordeClimbGoal(this)); // preempts melee while prey is out of reach above
         this.goalSelector.addGoal(2, new MeleeAttackGoal(this, 1.1D, false)); // original melee speed_multiplier 1.1
         this.goalSelector.addGoal(5, new InvestigateGoal(this));
         this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 0.5D));
@@ -207,18 +209,34 @@ public class UndeadEntity extends Monster implements GeoEntity {
             }
             return;
         }
-        climbTowardsTarget();
+        supportOnHorde();
     }
 
-    /** Original navigation.climb + climb_disturb: scramble up walls while chasing. */
-    private void climbTowardsTarget() {
-        if (this.getTarget() == null || !this.horizontalCollision) {
+    /**
+     * Pile support for Horde Climbing: undead are not solid blocks in Java, so a
+     * climber would sink through the mob below. If another undead's head is right
+     * under our feet while we are falling, cancel the fall - the pile behaves like
+     * a soft, writhing staircase. Throttled to every 3 ticks (staggered per entity)
+     * and only relevant in a horde situation, so the spatial query stays cheap.
+     */
+    private void supportOnHorde() {
+        if (this.onGround() || this.getTarget() == null || (this.tickCount + this.getId()) % 3 != 0) {
             return;
         }
         var movement = this.getDeltaMovement();
-        if (movement.y < 0.2D) {
-            this.setDeltaMovement(movement.x, 0.2D, movement.z);
-            this.fallDistance = 0.0F;
+        if (movement.y >= 0.0D) {
+            return;
+        }
+        for (UndeadEntity mate : this.level().getEntitiesOfClass(UndeadEntity.class,
+                this.getBoundingBox().inflate(0.3D, 0.6D, 0.3D),
+                u -> u != this && !u.isCorpse() && u.isAlive())) {
+            double mateHead = mate.getY() + mate.getBbHeight();
+            double feet = this.getY();
+            if (feet > mateHead - 0.75D && feet < mateHead + 0.25D) {
+                this.setDeltaMovement(movement.x, 0.0D, movement.z);
+                this.fallDistance = 0.0F;
+                return;
+            }
         }
     }
 
