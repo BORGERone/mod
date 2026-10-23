@@ -74,6 +74,12 @@ def convert(data):
         tex_w = desc.get("texture_width", 16)
         tex_h = desc.get("texture_height", 16)
         for bone in geo.get("bones", []):
+            # Bedrock shows these only via render-controller part_visibility
+            # (ud:broken_* properties). GeckoLib has no render controllers, so
+            # bake the default state in: broken variants start hidden and the
+            # limb-loss system unhides them at runtime via GeoBone.setHidden.
+            if bone.get("name", "").startswith("broken_"):
+                bone["neverRender"] = True
             mesh = bone.pop("poly_mesh", None)
             if not mesh:
                 continue

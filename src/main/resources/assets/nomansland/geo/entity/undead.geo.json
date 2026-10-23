@@ -14814,7 +14814,8 @@
 							29.25,
 							-4
 						]
-					}
+					},
+					"neverRender": true
 				},
 				{
 					"name": "broken_jaw",
@@ -16457,7 +16458,8 @@
 								}
 							}
 						}
-					]
+					],
+					"neverRender": true
 				},
 				{
 					"name": "normal_body",
@@ -27583,7 +27585,8 @@
 								}
 							}
 						}
-					]
+					],
+					"neverRender": true
 				},
 				{
 					"name": "leftArm",
@@ -27917,7 +27920,8 @@
 							18.5,
 							-1.2
 						]
-					}
+					},
+					"neverRender": true
 				},
 				{
 					"name": "rightArm",
@@ -29905,7 +29909,8 @@
 							20,
 							-1
 						]
-					}
+					},
+					"neverRender": true
 				},
 				{
 					"name": "leftLeg",
@@ -30232,7 +30237,8 @@
 								}
 							}
 						}
-					]
+					],
+					"neverRender": true
 				},
 				{
 					"name": "rightLeg",
@@ -30559,7 +30565,8 @@
 								}
 							}
 						}
-					]
+					],
+					"neverRender": true
 				}
 			]
 		}
