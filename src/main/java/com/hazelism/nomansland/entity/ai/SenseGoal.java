@@ -4,7 +4,7 @@ import com.hazelism.nomansland.entity.UndeadEntity;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.ai.goal.target.TargetGoal;
 import net.minecraft.world.entity.animal.IronGolem;
-import net.minecraft.world.entity.monster.AbstractRaider;
+import net.minecraft.world.entity.raid.Raider;
 import net.minecraft.world.entity.npc.AbstractVillager;
 import net.minecraft.world.entity.player.Player;
 
@@ -47,8 +47,9 @@ public class SenseGoal extends TargetGoal {
         }
         this.scanCooldown = SCAN_INTERVAL;
 
-        Player player = this.mob.level().getNearestPlayer(this.mob, UndeadEntity.FOLLOW_RANGE,
-                e -> e instanceof Player p && isSensiblePlayer(p));
+        Player player = this.mob.level().getNearestPlayer(
+                this.mob.getX(), this.mob.getY(), this.mob.getZ(), UndeadEntity.FOLLOW_RANGE,
+                e -> e instanceof Player p && p != this.mob && isSensiblePlayer(p));
         if (player != null) {
             if (this.mob.distanceToSqr(player) <= SMELL_RANGE_SQR || this.mob.getSensing().hasLineOfSight(player)) {
                 this.mob.setTarget(player);
@@ -92,7 +93,7 @@ public class SenseGoal extends TargetGoal {
                 return golem;
             }
         }
-        candidates = this.mob.level().getEntitiesOfClass(AbstractRaider.class,
+        candidates = this.mob.level().getEntitiesOfClass(Raider.class,
                 this.mob.getBoundingBox().inflate(UndeadEntity.FOLLOW_RANGE, 8.0D, UndeadEntity.FOLLOW_RANGE),
                 LivingEntity::isAlive);
         for (LivingEntity raider : candidates) {
