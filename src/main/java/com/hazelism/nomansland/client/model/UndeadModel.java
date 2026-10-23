@@ -30,27 +30,8 @@ public class UndeadModel extends GeoModel<UndeadEntity> {
         return ANIMATIONS;
     }
 
-    /**
-     * Ports the Bedrock render controller's part_visibility:
-     * the "broken" bone variants are hidden until that limb is actually broken.
-     * Without this both variants render at once and the mob looks like a pile of parts.
-     *
-     * <p>Runs per render frame - only constant-name bone lookups and boolean writes,
-     * no allocations. The limb-loss stage will flip these from the entity's synced data.
-     */
-    @Override
-    public void setCustomAnimations(UndeadEntity animatable, long instanceId, AnimationState<UndeadEntity> state) {
-        super.setCustomAnimations(animatable, instanceId, state);
-        setBrokenHidden("broken_head", true);
-        setBrokenHidden("broken_jaw", true);
-        setBrokenHidden("broken_body", true);
-        setBrokenHidden("broken_left_arm", true);
-        setBrokenHidden("broken_right_arm", true);
-        setBrokenHidden("broken_left_leg", true);
-        setBrokenHidden("broken_right_leg", true);
-    }
-
-    private void setBrokenHidden(String boneName, boolean hidden) {
-        getBone(boneName).ifPresent(bone -> bone.setHidden(hidden));
-    }
+    // Bone variant visibility (normal vs broken) is baked into the geometry:
+    // broken_* bones carry "neverRender": true (see tools/convert_bedrock_geo.py),
+    // mirroring the Bedrock render controller's part_visibility defaults.
+    // The limb-loss stage will unhide them at runtime via GeoBone.setHidden.
 }
