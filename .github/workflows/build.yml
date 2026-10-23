@@ -7,6 +7,9 @@ on:
     branches: [arena/b7115d06-mod]
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -48,3 +51,21 @@ jobs:
           name: nomansland-jar
           path: build/libs/*.jar
           if-no-files-found: error
+
+      # Direct artifact download is not reachable from every dev environment,
+      # so the jar is also committed to dist/ on the same branch.
+      # "[skip ci]" in the message prevents an endless build loop.
+      - name: Commit jar to dist/
+        run: |
+          mkdir -p dist
+          rm -f dist/*.jar
+          cp build/libs/*.jar dist/
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add dist/
+          if git diff --cached --quiet; then
+            echo "Jar unchanged, nothing to commit"
+          else
+            git commit -m "CI: built jar [skip ci]"
+            git push
+          fi
