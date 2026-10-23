@@ -14,7 +14,6 @@ import net.neoforged.fml.config.ModConfig;
 import net.neoforged.neoforge.event.entity.EntityAttributeCreationEvent;
 import net.neoforged.neoforge.event.entity.RegisterSpawnPlacementsEvent;
 import org.slf4j.Logger;
-import software.bernie.geckolib.GeckoLib;
 
 /**
  * No Man's Land - Dark Ages (NeoForge 1.21.1 port of the Bedrock addon).
@@ -35,8 +34,7 @@ public final class NoMansLand {
     public static final Logger LOGGER = LogUtils.getLogger();
 
     public NoMansLand(IEventBus modBus, ModContainer container) {
-        GeckoLib.initialize();
-
+        // GeckoLib 4.7 self-initialises via its own @Mod entrypoint - no explicit init call.
         ModItems.ITEMS.register(modBus);
         ModEntities.ENTITY_TYPES.register(modBus);
         ModCreativeTabs.TABS.register(modBus);
