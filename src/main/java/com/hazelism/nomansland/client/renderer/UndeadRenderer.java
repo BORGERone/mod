@@ -6,8 +6,8 @@ import net.minecraft.client.renderer.entity.EntityRendererProvider;
 import software.bernie.geckolib.renderer.GeoEntityRenderer;
 
 /**
- * Limb-loss bone hiding (bones: normal_*/broken_* pairs in undead.geo.json)
- * will hook in here later via getGeoModel().getBone(...) in render - server cost stays zero.
+ * Limb-loss bone hiding (the normal/broken bone pairs in undead.geo.json)
+ * will hook in here later via bone lookups during render - server cost stays zero.
  */
 public class UndeadRenderer extends GeoEntityRenderer<UndeadEntity> {
     public UndeadRenderer(EntityRendererProvider.Context context) {
