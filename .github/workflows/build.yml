@@ -1,0 +1,33 @@
+name: Build mod jar
+
+# Builds on every push to the port branch and on manual dispatch.
+# The resulting jar is uploaded as the "nomansland-jar" artifact.
+on:
+  push:
+    branches: [arena/b7115d06-mod]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - name: Set up Gradle cache
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Build
+        run: ./gradlew build --no-daemon --stacktrace
+
+      - name: Upload jar
+        uses: actions/upload-artifact@v4
+        with:
+          name: nomansland-jar
+          path: build/libs/*.jar
+          if-no-files-found: error
