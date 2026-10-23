@@ -134,6 +134,13 @@ public class UndeadEntity extends Monster implements GeoEntity {
         this.setTarget(null);
         this.clearInvestigatePos();
         this.getNavigation().stop();
+        // Hard immobilisation. Note: overriding customServerAiStep is NOT enough -
+        // NeoForge calls it after the goal/target selectors have already ticked,
+        // so a corpse kept turning towards players and even attacking. NoAi stops
+        // goal, look and move control entirely; the corpse timer runs in tick().
+        this.setNoAi(true);
+        this.setDeltaMovement(0.0D, Math.min(this.getDeltaMovement().y, 0.0D), 0.0D);
+        this.setYHeadRot(this.getYRot());
     }
 
     @Override
@@ -190,11 +197,19 @@ public class UndeadEntity extends Monster implements GeoEntity {
     @Override
     protected void customServerAiStep() {
         if (this.isCorpse()) {
-            this.getNavigation().stop();
-            this.setTarget(null);
-            return; // no goals run for a corpse
+            return; // unreachable in practice (NoAi skips AI), kept as a safety net
         }
         super.customServerAiStep();
+    }
+
+    @Override
+    public boolean doHurtTarget(Entity target) {
+        return !this.isCorpse() && super.doHurtTarget(target); // corpses never attack
+    }
+
+    @Override
+    public boolean isPushable() {
+        return !this.isCorpse() && super.isPushable(); // original undead:dead is not pushable
     }
 
     @Override
@@ -204,6 +219,10 @@ public class UndeadEntity extends Monster implements GeoEntity {
             return;
         }
         if (this.isCorpse()) {
+            // Corpses saved by older versions may not have NoAi set yet.
+            if (!this.isNoAi()) {
+                this.setNoAi(true);
+            }
             if (++this.corpseTicks >= CORPSE_LIFETIME_TICKS) {
                 this.discard(); // original: 90s timer -> despawn
             }
@@ -333,6 +352,7 @@ public class UndeadEntity extends Monster implements GeoEntity {
         this.entityData.set(DATA_LEFT_ARM, Math.min(2, Math.max(0, tag.getInt("LeftArmStage"))));
         if (tag.getBoolean("Corpse")) {
             this.entityData.set(DATA_CORPSE, true);
+            this.setNoAi(true);
         }
     }
 
