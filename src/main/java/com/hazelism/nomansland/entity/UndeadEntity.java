@@ -41,12 +41,8 @@ import software.bernie.geckolib.util.GeckoLibUtil;
  */
 public class UndeadEntity extends Monster implements GeoEntity {
 
-    // Animation names are the identifiers from the original undead.animation.json - do not rename.
-    protected static final RawAnimation IDLE   = RawAnimation.begin().thenLoop("animation.undead.idle_1");
-    protected static final RawAnimation WALK   = RawAnimation.begin().thenLoop("animation.undead.walk_1");
-    protected static final RawAnimation RUN    = RawAnimation.begin().thenLoop("animation.undead.run_1");
-    protected static final RawAnimation ATTACK = RawAnimation.begin().thenPlay("animation.undead.attack_still_1");
-    protected static final RawAnimation DEATH  = RawAnimation.begin().thenPlayAndHold("animation.undead.iwannadead_1");
+    // The corrupted illager model ships a single walk cycle; idle is the bind pose.
+    protected static final RawAnimation WALK = RawAnimation.begin().thenLoop("animation.corrupted_illager.walk");
 
     private final AnimatableInstanceCache cache = GeckoLibUtil.createInstanceCache(this);
 
@@ -83,34 +79,17 @@ public class UndeadEntity extends Monster implements GeoEntity {
         this.targetSelector.addGoal(3, new NearestAttackableTargetGoal<>(this, IronGolem.class, true));
     }
 
-    @Override
-    public boolean doHurtTarget(net.minecraft.world.entity.Entity target) {
-        boolean hit = super.doHurtTarget(target);
-        if (hit && !this.level().isClientSide) {
-            // GeckoLib triggerable animation; no packet of our own needed.
-            triggerAnim("main", "attack");
-        }
-        return hit;
-    }
-
     // ------------------------------------------------------------------ GeckoLib
 
     @Override
     public void registerControllers(AnimatableManager.ControllerRegistrar controllers) {
-        controllers.add(new AnimationController<>(this, "main", 5, this::animationPredicate)
-                .triggerableAnim("attack", ATTACK));
+        controllers.add(new AnimationController<>(this, "main", 5, this::animationPredicate));
     }
 
     /** Runs on the client only, every frame - keep it allocation-free. */
     protected PlayState animationPredicate(AnimationState<UndeadEntity> state) {
-        if (this.isDeadOrDying()) {
-            return state.setAndContinue(DEATH);
-        }
-        if (state.isMoving()) {
-            // Chasing a target reads as "running" in the original (run_* clips are 0.5s loops).
-            return state.setAndContinue(this.getTarget() != null ? RUN : WALK);
-        }
-        return state.setAndContinue(IDLE);
+        // No idle clip in the model: STOP leaves the bind pose untouched.
+        return state.isMoving() ? state.setAndContinue(WALK) : PlayState.STOP;
     }
 
     @Override
