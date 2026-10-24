@@ -127,7 +127,9 @@ public class HordeClimbGoal extends Goal {
         if (tryMantle(target)) {
             return;
         }
-        boolean supported = this.supportedFromBelow || this.hordeMatesNearby >= 2;
+        // A real wall supports the climber by itself (horizontalCollision); the living
+        // pile only holds in the open with a mate underneath or a crowd around.
+        boolean supported = this.mob.horizontalCollision || this.supportedFromBelow || this.hordeMatesNearby >= 2;
         if (!supported) {
             return;
         }
