@@ -1,10 +1,12 @@
 package com.hazelism.nomansland.entity.ai;
 
 import com.hazelism.nomansland.NMLConfig;
+import com.hazelism.nomansland.entity.BannerBearerEntity;
 import com.hazelism.nomansland.entity.UndeadEntity;
 import net.minecraft.core.BlockPos;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.attributes.AttributeModifier;
 import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraft.world.entity.ai.goal.Goal;
@@ -41,7 +43,7 @@ public class HordeClimbGoal extends Goal {
             ResourceLocation.fromNamespaceAndPath("nomansland", "horde_climb_step"),
             0.5D, AttributeModifier.Operation.ADD_VALUE);
 
-    private final UndeadEntity mob;
+    private final Mob mob;
     private int repathCooldown;
     private int queryCooldown;
     private int climbTicks;
@@ -51,9 +53,14 @@ public class HordeClimbGoal extends Goal {
     private boolean supportedFromBelow;
     private int hordeMatesNearby;
 
-    public HordeClimbGoal(UndeadEntity mob) {
+    public HordeClimbGoal(Mob mob) {
         this.mob = mob;
         this.setFlags(EnumSet.of(Flag.MOVE, Flag.JUMP));
+    }
+
+    /** Whom we are climbing toward. Undead use their hunt target; the banner bearer overrides this. */
+    protected LivingEntity climbTarget() {
+        return this.mob.getTarget();
     }
 
     @Override
@@ -61,7 +68,7 @@ public class HordeClimbGoal extends Goal {
         if (!NMLConfig.HORDE_CLIMBING.getAsBoolean()) {
             return false;
         }
-        LivingEntity target = this.mob.getTarget();
+        LivingEntity target = climbTarget();
         return target != null && target.isAlive() && isTargetAbove(target);
     }
 
@@ -94,7 +101,7 @@ public class HordeClimbGoal extends Goal {
 
     @Override
     public void tick() {
-        LivingEntity target = this.mob.getTarget();
+        LivingEntity target = climbTarget();
         if (target == null) {
             return;
         }
@@ -127,9 +134,9 @@ public class HordeClimbGoal extends Goal {
         if (tryMantle(target)) {
             return;
         }
-        // A real wall supports the climber by itself (horizontalCollision); the living
-        // pile only holds in the open with a mate underneath or a crowd around.
-        boolean supported = this.mob.horizontalCollision || this.supportedFromBelow || this.hordeMatesNearby >= 2;
+        // The pile is the only support: a mate underneath or a crowd around.
+        // No spider-style solo wall scaling - that was explicitly rejected.
+        boolean supported = this.supportedFromBelow || this.hordeMatesNearby >= 2;
         if (!supported) {
             return;
         }
@@ -154,9 +161,9 @@ public class HordeClimbGoal extends Goal {
 
     /** One staggered spatial query feeding all climb decisions for the next few ticks. */
     private void queryHorde(LivingEntity target) {
-        List<UndeadEntity> near = this.mob.level().getEntitiesOfClass(UndeadEntity.class,
+        List<Mob> near = this.mob.level().getEntitiesOfClass(Mob.class,
                 this.mob.getBoundingBox().inflate(4.0D, 2.0D, 4.0D),
-                u -> u != this.mob && u.isAlive());
+                u -> u != this.mob && u.isAlive() && isHordeMember(u));
         this.hordeMatesNearby = near.size();
 
         double dirX = target.getX() - this.mob.getX();
@@ -167,7 +174,7 @@ public class HordeClimbGoal extends Goal {
 
         this.hordeMateAhead = false;
         this.supportedFromBelow = false;
-        for (UndeadEntity mate : near) {
+        for (Mob mate : near) {
             double toMateX = mate.getX() - this.mob.getX();
             double toMateZ = mate.getZ() - this.mob.getZ();
             double horizontalDistSqr = toMateX * toMateX + toMateZ * toMateZ;
@@ -231,6 +238,38 @@ public class HordeClimbGoal extends Goal {
         this.mantleCooldown = 10;
         this.climbTicks = 0;
         return true;
+    }
+
+    /** Members of the climbing horde: the undead mass plus its banner bearer. */
+    public static boolean isHordeMember(Mob mob) {
+        return mob instanceof UndeadEntity || mob instanceof BannerBearerEntity;
+    }
+
+    /**
+     * Pile support, shared by every horde member: mobs are not solid blocks in Java,
+     * so a climber would sink through the mate below. If a horde member's head is
+     * right under our feet while we fall, cancel the fall - the pile behaves like a
+     * soft, writhing staircase. Throttled to every 3 ticks (staggered per entity).
+     */
+    public static void applyPileSupport(Mob mob, LivingEntity anchor) {
+        if (mob.onGround() || anchor == null || (mob.tickCount + mob.getId()) % 3 != 0) {
+            return;
+        }
+        var movement = mob.getDeltaMovement();
+        if (movement.y >= 0.0D) {
+            return;
+        }
+        for (Mob mate : mob.level().getEntitiesOfClass(Mob.class,
+                mob.getBoundingBox().inflate(0.3D, 0.6D, 0.3D),
+                u -> u != mob && u.isAlive() && isHordeMember(u))) {
+            double mateHead = mate.getY() + mate.getBbHeight();
+            double feet = mob.getY();
+            if (feet > mateHead - 0.75D && feet < mateHead + 0.25D) {
+                mob.setDeltaMovement(movement.x, 0.0D, movement.z);
+                mob.fallDistance = 0.0F;
+                return;
+            }
+        }
     }
 
     private boolean isFree(BlockPos pos) {

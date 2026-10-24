@@ -1,6 +1,8 @@
 package com.hazelism.nomansland.entity;
 
 import com.hazelism.nomansland.entity.ai.BearerEscortGoal;
+import com.hazelism.nomansland.entity.ai.BearerHordeClimbGoal;
+import com.hazelism.nomansland.entity.ai.HordeClimbGoal;
 import com.hazelism.nomansland.entity.ai.RallyCastGoal;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.network.syncher.EntityDataAccessor;
@@ -88,8 +90,9 @@ public class BannerBearerEntity extends Monster implements GeoEntity {
     @Override
     protected void registerGoals() {
         this.goalSelector.addGoal(0, new FloatGoal(this));
-        this.goalSelector.addGoal(1, new BearerEscortGoal(this)); // keep near the player, never close
-        this.goalSelector.addGoal(2, new RallyCastGoal(this));    // buff the horde
+        this.goalSelector.addGoal(1, new BearerHordeClimbGoal(this)); // up the pile after the player, like the horde
+        this.goalSelector.addGoal(2, new BearerEscortGoal(this)); // keep near the player, never close
+        this.goalSelector.addGoal(3, new RallyCastGoal(this));    // buff the horde
         this.goalSelector.addGoal(7, new WaterAvoidingRandomStrollGoal(this, 0.6D));
         // Deliberately no target selector and no melee goal: this mob is prey, not a hunter.
     }
@@ -149,11 +152,18 @@ public class BannerBearerEntity extends Monster implements GeoEntity {
     }
 
     @Override
+    public boolean onClimbable() {
+        return this.horizontalCollision; // the pile (and ladders) - never free wall scaling
+    }
+
+    @Override
     public void tick() {
         super.tick();
         if (this.level().isClientSide) {
             return;
         }
+        // Stand on the horde like everyone else while climbing.
+        HordeClimbGoal.applyPileSupport(this, this.level().getNearestPlayer(this, 24.0D));
         if (this.castCooldown > 0) {
             this.castCooldown--;
         }

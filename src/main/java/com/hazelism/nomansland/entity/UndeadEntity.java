@@ -134,7 +134,7 @@ public class UndeadEntity extends Monster implements GeoEntity {
         if (this.level().isClientSide || !this.isAlive()) {
             return;
         }
-        supportOnHorde();
+        HordeClimbGoal.applyPileSupport(this, this.getTarget());
         sharePreyWithPack();
         separateFromPack();
     }
@@ -225,33 +225,6 @@ public class UndeadEntity extends Monster implements GeoEntity {
             for (UndeadEntity ally : this.level().getEntitiesOfClass(UndeadEntity.class,
                     this.getBoundingBox().inflate(10.0D), u -> u != this && u.isAlive() && u.getTarget() == null)) {
                 ally.setTarget(living);
-            }
-        }
-    }
-
-    /**
-     * Pile support for Horde Climbing: undead are not solid blocks in Java, so a
-     * climber would sink through the mob below. If another undead's head is right
-     * under our feet while we are falling, cancel the fall - the pile behaves like
-     * a soft, writhing staircase. Throttled to every 3 ticks (staggered per entity).
-     */
-    private void supportOnHorde() {
-        if (this.onGround() || this.getTarget() == null || (this.tickCount + this.getId()) % 3 != 0) {
-            return;
-        }
-        var movement = this.getDeltaMovement();
-        if (movement.y >= 0.0D) {
-            return;
-        }
-        for (UndeadEntity mate : this.level().getEntitiesOfClass(UndeadEntity.class,
-                this.getBoundingBox().inflate(0.3D, 0.6D, 0.3D),
-                u -> u != this && u.isAlive())) {
-            double mateHead = mate.getY() + mate.getBbHeight();
-            double feet = this.getY();
-            if (feet > mateHead - 0.75D && feet < mateHead + 0.25D) {
-                this.setDeltaMovement(movement.x, 0.0D, movement.z);
-                this.fallDistance = 0.0F;
-                return;
             }
         }
     }
