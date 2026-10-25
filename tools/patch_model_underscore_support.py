@@ -303,12 +303,11 @@ def make_helper_class() -> bytes:
     trim_ref = method(string_class, "trim", "()Ljava/lang/String;")
     replace_ref = method(string_class, "replace", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;")
     lower_ref = method(string_class, "toLowerCase", "()Ljava/lang/String;")
-    last_index_ref = method(string_class, "lastIndexOf", "(Ljava/lang/String;)I")
-    substring_ref = method(string_class, "substring", "(I)Ljava/lang/String;")
+    replace_first_ref = method(string_class, "replaceFirst", "(Ljava/lang/String;Ljava/lang/String;)Ljava/lang/String;")
     underscore = add((8, "_"), b"\x08" + put_u2(utf8("_")))
     empty = add((8, ""), b"\x08" + put_u2(utf8("")))
-    marker_value = ".animation."
-    marker = add((8, marker_value), b"\x08" + put_u2(utf8(marker_value)))
+    animation_prefix_regex = "^.*[.]animation[.]"
+    prefix_regex = add((8, animation_prefix_regex), b"\x08" + put_u2(utf8(animation_prefix_regex)))
 
     def add_method(name: str, code: bytes, max_stack: int, max_locals: int):
         method_name = utf8(name)
@@ -329,14 +328,12 @@ def make_helper_class() -> bytes:
 
     # Normalize animation identifiers such as "ivy_oleander.animation.walk"
     # to "walk" while preserving underscores in the actual animation name.
+    # Keep this straight-line bytecode: the helper has no StackMapTable
+    # generator, so a conditional branch here would fail JVM verification.
     animation_code = bytearray([0x2A, 0xB6]) + bytearray(put_u2(trim_ref))
-    animation_code += bytes([0xB6]) + put_u2(lower_ref) + bytes([0x4C])  # astore_1
-    animation_code += bytes([0x2B]) + ldc(marker)
-    animation_code += bytes([0xB6]) + put_u2(last_index_ref) + bytes([0x3D])  # istore_2
-    animation_code += bytes([0x1C, 0x9B]) + put_u2(12)  # iflt -> return unchanged
-    animation_code += bytes([0x2B, 0x1C, 0x10, 11, 0x60])
-    animation_code += bytes([0xB6]) + put_u2(substring_ref) + bytes([0xB0])
-    animation_code += bytes([0x2B, 0xB0])
+    animation_code += bytes([0xB6]) + put_u2(lower_ref)
+    animation_code += ldc(prefix_regex) + ldc(empty)
+    animation_code += bytes([0xB6]) + put_u2(replace_first_ref) + bytes([0xB0])
 
     methods = [
         add_method("normalize", bytes(normalize_code), 3, 1),
