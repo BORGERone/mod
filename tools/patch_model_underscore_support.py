@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Patch the bundled Settled Lands JAR to treat underscores in bone names as optional.
+"""Patch Blockbench name handling in the bundled Settled Lands JAR.
 
 The repository contains the released JAR rather than Java sources. This narrowly
-patches the compiled Blockbench parser and model lookup, and adds a tiny helper
-class. It intentionally leaves animation names and all other mod behavior alone.
+patches the compiled Blockbench parser and model lookup, adds a tiny helper
+class, and normalizes exported animation identifiers like
+"ivy_oleander.animation.walk" to "walk". Other mod behavior is left alone.
 """
 from __future__ import annotations
 
@@ -227,10 +228,14 @@ def locate_methods(data: bytes):
     return entries, methods
 
 
-def patch_calls(data: bytes, method_specs: dict[tuple[str, str], list[tuple[tuple, int]]]) -> tuple[bytes, dict]:
+def patch_calls(
+    data: bytes,
+    method_specs: dict[tuple[str, str], list[tuple[tuple, int]]],
+    helper_method: str = "normalize",
+) -> tuple[bytes, dict]:
     entries, _ = parse_constant_pool(data)
     pool = PoolAppender(entries)
-    helper_ref = pool.methodref(HELPER_INTERNAL, "normalize", "(Ljava/lang/String;)Ljava/lang/String;")
+    helper_ref = pool.methodref(HELPER_INTERNAL, helper_method, "(Ljava/lang/String;)Ljava/lang/String;")
     data = inject_methodref(data, pool)
     entries, methods = locate_methods(data)
     patched = {}
@@ -293,37 +298,55 @@ def make_helper_class() -> bytes:
 
     this_idx = cls(HELPER_INTERNAL)
     super_idx = cls("java/lang/Object")
-    method_name = utf8("normalize")
-    method_desc = utf8("(Ljava/lang/String;)Ljava/lang/String;")
     code_name = utf8("Code")
     string_class = "java/lang/String"
     trim_ref = method(string_class, "trim", "()Ljava/lang/String;")
     replace_ref = method(string_class, "replace", "(Ljava/lang/CharSequence;Ljava/lang/CharSequence;)Ljava/lang/String;")
     lower_ref = method(string_class, "toLowerCase", "()Ljava/lang/String;")
+    last_index_ref = method(string_class, "lastIndexOf", "(Ljava/lang/String;)I")
+    substring_ref = method(string_class, "substring", "(I)Ljava/lang/String;")
     underscore = add((8, "_"), b"\x08" + put_u2(utf8("_")))
     empty = add((8, ""), b"\x08" + put_u2(utf8("")))
+    marker_value = ".animation."
+    marker = add((8, marker_value), b"\x08" + put_u2(utf8(marker_value)))
 
-    code = bytearray([0x2A, 0xB6]) + bytearray(put_u2(trim_ref))
-    for string_idx in (underscore, empty):
-        if string_idx <= 0xFF:
-            code += bytes([0x12, string_idx])  # ldc
-        else:
-            code += bytes([0x13]) + put_u2(string_idx)  # ldc_w
-    code += bytes([0xB6]) + put_u2(replace_ref)
-    code += bytes([0xB6]) + put_u2(lower_ref)
-    code += bytes([0xB0])  # areturn
+    def add_method(name: str, code: bytes, max_stack: int, max_locals: int):
+        method_name = utf8(name)
+        method_desc = utf8("(Ljava/lang/String;)Ljava/lang/String;")
+        code_attr = put_u2(max_stack) + put_u2(max_locals) + struct.pack(">I", len(code)) + code + put_u2(0) + put_u2(0)
+        return (
+            put_u2(0x0009) + put_u2(method_name) + put_u2(method_desc) + put_u2(1)
+            + put_u2(code_name) + struct.pack(">I", len(code_attr)) + code_attr
+        )
 
-    code_attr = put_u2(3) + put_u2(1) + struct.pack(">I", len(code)) + code + put_u2(0) + put_u2(0)
-    method_info = (
-        put_u2(0x0009) + put_u2(method_name) + put_u2(method_desc) + put_u2(1)
-        + put_u2(code_name) + struct.pack(">I", len(code_attr)) + code_attr
-    )
+    def ldc(index: int) -> bytes:
+        return bytes([0x12, index]) if index <= 0xFF else bytes([0x13]) + put_u2(index)
+
+    normalize_code = bytearray([0x2A, 0xB6]) + bytearray(put_u2(trim_ref))
+    normalize_code += ldc(underscore) + ldc(empty)
+    normalize_code += bytes([0xB6]) + put_u2(replace_ref)
+    normalize_code += bytes([0xB6]) + put_u2(lower_ref) + bytes([0xB0])
+
+    # Normalize animation identifiers such as "ivy_oleander.animation.walk"
+    # to "walk" while preserving underscores in the actual animation name.
+    animation_code = bytearray([0x2A, 0xB6]) + bytearray(put_u2(trim_ref))
+    animation_code += bytes([0xB6]) + put_u2(lower_ref) + bytes([0x4C])  # astore_1
+    animation_code += bytes([0x2B]) + ldc(marker)
+    animation_code += bytes([0xB6]) + put_u2(last_index_ref) + bytes([0x3D])  # istore_2
+    animation_code += bytes([0x1C, 0x9B]) + put_u2(12)  # iflt -> return unchanged
+    animation_code += bytes([0x2B, 0x1C, 0x10, 11, 0x60])
+    animation_code += bytes([0xB6]) + put_u2(substring_ref) + bytes([0xB0])
+    animation_code += bytes([0x2B, 0xB0])
+
+    methods = [
+        add_method("normalize", bytes(normalize_code), 3, 1),
+        add_method("normalizeAnimation", bytes(animation_code), 3, 3),
+    ]
     return (
         b"\xca\xfe\xba\xbe" + put_u2(0) + put_u2(65) + put_u2(len(cp) + 1)
         + b"".join(cp) + put_u2(0x0031) + put_u2(this_idx) + put_u2(super_idx)
-        + put_u2(0) + put_u2(0) + put_u2(1) + method_info + put_u2(0)
+        + put_u2(0) + put_u2(0) + put_u2(len(methods)) + b"".join(methods) + put_u2(0)
     )
-
 
 def patch_jar(input_path: Path, output_path: Path):
     with zipfile.ZipFile(input_path, "r") as src:
@@ -331,17 +354,32 @@ def patch_jar(input_path: Path, output_path: Path):
         if PARSER not in names or MODEL not in names:
             raise ValueError("This is not the expected Settled Lands JAR (model classes missing)")
         if HELPER in names:
-            raise ValueError("Jar already contains the underscore normalizer; refusing to patch twice")
+            raise ValueError("Jar already contains the Blockbench name helpers; refusing to patch twice")
         parser = src.read(PARSER)
         model = src.read(MODEL)
 
+        # Keep the prior underscore-insensitive animator and bone matching.
+        # Patch the later trim call first so the animation-name call remains
+        # occurrence zero when it is normalized in the following pass.
         parser, parser_changes = patch_calls(parser, {
-            ("parse", PARSE_DESC): [(STRING_TRIM, 1)],  # Animator name, not animation name.
+            ("parse", PARSE_DESC): [(STRING_TRIM, 1)],
             ("parseBone", PARSE_BONE_DESC): [(STRING_TRIM, 0), (STRING_TRIM, 1)],
         })
-        model, model_changes = patch_calls(model, {
+        # Strip the Blockbench project/export prefix from animation names so
+        # e.g. "ivy_oleander.animation.walk" is indexed as exactly "walk".
+        parser, animation_name_changes = patch_calls(parser, {
+            ("parse", PARSE_DESC): [(STRING_TRIM, 0)],
+        }, "normalizeAnimation")
+        # Normalize caller-supplied animation names too, then exact lookup wins
+        # over the legacy substring fallback (so "walk" won't resolve to
+        # "orthodox_walk" merely because that entry appears first).
+        model, lookup_changes = patch_calls(model, {
+            ("findAnimation", "(Ljava/lang/String;)Ldev/settledlands/model/BbAnimation;"): [(STRING_LOWER, 0)],
+        }, "normalizeAnimation")
+        model, part_changes = patch_calls(model, {
             ("getPart", GET_PART_DESC): [(STRING_LOWER, 0)],
         })
+        model_changes = {**lookup_changes, **part_changes}
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
         fd, temporary = tempfile.mkstemp(prefix=output_path.name + ".", suffix=".tmp", dir=output_path.parent)
@@ -366,7 +404,8 @@ def patch_jar(input_path: Path, output_path: Path):
                 pass
             raise
     print(f"Wrote {output_path}")
-    print(f"Patched parser call sites: {parser_changes}")
+    print(f"Patched parser bone/animator call sites: {parser_changes}")
+    print(f"Patched parser animation-name call sites: {animation_name_changes}")
     print(f"Patched model lookup call sites: {model_changes}")
 
 
