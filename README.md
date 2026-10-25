@@ -31,3 +31,44 @@ python3 tools/make_preview_sheet.py     # preview_villager.png
 Палитры и раскладка «часть модели → цвет» задаются таблицами `TARGETS` / `THEMES`
 в `tools/make_villager_skin.py`; лицо рисуется вручную в `FACE`/`draw_head()`,
 мелкие детали — в `draw_details()`.
+
+## Галерея `ivy_oleander_gallery.html`
+
+Тот же 3D-просмотрщик, что был в присланной галерее «Люди и NPC из модов», но
+внутри осталась **только эта модель** — остальные 324 персонажа и 31 мод удалены.
+Страница самодостаточна (один файл, 0,6 МБ, без внешних ссылок): карточка с
+миниатюрой, вращение мышью, 8 ракурсов камеры, автоповорот и панель анимаций
+со всеми 82 анимациями, кнопка «Скачать .bbmodel».
+
+| Файл | Что внутри |
+| --- | --- |
+| `ivy_oleander_gallery.html` | готовая страница-галерея с одной моделью |
+| `preview_gallery.png` | кадры: поза покоя, walk, greetings, sit, die, idle |
+
+### Как это собрано
+
+```bash
+python3 tools/make_gallery.py \
+    --src /путь/к/исходной/галерее.html \
+    --model ivy_oleander_villager.bbmodel \
+    --out ivy_oleander_gallery.html \
+    --name ivy_oleander_villager --mod ivy_oleander --title "Ivy Oleander"
+
+python3 tools/render_gallery_sheet.py ivy_oleander_gallery.html preview_gallery.png
+```
+
+`tools/bbmodel_to_gallery.py` — конвертер `.bbmodel` → компактный формат галереи:
+* `g` — геометрия в позе покоя, int16 по 1/32 блока, 12 чисел на квад (4 угла × xyz),
+  хранится как `(-x, -y, z)`;
+* `u` — UV, uint16 по 1/16 текселя, 8 чисел на квад;
+* `qb` — номер кости на квад (1-based, 0 = статика);
+* `r` — риг: кости `[имя, родитель, ox, oy, oz, rx, ry, rz]` (повороты в градусах,
+  порядок ZYX, как в Blockbench) и кубы для обратного экспорта;
+* `a` — анимации; значения ключей — как в `.bbmodel`, только у поворотов
+  инвертированы x/y, а у позиций x: просмотрщик галереи применяет их по формуле
+  `rest − kx, rest − ky, rest + kz`, поэтому так поза совпадает с Blockbench.
+
+Порядок вершин и UV внутри грани, повороты кубов вокруг их `origin`, а также
+запекание поворотов костей в геометрию проверены на модели из самой галереи
+(`villager_farmer`, `bard`, `steve`, `witch`, `pillager`): совпадает 100 % квадов,
+кроме вырожденных/дублирующихся граней.
