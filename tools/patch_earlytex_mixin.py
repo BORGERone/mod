@@ -32,8 +32,11 @@ import argparse, hashlib, io, json, struct, sys, zipfile, tomllib
 
 MIXIN_CLASS = "dev/settledlands/mixin/EarlyCorpseTextureMixin"
 MIXIN_SIMPLE = "EarlyCorpseTextureMixin"
-NEW_VERSION = "0.8.0-build231-earlytex"
+NEW_VERSION = "0.8.0-build232-earlytex2"
 CHANGELOG = (
+    "Build 232: same corpse-model fix as 231, but the @Mixin annotation is now encoded as a real "
+    "array - 231 crashed during mixin prepare with ClassCastException (asm.Type -> Iterable) because a "
+    "single class element was written instead of a one-element array. "
     "Build 231: corpse model fix (real one). GuideRenderer takes the model name from synched entity "
     "data (DATA_TEXTURE), but GuideNpc.applyProfile() wrote it as its second-to-last statement and both "
     "callers (setProfile and PlayerCorpsePossession.dressBodyCorpse) swallow exceptions, so any failure "
@@ -42,6 +45,8 @@ CHANGELOG = (
     "actual bbmodel even if the rest of the profile work throws. No existing class was modified."
 )
 PATCHINFO_ADD = (
+    "сборка 232: то же, что 231, но @Mixin.value закодирован МАССИВОМ (тег '[' + один 'c'). "
+    "В 231 одиночный элемент ронял старт: MixinInfo.readTargets -> ClassCastException asm.Type -> Iterable. "
     "сборка 231: починка модели трупа (настоящая). GuideRenderer берёт имя модели из "
     "entityData(DATA_TEXTURE), а GuideNpc.applyProfile() выставлял его предпоследним оператором, причём "
     "оба вызывающих (setProfile и PlayerCorpsePossession.dressBodyCorpse) глотают исключения — любая "
@@ -183,9 +188,14 @@ def build_mixin_class():
     handler = (u2(0x0002) + u2(cp.utf8("settledlands$earlyTexture")) + u2(cp.utf8(desc))
                + u2(2) + attr(a_code, code_attr) + attr(a_rva, inject_rva))
 
-    # @Mixin(GuideNpc.class)  (class -> element tag 'c' + дескриптор класса)
+    # @Mixin(GuideNpc.class)
+    # ВАЖНО: value объявлено как Class<?>[], и Mixin (MixinInfo.readTargets)
+    # кастует значение к Iterable. Одиночный элемент (тег 'c' без массива)
+    # даёт ClassCastException: org.objectweb.asm.Type -> java.lang.Iterable
+    # и роняет старт (проверено на build 231). Поэтому строго массив:
+    #   '[' num_values=1 'c' <дескриптор класса>
     mixin_ann = (u2(cp.utf8("Lorg/spongepowered/asm/mixin/Mixin;")) + u2(1)
-                 + u2(cp.utf8("value")) + b"c"
+                 + u2(cp.utf8("value")) + b"[" + u2(1) + b"c"
                  + u2(cp.utf8("Ldev/settledlands/npc/GuideNpc;")))
     mixin_ria = u2(1) + mixin_ann
 

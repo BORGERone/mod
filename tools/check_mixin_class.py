@@ -207,6 +207,15 @@ def main():
 
     for x, y in k["cattrs"]:
         print(f"class attr {cp[x][1]}: {y.hex()}")
+        if cp[x][1] == "RuntimeInvisibleAnnotations":
+            # @Mixin.value ОБЯЗАН быть массивом ('[' ...), иначе MixinInfo.readTargets
+            # падает с ClassCastException: asm.Type -> Iterable (инцидент build 231).
+            i = y.find(b"\x5b\x00\x01\x63")
+            bare = y.find(b"\x63")
+            if i < 0:
+                bad("@Mixin.value закодирован НЕ массивом — будет ClassCastException на старте")
+            elif bare >= 0 and bare < i:
+                print("  (одиночный 'c' встречается раньше массива — проверьте вручную)")
     for acc, ni, di, attrs in k["fields"]:
         print(f"field {cp[ni][1]}:{cp[di][1]}")
     print("\nИТОГ:", "OK" if ok else "ЕСТЬ ОШИБКИ")

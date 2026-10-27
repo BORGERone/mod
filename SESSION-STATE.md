@@ -195,6 +195,31 @@ toml 0.8.0-build231-earlytex + ченджлог, `settledlands-patch-info.txt`. 
 ВАЖНО: в `disasm.py` длина атрибута member'а — u2 индекс + u4 длина; `switch` имеет padding;
 `invokedynamic` arg[0:4] = bootstrap(2)+nat(2).
 
+
+## 27.10.2026 20:14 — BUILD 231 УПАЛ: кодировка @Mixin.value (мой баг), собран 232
+Лог (sha `eecdf922…24bc`, 630 строк, коммит `afd857f`): мод найден (`build231-earlytex.jar`),
+затем FATAL:
+`Mixin prepare for mod settledlands failed preparing EarlyCorpseTextureMixin` +
+`ClassCastException: org.objectweb.asm.Type cannot be cast to java.lang.Iterable`
+(`MixinInfo.readTargets:967` -> `MixinInfo.<init>:881`). Игра не дошла даже до окна.
+ПРИЧИНА: `@Mixin(value = GuideNpc.class)` я закодировал ОДИНОЧНЫМ элементом `63 <utf8>`;
+поле объявлено как `Class<?>[]`, Mixin кастует значение к Iterable ⇒ нужен МАССИВ:
+`5b 0001 63 <utf8>`. У всех рабочих миксинов этого jar именно так
+(GuideCorpseNameTagMixin: `000100250001001e 5b0001 63 0026`).
+УРОК (продолжение урока 224): любая ошибка в аннотации миксина = FATAL на PREPARE, до игры;
+сверяй БАЙТЫ аннотации с уже работающим миксином того же jar, а не «как логично».
+Проверено, что одиночные `method` (тег `s`) и `at` (тег `@`) допустимы — NameTagMixin с ними работает.
+
+### BUILD 232 «earlytex2» — актуальная раздача
+`settledlands-0.8.0-build232-earlytex2.jar`, 1 538 344 B, sha256
+`a75d8a8f724f5e7433be152ddcc672a17b885930444cf74e60128c52bffdf914`, 353 записи / 307 классов,
+diff vs 229: +1 класс (EarlyCorpseTextureMixin 1484 B) и 3 изменённые записи, 350 идентичных.
+Аннотация класса теперь `0001004b00010041 5b0001 63 004c` — совпадает по форме с рабочими.
+Source-zip `SettledLands-Build232-EarlyTex2-Source.zip` (91 992 B распакованного, sha `7487fa5a…1ac4`),
+README `README-Build232-EarlyTex2-RU.txt` (sha `72d07c10…e850`).
+`tools/check_mixin_class.py` теперь валит проверку, если в @Mixin.value нет тега `[`.
+ОТОЗВАНЫ: 230 (правка Code), 231 (кодировка @Mixin). Раздача — только 232.
+
 ## ПРАВИЛО ЮЗЕРА (с 27.10.2026): В КОНЦЕ КАЖДОГО ОТВЕТА — ПРЯМАЯ ССЫЛКА НА JAR
 Формат ссылки (репозиторий публичный, ветка сессии):
 `https://raw.githubusercontent.com/BORGERone/mod/arena/829e0ad0-mod/<имя>.jar`
