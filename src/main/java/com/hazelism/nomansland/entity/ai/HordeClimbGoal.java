@@ -97,6 +97,7 @@ public class HordeClimbGoal extends Goal {
             stepHeight.removeModifier(STEP_BOOST.id());
         }
         this.climbTicks = 0;
+        this.mantling = false;
     }
 
     @Override
@@ -126,12 +127,19 @@ public class HordeClimbGoal extends Goal {
         }
 
         boolean wantsClimb = (this.mob.horizontalCollision || this.hordeMateAhead) && isTargetAbove(target);
-        if (!wantsClimb) {
+        if (!wantsClimb && !this.mantling) {
             return;
         }
-        // Mounting the lip comes first: step-up physics never triggers mid-air,
-        // which is why climbers used to cling to the edge forever.
-        if (tryMantle(target)) {
+        // Edge pull-up comes before everything else: it needs no support gate and
+        // no fatigue budget - hanging one block short of the top is exactly the
+        // situation it exists for. Step-up physics never triggers mid-air, which
+        // is why climbers used to cling to the lip forever.
+        if (this.mantling) {
+            mantleStep();
+            return;
+        }
+        if (tryStartMantle(target)) {
+            mantleStep();
             return;
         }
         // The pile is the only support: a mate underneath or a crowd around.
@@ -191,53 +199,105 @@ public class HordeClimbGoal extends Goal {
         }
     }
 
-    /**
-     * If the obstacle in front of us tops out within reach, pull up and over it:
-     * place the mob on the ledge (after a no-collision check) with a small forward
-     * push. Runs at most once per 10 ticks per mob and only while pressed to a wall.
-     */
-    private boolean tryMantle(LivingEntity target) {
-        if (this.mantleCooldown-- > 0 || !this.mob.horizontalCollision) {
-            return false;
-        }
-        double dirX = target.getX() - this.mob.getX();
-        double dirZ = target.getZ() - this.mob.getZ();
-        double length = Math.sqrt(dirX * dirX + dirZ * dirZ);
-        if (length < 0.001D) {
-            return false;
-        }
-        dirX /= length;
-        dirZ /= length;
+    // How far above the feet a ledge can be and still be grabbed (a zombie hauling
+    // itself up by the arms mounts roughly its own height minus a step).
+    private static final double MANTLE_MAX_REACH = 2.3D;
+    private static final double MANTLE_MIN_REACH = 0.1D;
+    private static final int MANTLE_MAX_TICKS = 14;
 
-        BlockPos front = BlockPos.containing(
-                this.mob.getX() + dirX * 0.9D, this.mob.getY() + 0.2D, this.mob.getZ() + dirZ * 0.9D);
-        if (isFree(front)) {
-            return false; // nothing to mantle over in front of us
+    /**
+     * Edge pull-up detection. Probes the block column in front of the zombie
+     * (toward the prey first, then toward where it is facing) for a wall that
+     * tops out within arm's reach above the feet - {@link #MANTLE_MIN_REACH} to
+     * {@link #MANTLE_MAX_REACH} blocks. The old instant teleport only fired under
+     * 1.4 blocks, and climbers reliably stalled one block short of it; the reach
+     * is now a full haul-up and the motion plays out over a few ticks instead of
+     * a teleport.
+     */
+    private boolean tryStartMantle(LivingEntity target) {
+        if (this.mantleCooldown-- > 0) {
+            return false;
         }
-        int topY = -1;
-        for (int dy = 1; dy <= 3; dy++) {
-            if (isFree(front.above(dy))) {
-                topY = front.getY() + dy;
-                break;
+        double targetDirX = target.getX() - this.mob.getX();
+        double targetDirZ = target.getZ() - this.mob.getZ();
+        double length = Math.sqrt(targetDirX * targetDirX + targetDirZ * targetDirZ);
+        if (length > 0.001D && startMantleTowards(targetDirX / length, targetDirZ / length)) {
+            return true;
+        }
+        // Facing direction as a fallback: the wall we are pressed into is not
+        // always exactly toward the prey (corners, side walls, pile pushes).
+        double yaw = Math.toRadians(this.mob.getYRot());
+        double faceX = -Math.sin(yaw);
+        double faceZ = Math.cos(yaw);
+        return startMantleTowards(faceX, faceZ);
+    }
+
+    private boolean startMantleTowards(double dirX, double dirZ) {
+        double probe = this.mob.getBbWidth() * 0.5D + 0.55D;
+        BlockPos base = BlockPos.containing(
+                this.mob.getX() + dirX * probe, this.mob.getY() + 0.2D, this.mob.getZ() + dirZ * probe);
+        // Walk up the column: solid cells first, the first free cell above them is the ledge top.
+        int topY = Integer.MIN_VALUE;
+        boolean seenSolid = false;
+        for (int dy = 0; dy <= 4; dy++) {
+            BlockPos cell = base.above(dy);
+            if (isFree(cell)) {
+                if (seenSolid) {
+                    topY = cell.getY();
+                    break;
+                }
+            } else {
+                seenSolid = true;
             }
         }
-        if (topY < 0 || topY - this.mob.getY() > 1.4D || topY - this.mob.getY() < 0.1D) {
-            return false; // ledge is not within arm's reach yet - keep climbing
+        if (!seenSolid || topY == Integer.MIN_VALUE) {
+            return false;
         }
-
+        double lift = topY - this.mob.getY();
+        if (lift < MANTLE_MIN_REACH || lift > MANTLE_MAX_REACH) {
+            return false; // ledge not within arm's reach yet (or already level) - keep climbing
+        }
+        // The landing spot on top must fit the whole body.
         double landX = this.mob.getX() + dirX * 0.75D;
         double landZ = this.mob.getZ() + dirZ * 0.75D;
         var landingBox = this.mob.getDimensions(this.mob.getPose())
-                .makeBoundingBox(new net.minecraft.world.phys.Vec3(landX, topY, landZ));
+                .makeBoundingBox(new Vec3(landX, topY, landZ));
         if (!this.mob.level().noCollision(this.mob, landingBox)) {
             return false;
         }
-        this.mob.setPos(landX, topY, landZ);
-        this.mob.setDeltaMovement(dirX * 0.18D, 0.06D, dirZ * 0.18D);
-        this.mob.fallDistance = 0.0F;
-        this.mantleCooldown = 10;
-        this.climbTicks = 0;
+        this.mantling = true;
+        this.mantleTopY = topY;
+        this.mantleDirX = dirX;
+        this.mantleDirZ = dirZ;
+        this.mantleTicksLeft = MANTLE_MAX_TICKS;
         return true;
+    }
+
+    /** One tick of the haul-up: rise along the wall, then step onto the ledge. */
+    private void mantleStep() {
+        if (this.mob.getY() >= this.mantleTopY - 0.05D || this.mantleTicksLeft-- <= 0) {
+            // Arrived (or out of time while close): plant feet on the ledge if it fits.
+            double landX = this.mob.getX() + this.mantleDirX * 0.55D;
+            double landZ = this.mob.getZ() + this.mantleDirZ * 0.55D;
+            var landingBox = this.mob.getDimensions(this.mob.getPose())
+                    .makeBoundingBox(new Vec3(landX, this.mantleTopY, landZ));
+            if (this.mob.level().noCollision(this.mob, landingBox)) {
+                this.mob.setPos(landX, this.mantleTopY, landZ);
+                this.mob.setDeltaMovement(this.mantleDirX * 0.25D, 0.05D, this.mantleDirZ * 0.25D);
+            }
+            this.mantling = false;
+            this.mantleCooldown = 8;
+            this.climbTicks = 0;
+            this.fatigueTicks = 0;
+            this.mob.fallDistance = 0.0F;
+            return;
+        }
+        Vec3 movement = this.mob.getDeltaMovement();
+        this.mob.setDeltaMovement(
+                this.mantleDirX * 0.16D,
+                Math.max(movement.y, 0.30D),
+                this.mantleDirZ * 0.16D);
+        this.mob.fallDistance = 0.0F;
     }
 
     /** Members of the climbing horde: the undead mass plus its banner bearer. */
