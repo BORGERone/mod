@@ -112,6 +112,46 @@ sha256 `b992aad31478dcbd203068d159d2772151e1a8e1905c606b07e41779cb1c8148`, ра�
 Следующая хирургия: `--base settledlands-0.8.0-build228-scenefix.jar --expect-base-sha b992aad3…c148`.
 Проверка ресурсов zip228 ↔ jar228: toml в zip совпадает с jar-версией по версии (0.8.0-build228-scenefix).
 
+## 27.10.2026 (вечер): РАЗБОР ПЛЕЙТЕСТА 228 → BUILD 229 «sablesweep»
+Лог юзера 27.10 (sha `ebf3a716…0bb9`, 69 224 строки, коммит efd9c5b): мод **228 загружен** —
+`loaded 0.8.0-build228-scenefix`. Смерть под вселением в 18:46:24.632 (37/64/-244), «16 body stacks written
+into own corpse», в 18:46:26.612 «stock corpse recorded — no duplicate spawn» (фикс 227 работает), затем
+чистилище → сам-выход в верхний мир в 18:46:36 (перезахода в мир НЕ было).
+
+### БАГ 1 (корень видимого дефекта): watchdog 228 не работал ВООБЩЕ
+`healStuckIvyBodies` искал сущности боксом ±3.0E7. Sable 2.0.5 в `SubLevelInclusiveLevelEntityGetter.get()`
+делает `if (box.getSize() > 100000.0) { logError(box); return; }` — запрос отменяется и сущности НЕ отдаются
+(подтверждено публичным разбором байткода Sable 2.0.5). У бокса ±3.0E7 size = 6.0E7 ⇒ watchdog всегда
+получал пустой список. В логе: **3084** ошибки `Aborting entity get for abnormally large AABB` c 18:41:01
+по 18:49:37, все из `healStuckIvyBodies:422` (≈1/сек × 14 строк) — и ни одной строки `stuck ivy ...`.
+⇒ «невидимое тело 60/60 без модели + шлейф soul-партиклов» = последствие: фикс 228 не исполнялся.
+Урок в копилку: **AABB больше ~1e5 в этом модпаке запрещён** (Sable). Любой «всемирный» поиск — только
+через `level.getAllEntities()`, бокс — не больше ±49000.
+
+### БАГ 2 (найден по исходнику, НЕ покрыт 229): неодетый стоковый труп
+`onCorpseJoin` одевает труп только если в `PENDING` уже лежит тело; если стоковый труп появился раньше
+(порядок событий между модами), `pending == null` → return, а `guaranteeCorpses` в ветке «stock corpse recorded»
+только логирует. Итог: труп остаётся 60/60, без модели тела, без die-анимации, без invulnerable.
+Лечится правкой `guaranteeCorpses` (доодевание с меткой `settledlands_corpse_dressed`) — исходник готов.
+
+### BUILD 229 (собран здесь, без компилятора — zip-хирургия)
+`settledlands-0.8.0-build229-sablesweep.jar`, sha256 `874c97ead4d9f93f5649f5a37749c52fe6f1cfec57f427365040dabf64837c76`, 1 536 587 B.
+Инструмент: `tools/patch_sweep_aabb.py` (читает jar228, правит 2 double-константы в constant pool
+#673 `-3.0E7`→`-49999.0`, #675 `3.0E7`→`49999.0`; класс 19 603 → 19 603 B, отличаются 8 байт; пул не растёт,
+контроль потока не меняется — самая безопасная из возможных правок). Плюс toml (версия + ченджлог,
+проверен tomllib) и `settledlands-patch-info.txt`. Дифф против 228: 3 записи из 352.
+Проверено `tools/verify_jar.py`: zip/toml/lang/mixins/classfile/маркеры/дифф — всё PASS.
+ОГРАНИЧЕНИЕ 229: бокс симметричен относительно НУЛЯ координат ⇒ лечит в пределах ±49999 по каждой оси
+(для этого мира с запасом). Нового кода не добавляет ⇒ БАГ 2 им не лечится.
+Source-zip: `SettledLands-Build229-Sablesweep-Source.zip`, sha256 `a9efca5ed2fd0575913de977d5edebc6b693c4e1d8f6eff9123cc1f1dacb84f5`, 319 026 B, 73 записи.
+В нём `patch-src/.../PlayerCorpsePossession.java` уже с правильными правками (getAllEntities + доодевание)
+— это заготовка build 230 для сборки в сессии с javac и classpath.
+
+### Файлы, добавленные в репозиторий в этот ход
+`settledlands-0.8.0-build229-sablesweep.jar`, `SettledLands-Build229-Sablesweep-Source.zip`,
+`README-Build229-Sablesweep-RU.txt`, `tools/patch_sweep_aabb.py`, `tools/verify_jar.py`, `tools/extract_diag.py`,
+`tools/check_env.sh`, `patch-src-229/dev/settledlands/npc/PlayerCorpsePossession.java`, `latest.log` (свежий, 228).
+
 ## Ключевые sha (история)
 226 `b4a762c8…4633`; 227 jar `6b722021…de3c` / zip `03416d32…d7e4` / README `5432d14e…dbdf`; 228 jar `b992aad3…c148` / zip `7ebebfde…4d70` / README `8eed7207…b11a`; baseline83 `dcbdb263…`; donor b168 `e5ca762b…05e9`; jar172 `fec4b01f…6fcf4f`.
 
