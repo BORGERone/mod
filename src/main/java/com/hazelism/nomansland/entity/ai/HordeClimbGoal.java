@@ -53,6 +53,14 @@ public class HordeClimbGoal extends Goal {
     private boolean supportedFromBelow;
     private int hordeMatesNearby;
 
+    // Edge pull-up ("mantle") state: while active the zombie hauls itself onto
+    // the mantleTopY ledge along the stored horizontal direction, over a few ticks.
+    private boolean mantling;
+    private double mantleTopY;
+    private double mantleDirX;
+    private double mantleDirZ;
+    private int mantleTicksLeft;
+
     public HordeClimbGoal(Mob mob) {
         this.mob = mob;
         this.setFlags(EnumSet.of(Flag.MOVE, Flag.JUMP));
