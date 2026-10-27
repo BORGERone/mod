@@ -3,7 +3,9 @@
 
 Checks that the new corpse already has its owner and die animation *before*
 addFreshEntity, and that non-player / client-world / null-create paths still
-return normally. The build 236 jar is a negative control.
+return normally. The build 236 jar is a negative control. For build 241+, this
+isolated animation fixture supplies a tiny pass-through spawn-hook stand-in;
+the real identity/teleport helper is executed separately in jvm_altar241.py.
 """
 import argparse
 import pathlib
@@ -170,10 +172,17 @@ def run_fixture(java, jar_path):
         folder = pathlib.Path(temp)
         with zipfile.ZipFile(jar_path) as jar:
             actual = jar.read(LIFECYCLE + '.class')
+            new_hook = 'dev/settledlands/npc/AltarCorpseRevival' in {x[:-6] for x in jar.namelist() if x.endswith('.class')}
         classes = {LIFECYCLE: actual, ENTITY: f.blank_class(ENTITY), LIVING: subclass(LIVING, ENTITY),
                    PLAYER: player_class(), LEVEL: f.blank_class(LEVEL), SERVER: server_class(),
                    EVENT: event_class(), TYPE: type_class(), CONTENT: content_class(),
                    CORPSE: corpse_class(), 'CorpseSpawnHarness': harness_class()}
+        if new_hook:
+            helper = 'dev/settledlands/npc/AltarCorpseRevival'
+            classes[helper] = f.fake_class(helper, [], [
+                (9, 'beginDeath', '(L' + PLAYER + ';)V', 0, 1, lambda cp: b'\xb1'),
+                (9, 'spawnAndRemember', '(L' + SERVER + ';L' + ENTITY + ';L' + PLAYER + ';)Z', 2, 3,
+                 lambda cp: b'\x2a\x2b' + f.op(0xb6, cp.method(SERVER, 'addFreshEntity', '(L' + ENTITY + ';)Z')) + b'\xac')])
         for name, data in classes.items():
             path = folder / (name + '.class'); path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(data)
         r = subprocess.run([java, '-Xshare:off', '-Xverify:all', '-cp', str(folder), 'CorpseSpawnHarness'],

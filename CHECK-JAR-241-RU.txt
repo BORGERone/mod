@@ -1,0 +1,21 @@
+Проверка скачанного build 241 (Windows PowerShell)
+
+Сохраните jar по ссылке как файл с расширением .jar и проверьте:
+
+$filename = 'settledlands-0.8.0-build241-altar-body-respawn.jar'
+$url = 'https://raw.githubusercontent.com/BORGERone/mod/arena/24676dbe-mod/settledlands-0.8.0-build241-altar-body-respawn.jar'
+Invoke-WebRequest -Uri $url -OutFile $filename
+(Get-Item $filename).Length
+(Get-FileHash $filename -Algorithm SHA256).Hash
+
+Должно получиться:
+Length = 1548387
+SHA256 = ded3b5b10db1edfeeea6f90ee753d420d1f7f17da92cf136d8db3012346f5b27
+
+Альтернатива для проверки хеша:
+certutil -hashfile settledlands-0.8.0-build241-altar-body-respawn.jar SHA256
+
+Если загрузка не удалась, резервная ссылка:
+https://github.com/BORGERone/mod/raw/arena/24676dbe-mod/settledlands-0.8.0-build241-altar-body-respawn.jar
+
+При несовпадении размера/хеша удалите файл и скачайте заново; не запускайте обрезанный jar. GitHub Contents API для файлов больше 1 MiB не отдаёт base64.

@@ -652,6 +652,12 @@ def logger_classes():
 def build_classes(jar, helper_jar):
     with zipfile.ZipFile(helper_jar) as z:
         helper = z.read(H + '.class')
+    # Build 241's capture/identity logic is exercised with the REAL helper by
+    # jvm_altar241.py. This older fixture isolates the unchanged strict
+    # recovery/health behavior by supplying a pass-through capture adapter.
+    altar_helper = 'dev/settledlands/npc/AltarCorpseRevival'
+    with zipfile.ZipFile(jar) as z:
+        has_altar = altar_helper + '.class' in z.namelist()
     component, mutable = component_classes()
     player_event, interact_event = event_parents()
     logger, fake_logger, utils = logger_classes()
@@ -672,7 +678,7 @@ def build_classes(jar, helper_jar):
         IVY: subset(jar, IVY, {'editingTool', 'onInteractCorpse', 'onInteractSpecificCorpse'}),
         PM: subset(jar, PM, {'onDimensionChange'}, fields={'PURGATORY_LEVEL'}, add_clinit=purgatory_clinit),
         POSS: subset(jar, POSS, {'<clinit>', 'data', 'onPlayerDrops', 'movePendingItemsToCorpse',
-                                 'findOwnerCorpse', 'ownerUuid'}, expose={'movePendingItemsToCorpse'}),
+                                 'findOwnerCorpse', 'ownerUuid'}, expose={'movePendingItemsToCorpse', 'findOwnerCorpse'}),
         H: helper,
         TAG: interface(TAG), NBT: nbt_class(), LIST: list_class(),
         EXT: interface(EXT, [abstract('getPersistentData', '()L' + NBT + ';')]),
@@ -734,6 +740,19 @@ def build_classes(jar, helper_jar):
     }
     for tool in TOOLS:
         classes[tool] = f.fake_class(tool, [], [(1, '<init>', '()V', 1, 1, f.empty_init(ITEM))], super_name=ITEM)
+    if has_altar:
+        find_desc = '(L' + SL + ';L' + VEC + ';Ljava/util/UUID;)L' + C + ';'
+        move_desc = '(L' + SP + ';L' + C + ';)V'
+        def empty(cp):
+            a = Asm(); a.raw(0x2a); p.invokeinterface(a, cp, 'java/util/Collection', 'isEmpty', '()Z', 1)
+            a.raw(0xac); return a.finish()
+        classes[altar_helper] = f.fake_class(altar_helper, [], [
+            (9, 'skipCapture', '(Ljava/util/Collection;L' + SP + ';)Z', 1, 2, empty),
+            (9, 'noteCaptured', '(L' + SP + ';)V', 0, 1, lambda cp: b'\xb1'),
+            (9, 'findForDrops', find_desc, 3, 3, lambda cp: b'\x2a\x2b\x2c' +
+             f.op(0xb8, cp.method(POSS, 'findOwnerCorpse', find_desc)) + b'\xb0'),
+            (9, 'movePendingSafely', move_desc, 2, 2, lambda cp: b'\x2a\x2b' +
+             f.op(0xb8, cp.method(POSS, 'movePendingItemsToCorpse', move_desc)) + b'\xb1')])
     return classes
 
 

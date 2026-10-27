@@ -1,0 +1,2 @@
+ded3b5b10db1edfeeea6f90ee753d420d1f7f17da92cf136d8db3012346f5b27  settledlands-0.8.0-build241-altar-body-respawn.jar
+520288f3060cdae33186c5913d985e332adba669569e554e428be54a8b27b2fb  SettledLands-Build241-AltarBodyRespawn-Source.zip
