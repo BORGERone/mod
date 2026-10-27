@@ -89,6 +89,29 @@
   поэтому даже JAR-ONLY путь упирается в юзера: нужен `settledlands-0.8.0-build228-scenefix.jar` (1 523 701 B,
   sha b992aad3…c148) из его папки mods, либо с Drive.
 
+## 27.10.2026: JAR 228 ПРИНЯТ И ПРОВЕРЕН — база восстановлена
+`settledlands-0.8.0-build228-scenefix.jar` залит юзером в `main` (коммит db70e56) и скопирован в ветку сессии.
+sha256 `b992aad31478dcbd203068d159d2772151e1a8e1905c606b07e41779cb1c8148`, размер 1 523 701 B — **совпадает с эталоном**.
+Проверено `python3 tools/verify_jar.py ... --base build227 --marker ...` (новый инструмент, только stdlib):
+- zip цел, дублей нет; 352 записи / 306 классов; битых classfile нет (v65:234, v50:71, v55:1 — Java 21 для наших классов);
+- toml парсится (tomllib): modId settledlands, version `0.8.0-build228-scenefix`, зависимостей 2;
+- lang en/ru по 698 ключей, согласованы; миксины: 16 + 1, все классы на месте;
+- фикс 228 в байткоде: `private static healStuckIvyBodies(Lnet/minecraft/server/MinecraftServer;)V` присутствует (20 методов vs 19 в 227),
+  и `onServerTick` вызывает его через invokestatic (Methodref #420) — цепочка вызова подтверждена дизассемблером constant pool;
+  строки `stuck ivy body discarded` / `stuck ivy scene rebased`, ключи `settledlands_ivydie_t0/_stage` — на месте;
+  тело ссылается на GuideNpc, GuideCorpseNpc, GetEntitiesOfClass, AABB, ServerLevel.getAllLevels — как в исходнике;
+- **дифф 227→228 = ровно 2 записи**: PlayerCorpsePossession.class (18 283 → 19 603 B) и toml (24 704 → 24 705 B, версия).
+  Остальные 350 записей побайтово идентичны ⇒ это чистая хирургия, ничего не откатилось.
+
+### Известный косметический дефект 228 (в список юзера не входит — только предлагать)
+В toml описание начинается с «Build 226» (163 строки, то же, что в 227): строки про 227 и 228 **не добавлены**,
+`settledlands-patch-info.txt` (91 строка) тоже без упоминаний 227/228. На игру не влияет; лечится правкой одного toml
+без компиляции (но меняет sha jar — только по согласию юзера).
+
+### Рабочая база дальше
+Следующая хирургия: `--base settledlands-0.8.0-build228-scenefix.jar --expect-base-sha b992aad3…c148`.
+Проверка ресурсов zip228 ↔ jar228: toml в zip совпадает с jar-версией по версии (0.8.0-build228-scenefix).
+
 ## Ключевые sha (история)
 226 `b4a762c8…4633`; 227 jar `6b722021…de3c` / zip `03416d32…d7e4` / README `5432d14e…dbdf`; 228 jar `b992aad3…c148` / zip `7ebebfde…4d70` / README `8eed7207…b11a`; baseline83 `dcbdb263…`; donor b168 `e5ca762b…05e9`; jar172 `fec4b01f…6fcf4f`.
 
