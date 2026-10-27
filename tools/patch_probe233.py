@@ -27,7 +27,7 @@ from patch_earlytex_mixin import CP, u2, u4, attr, MIXIN_CLASS
 
 PROBE = "dev/settledlands/diag/TexProbe"
 PROBE_MIXIN = "dev/settledlands/mixin/CorpseRenderProbeMixin"
-NEW_VERSION = "0.8.0-build234-probe"
+NEW_VERSION = "0.8.0-build235-probe"
 CHANGELOG = (
     "Build 233: diagnostics for the corpse model. Build 232 proved the server now sets DATA_TEXTURE "
     "correctly (log line 'corpse texture pre-set: provodnik.bbmodel'), so the remaining problem is on the "
@@ -69,20 +69,27 @@ class Asm:
         self.labels[name] = len(self.buf)
 
     def jump(self, opcode, label):
+        # Смещение ветвления считается от АДРЕСА ОПКОДА, а не от операнда.
+        # Инцидент 234: rel = label - pos давал сдвиг на 1 байт ->
+        # VerifyError "Illegal target of jump or branch" при первом рендере трупа.
         self.buf.append(opcode)
-        self.fixups.append((len(self.buf), label))
+        self.fixups.append((len(self.buf), label))        # позиция ОПЕРАНДА
         self.buf += b"\x00\x00"
 
     def finish(self):
         for pos, lab in self.fixups:
             if lab not in self.labels:
                 raise KeyError(lab)
-            rel = self.labels[lab] - pos
+            # операнд начинается на pos, опкод — на pos-1; смещение считается
+            # от адреса ОПКОДА (JVMS: branchbyte1/2 -> target = opcode_pc + offset)
+            rel = self.labels[lab] - (pos - 1)
+            if not (-32768 <= rel <= 32767):
+                raise ValueError(f"переход {lab} вне диапазона short: {rel}")
             self.buf[pos:pos + 2] = struct.pack(">h", rel)
         return bytes(self.buf)
 
 
-def build_probe_class():
+def build_probe_class(with_main=False):
     cp = CP()
     a_code = cp.utf8("Code")
     a_src = cp.utf8("SourceFile")
@@ -186,6 +193,29 @@ def build_probe_class():
         (0x0009, cp.utf8("logObj"), cp.utf8("(Ljava/lang/String;Ljava/lang/Object;)V"),
          [code_attr(logobj_code, 3, 3)]),
     ]
+    if with_main:
+        m_log_main = cp.method(PROBE, "log", "(Ljava/lang/String;Ljava/lang/String;)V")
+        m_logobj_main = cp.method(PROBE, "logObj", "(Ljava/lang/String;Ljava/lang/Object;)V")
+        s_self, s_a, s_b, s_obj, s_ok = (cp.string("selftest"), cp.string("A"), cp.string("B"),
+                                        cp.string("obj"), cp.string("SELFTEST OK"))
+        for idx in (s_self, s_a, s_b, s_obj, s_ok):
+            assert idx <= 255
+        a = Asm()
+        for val in ("A", "A", "B"):           # третий вызов должен быть отброшен дедупом
+            a.raw(0x12, s_self)
+            a.raw(0x12, s_a if val == "A" else s_b)
+            a.op(0xB8, m_log_main)
+        a.raw(0x12, s_obj)                    # null -> "NULL"
+        a.raw(0x01)
+        a.op(0xB8, m_logobj_main)
+        a.op(0xB2, cp.field("java/lang/System", "out", "Ljava/io/PrintStream;"))
+        a.raw(0x12, s_ok)
+        a.op(0xB6, cp.method("java/io/PrintStream", "println", "(Ljava/lang/String;)V"))
+        a.raw(0xB1)
+        main_code = a.finish()
+        methods.append((0x0009, cp.utf8("main"), cp.utf8("([Ljava/lang/String;)V"),
+                        [code_attr(main_code, 3, 1)]))
+
 
     # ВАЖНО: все записи пула должны быть добавлены ДО cp.dump(), иначе
     # индексы в структуре класса окажутся за границей пула (краш 233:

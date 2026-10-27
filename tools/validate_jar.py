@@ -114,6 +114,11 @@ CP_OPS_U2 = {
 }
 
 
+BRANCH2 = {0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F, 0xA0, 0xA1, 0xA2, 0xA3, 0xA4, 0xA5, 0xA6,
+           0xA7, 0xC6, 0xC7}
+BRANCH4 = {0xC8}
+
+
 def check_code(where, cp, code, max_stack, max_locals, exc, nested, cp_count):
     if max_stack > 65535 or max_locals > 65535:
         err(where, "max_stack/max_locals вне u2")
@@ -148,7 +153,48 @@ def check_code(where, cp, code, max_stack, max_locals, exc, nested, cp_count):
             if raw[3] == 0:
                 err(where, f"multianewarray на {pc}: dims=0")
         pc += ln
+    # цели переходов ОБЯЗАНЫ попадать на границы инструкций
+    # (инцидент 234: VerifyError "Illegal target of jump or branch")
+    starts = set()
+    p2 = 0
+    while p2 < n:
+        starts.add(p2)
+        try:
+            p2 += instr_len(code, p2)
+        except Exception:                      # noqa: BLE001
+            break
+    p3 = 0
+    while p3 < n:
+        op = code[p3]
+        try:
+            ln = instr_len(code, p3)
+        except Exception:                      # noqa: BLE001
+            break
+        raw = code[p3:p3 + ln]
+        targets = []
+        if op in BRANCH2:
+            targets.append(p3 + struct.unpack(">h", raw[1:3])[0])
+        elif op in BRANCH4:
+            targets.append(p3 + struct.unpack(">i", raw[1:5])[0])
+        elif op in (0xAA, 0xAB):
+            pad = (4 - (p3 + 1) % 4) % 4
+            q = p3 + 1 + pad
+            targets.append(p3 + struct.unpack(">i", code[q:q + 4])[0])
+            if op == 0xAA:
+                lo, hi = struct.unpack(">ii", code[q + 4:q + 12])
+                for k in range(hi - lo + 1):
+                    targets.append(p3 + struct.unpack(">i", code[q + 12 + 4 * k:q + 16 + 4 * k])[0])
+            else:
+                npr = struct.unpack(">i", code[q + 4:q + 8])[0]
+                for k in range(npr):
+                    targets.append(p3 + struct.unpack(">i", code[q + 8 + 8 * k + 4:q + 12 + 8 * k + 4])[0])
+        for t in targets:
+            if t not in starts:
+                err(where, f"переход на {p3} ведёт на {t}, а это НЕ граница инструкции")
+        p3 += ln
     for (s, e, h, ct) in exc:
+        if h not in starts:
+            err(where, f"exception handler {h} не на границе инструкции")
         if not (s < e <= n):
             err(where, f"exception_table: границы {s}..{e} вне кода (len={n})")
         if h >= n:
