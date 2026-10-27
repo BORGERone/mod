@@ -30,6 +30,7 @@ import argparse, json, struct, sys, zipfile
 sys.path.insert(0, __file__.rsplit("/", 1)[0])
 from disasm import parse_class, OPS, cls_name, ref, const_str  # noqa: E402
 from decode import instr_len  # noqa: E402
+import smt  # noqa: E402
 
 ERRORS = []
 WARN = []
@@ -119,6 +120,29 @@ BRANCH2 = {0x99, 0x9A, 0x9B, 0x9C, 0x9D, 0x9E, 0x9F, 0xA0, 0xA1, 0xA2, 0xA3, 0xA
 BRANCH4 = {0xC8}
 
 
+def desc_slots(desc):
+    """Слоты аргументов метода в дескрипторе (long/double — два)."""
+    i = 1
+    end = desc.index(")")
+    n = 0
+    while i < end:
+        c = desc[i]
+        if c == "[":
+            while desc[i] == "[":
+                i += 1
+            if desc[i] == "L":
+                i = desc.index(";", i)
+            i += 1
+            n += 1
+        elif c == "L":
+            i = desc.index(";", i) + 1
+            n += 1
+        else:
+            n += 2 if c in "JD" else 1
+            i += 1
+    return n
+
+
 def check_code(where, cp, code, max_stack, max_locals, exc, nested, cp_count):
     if max_stack > 65535 or max_locals > 65535:
         err(where, "max_stack/max_locals вне u2")
@@ -146,12 +170,24 @@ def check_code(where, cp, code, max_stack, max_locals, exc, nested, cp_count):
             idx = struct.unpack(">H", raw[1:3])[0]
             if not (0 < idx < cp_count) or cp[idx] is None or cp[idx][0] not in CP_OPS_U2[op]:
                 err(where, f"{OPS[op][0]} на {pc}: индекс #{idx} не в пуле или неверный тег")
-        elif op == 0xC5:                       # multianewarray: cp + dims
-            idx = struct.unpack(">H", raw[1:3])[0]
-            if not (0 < idx < cp_count) or cp[idx] is None or cp[idx][0] != 7:
-                err(where, f"multianewarray на {pc}: индекс #{idx} не Class")
-            if raw[3] == 0:
-                err(where, f"multianewarray на {pc}: dims=0")
+            elif op == 0xB9:
+                # count = objectref + слоты аргументов; long/double — два слота
+                ci, nti = struct.unpack(">HH", cp[idx][1])
+                desc = None
+                if cp[nti] and cp[nti][0] == 12:
+                    mu, du = struct.unpack(">HH", cp[nti][1])
+                    if cp[du] and cp[du][0] == 1:
+                        desc = cp[du][1]
+                if desc:
+                    slots = 1 + desc_slots(desc)
+                    if raw[3] != slots:
+                        err(where, f"invokeinterface на {pc}: count={raw[3]}, а по дескриптору "
+                                   f"{desc} нужно {slots} (аргументы + objectref) — VerifyError")
+                if raw[4] != 0:
+                    err(where, f"invokeinterface на {pc}: последний байт должен быть 0")
+            elif op == 0xC5:
+                if raw[3] == 0:
+                    err(where, f"multianewarray на {pc}: dims=0")
         pc += ln
     # цели переходов ОБЯЗАНЫ попадать на границы инструкций
     # (инцидент 234: VerifyError "Illegal target of jump or branch")
@@ -201,6 +237,64 @@ def check_code(where, cp, code, max_stack, max_locals, exc, nested, cp_count):
             err(where, f"exception_table: handler {h} вне кода")
         if ct != 0:
             class_ok(where, cp, ct, "exception_table.catch_type")
+    # --- StackMapTable против кода (инцидент 230/234) ---------------------
+    # Каждая ветка и каждый exception handler ОБЯЗАНЫ иметь фрейм (major >= 50),
+    # иначе JVM на этапе верификации падает. Инструкция сразу после
+    # безусловного перехода тоже требует фрейма.
+    frames = []
+    for an, body in nested:
+        if an == "StackMapTable":
+            try:
+                frames = smt.parse(body)
+            except Exception as e:                 # noqa: BLE001
+                err(where, f"StackMapTable: фреймы не разбираются: {e}")
+                frames = []
+    if frames:
+        fset = set()
+        prev = -1
+        for f in frames:
+            off = f["offset"]
+            if off >= n:
+                err(where, f"StackMapTable: фрейм на {off} вне кода (len={n})")
+            elif off not in starts:
+                err(where, f"StackMapTable: фрейм на {off} — НЕ граница инструкции")
+            if off <= prev:
+                err(where, f"StackMapTable: фреймы не по возрастанию ({off} после {prev})")
+            fset.add(off)
+            prev = off
+        need = set()
+        p4 = 0
+        while p4 < n:
+            op4 = code[p4]
+            ln4 = instr_len(code, p4)
+            raw4 = code[p4:p4 + ln4]
+            if op4 in BRANCH2:
+                need.add(p4 + struct.unpack(">h", raw4[1:3])[0])
+            elif op4 in BRANCH4:
+                need.add(p4 + struct.unpack(">i", raw4[1:5])[0])
+            elif op4 in (0xAA, 0xAB):
+                pad = (4 - (p4 + 1) % 4) % 4
+                q = p4 + 1 + pad
+                need.add(p4 + struct.unpack(">i", code[q:q + 4])[0])
+                if op4 == 0xAA:
+                    lo, hi = struct.unpack(">ii", code[q + 4:q + 12])
+                    for k in range(hi - lo + 1):
+                        need.add(p4 + struct.unpack(">i", code[q + 12 + 4 * k:q + 16 + 4 * k])[0])
+                else:
+                    npr = struct.unpack(">i", code[q + 4:q + 8])[0]
+                    for k in range(npr):
+                        need.add(p4 + struct.unpack(">i", code[q + 8 + 8 * k + 4:q + 12 + 8 * k + 4])[0])
+            if op4 in (0xA7, 0xC8, 0xAA, 0xAB, 0xBF) or 0xAC <= op4 <= 0xB1:
+                # после безусловного перехода идёт новый базовый блок
+                if p4 + ln4 < n:
+                    need.add(p4 + ln4)
+            p4 += ln4
+        for (s_, e_, h_, ct_) in exc:
+            need.add(h_)
+        for t in sorted(need):
+            if t < n and t not in fset:
+                err(where, f"нет StackMapTable-фрейма для адреса {t} "
+                           f"(цель ветки/обработчик) — JVM упадёт с VerifyError")
     for an, body in nested:
         check_attr(where, cp, an, body, cp_count)
 

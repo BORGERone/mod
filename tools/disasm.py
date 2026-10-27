@@ -193,8 +193,10 @@ def disasm(code, cp, labels_only=False):
                 n = hi - lo + 1
                 body = code[q:q + 12 + 4 * n]
                 for k in range(n):
-                    t = pc + struct.unpack(">i", body[12 + 4 * k:16 + 4 * k])[0]
-                    targets.add(t)
+                    chunk = body[12 + 4 * k:16 + 4 * k]
+                    if len(chunk) < 4:
+                        break
+                    targets.add(pc + struct.unpack(">i", chunk)[0])
                 arg = body
                 ln = len(body)
             else:
@@ -216,8 +218,9 @@ def disasm(code, cp, labels_only=False):
             idx = arg[-1] if len(arg) == 1 else struct.unpack(">H", arg)[0]
             extra = f"  # {const_str(cp, idx)}"
         elif name == "invokedynamic":
-            n2, t2 = struct.unpack(">HH", arg[0:4])
-            extra = f"  # {cp[n2][1]}{cp[t2][1]}"
+            t2 = struct.unpack(">H", arg[2:4])[0]
+            e = cp[t2] if 0 <= t2 < len(cp) else None
+            extra = "  # invokedynamic" + (f" {e[1]}" if e else "")
         elif name.startswith(("get", "put", "invoke")) or name in ("new", "checkcast", "instanceof", "anewarray"):
             idx = struct.unpack(">H", arg[:2])[0]
             extra = f"  # {ref(cp, idx)}"

@@ -397,3 +397,19 @@ Build 230 ОТОЗВАН; актуальная раздача — 229 (sha 874c9
 - 233 (пул/SourceFile) и 234 (цели переходов) — постоянные регресс-кейсы для `tools/validate_jar.py`.
 - `tools/selftest_probe.py`: сборка того же генератора + запуск реальной JVM, ожидание маркеров.
 - Билд 235 собирается только после шлюза (валидатор → JVM-самотест → check_mixin_class → verify_jar).
+
+## 28. 27.10.2026 — build 236 «corpse-tex» + JVM-верификация
+- Причина «прозрачного трупа»: DATA_TEXTURE (имя модели) выставляется последней
+  строкой `applyProfile()` и в конце `setProfile()`, а вызовы обёрнуты в
+  `catch (Throwable ignored)`. Любое исключение выше = пустая текстура = рендер
+  трупа отменяется (`GuideCorpseFreezeMixin` при `getModel()==null` не рисует).
+- 236: DATA_TEXTURE пишется в начале `GuideNpc.applyProfile()` (через
+  `Objects.toString(texture,"")`) и в конце `PlayerCorpsePossession.dressBodyCorpse()`
+  из `PendingBody.model()` + лог `[SettledLands][corpse] model=… tex=…`.
+- Добавлены инструменты: `tools/classedit.py` (вставка в Code со пересчётом всех
+  смещений), `tools/smt.py` (StackMapTable parse/build с сохранением типов),
+  `tools/jvm_verify.py` (верификация настоящей JVM на заглушках).
+- Валидатор усилен: границы инструкций для фреймов, наличие фреймов на целях
+  ветвлений/обработчиках, count у `invokeinterface`.
+- Калибровка: 230 — FAIL (`Bad instruction`), 234 — FAIL (`Illegal target`),
+  232/236 — OK.
