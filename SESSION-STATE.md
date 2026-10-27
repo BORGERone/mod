@@ -258,6 +258,38 @@ ci.cancel(); m.render(...);                                          // рису
 проверка @Mixin — ищет `5b 0001` (массив) и в форме `c`, и в форме `s`.
 Отозваны: 230, 231. 232 рабочий, но дефект не закрывает.
 
+
+## 27.10.2026 20:27 — BUILD 233 УПАЛ НА СКАНЕ (мой баг), собран 234 + строгий валидатор + AI-GUIDE
+Лог (sha `d9a1db1f…e668`, 1177 строк, коммит `817100c`):
+`An error occurred scanning file Mod file: ...build233-probe.jar` ->
+`java.lang.ArrayIndexOutOfBoundsException: Index 79 out of bounds for length 79` ->
+`org.objectweb.asm.ClassReader.readUtf` -> `ModFile.scanFile`. Игра умерла до загрузки модов.
+ПРИЧИНА: в `TexProbe` `cp.utf8("TexProbe.java")` вызывался ПОСЛЕ `cp.dump()` (list-литерал
+вычисляется слева направо), поэтому `SourceFile.sourcefile_index=79` при пуле из 79 записей.
+УРОК: NeoForge на старте читает ASM-ом КАЖДЫЙ класс в jar ⇒ любой структурный дефект = краш
+до игры; «не грузится, ошибка в скане» = смотреть пул/атрибуты, а не миксины.
+
+### Новый обязательный инструмент: tools/validate_jar.py
+Строгая валидация ВСЕГО jar: пул (все ссылки и теги), операнды всех инструкций,
+exception_table, полный разбор Code/LineNumberTable/StackMapTable/аннотаций/SourceFile/
+Signature/Nest*/InnerClasses/BootstrapMethods/ConstantValue/Exceptions, версия 49..65,
+наличие миксинов из JSON, форма @Mixin. КАЛИБРОВКА (обязательна): на рабочем 232 — «ПРОЙДЕНЫ»
+(307 классов), на сломанном 233 — падает ровно на `SourceFile #79`. Ложные срабатывания
+по ходу отладки исправлены (verification_type_info 3 байта для tag 7/8; invokestatic может
+ссылаться на InterfaceMethodref; NestHost — без счётчика).
+
+### AI-GUIDE-SettledLands.md (в репозитории, новое требование юзера)
+Правила: шлюз проверок перед каждой выдачей, калибровка валидатора на рабочем билде,
+регресс-тест на сломанном, «сначала измерение — потом правка», оптимизация (ноль работы
+в per-frame путях, дедуп логов, AABB ≤ 1e5 из-за Sable), журнал инцидентов 230/231/233.
+
+### BUILD 234 «probe» — актуальная раздача
+`settledlands-0.8.0-build234-probe.jar`, 1 540 699 B,
+sha256 `f83b8c69178176ecfbd3a3136e2328f25cbf80af791a818f0ab200a7fd6039b7`, 355 записей / 309 классов.
+Дифф vs 232: +2 класса (TexProbe, CorpseRenderProbeMixin), 3 изменённые записи, 350 идентичных.
+`validate_jar.py` — ПРОЙДЕНО, `check_mixin_class.py` — OK для обоих новых классов.
+Назначение: измерить клиентскую сторону рендера трупа (см. README-Build234-Probe-RU.txt).
+
 ## ПРАВИЛО ЮЗЕРА (с 27.10.2026): В КОНЦЕ КАЖДОГО ОТВЕТА — ПРЯМАЯ ССЫЛКА НА JAR
 Формат ссылки (репозиторий публичный, ветка сессии):
 `https://raw.githubusercontent.com/BORGERone/mod/arena/829e0ad0-mod/<имя>.jar`

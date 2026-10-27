@@ -27,7 +27,7 @@ from patch_earlytex_mixin import CP, u2, u4, attr, MIXIN_CLASS
 
 PROBE = "dev/settledlands/diag/TexProbe"
 PROBE_MIXIN = "dev/settledlands/mixin/CorpseRenderProbeMixin"
-NEW_VERSION = "0.8.0-build233-probe"
+NEW_VERSION = "0.8.0-build234-probe"
 CHANGELOG = (
     "Build 233: diagnostics for the corpse model. Build 232 proved the server now sets DATA_TEXTURE "
     "correctly (log line 'corpse texture pre-set: provodnik.bbmodel'), so the remaining problem is on the "
@@ -187,15 +187,22 @@ def build_probe_class():
          [code_attr(logobj_code, 3, 3)]),
     ]
 
-    out = [b"\xca\xfe\xba\xbe", u2(0), u2(49), cp.dump(),
-           u2(0x0031), u2(this_idx), u2(super_idx), u2(0),          # public final super
-           u2(1),                                                   # fields
-           u2(0x001A) + u2(cp.utf8("LAST")) + u2(cp.utf8("Ljava/util/HashMap;")) + u2(0),
-           u2(len(methods))]
+    # ВАЖНО: все записи пула должны быть добавлены ДО cp.dump(), иначе
+    # индексы в структуре класса окажутся за границей пула (краш 233:
+    # ClassReader.readUtf AIOOBE Index 79 out of bounds for length 79).
+    field_body = (u2(0x001A) + u2(cp.utf8("LAST"))
+                  + u2(cp.utf8("Ljava/util/HashMap;")) + u2(0))
+    methods_body = bytearray()
     for acc, ni, di, attrs in methods:
-        out.append(u2(acc) + u2(ni) + u2(di) + u2(len(attrs)) + b"".join(attrs))
-    out.append(u2(1) + attr(a_src, u2(cp.utf8("TexProbe.java"))))
-    return b"".join(out), dict(cp=len(cp.items), log=len(log_code), logobj=len(logobj_code))
+        methods_body += u2(acc) + u2(ni) + u2(di) + u2(len(attrs)) + b"".join(attrs)
+    attrs_body = u2(1) + attr(a_src, u2(cp.utf8("TexProbe.java")))
+
+    body = (u2(0x0031) + u2(this_idx) + u2(super_idx) + u2(0)      # public final super
+            + u2(1) + field_body                                   # fields
+            + u2(len(methods)) + bytes(methods_body)
+            + attrs_body)
+    out = b"\xca\xfe\xba\xbe" + u2(0) + u2(49) + cp.dump() + body
+    return out, dict(cp=len(cp.items), log=len(log_code), logobj=len(logobj_code))
 
 
 def build_probe_mixin():
@@ -289,11 +296,11 @@ def build_probe_mixin():
     class_attrs = (attr(a_src, u2(cp.utf8("CorpseRenderProbeMixin.java")))
                    + attr(a_ria, u2(1) + mixin_ann))
 
-    out = (b"\xca\xfe\xba\xbe" + u2(0) + u2(65) + cp.dump()
-           + u2(0x0421) + u2(this_idx) + u2(super_idx) + u2(0)
-           + u2(0)
-           + u2(2) + init_method + handler
-           + u2(2) + class_attrs)
+    body = (u2(0x0421) + u2(this_idx) + u2(super_idx) + u2(0)
+            + u2(0)
+            + u2(2) + init_method + handler
+            + u2(2) + class_attrs)          # оба счётчика атрибутов сверены ниже
+    out = b"\xca\xfe\xba\xbe" + u2(0) + u2(65) + cp.dump() + body
     return out, dict(cp=len(cp.items), code=len(code))
 
 
