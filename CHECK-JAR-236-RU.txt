@@ -1,0 +1,32 @@
+Проверка скачанного jar — build 236
+==================================
+Если игра пишет "File mods\\settledlands-0.8.0-build236-corpse-tex.jar is not a jar file"
+или "zip END header not found" — файл скачался НЕ ЦЕЛИКОМ. Сам jar на GitHub целый:
+1541160 байт, 355 записей, sha256
+4d640528b565e788450be82ec237ca950c3dd3a3e3a8646fccde12f8534ddecf
+
+Шаг 1. Удалить битый файл из mods
+  del "$env:APPDATA\.minecraft\mods\settledlands-0.8.0-build236-corpse-tex.jar"
+
+Шаг 2. Скачать заново и сразу проверить (PowerShell)
+  $u = "https://raw.githubusercontent.com/BORGERone/mod/arena/829e0ad0-mod/settledlands-0.8.0-build236-corpse-tex.jar"
+  $out = "$env:APPDATA\.minecraft\mods\settledlands-0.8.0-build236-corpse-tex.jar"
+  Invoke-WebRequest -Uri $u -OutFile $out
+  (Get-Item $out).Length
+  (Get-FileHash $out -Algorithm SHA256).Hash
+
+Должно быть ровно:
+  Length = 1541160
+  Hash   = 4D640528B565E788450BE82EC237CA950C3DD3A3E3A8646FCCDE12F8534DDECF
+
+Если Length меньше — качаем другим способом:
+
+Шаг 3 (резерв A, jsDelivr)
+  Invoke-WebRequest -Uri "https://cdn.jsdelivr.net/gh/BORGERone/mod@arena/829e0ad0-mod/settledlands-0.8.0-build236-corpse-tex.jar" -OutFile $out
+
+Шаг 3 (резерв B, через GitHub API, base64)
+  $j = Invoke-RestMethod "https://api.github.com/repos/BORGERone/mod/contents/settledlands-0.8.0-build236-corpse-tex.jar?ref=arena/829e0ad0-mod"
+  [IO.File]::WriteAllBytes($out, [Convert]::FromBase64String($j.content))
+  (Get-Item $out).Length
+
+Не запускать игру, пока Length не 1541160.

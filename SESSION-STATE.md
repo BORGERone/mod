@@ -413,3 +413,11 @@ Build 230 ОТОЗВАН; актуальная раздача — 229 (sha 874c9
   ветвлений/обработчиках, count у `invokeinterface`.
 - Калибровка: 230 — FAIL (`Bad instruction`), 234 — FAIL (`Illegal target`),
   232/236 — OK.
+
+## 29. 27.10.2026 — «вылет» на 236 = недокачанный jar
+- latest.log (origin/main `10b423f`, 1170 строк): `File mods\settledlands-0.8.0-build236-corpse-tex.jar
+  is not a jar file` → `ZipException: zip END header not found`. Мод не загрузился,
+  дальше каскад (`zetafix: could not resolve mod container for quark`).
+- Сам jar исправен: 1 541 160 B, 355 записей, EOCD на 1 541 138, `testzip()` → None.
+- Инструкция для юзера: `CHECK-JAR-236-RU.txt` (PowerShell + сверка Length/sha256,
+  резервы jsDelivr и GitHub API).
