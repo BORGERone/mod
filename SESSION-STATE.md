@@ -152,6 +152,49 @@ Source-zip: `SettledLands-Build229-Sablesweep-Source.zip`, sha256 `a9efca5ed2fd0
 `README-Build229-Sablesweep-RU.txt`, `tools/patch_sweep_aabb.py`, `tools/verify_jar.py`, `tools/extract_diag.py`,
 `tools/check_env.sh`, `patch-src-229/dev/settledlands/npc/PlayerCorpsePossession.java`, `latest.log` (свежий, 228).
 
+
+## 27.10.2026 — BUILD 231 «earlytex» СОБРАН (сам, без javac) — актуальная раздача
+`settledlands-0.8.0-build231-earlytex.jar`, sha256 `c1ca5ebf9d642bbd671af1f2ee88db8dfd1299e1ed63ac9f676582d9e5373db3`, 1 538 081 B, 353 записи / 307 классов.
+Source-zip `SettledLands-Build231-EarlyTex-Source.zip` (31 174 B, sha `bd200bce…9a7e`, 9 записей), README `README-Build231-EarlyTex-RU.txt` (4 760 B, sha `8a7e72ce…2279`).
+
+### Новая техника: ручная сборка КЛАССА (не патч чужого Code)
+`tools/patch_earlytex_mixin.py` — пишет class-файл «с нуля» (CP + 2 метода + аннотации), поэтому
+структура гарантированно валидна: нет вставок в существующие Code-атрибуты. Скелет аннотаций
+скопирован из рабочих миксинов jar: `@Mixin` = RuntimeInvisibleAnnotations (элемент `value`, тег `c`,
+Utf8-дескриптор класса), `@Inject(method, at=@At("HEAD"), require=0)` = RuntimeVisibleAnnotations.
+Тело: 40 байт, без ветвлений, max_stack 3, max_locals 2 → StackMapTable не нужен; Mixin всё равно
+пересчитывает фреймы (COMPUTE_FRAMES).
+
+### Что установлено по байткоду 229 (важные факты)
+- `GuideNpc.texturePath()` = 14 байт: entityData(DATA_TEXTURE) -> checkcast String; NBT не читается.
+- `applyProfile()V`: 236 байт; DATA_TEXTURE пишется на 186..211 (предпоследний блок), ПОСЛЕ
+  setCustomName(95/103), DATA_SCALE(127), Attributes.SCALE(160), refreshDimensions(164), setPoseIndex(183).
+- `GuideNpc.setProfile()` САМ вызывает applyProfile() (offset 38) — второй вызов из dressBodyCorpse избыточен.
+- `dressBodyCorpse` в jar 229 совпадает с patch-src (проверено дизассемблером): профиль одевается только
+  если `body.model()` непуст, весь блок в `catch (Throwable ignored)`.
+- `GuideNpc.<init>` всегда кладёт непустой profile (offset 27) ⇒ `profile()` не бывает null;
+  `readAdditionalSaveData` тоже зовёт applyProfile() (offset 342) ⇒ старые трупы лечатся при перезагрузке чанка.
+- Список вызывающих applyProfile (все серверные, клиента нет!): RevivalNpcHelper.tryReviveNpc,
+  PlayerCorpsePossession.dressBodyCorpse, IvyDeathScene.onTick, GuideNpc.beginEscort/beginMobilityWatch/
+  finishEscort/setProfile/readAdditionalSaveData.
+- `GuideCorpseNpc.defineSynchedData` вызывает super ⇒ DATA_TEXTURE у трупа зарегистрирован (гипотеза
+  «accessor не зарегистрирован» отпала).
+- Соседние миксины в jar сборки 229 тоже собраны вручную (нет @Shadow, нет refmap) и работают.
+
+### build 231
+`dev/settledlands/mixin/EarlyCorpseTextureMixin` + строка в `settledlands.mixins.json` (mixins, 17 шт),
+toml 0.8.0-build231-earlytex + ченджлог, `settledlands-patch-info.txt`. Дифф против 229: 1 новый класс +
+3 изменённые записи, 350 идентичных. Байткод существующих классов НЕ тронут (в отличие от 230).
+Лог-маркер для следующей диагностики: `[SettledLands] corpse texture pre-set: <имя модели>`
+(пусто после двоеточия = профиль трупа не заполнен; непусто, а модель коричневая = имя не совпало с файлом).
+
+### Инструменты, добавленные в этой сессии
+`tools/disasm.py` (мини-дизассемблер + разбор Code/attr), `tools/decode.py` (точный покомандный
+декодер + StackMapTable), `tools/check_mixin_class.py` (валидация самописного класса: структура, пул,
+стек-баланс, отсутствие ветвлений), `tools/patch_earlytex_mixin.py` (генератор+jар-сборка).
+ВАЖНО: в `disasm.py` длина атрибута member'а — u2 индекс + u4 длина; `switch` имеет padding;
+`invokedynamic` arg[0:4] = bootstrap(2)+nat(2).
+
 ## ПРАВИЛО ЮЗЕРА (с 27.10.2026): В КОНЦЕ КАЖДОГО ОТВЕТА — ПРЯМАЯ ССЫЛКА НА JAR
 Формат ссылки (репозиторий публичный, ветка сессии):
 `https://raw.githubusercontent.com/BORGERone/mod/arena/829e0ad0-mod/<имя>.jar`
