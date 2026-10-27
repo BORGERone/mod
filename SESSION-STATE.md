@@ -211,3 +211,20 @@ Attributes.SCALE, refreshDimensions, setPoseIndex), а `PlayerCorpsePossession.d
 План 230: в dressBodyCorpse выставлять DATA_TEXTURE первым и логировать каждый шаг; в BbModelManager писать
 «model 'X' not found / parse failed»; вложить ivy_oleander.bbmodel в jar рядом с ivy.bbmodel (сейчас копируется
 только sidecar .uvshift.txt); HUD трупа — current/max (1/60 уже так и есть).
+
+## BUILD 230 «modelfix» — СОБРАН (27.10.2026, байткод-хирургия)
+Файлы: `settledlands-0.8.0-build230-modelfix.jar` sha256 `b41dc40574e3c2d809534107e46f8a7037f9e13e052331390e2a2e5bf4f4b818` (1 536 982 B);
+`SettledLands-Build230-Modelfix-Source.zip` sha256 `95a7c6eac02ecf92aa319f5b99f6c8c97af59d98e2ebeedf9fa9c58b2658692b` (329 535 B, 76 записей);
+`README-Build230-Modelfix-RU.txt`.
+Суть правки: в начало `GuideNpc.applyProfile()` вставлены 14 байт —
+`aload_0; getfield entityData(#248); getstatic DATA_TEXTURE(#222); aload_1; getfield NpcProfile.texture(#316);
+invokevirtual SynchedEntityData.set(#252)` — то есть штатная последовательность, которую игра выполняет
+в конце метода (offset 190), но раньше и без подстановки "" для null. Пул констант не менялся, новых
+ветвлений нет, новых stack map frames не нужно, max_stack 5 покрывает 3.
+Инструменты: `tools/patch_model_fix.py` (патчер), `tools/check_class.py` (структурный валидатор без JVM).
+Валидация: пул/поля/интерфейсы/класс-атрибуты идентичны; изменён ровно 1 метод; code_len 236→250;
+хвост кода побайтово совпал; LineNumberTable все start_pc +14; StackMapTable 12 фреймов, первый
+offset_delta 56→70, остаток идентичен; оба class-файла разбираются до последнего байта.
+Дифф jar 229→230: 3 записи из 352 (GuideNpc.class, toml, patch-info). `tools/verify_jar.py` — ALL PASS,
+версия `0.8.0-build230-modelfix`, lang 698+698, миксины 16+1.
+Запуск в JVM проверить НЕЛЬЗЯ (нет MC/Maven) ⇒ плейтест за юзером. Откат — 229 (sha 874c97ea…7c76).
