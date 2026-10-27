@@ -228,3 +228,13 @@ offset_delta 56→70, остаток идентичен; оба class-файла
 Дифф jar 229→230: 3 записи из 352 (GuideNpc.class, toml, patch-info). `tools/verify_jar.py` — ALL PASS,
 версия `0.8.0-build230-modelfix`, lang 698+698, миксины 16+1.
 Запуск в JVM проверить НЕЛЬЗЯ (нет MC/Maven) ⇒ плейтест за юзером. Откат — 229 (sha 874c97ea…7c76).
+
+## 27.10.2026 19:52 — краш на 230: НЕ наш баг, битая загрузка
+`latest.log` (192 488 B): `Error during pre-loading phase: File mods\settledlands-0.8.0-build230-modelfix.jar
+is not a jar file`, причина `java.util.zip.ZipException: zip END header not found` — файл в mods обрезан/недокачан.
+Локальный jar и файл на GitHub целые: размер 1 536 982 B, sha256 `b41dc405…f4b818`, EOCD на позиции 1 536 960,
+центральный каталог на месте, 352 записи, `unzip -t` без ошибок, API GitHub отдаёт тот же размер.
+В mods при этом оставался и build228 (в логе `Found mod file ... build228-scenefix.jar`) — оба надо вычистить,
+оставить только 230.
+Правило для выдачи: всегда напоминать проверку `certutil -hashfile <jar> SHA256` + размер, и что качать надо
+«Сохранить ссылку как…», а не «скачать страницу».
