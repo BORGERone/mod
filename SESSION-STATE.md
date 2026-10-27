@@ -75,3 +75,18 @@
 - latest.log в репозитории — 26.10 22:25–22:29, мод **0.8.0-build222-corpsevisible**, строка
   «stock corpse missing - spawned our own for BORGER (possessed=true)» = поведение ДО фикса 227.
   Это не фидбек по 228 — для диагностики нужен свежий лог с jar 228.
+
+## ПОПОЛНЕНИЕ 27.10.2026 (после заливки юзером 2 файлов в main)
+В `main` (коммит b935c29) юзер залил:
+- `settledlands-0.8.0-build227-restore.jar` — это **настоящий build 227**, sha256 `6b7220216d54ba8a1197fc47ffeb3ba5e7fb4b350c3706571b967332f876de3c`
+  (совпадает с историей), 1 522 990 B, toml-версия `0.8.0-build227-restore`, 352 записи / 306 классов,
+  lang 698+698, `healStuckIvyBodies` ОТСУТСТВУЕТ ⇒ это база ДО фикса 228.
+- `SettledLands-Workspace-Backup-2026-10-21-build132.zip` — старый бэкап рабочего дерева эпохи **build 132**
+  (21.10.2026): patch-src 50 файлов (GD/Graph/Screen ещё НЕ слитые с 226), tests/ (харнесы + run_tests.py),
+  prepare_classpath.py, build_patch.py, package_source.py, AI-GUIDE v1.2 (≤132), resources b132, jar132.
+ЧЕГО ПО-ПРЕЖНЕМУ НЕТ: jar 228 (sha b992aad3…c148, 1 523 701 B), SettledLands-Build228-SceneFix-Source.zip
+(7ebebfde…4d70, 314 986 B, 72 flat entry), build_surgery.py, merge227/ (dec172/dec226/MergeCheck), README-227/228.
+⇒ Найти/залить 228. Альтернатива: включить google_drive и взять с Drive 227-source-zip (`1kfOI_BGUNoNuElMS5o_Vy7gOw7MUMmYg`)
+— в нём patch-src уже эпохи 227 (слитые GD/Graph/Screen + PCP с фиксами 227) и AI-GUIDE ≤227; фикс 228 придётся переписать заново.
+Ограничение среды (сеть): Maven/Mojang/NeoForge НЕ доступны, javac НЕТ (только JRE 25 из `pip install jdk4py`
+в /home/user/tools/jdkpkg) ⇒ компиляция и прогон 923 тестов в этой сессии невозможны; правки только байткодом/патчем jar.
