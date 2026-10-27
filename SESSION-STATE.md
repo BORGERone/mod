@@ -69,6 +69,26 @@
 нет classpath Minecraft 1.21.1 / NeoForge 21.1.253 (Maven/Mojang заблокированы), а без них `PlayerCorpsePossession.java`
 не скомпилировать. Компиляция возможна только в сессии с доступом к Maven.
 
+## §0 ГЛАВНОЕ ПРАВИЛО НОВОЙ СЕССИИ: СНАЧАЛА EGRESS, ПОТОМ ПЛАНЫ
+Первым действием: `bash tools/check_env.sh` (в репозитории). Он печатает вердикт COMPILE-CAPABLE или JAR-ONLY.
+Формула воспроизводимости из исходников = **cpmin (classpath, ~60 МБ) + компилятор (egress на ~11 c)**.
+Компилятор персистентно не живёт (JDK ~190 МБ выбивает снапшот), cpmin — живёт, если workspace <= ~97 МБ.
+Если egress закрыт — сборки НЕТ ни в каком диалоге; не тратить ходы, рабочий артефакт = готовый jar.
+
+### Замер этого инстанса (27.10.2026, ветка arena/829e0ad0-mod) — JAR-ONLY
+- api.adoptium.net — BLOCKED (000), piston-meta.mojang.com — BLOCKED, repo1/repo.maven.apache.org — BLOCKED,
+  maven.neoforged.net — BLOCKED, maven.minecraftforge.net / libraries.minecraft.net — BLOCKED,
+  raw.githubusercontent.com — BLOCKED. Открыты только: github.com / api / codeload, pypi.org, registry.npmjs.org.
+- Компилятора нет и взять неоткуда: `jdk4py` на PyPI = **JRE** (21.0.8.x и 25.0.2.x, 30–35 МБ; `--list-modules` без
+  `jdk.compiler`, source-file mode падает с «Module jdk.compiler not in boot Layer»); пакетов с ecj/javac на PyPI нет
+  (`ecj`, `eclipse-jdt-core`, `java-compiler`, `javac` — 404; `pyjdk` — пустышка 0.0 МБ, не брать). В npm тоже нет.
+  Единственная польза от jdk4py — `java` для инспекции: `/home/user/tools/jdkpkg/jdk4py/java-runtime/bin/java`.
+- Снапшот workspace в этот инстанс НЕ приехал: нет `settledlands/` вообще (ни build92, ни cache/cpmin, ни jdk21),
+  в /home/user только клон репозитория. => cpmin из прошлого диалога надо создавать заново при открытом egress.
+- Наличие 228: в `main` приехал только Source-zip (sha 7ebebfde…4d70, идентичен эталону) — **jar 228 отсутствует**,
+  поэтому даже JAR-ONLY путь упирается в юзера: нужен `settledlands-0.8.0-build228-scenefix.jar` (1 523 701 B,
+  sha b992aad3…c148) из его папки mods, либо с Drive.
+
 ## Ключевые sha (история)
 226 `b4a762c8…4633`; 227 jar `6b722021…de3c` / zip `03416d32…d7e4` / README `5432d14e…dbdf`; 228 jar `b992aad3…c148` / zip `7ebebfde…4d70` / README `8eed7207…b11a`; baseline83 `dcbdb263…`; donor b168 `e5ca762b…05e9`; jar172 `fec4b01f…6fcf4f`.
 
