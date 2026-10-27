@@ -195,3 +195,19 @@ GitHub Releases как способ раздачи НЕ работают из э
 — в нём patch-src уже эпохи 227 (слитые GD/Graph/Screen + PCP с фиксами 227) и AI-GUIDE ≤227; фикс 228 придётся переписать заново.
 Ограничение среды (сеть): Maven/Mojang/NeoForge НЕ доступны, javac НЕТ (только JRE 25 из `pip install jdk4py`
 в /home/user/tools/jdkpkg) ⇒ компиляция и прогон 923 тестов в этой сессии невозможны; правки только байткодом/патчем jar.
+
+## 27.10.2026: итог диагностики «трупа без модели» (свежий скриншот + `/summon`)
+Факты юзера: ivy_oleander.bbmodel идеально рисуется на живом НПС и на игроке; файл в
+`.minecraft/settledlands/models` присутствует (там же provodnik.bbmodel, player_body.bbmodel, corpse_coffin_v2.bbmodel);
+удаление ivy.bbmodel ничего не меняет; `/data merge` текстуры в труп не помогает; `/summon` трупа с
+Texture:"provodnik.bbmodel" даёт труп БЕЗ модели (виден только хитбокс), настоящий труп рисует коричневый fallback.
+Свежий труп теперь показывает **1/60** (корректно), а старый застрявший показывал 60/60 (остаток прошлой сессии).
+Вывод: файл, парсер и рендер живого НПС рабочие — ломается именно путь «имя модели → рендер ТРУПА».
+`GuideRenderer.renderCorpse` берёт имя из `GuideNpc.texturePath()` = `entityData(DATA_TEXTURE)`, НЕ из NBT.
+DATA_TEXTURE выставляется только в `GuideNpc.applyProfile()` — ПОСЛЕДНЕЙ строкой (после setCustomName,
+Attributes.SCALE, refreshDimensions, setPoseIndex), а `PlayerCorpsePossession.dressBodyCorpse` вызывает её
+внутри `catch (Throwable ignored)`. Любое исключение выше = пустой DATA_TEXTURE = молчаливый fallback
+(`super.render` + встроенная GuideModel + guide_npc.png) без единой строки в логе.
+План 230: в dressBodyCorpse выставлять DATA_TEXTURE первым и логировать каждый шаг; в BbModelManager писать
+«model 'X' not found / parse failed»; вложить ivy_oleander.bbmodel в jar рядом с ivy.bbmodel (сейчас копируется
+только sidecar .uvshift.txt); HUD трупа — current/max (1/60 уже так и есть).
