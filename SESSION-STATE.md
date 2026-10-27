@@ -220,6 +220,44 @@ README `README-Build232-EarlyTex2-RU.txt` (sha `72d07c10…e850`).
 `tools/check_mixin_class.py` теперь валит проверку, если в @Mixin.value нет тега `[`.
 ОТОЗВАНЫ: 230 (правка Code), 231 (кодировка @Mixin). Раздача — только 232.
 
+
+## 27.10.2026 20:20 — ЛОГ 232: миксин РАБОТАЕТ, дефект на клиенте. BUILD 233 «probe»
+Лог (sha `b51c3a51…dd70`, 4966 строк, коммит `36f6a1a`): `build232-earlytex2` загружен,
+`loaded 0.8.0-build232-earlytex2`; строки зонда сервера:
+`corpse texture pre-set: ivy_oleander.bbmodel` / `provodnik.bbmodel`, в момент смерти:
+`player death at (41,64,-255) possessed=true`, `3 body stacks written into own corpse`.
+⇒ На СЕРВЕРЕ DATA_TEXTURE выставляется правильно, миксин работает. Баг НЕ в applyProfile.
+ВАЖНО: вывод `System.out.print/println` попадает в лог как `[STDOUT] ... handler$fph000$...`.
+
+### Найден второй участник: GuideCorpseFreezeMixin (HEAD renderCorpse, client)
+Дизассемблер 229/232 (`dev/settledlands/mixin/GuideCorpseFreezeMixin`, `settledlands$frozenCorpse`):
+```
+if (corpse.isCoffin()) return;
+String anim = corpse.getCustomAnimName();
+if (anim == null || !anim.contains("die")) { ci.cancel(); return; }   // НЕ рисуем ничего
+BbModel m = BbModelManager.getModel(corpse.texturePath());
+if (m == null) { ci.cancel(); return; }                               // НЕ рисуем ничего
+ci.cancel(); m.render(...);                                          // рисует сам, без translate(0,0.35,0)/Z90
+```
+⇒ Ванильный `renderCorpse` (и его коричневый fallback `MobRenderer.render`) для тел ОТКЛЮЧЁН.
+Всё зависит от `getModel(texturePath())` на КЛИЕНТЕ. Его @Mixin задан формой
+`targets = {"..."}` (массив строк `5b0001 73`), а не `value = X.class`.
+`BbModelStorage.findModelFile`: modelsDir = `FMLPaths.GAMEDIR/settledlands/models`, сначала
+`resolve(name)` как есть, иначе (если имя не оканчивается на .bbmodel) пробует `name + ".bbmodel"`.
+⇒ для `provodnik.bbmodel` файл должен находиться напрямую; parse-ошибки печатаются в stderr — их в логе нет.
+
+### BUILD 233 «probe» — актуальная раздача (только диагностика)
+`settledlands-0.8.0-build233-probe.jar`, 1 540 690 B, sha256 `0592d61c4ffe5888f93ca17fdf139e5982a63d060ce606c13c1d7b742a661260`, 355 записей.
+Добавлено 2 класса, игра не меняется:
+- `dev/settledlands/diag/TexProbe` — **version 49** (старый inference-верификатор, StackMapTable не нужен),
+  дедуплицирующий печать (`HashMap LAST`, печать только при смене значения) — поэтому per-frame вызовы не спамят.
+- `dev/settledlands/mixin/CorpseRenderProbeMixin` — @Inject HEAD `renderCorpse` (client, require=0),
+  тело без ветвлений, печатает `client.corpse.coffin/anim/tex/model`, `client.modelsDir`, `client.models`.
+Инструменты: `tools/patch_probe233.py` (генератор + сборка, содержит мини-ассемблер `Asm` с метками).
+`tools/check_mixin_class.py` доработан: propusk симуляции стека при ветвлениях, если major < 50;
+проверка @Mixin — ищет `5b 0001` (массив) и в форме `c`, и в форме `s`.
+Отозваны: 230, 231. 232 рабочий, но дефект не закрывает.
+
 ## ПРАВИЛО ЮЗЕРА (с 27.10.2026): В КОНЦЕ КАЖДОГО ОТВЕТА — ПРЯМАЯ ССЫЛКА НА JAR
 Формат ссылки (репозиторий публичный, ветка сессии):
 `https://raw.githubusercontent.com/BORGERone/mod/arena/829e0ad0-mod/<имя>.jar`
