@@ -1,0 +1,2 @@
+375e8faed7ea19e7bc1c343a043f833f82112a10b0ff17c1f6982bc18c2afe6d  settledlands-0.8.0-build242-body-required.jar
+a5ce146241a350204918a329fa60aa8795f24a2246f5638d6e088b60143ebbb1  SettledLands-Build242-BodyRequired-Source.zip

@@ -40,6 +40,7 @@ HINTS = {
     "net/minecraft/server/level/ServerPlayer": "net/minecraft/world/entity/player/Player",
     "net/minecraft/world/level/Level": "java/lang/Object",
     "net/minecraft/server/level/ServerLevel": "net/minecraft/world/level/Level",
+    "net/minecraft/core/BlockPos": "net/minecraft/core/Vec3i",
     "net/minecraft/network/chat/MutableComponent": "java/lang/Object",
     "com/mojang/brigadier/exceptions/CommandSyntaxException": "java/lang/Exception",
 }
