@@ -238,3 +238,17 @@ is not a jar file`, причина `java.util.zip.ZipException: zip END header n
 оставить только 230.
 Правило для выдачи: всегда напоминать проверку `certutil -hashfile <jar> SHA256` + размер, и что качать надо
 «Сохранить ссылку как…», а не «скачать страницу».
+
+## 27.10.2026 20:00 — BUILD 230 ОТОЗВАН: мой байткод-патч невалиден
+Лог (sha `51e788b1…bb65`): `Found mod file ... build230-modelfix(1).jar`, затем 11×
+`[mixin] Error loading class: dev/settledlands/npc/GuideNpc (java.lang.ArrayIndexOutOfBoundsException:
+Index 2818093 out of bounds for length 2)` и FATAL `Failed to register class Ldev/settledlands/npc/CorpseLifecycle;
+with @EventBusSubscriber` → «Mod loading has failed», версия в краш-репорте `0.8.0-build230-modelfix`.
+Индекс 2818093 = 0x002B002D — таких байт в файле НЕТ ⇒ значение вычислено парсером ASM/Mixin при разборе
+структуры, которую мой валидатор считал корректной. Проверить байткод офлайн НЕЛЬЗЯ: JRE в песочнице без
+jdk.compiler, MC-классов нет (Probe-загрузка GuideNpc упирается в NoClassDefFoundError PathfinderMob до верификации).
+ВЫВОД-ПРАВИЛО: больше не делать вставок/сдвигов в Code-атрибуты (LineNumberTable/StackMapTable) без реального
+ASM/верификатора. Допустимы только правки равной длины (константы, опкоды, индексы) — как в build 229.
+Build 230 ОТОЗВАН; актуальная раздача — 229 (sha 874c97ea…7c76). Файл 230 остаётся в репо для истории.
+Следующий шаг для фикса модели трупа — ТОЛЬКО компиляция (нужен javac 21 + classpath MC/NeoForge;
+у юзера можно собрать cp из его собственного .minecraft/libraries + versions/1.21.1/client.jar).
