@@ -152,6 +152,14 @@ Source-zip: `SettledLands-Build229-Sablesweep-Source.zip`, sha256 `a9efca5ed2fd0
 `README-Build229-Sablesweep-RU.txt`, `tools/patch_sweep_aabb.py`, `tools/verify_jar.py`, `tools/extract_diag.py`,
 `tools/check_env.sh`, `patch-src-229/dev/settledlands/npc/PlayerCorpsePossession.java`, `latest.log` (свежий, 228).
 
+## ПРАВИЛО ЮЗЕРА (с 27.10.2026): В КОНЦЕ КАЖДОГО ОТВЕТА — ПРЯМАЯ ССЫЛКА НА JAR
+Формат ссылки (репозиторий публичный, ветка сессии):
+`https://raw.githubusercontent.com/BORGERone/mod/arena/829e0ad0-mod/<имя>.jar`
+(кликабельно и через `https://github.com/BORGERone/mod/raw/arena/829e0ad0-mod/<имя>.jar`)
+Проверка живости: `gh api "repos/BORGERone/mod/contents/<имя>?ref=arena/829e0ad0-mod" --jq .size`
+GitHub Releases как способ раздачи НЕ работают из этой песочницы: `uploads.github.com` заблокирован
+(`gh release upload` → EOF), сам релиз создать можно, но ассеты не прикрепляются. Раздаём файлами ветки.
+
 ## Ключевые sha (история)
 226 `b4a762c8…4633`; 227 jar `6b722021…de3c` / zip `03416d32…d7e4` / README `5432d14e…dbdf`; 228 jar `b992aad3…c148` / zip `7ebebfde…4d70` / README `8eed7207…b11a`; baseline83 `dcbdb263…`; donor b168 `e5ca762b…05e9`; jar172 `fec4b01f…6fcf4f`.
 
