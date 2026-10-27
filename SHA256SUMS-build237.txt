@@ -1,0 +1,2 @@
+9abf34da8a566d882e4bb7a4561a93e019aa4c5a58461ec1e54fc51039e58c45  settledlands-0.8.0-build237-corpse-pose.jar
+e674d071f4b509e28914170b9defa3e2ffd958e7f674bebb31e8342807ffb7e6  SettledLands-Build237-CorpsePose-Source.zip

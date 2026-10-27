@@ -1,0 +1,335 @@
+# ПЕРЕДАЧА СМЕНЫ: «у трупа нет модели» (SettledLands 0.8.0)
+
+## Актуальное состояние после build 237 — читать раньше истории ниже
+
+Пользователь проверил build 236: труп всё ещё не виден. Более новый приложенный лог (1 285 346 байт, SHA-256 `f6c87a4cf8668a0ba5697111356ea99d29cf35378ad2d0e12839f17f0b431062`) подтверждает загрузку 236; старый `origin/main:latest.log` ниже про битую загрузку — **не этот запуск**. В свежем логе probe показывает негроб с пустой анимацией, а также `ivy_oleander.bbmodel → BbModel` и пустую текстуру, но не пишет ID. Значения могли относиться к разным сущностям; независимых маркеров смерти нет. Не утверждать, что найдена причина именно искомого трупа.
+
+По байткоду подтверждён дефект сохранённых трупов: `readAdditionalSaveData` 236 не восстанавливает анимацию; `GuideCorpseFreezeMixin` отменяет рендер негроба без имени, содержащего `die`. Build 237 восстанавливает `die` при загрузке только если анимация `null`/пустая и это не гроб, а при стандартном спавне задаёт её до добавления сущности. Непустые анимации не переписываются. Дополнительно переделан неверный фрагмент 236 в `dressBodyCorpse`: старая вставка обходилась на успехе и на исключении могла вызвать `IllegalAccessError`; вместо неё текстура готовится через публичный профиль, логируется один раз при успешной подготовке. Сохранены здоровье/неуязвимость, старая логика имён и гробов. Клиентский `CorpseRenderProbeMixin` выключен в конфигурации, поскольку его глобальные значения смешивают сущности и спамят на кадрах.
+
+**Кандидат:** `settledlands-0.8.0-build237-corpse-pose.jar`, 1 541 606 B, SHA-256 `9abf34da8a566d882e4bb7a4561a93e019aa4c5a58461ec1e54fc51039e58c45`. Структурный и полный JVM-шлюз §8 прошли. Настоящие байткоды чтения, спавна и подготовки трупа исполнены на JVM 21 со стендами и отрицательным контролем 236; дополнительная fixture исполняет настоящие `GuideNpc.applyProfile/setProfile`, измеряя побочные эффекты дополнительного вызова. **Minecraft/NeoForge в песочнице не запускались; проверка в игре ещё нужна.** При пустом имени модели и при непустой анимации без `die` невидимость может сохраняться — имя модели не угадывается.
+
+В текущей сессии работать и пушить только в закреплённую ветку `arena/24676dbe-mod`. Указания ниже про историческую `arena/829e0ad0-mod` не дают права переключаться на неё; в будущей сессии приоритет у системного имени ветки. Входные jar для полного воспроизведения лежат в backup ZIP в `test-inputs/`; 230/233/234 заведомо сломаны и не должны устанавливаться.
+
+Ниже сохранена историческая передача 236; при противоречии приоритет у актуального состояния выше, §8 и `SESSION-STATE.md`.
+
+Файл для новой сессии. Читать целиком до первой сборки. Всё, что ниже, проверено
+по байткоду/логам, а не «по памяти». Дата: 27.10.2026.
+
+---
+
+## 0. Задача в одну строку
+
+Труп игрока (`dev.settledlands.npc.GuideCorpseNpc`) **не рисуется моделью** —
+либо ничего не видно («прозрачный»), либо встроенная заглушка. Живые NPC при этом
+рисуются нормально. Нужно найти, почему у трупа не разрешается имя модели, и
+починить. Собирать jar агент обязан сам (компилятора нет — только правка байткода
+и новые классы).
+
+Исторический кандидат был build 236 (см. §4). Он проверен пользователем в игре: проблема осталась. Текущий кандидат — build 237, см. актуальное состояние в начале; именно он ещё не проверен в игре.
+
+---
+
+## 1. Первые действия новой сессии (5 минут, ничего не собирать)
+
+```bash
+cd /home/user/mod
+git fetch origin && git log --oneline -3 origin/main -- latest.log
+git checkout origin/main -- latest.log && wc -l latest.log
+```
+Сравнивать дату, версию и SHA файла с приложенными отдельно логами. Отсутствие нового файла в `main` **не доказывает**, что игру не запускали: после 236 пользователь приложил свежий лог отдельно. После проверки 237 нужен именно лог этого нового запуска.
+
+Дальше — только чтение, без сборки:
+```bash
+python3 tools/disasm.py settledlands-0.8.0-build236-corpse-tex.jar \
+    --class dev/settledlands/npc/GuideNpc.class --method applyProfile
+python3 tools/disasm.py settledlands-0.8.0-build236-corpse-tex.jar \
+    --class dev/settledlands/npc/GuideCorpseNpc.class
+```
+
+---
+
+## 2. Как устроен путь рендера (проверено по байткоду)
+
+```
+GuideRenderer.renderCorpse(...)                 (клиент)
+  ├─ GuideCorpseFreezeMixin (@Inject HEAD)      dev/settledlands/mixin/GuideCorpseFreezeMixin
+  │    if (!anim.contains("die")) → ci.cancel()          // живой рендер не наш случай
+  │    m = BbModelManager.getModel(npc.texturePath())
+  │    if (m == null) → ci.cancel()  → НЕ РИСУЕТСЯ НИЧЕГО  ← «прозрачный труп»
+  │    else → ci.cancel(); m.render(...)
+  └─ иначе ванильный MobRenderer с GuideModel + guide_npc.png  ← «заглушка»
+```
+
+`GuideNpc.texturePath()` — 14 байт: `entityData.get(DATA_TEXTURE)` (никогда не
+переопределён в `GuideCorpseNpc`).
+
+`BbModelManager.getModel(String name)`:
+* `null`, пустая/пробельная строка, `"default"` (без учёта регистра) → `null`;
+* иначе `BbModelStorage.findModelFile(name)`; если файла нет → `null`;
+* исключение парсера → печать в `System.err` и `null`.
+
+`BbModelStorage.findModelFile(name)`:
+* `modelsDir.resolve(name)` и `isRegularFile` → файл;
+* иначе, если имя не оканчивается на `.bbmodel` → `modelsDir.resolve(name + ".bbmodel")`;
+* иначе `null`.
+`modelsDir` = `FMLPaths.GAMEDIR / "settledlands/models"` (у юзера:
+`.minecraft/settledlands/models/`, там лежат `ivy_oleander.bbmodel`, `red_coffin.bbmodel`).
+Путь **не зависит от регистра только на Windows-ФС**, сам код регистро-зависим.
+
+`DATA_TEXTURE` (тип `EntityDataAccessor`, синхронизируемое поле) выставляется:
+1. в `GuideNpc.applyProfile()` — **последними** инструкциями (offset 183..209 из 236);
+2. в `GuideNpc.setProfile()` — косвенно, он вызывает `applyProfile()` в конце,
+   но `putfield profile` происходит **после** `mobilitySettingsChanged()`/`resetMobility()`.
+
+Вызовы у трупа:
+```java
+// PlayerCorpsePossession.dressBodyCorpse(npc, pending)
+try { npc.setYRot(...); npc.setYBodyRot(...); npc.setYHeadRot(...); } catch (Throwable ignored) {}
+try { if (!pending.model().isEmpty()) { prof = new NpcProfile(); ... npc.setProfile(prof); npc.applyProfile(); } } catch (Throwable ignored) {}
+try { имя } catch (Throwable ignored) {}
+try { playCustomAnimation("die", false) } catch (Throwable ignored) {}
+try { setHealth(1f); setInvulnerable(true) } catch (Throwable ignored) {}
+```
+Важно: `setProfile()` уже вызывает `applyProfile()`, а строка `npc.applyProfile()`
+идёт второй раз и работает с **тем** профилем, который успел записаться в поле.
+
+Имя модели у трупа берётся при смерти игрока:
+```
+LivingDeathEvent → PlayerCorpsePossession.onPlayerDeath
+    model = PossessionSystem.isPossessed(p) ? safe(PossessionSystem.possessModelKey(p)) : ""
+    → DeadWatch(model, ...)
+    → onServerTick → спавн GuideCorpseNpc → dressBodyCorpse(new PendingBody(model, name, ...))
+```
+а `possessModelKey(p)` — это NBT игрока `settledlands_possess_model`, куда при
+вселении писалось `npc.texturePath()` (`PossessionSystem.possess`).
+
+---
+
+## 3. Что уже сделано и чем это закончилось
+
+| билд | что делал | итог |
+|---|---|---|
+| 229 | sable-AABB | рабочая база |
+| 230 | вставка 14 байт в начало `applyProfile` | ❌ AIOOBE при загрузке миксинов (вставка была неверной: `aload_1` до `astore_1`, сломанное смещение `Code`) |
+| 231 | новый миксин `EarlyCorpseTextureMixin` | ❌ падение на скане (`@Mixin.value` одиночным `c`) |
+| 232 | тот же миксин, аннотации массивами | ⚠️ грузится, но модели нет. Маркер `corpse texture pre-set` в логе был **неверной трактовкой** |
+| 233 | зонд-класс `TexProbe` + `CorpseRenderProbeMixin` | ❌ скан: `SourceFile` добавлен в пул после `dump()` |
+| 234 | те же зонды, исправлен пул | ❌ `VerifyError: Illegal target of jump or branch` (смещение считалось от операнда) |
+| 235 | то же + исправлены смещения + JVM-самотест | ✅ грузится (это уже не проверялось в игре отдельно) |
+| 236 | `DATA_TEXTURE` в начале `applyProfile`; попытка подготовки/лога в `dressBodyCorpse` | загружен в свежем логе, труп всё ещё невидим; вставка в `dressBodyCorpse` ошибочна |
+| 237 | восстановление `die`, безопасная подготовка через профиль, выключение спамящего probe | полный JVM-шлюз пройден, в игре ещё не проверен |
+
+---
+
+## 4. Билды, их sha256 и статус
+
+Старые билды доступны в исторической ветке `arena/829e0ad0-mod`; необходимые входы также упакованы в backup 237. В текущей сессии не переключаться на историческую ветку.
+
+| файл | байт | sha256 | статус |
+|---|---|---|---|
+| `settledlands-0.8.0-build229-sablesweep.jar` | — | — | рабочая база (до фиксов) |
+| `settledlands-0.8.0-build230-modelfix.jar` | 1536982 | `b41dc40574e3c2d8…` | отозван |
+| `settledlands-0.8.0-build231-earlytex.jar` | 1538081 | `c1ca5ebf9d642bbd…` | отозван |
+| `settledlands-0.8.0-build232-earlytex2.jar` | 1538344 | `a75d8a8f724f5e74…` | рабочая база для диффов, модели нет |
+| `settledlands-0.8.0-build233-probe.jar` | 1540690 | `0592d61c4ffe5888…` | отозван (регресс-кейс валидатора) |
+| `settledlands-0.8.0-build234-probe.jar` | 1540699 | `f83b8c69178176ec…` | отозван (регресс-кейс JVM-верификатора) |
+| `settledlands-0.8.0-build235-probe.jar` | 1540699 | `cfddca97baf6a98b…` | зонд, грузится |
+| `settledlands-0.8.0-build236-corpse-tex.jar` | 1541160 | `4d640528b565e788…` | загружен в игре, проблема осталась |
+| **`settledlands-0.8.0-build237-corpse-pose.jar`** | **1541606** | **`9abf34da8a566d88…`** | **текущий кандидат: полный JVM-шлюз пройден, игровая проверка ожидается** |
+
+Полные хеши — в `git log` / `SESSION-STATE.md`.
+
+---
+
+## 5. Исторический старый лог (origin/main `10b423f`, 1170 строк) — НЕ свежий лог после 236
+
+```
+[Render thread/FATAL] Error during pre-loading phase:
+  File mods\settledlands-0.8.0-build236-corpse-tex.jar is not a jar file
+Caused by: java.util.zip.ZipException: zip END header not found
+...
+java.lang.ExceptionInInitializerError
+Caused by: java.lang.IllegalStateException: zetafix: could not resolve mod container for quark
+```
+Это **недокачанный jar** (обрезанный файл), мод вообще не загрузился, остальное —
+каскад. Сам артефакт целый: 355 записей, EOCD на 1 541 138, `zipfile.testzip()` → `None`.
+
+Для текущего билда инструкция — `CHECK-JAR-237-RU.txt` (PowerShell `Invoke-WebRequest -OutFile` и сверка размера/хеша). GitHub Contents API не возвращает base64 для файлов >1 MiB, поэтому не использовать его как резерв скачивания.
+**Правило: при «вылете» сначала сверять размер/хеш скачанного файла, потом код.**
+
+---
+
+## 6. Маркеры, которые надо искать в НОВОМ логе
+
+С build 237 клиентский `CorpseRenderProbeMixin` отключён, поэтому строки `client.corpse.*` ожидаемо отсутствуют. Серверный `[corpse]` пишет один раз на успешном пути подготовки possessed-тела, но не содержит ID и не заменяет подтверждение создания конкретной сущности. Не выводить связь между значениями разных сущностей без адресной диагностики.
+
+```
+[SettledLands][corpse] model=<...> tex=<...>          ← 236, сервер: что записали трупу
+[SettledLands][probe] client.corpse.coffin
+[SettledLands][probe] client.corpse.anim
+[SettledLands][probe] client.corpse.tex               ← что видит клиент
+[SettledLands][probe] client.corpse.model             ← разрешилась ли модель
+[SettledLands][probe] client.modelsDir
+[SettledLands][probe] client.models                    ← какие файлы клиент видит
+[SettledLands] player death at (...) possessed=... — corpse watch scheduled   ← уже было в 229
+```
+Исторический `TexProbe` дедуплицирует каждую метку глобально, не по ID: чередование сущностей всё равно вызывает per-frame спам. В 237 его клиентский вызов отключён.
+
+---
+
+## 7. Дерево решений по новому логу
+
+### A. `model=` пустое (сервер не получил имя модели)
+Значит `possessModelKey(player)` пуст → при вселении `npc.texturePath()` был `""` либо
+`setPossessed` не выполнился. Смотреть `PossessionSystem.possess` (184 Б) — он пишет
+`settledlands_possess_model = npc.texturePath()` перед `npc.discard()`.
+Возможная диагностика в будущем билде (не считать доказанным исправлением 237): в `possess` логировать `texturePath()` и `profile.texture`,
+при пустом `texturePath()` брать `this.profile.texture` (поле
+`dev/settledlands/npc/NpcProfile.texture`, `getfield`) и писать через
+`Objects.toString(x, "")`. Инструменты: `tools/classedit.py` (`insert`), `tools/smt.py`.
+
+### B. `model=` есть, `client.corpse.tex` пустая на клиенте
+Синхронизация `SynchedEntityData`: значение записали после `addFreshEntity`, и dirty-бит
+не ушёл / записали до добавления. Фикс: писать `DATA_TEXTURE` **до** спавна в
+`DeadWatch`-пути (там есть готовый `model`), либо в `GuideCorpseNpc.tick()` на сервере
+(дешёвая самопроверка «поле пустое, а профиль есть → записать»).
+
+### C. `client.corpse.tex` есть, `client.corpse.model` = `null`
+Не находится файл модели. Сверить `client.corpse.tex` с `client.models`:
+* имя с расширением/без (`.bbmodel` добавляется автоматически, если его нет);
+* регистр (`Ivy_Oleander.bbmodel` vs `ivy_oleander.bbmodel`) — код регистро-зависим;
+* имя с каталогом/пробелами;
+* ошибку парсера искать в `System.err` этого же лога (там печатается имя файла и стек).
+Фикс — правка `BbModelStorage.findModelFile` или `BbModelManager.getModel`
+(небольшие методы, вставка в `Code` через `tools/classedit.py`).
+
+### D. Всё непустое и `client.corpse.model` не null, но труп не виден
+Тогда проблема в самом `BbModel.render(...)` (поза/анимация `die`/масштаб) —
+начинать с `CorpseRenderProbeMixin`: добавить в лог аргументы `render` (свет, overlay,
+частичный тик) и результат `BbAnimation`.
+
+---
+
+## 8. Инструменты и обязательный шлюз перед раздачей
+
+- `tools/classedit.py`, `tools/smt.py`: точечные вставки с пересчётом переходов, таблиц и фреймов; не править байткод вручную.
+- `tools/patch_corpse_pose237.py`: воспроизводимый патч с контролем SHA входов 235/236 и точного диффа.
+- `tools/validate_jar.py`: структура каждого класса, TOML, mixin JSON, пулы, инструкции, атрибуты и границы переходов.
+- `tools/jvm_verify.py`: настоящая JVM, реальные классы, синтетические зависимости; цель с аргументами задаётся полностью. JVM должна выдать `DECLARED` для каждой цели; ошибку до этого нельзя считать успехом.
+- `tools/selftest_probe.py`, `tools/check_mixin_class.py`, `tools/verify_jar.py`: отдельные JVM/аннотации/zip/lang/mixins/TOML и строгий allowlist диффа.
+- `tests/jvm_corpse_load.py`, `jvm_corpse_spawn.py`, `jvm_corpse_dress.py`, `jvm_corpse_realprofile.py`: реальные байткоды и исполняемые заглушки, отрицательный контроль build 236, границы поведения. Последний тест запускает реальные `GuideNpc.applyProfile/setProfile`; при нормальном пути дополнительный вызов повышает число пересчётов размеров с двух до трёх — это не игровой тест.
+
+### Полный повторяемый шлюз build 237
+
+Backup содержит входные jar в `test-inputs/`; 230/233/234 использовать только как отрицательные тесты. Нужны Python 3.11+ и **JVM 21**, не `javac`. При её отсутствии агент может временно установить `jdk4py==21.0.8.2` через pip вне репозитория.
+
+```bash
+python3 tests/gate_build237.py --inputs /path/to/test-inputs \
+  --java /path/to/java21 \
+  --jar settledlands-0.8.0-build237-corpse-pose.jar
+```
+
+Ожидается `BUILD 237 GATE: PASS`. Скрипт проверяет воспроизводимую сборку, валидатор на 232 и 237, отрицательные 233/234, точный allowlist относительно 232 и 236, TOML, языки и mixin-классы, побайтное соответствие `TexProbe` генератору и его JVM-самотест. Дополнительно проверяются CRC, отсутствие/невалидность языка, несовпадение ключей, отсутствующий mixin, ошибочный allowlist и невозможная цель JVM-проверки: каждый негативный тест обязан падать.
+
+`jvm_verify.py` после любой правки требует повторной калибровки: build 230 `GuideNpc#applyProfile` → `VerifyError: Bad instruction`; build 234 `TexProbe#logObj(java.lang.String,java.lang.Object)` → `VerifyError: Illegal target of jump`; build 232/236 `GuideNpc#applyProfile` и build 235 `TexProbe#logObj(...)` → OK. Для 237 отдельно проверять `GuideNpc#applyProfile`, `GuideCorpseNpc#readAdditionalSaveData(net.minecraft.nbt.CompoundTag)`, `CorpseLifecycle#onPlayerDeath(net.neoforged.neoforge.event.entity.living.LivingDeathEvent)` и `PlayerCorpsePossession#dressBodyCorpse(dev.settledlands.npc.GuideCorpseNpc,dev.settledlands.npc.PlayerCorpsePossession$PendingBody)`. Текущий скрипт всё это делает.
+
+Обязательно выполняются четыре поведенческие fixture с отрицательными контролями на 236. Реальная JVM с тестовыми заглушками **не** подтверждает работу NeoForge/рендера в игре; после каждого билда нужен отдельный пользовательский игровой прогон.
+
+---
+
+## 9. Грабли байткода (стоили шести отозванных сборок)
+
+1. **Не вставлять байты «на глаз»** — только `tools/classedit.py`.
+2. `rel = target_addr − opcode_addr` (не операнда!) — инцидент 234.
+3. `invokeinterface`: `count = objectref + слоты аргументов` (для
+   `info(String,Object,Object)` = **4**), последний байт `0` — инцидент 236α.
+4. `tableswitch`/`lookupswitch` выравниваются по 4 байта от **абсолютного** адреса:
+   длина вставки обязана быть кратна 4 (добивается `nop`) — инцидент 236β.
+5. Порядок сборки пула: все `cp.utf8(...)` **до** `dump()` (инцидент 233).
+6. `@Mixin.value` и `targets` — **массивы** (`5b 00 01 63 …`), иначе ClassCastException.
+7. Свой класс без ветвлений → фреймы не нужны; с ветвлениями → либо major 49,
+   либо честные `StackMapTable` (и только `jvm_verify.py` это подтверждает).
+8. `ldc` — индекс ≤ 255, иначе `ldc_w`.
+
+---
+
+## 10. Правила, которые юзер требует соблюдать (нарушать нельзя)
+
+* Ответы **короткие**, без «простыней» и оправданий. Схема: что случилось → почему →
+  что сделано → что проверить → ссылка.
+* В каждом ответе, где есть собранный jar, — **кликабельная markdown-ссылка**
+  `[имя](https://raw.githubusercontent.com/BORGERone/mod/arena/24676dbe-mod/<файл>)`,
+  резерв `https://github.com/BORGERone/mod/raw/arena/24676dbe-mod/<файл>`. В новой сессии подставить её закреплённую ветку.
+  Не вставлять URL в блок кода, не давать «голым текстом». Jar первым, zip вторым.
+* Всегда рядом: размер, `sha256`, `certutil -hashfile <файл> SHA256`, и напоминание
+  «Сохранить ссылку как…». GitHub Releases для раздачи **не** использовать.
+* Перед выдачей ссылки проверять файл в текущей ветке: `gh api repos/BORGERone/mod/contents/<файл>?ref=arena/24676dbe-mod --jq .size`. Contents API для файлов >1 MiB не даёт base64 в `content` и не подходит как запасная скачка.
+* После «я залил лог» — сразу `git fetch origin` + `git checkout origin/main -- latest.log`.
+* jar собирает **агент**, вариант «поставь javac/собери сам» отклонён.
+* Каждый билд: backup + sha256, `present_file` jar → zip, AI-GUIDE внутрь zip,
+  toml проверять `tomllib`.
+* Самодеятельные фиксы вне списка задачи — только **предлагать** (PROPOSE-ONLY).
+* Не пересобирать `GuideNpc`/`NpcContent`/`GuideRenderer` из `patch-src-229`
+  (там лежит только `PlayerCorpsePossession.java`, он НЕ компилируется) — только
+  байтпатч/миксин/новый класс.
+* Труп и гроб не должны быть нежитью (откат 205): HP=1/full HP, неубиваемы,
+  привязка поводком к гробу. Отклонены: микро-хитбокс, keyAttack-гейт, снятие
+  land-гейта, щит +40°, crossfade 0.2s, HnS-переопределения, «бонусные» фичи.
+
+---
+
+## 11. Как проверить build 237 в игре
+
+1. Удалить build 236 из папки `mods`, поставить только build 237; сверить 1 541 606 байт и SHA-256 из актуального состояния. Backup ZIP не класть в `mods`.
+2. Войти в мир, проверить уже существовавший сохранённый труп; затем вселиться в NPC и умереть, дождаться **нового** трупа. Отдельно убедиться, что гроб работает как раньше.
+3. Если труп всё ещё не виден — выйти из мира, приложить свежий `latest.log` этого запуска и сообщить приблизительное время смерти/тип трупа. Искать `[SettledLands][corpse] model=… tex=…`, маркеры смерти, ошибки. Отсутствие `[probe]` в build 237 ожидаемо.
+4. Не угадывать имя модели при пустом `model`/`tex`; не считать глобальные значения в логах 236 доказательством, что они от одной сущности. Если одного серверного лога недостаточно, сначала разработать адресный одноразовый зонд без per-frame спама.
+
+---
+
+## 12. Где что лежит
+
+```
+/home/user/mod/
+  AI-GUIDE-SettledLands.md      правила, §11 JVM-верификация, §12 битая закачка
+  SESSION-STATE.md              журнал решений по билдам (28 пунктов)
+  HANDOFF-NEXT-SESSION-RU.md    этот файл
+  CHECK-JAR-237-RU.txt          PowerShell-проверка скачанного jar
+  README-Build237-CorpsePose-RU.txt   краткие сведения для юзера
+  latest.log                    старый origin/main лог (не более новый attachment после 236)
+  tools/                        см. §8
+  tests/                        полный шлюз и JVM-fixture
+  settledlands-0.8.0-build237-corpse-pose.jar
+  SettledLands-Build237-CorpsePose-Source.zip   тестовые входы, инструменты, инструкции и jar
+```
+
+Полезные дескрипторы/поля, которые точно понадобятся:
+```
+dev/settledlands/npc/GuideNpc            entityData:Lnet/minecraft/network/syncher/SynchedEntityData;
+                                         DATA_TEXTURE:Lnet/minecraft/network/syncher/EntityDataAccessor;
+                                         profile:Ldev/settledlands/npc/NpcProfile;
+                                         setProfile(Ldev/settledlands/npc/NpcProfile;)V
+                                         applyProfile()V   texturePath()Ljava/lang/String;
+dev/settledlands/npc/NpcProfile          texture:Ljava/lang/String;
+dev/settledlands/npc/PlayerCorpsePossession   LOGGER:Lorg/slf4j/Logger;
+                                         dressBodyCorpse(Ldev/settledlands/npc/GuideCorpseNpc;Ldev/settledlands/npc/PlayerCorpsePossession$PendingBody;)V
+                                         onPlayerDeath(Lnet/neoforged/neoforge/event/entity/living/LivingDeathEvent;)V
+dev/settledlands/npc/PossessionSystem    possess(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/GuideNpc;)V
+                                         possessModelKey(Lnet/minecraft/world/entity/Entity;)Ljava/lang/String;
+                                         setPossessed(Lnet/minecraft/server/level/ServerPlayer;Ljava/lang/String;Ljava/lang/String;)V
+dev/settledlands/model/BbModelManager    getModel(Ljava/lang/String;)Ldev/settledlands/model/BbModel;
+dev/settledlands/model/BbModelStorage    findModelFile(Ljava/lang/String;)Ljava/io/File;
+                                         getModelsDir()Ljava/nio/file/Path;
+```
+
+---
+
+## 13. Что делать в первую очередь (чек-лист)
+
+- [ ] `git fetch origin`, проверить свежесть `latest.log` (§1).
+- [ ] Если лог новый — выписать из него строки §6 и выбрать ветку A/B/C/D (§7).
+- [ ] Если нового лога после 237 нет — **не собирать зря**: попросить проверить jar по `CHECK-JAR-237-RU.txt`, поставить его одного, создать новый труп и приложить лог этого запуска.
+- [ ] Выбранную ветку чинить через `tools/classedit.py` + `tools/smt.py`,
+      обязательно прогнать шлюз §8 целиком (включая `jvm_verify.py`).
+- [ ] Обновить `SESSION-STATE.md`, `AI-GUIDE` (если новый урок), собрать zip,
+      `present_file` jar → zip, выдать ссылки по правилам §10.
