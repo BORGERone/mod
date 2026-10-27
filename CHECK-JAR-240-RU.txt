@@ -1,0 +1,21 @@
+Проверка скачанного build 240 (Windows PowerShell)
+
+Сохраните jar по ссылке как файл с расширением .jar и проверьте:
+
+$filename = 'settledlands-0.8.0-build240-npc-local-cult.jar'
+$url = 'https://raw.githubusercontent.com/BORGERone/mod/arena/24676dbe-mod/settledlands-0.8.0-build240-npc-local-cult.jar'
+Invoke-WebRequest -Uri $url -OutFile $filename
+(Get-Item $filename).Length
+(Get-FileHash $filename -Algorithm SHA256).Hash
+
+Должно получиться:
+Length = 1544935
+SHA256 = 2e4a29f6f147d6d081234ea5b7d3839b9a5ba297e984b3962b6f3113e47d76b5
+
+Альтернатива для проверки хеша:
+certutil -hashfile settledlands-0.8.0-build240-npc-local-cult.jar SHA256
+
+Если загрузка не удалась, резервная ссылка:
+https://github.com/BORGERone/mod/raw/arena/24676dbe-mod/settledlands-0.8.0-build240-npc-local-cult.jar
+
+При несовпадении размера/хеша удалите файл и скачайте заново; не запускайте обрезанный jar. GitHub Contents API для файлов более 1 MiB не отдаёт base64 и не подходит для резервного скачивания.

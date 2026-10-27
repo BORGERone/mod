@@ -1,0 +1,2 @@
+2e4a29f6f147d6d081234ea5b7d3839b9a5ba297e984b3962b6f3113e47d76b5  settledlands-0.8.0-build240-npc-local-cult.jar
+4424a0c3aa18ab1144bbd6de3281cd8c5a7b4706e28655b96de3acd198fb203d  SettledLands-Build240-NpcLocalCult-Source.zip

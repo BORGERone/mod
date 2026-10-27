@@ -41,6 +41,7 @@ HINTS = {
     "net/minecraft/world/level/Level": "java/lang/Object",
     "net/minecraft/server/level/ServerLevel": "net/minecraft/world/level/Level",
     "net/minecraft/network/chat/MutableComponent": "java/lang/Object",
+    "com/mojang/brigadier/exceptions/CommandSyntaxException": "java/lang/Exception",
 }
 IFACE_HINTS = {
     "org/slf4j/Logger": True,
@@ -52,6 +53,7 @@ IFACE_HINTS = {
     "com/mojang/serialization/Codec": True,
     "com/mojang/serialization/DataResult": True,
     "net/minecraft/network/chat/ComponentContents": True,
+    "net/minecraft/world/Container": True,
 }
 IMPL_HINTS = {
     "net/minecraft/network/chat/MutableComponent": ["net/minecraft/network/chat/Component"],
@@ -60,6 +62,7 @@ IMPL_HINTS = {
     "net/minecraft/nbt/NbtOps": ["com/mojang/serialization/DynamicOps"],
     "net/minecraft/resources/RegistryOps": ["com/mojang/serialization/DynamicOps"],
     "net/minecraft/network/chat/contents/TranslatableContents": ["net/minecraft/network/chat/ComponentContents"],
+    "net/minecraft/world/SimpleContainer": ["net/minecraft/world/Container"],
 }
 
 
