@@ -212,10 +212,18 @@ def entity_class():
         a = Asm(); a.raw(0x2a); a.op(0xb7, cp.method('java/lang/Object', '<init>', '()V'))
         a.raw(0x2a); obj(a, cp, NBT); a.op(0xb5, cp.field(E, 'data', 'L' + NBT + ';'))
         a.raw(0xb1); return a.finish()
-    return f.fake_class(E, [(1, 'data', 'L' + NBT + ';'), (1, 'world', 'L' + L + ';')], [
+    def discard(cp):
+        count = cp.field(E, 'discardCount', 'I')
+        return (b'\x2a\x04' + op(0xb5, cp.field(E, 'removed', 'Z')) +
+                b'\x2a\x59' + op(0xb4, count) + b'\x04\x60' + op(0xb5, count) + b'\xb1')
+    return f.fake_class(E, [(1, 'data', 'L' + NBT + ';'), (1, 'world', 'L' + L + ';'),
+                             (1, 'removed', 'Z'), (1, 'discardCount', 'I')], [
         (1, '<init>', '()V', 3, 1, ctor),
         (1, 'getPersistentData', '()L' + NBT + ';', 1, 1, getfield(E, 'data', 'L' + NBT + ';')),
         (1, 'level', '()L' + L + ';', 1, 1, getfield(E, 'world', 'L' + L + ';')),
+        # Models vanilla Entity.discard as an observable server-side removal;
+        # build 238 never calls it through the recovery path.
+        (0x0011, 'discard', '()V', 3, 1, discard),
     ], interfaces=[EXT])
 
 
@@ -232,6 +240,7 @@ def guide_class():
     fields = [(1, 'entityData', 'L' + SED + ';'), (1, 'attribute', 'L' + ATTR + ';'),
               (1, 'health', 'F'), (1, 'anim', 'Ljava/lang/String;'), (1, 'hasName', 'Z'),
               (1, 'invulnerable', 'Z'), (1, 'leashed', 'Z'), (1, 'leashHolder', 'L' + E + ';'),
+              (1, 'leadDrops', 'I'), (1, 'leashBroadcasts', 'I'), (1, 'dropLeashCalls', 'I'),
               (1, 'soundCount', 'I'), (1, 'fallbackCount', 'I'), (1, 'genericDamageCount', 'I')]
     def ctor(cp):
         a = Asm(); a.raw(0x2a); a.op(0xb7, cp.method(E, '<init>', '()V'))
@@ -262,12 +271,20 @@ def guide_class():
     def leash(cp):
         return (b'\x2a\x04' + op(0xb5, cp.field(G, 'leashed', 'Z')) +
                 b'\x2a\x2b' + op(0xb5, cp.field(G, 'leashHolder', 'L' + E + ';')) + b'\xb1')
-    def drop_leash(cp):
-        return (b'\x2a\x03' + op(0xb5, cp.field(G, 'leashed', 'Z')) +
-                b'\x2a\x01' + op(0xb5, cp.field(G, 'leashHolder', 'L' + E + ';')) + b'\xb1')
     def increment(cp, name):
         x = cp.field(G, name, 'I')
         return b'\x2a\x59' + op(0xb4, x) + b'\x04\x60' + op(0xb5, x)
+    def drop_leash(cp):
+        # Approximate vanilla Leashable.dropLeash: no drop unless a live holder
+        # is attached; flags independently control item drop and broadcast.
+        a = Asm(); a.raw(*increment(cp, 'dropLeashCalls'))
+        a.raw(0x2a); a.op(0xb4, cp.field(G, 'leashed', 'Z')); a.jump(0x99, 'done')
+        a.raw(0x2a); a.op(0xb4, cp.field(G, 'leashHolder', 'L' + E + ';')); a.jump(0xc6, 'done')
+        a.raw(0x2a, 0x03); a.op(0xb5, cp.field(G, 'leashed', 'Z'))
+        a.raw(0x2a, 0x01); a.op(0xb5, cp.field(G, 'leashHolder', 'L' + E + ';'))
+        a.raw(0x1c); a.jump(0x99, 'no_drop'); a.raw(*increment(cp, 'leadDrops')); a.label('no_drop')
+        a.raw(0x1b); a.jump(0x99, 'done'); a.raw(*increment(cp, 'leashBroadcasts'))
+        a.label('done'); a.raw(0xb1); return a.finish()
     def fallback(cp):
         return increment(cp, 'fallbackCount') + b'\x03' + op(0xb8, cp.method(INTERACTION, 'sidedSuccess', '(Z)L' + INTERACTION + ';')) + b'\xb0'
     return f.fake_class(G, fields, [
@@ -282,7 +299,7 @@ def guide_class():
         (1, 'setLeashedTo', '(L' + E + ';Z)V', 2, 3, leash),
         (1, 'isLeashed', '()Z', 1, 1, getfield(G, 'leashed', 'Z', 0xac)),
         (1, 'getLeashHolder', '()L' + E + ';', 1, 1, getfield(G, 'leashHolder', 'L' + E + ';')),
-        (1, 'dropLeash', '(ZZ)V', 2, 3, drop_leash),
+        (1, 'dropLeash', '(ZZ)V', 3, 3, drop_leash),
         (1, 'isAlive', '()Z', 1, 1, lambda cp: b'\x04\xac'),
         (1, 'playSound', '(L' + SOUND + ';FF)V', 3, 4, lambda cp: increment(cp, 'soundCount') + b'\xb1'),
         (1, 'hurt', '(L' + DAMAGE + ';F)Z', 3, 3, lambda cp: increment(cp, 'genericDamageCount') + b'\x04\xac'),

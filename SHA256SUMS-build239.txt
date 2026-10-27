@@ -1,0 +1,2 @@
+b68fd79357da507fff35939964816c2a301101ac3afb31298bf4ea31ab7a4290  settledlands-0.8.0-build239-empty-corpse-cleanup.jar
+af835c87e16953783ec434b47e651e3e87fc057cca4997c03b980bc7e56c1616  SettledLands-Build239-EmptyCorpseCleanup-Source.zip
