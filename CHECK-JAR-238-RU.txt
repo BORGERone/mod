@@ -1,0 +1,21 @@
+Проверка скачанного build 238 (Windows PowerShell)
+
+Сохраните jar по ссылке как файл с расширением .jar и проверьте:
+
+$filename = 'settledlands-0.8.0-build238-corpse-recovery.jar'
+$url = 'https://raw.githubusercontent.com/BORGERone/mod/arena/24676dbe-mod/settledlands-0.8.0-build238-corpse-recovery.jar'
+Invoke-WebRequest -Uri $url -OutFile $filename
+(Get-Item $filename).Length
+(Get-FileHash $filename -Algorithm SHA256).Hash
+
+Должно получиться:
+Length = 1544550
+SHA256 = 632a64b9a94c31165f351152e260ece774c62870570a4ac6101c06ca634a84c2
+
+Альтернатива для проверки хеша:
+certutil -hashfile settledlands-0.8.0-build238-corpse-recovery.jar SHA256
+
+Если загрузка не удалась, резервная ссылка:
+https://github.com/BORGERone/mod/raw/arena/24676dbe-mod/settledlands-0.8.0-build238-corpse-recovery.jar
+
+При несовпадении размера/хеша удалите файл и скачайте заново; не запускайте обрезанный jar. GitHub Contents API для файлов более 1 MiB не отдаёт base64 и не подходит для резервного скачивания.

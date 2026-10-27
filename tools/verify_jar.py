@@ -50,7 +50,7 @@ def check_toml(z):
     build_hits = [l for l in lines if l.startswith("Build ")]
     newest = build_hits[0].split(":")[0] if build_hits else "?"
     print(f"  описание: строк {len(lines)}, первая строка ченджлога = {newest}")
-    if newest not in m["version"]:
+    if newest.lower().replace(' ', '') not in m["version"].lower():
         print(f"  ВНИМАНИЕ: в описании нет строки про текущую сборку ({m['version']}) — "
               f"в меню модов ченджлог отстаёт")
     deps = d.get("dependencies", {}).get(m["modId"], [])

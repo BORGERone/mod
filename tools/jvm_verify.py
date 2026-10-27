@@ -47,10 +47,19 @@ IFACE_HINTS = {
     "net/minecraft/network/chat/Component": True,
     "net/minecraft/core/RegistryAccess": True,
     "net/minecraft/core/HolderLookup$Provider": True,
+    "net/minecraft/nbt/Tag": True,
+    "com/mojang/serialization/DynamicOps": True,
+    "com/mojang/serialization/Codec": True,
+    "com/mojang/serialization/DataResult": True,
+    "net/minecraft/network/chat/ComponentContents": True,
 }
 IMPL_HINTS = {
     "net/minecraft/network/chat/MutableComponent": ["net/minecraft/network/chat/Component"],
     "net/minecraft/core/RegistryAccess": ["net/minecraft/core/HolderLookup$Provider"],
+    "net/minecraft/nbt/CompoundTag": ["net/minecraft/nbt/Tag"],
+    "net/minecraft/nbt/NbtOps": ["com/mojang/serialization/DynamicOps"],
+    "net/minecraft/resources/RegistryOps": ["com/mojang/serialization/DynamicOps"],
+    "net/minecraft/network/chat/contents/TranslatableContents": ["net/minecraft/network/chat/ComponentContents"],
 }
 
 

@@ -1,0 +1,2 @@
+632a64b9a94c31165f351152e260ece774c62870570a4ac6101c06ca634a84c2  settledlands-0.8.0-build238-corpse-recovery.jar
+9d26a904960d8b74309c0b1884604d13be9e35c0549ac4a0aabefe59a797e93f  SettledLands-Build238-CorpseRecovery-Source.zip

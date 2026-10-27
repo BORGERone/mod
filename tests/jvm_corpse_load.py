@@ -4,7 +4,9 @@
 No javac and no Minecraft are required. The fixture keeps the candidate class's
 constant pool, fields, target method, constructor, coffin accessors and <clinit>
 byte-for-byte; unrelated methods are omitted and its external dependencies are
-minimal, executable stand-ins. jvm_verify.py separately verifies the complete jar.
+minimal, executable stand-ins. For build 238+, syncHealth is isolated by a no-op
+stand-in here; its real implementation is exercised in jvm_recovery238.py.
+jvm_verify.py separately verifies the complete jar.
 """
 import argparse
 import pathlib
@@ -254,6 +256,11 @@ def create_fixtures(folder, jar_path):
                SERIALIZER: blank_class(SERIALIZER), TYPE: blank_class(TYPE), LEVEL: blank_class(LEVEL),
                SERIALIZERS: fake_class(SERIALIZERS, [(9, 'BOOLEAN', 'L' + SERIALIZER + ';')], []),
                COMPONENT: component_interface(), MUTABLE: mutable_component(),
+               # Pose-only fixture: build 238's real health helper is tested
+               # separately with realistic attribute stubs in jvm_recovery238.
+               'dev/settledlands/npc/CorpseRecovery': fake_class(
+                   'dev/settledlands/npc/CorpseRecovery', [], [(9, 'syncHealth',
+                   '(L' + CORPSE + ';)V', 0, 1, lambda cp: b'\xb1')]),
                'CorpseLoadHarness': harness_class()}
     for name, data in classes.items():
         path = folder / (name + '.class')
