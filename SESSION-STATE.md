@@ -55,6 +55,20 @@
 - /home/user/settledlands/cache/: cp228/ (minecraft-compile, neoforge, libraries/, classpath.txt после шага 5), ensure_jdk.sh уровнем выше, jdk21/ (восстанавливаемый).
 - Drive: папка 1a0n2_H7RhetWwJYXF49i9NfIMExno_Kl; доноры 150–160 (скачивать ТОЛЬКО если понадобится бисект 173–215): build150-radius-gate 1C_GnOHqLEa3VTeuS00w4HqTNVNrIDFQy, 151-cutscene-replica 1Nz3Zf-vwzPA0ijhax5JhJ7-aWq0tQzSl, 152 1JZTPfmpSp7wtN3j7X0H5vdOusMCYkQTY, 153 1n1EoyS5xTEMgPJ49Nv3Trpnsxyx7sl2w, 154 1WBeLsHc6LlB7TeCc_sPL5HyPigaNRzrt, 156 1cxda4fJpo8hHFiBRm5Q08kOolynh3bPU, 157 14IdZvuZkbiv4-QtftAVlnj6NW1rhZzqQ, 158 1f4bG_AbtO8tnGbIWVnF6G84kCNouV_lz, 159 19ffICAbzm5GRkUsxyXiaZOGkDqWWjtML, 160 1opIKesV1GZjd0_ndqteq_m6AkyPYaxr5; b188-source.zip 1Pe-ikvuC-VbHluDilGJe01D6k4MRXEYj.
 
+## ПОПОЛНЕНИЕ 27.10.2026 №2 (после «залил 228»)
+Приехал только **`SettledLands-Build228-SceneFix-Source.zip`** — sha256 `7ebebfde7a489f496709fe73806abf5415e2e586a51658127147420edb154d70`
+(совпадает с эталоном 228), 72 flat entry, распакован в `/home/user/work/b228`. Внутри проверено:
+`resources/META-INF/neoforge.mods.toml` → `version="0.8.0-build228-scenefix"`, lang 698+698;
+`patch-src/dev/settledlands/npc/PlayerCorpsePossession.java` (29 710 B) содержит `healStuckIvyBodies` + вызов в `onServerTick`;
+`AI-GUIDE-SettledLands.md` (97 553 B, эпоха ≤228), README 217–228, SOURCE-NOTE.
+Сверка ресурсов zip228 ↔ jar227: lang en/ru, coord_stick, cutscene_wand — **идентичны**; отличается ТОЛЬКО toml
+(версия 227→228 и описание). ⇒ дельта 227→228 = toml + класс(ы) PlayerCorpsePossession (фикс sweep). Больше ничего.
+**JAR 228 ПО-ПРЕЖНЕМУ НЕ ЗАЛИТ** (в main: 168, 227-restore, Source-zip228, Workspace-b132; других jar нет).
+⇒ Для выдачи/базы нужен именно `settledlands-0.8.0-build228-scenefix.jar` (1 523 701 B, sha `b992aad3…c148`).
+Восстановить его в этом sandbox НЕЛЬЗЯ: нет `jdk.compiler` (jdk4py = JRE: только java, jcmd, jfr…; `java --list-modules` — без compiler),
+нет classpath Minecraft 1.21.1 / NeoForge 21.1.253 (Maven/Mojang заблокированы), а без них `PlayerCorpsePossession.java`
+не скомпилировать. Компиляция возможна только в сессии с доступом к Maven.
+
 ## Ключевые sha (история)
 226 `b4a762c8…4633`; 227 jar `6b722021…de3c` / zip `03416d32…d7e4` / README `5432d14e…dbdf`; 228 jar `b992aad3…c148` / zip `7ebebfde…4d70` / README `8eed7207…b11a`; baseline83 `dcbdb263…`; donor b168 `e5ca762b…05e9`; jar172 `fec4b01f…6fcf4f`.
 
