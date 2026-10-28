@@ -1,0 +1,13 @@
+Архив исходных материалов сборки 246
+
+Внутри: готовый JAR 246, точная база 245, src/build246, патчер и compile-only
+силуэты, ECJ + EPL-2.0/NOTICE, тесты 237–246, необходимые исходные JAR в
+ test-inputs/, START-HERE, HANDOFF, AI-GUIDE и SESSION-STATE. Исторический
+SettledLands-Build228-SceneFix-Source.zip сохранён как справочный исходник
+старого графа/UI. BACKUP-MANIFEST.sha256 содержит SHA-256 остальных файлов.
+
+После распаковки (нужны Python 3.11+ и Java 21; сама JVM в архив не вложена):
+  sha256sum -c BACKUP-MANIFEST.sha256
+  python3 tests/gate_build246.py --inputs test-inputs --base245 settledlands-0.8.0-build245-body-wear.jar --java /путь/к/java --jar settledlands-0.8.0-build246-npc-characteristics.jar
+Ожидается BUILD 246 GATE: PASS. Это не запуск Minecraft/NeoForge.
+При дальнейшей модификации повторить весь gate, обновить хеш и проверку.

@@ -1,0 +1,1 @@
+fe62c48b5bfbb0607cf1fa1e9996649bcd90a144de57ca991dfb737ff78cc819  settledlands-0.8.0-build246-npc-characteristics.jar
