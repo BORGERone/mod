@@ -1,0 +1,2 @@
+package net.minecraft.client.gui;import java.util.*;import com.mojang.blaze3d.vertex.PoseStack;
+public class GuiGraphics {public final List<String> words=new ArrayList<>();public int rectangles;private final PoseStack pose=new PoseStack();public PoseStack pose(){return pose;}public void fill(int a,int b,int c,int d,int color){rectangles++;}public int drawString(Font f,String s,int x,int y,int color,boolean shadow){words.add(s);return 0;}public void drawCenteredString(Font f,String s,int x,int y,int color){words.add(s);}}
