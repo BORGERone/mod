@@ -1,0 +1,7 @@
+Backup включает AI-GUIDE-SettledLands.md, инструкции, исходники/инструменты/тесты, ECJ и исходники JOML, JAR 245–250 и исходные входы 230–244. Текущие логи итогового gate и SHA расположены вне архива, потому что backup готовится до его проверки. Чужие EMF/ETF/TnM и FA не включаются.
+
+Из независимой распаковки необходимы Python 3.11+, Java 21 и отдельно предоставленные GPL бинарники TnM 1.0.4 (SHA-256 3754909bf0d12445b18a60de315619734c1229bcc621f88f315ccf076701ab56), EMF 3.3.12 (3ba0bf7b487660920d12cc0ff6cb5de1763f024a080fe0cd7d64e1c8e0f7f190) и ETF 7.2.6 (b47173468febc21bb565af19a82bcd2f851e34ecb333660cdc48a8c37c27c1cd) для теста соответствующих компонентов — эти версии НЕ соответствуют игровым зависимостям 250.
+
+python3 tests/gate_build250.py --inputs test-inputs --base245 settledlands-0.8.0-build245-body-wear.jar --base246 settledlands-0.8.0-build246-npc-characteristics.jar --base247 settledlands-0.8.0-build247-bodiless-protection.jar --base248 settledlands-0.8.0-build248-touchmotion-player.jar --base249 settledlands-0.8.0-build249-player-motion.jar --java /path/to/java21 --jar settledlands-0.8.0-build250-fresh-motion.jar --tnm /path/to/tnm104.jar --emf /path/to/emf3312.jar --etf /path/to/etf726.jar
+
+Ожидается BUILD 250 GATE: PASS. Все фикстуры и байткод-проверки не являются тестом Minecraft/NeoForge, встроенного FA и визуала. Сначала сверить BACKUP-MANIFEST.sha256; воспроизвести ZIP: python3 tools/make_backup250.py --inputs test-inputs --out /tmp/reproduced250.zip и сравнить SHA-256. Официальный FA пользователь добавляет самостоятельно.

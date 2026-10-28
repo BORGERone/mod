@@ -1,0 +1,2 @@
+2187bd12cbbd252570280c850c665945d6ad87b929fd80a4f400217e4c11082d  settledlands-0.8.0-build250-fresh-motion.jar
+72acc37e6275f6a706852f405532ed8f2d99652759f816fec43cd2916691a4de  SettledLands-Build250-FreshMotion-Source.zip
