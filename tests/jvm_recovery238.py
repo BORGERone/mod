@@ -754,6 +754,11 @@ def build_classes(jar, helper_jar):
             (9, 'movePendingSafely', move_desc, 2, 2, lambda cp: b'\x2a\x2b' +
              f.op(0xb8, cp.method(POSS, 'movePendingItemsToCorpse', move_desc)) + b'\xb1')])
     with zipfile.ZipFile(jar) as z:
+        click_guard = 'dev/settledlands/npc/CorpseClickGuard'
+        if click_guard + '.class' in z.namelist():
+            # Newer releases wrap the real recovery entry point; retain that
+            # genuine class in regression fixtures rather than replacing it.
+            classes[click_guard] = z.read(click_guard + '.class')
         if 'dev/settledlands/npc/CorpseDeathGuard.class' in z.namelist():
             # This old fixture isolates the existing item recovery component.
             # Real dimension/death eligibility executes in jvm_noqueue243.py.

@@ -13,7 +13,7 @@ import jvm_recovery238 as r
 from patch_probe233 import Asm
 
 
-def harness_class():
+def harness_class(click_guard=False):
     def main(cp):
         a = Asm()
         E, P, SP, L, SL, SERVER, C = r.E, r.P, r.SP, r.L, r.SL, r.SERVER, r.C
@@ -207,6 +207,10 @@ def harness_class():
 
         # Tools bypass the recovery handler exactly as in 238.
         env(); make_list(); item(1); click(kind=r.TOOLS[-1]); removed('tools.coffin_removed'); canceled('tools.coffin_canceled', ES)
+        if click_guard:
+            # 244 deliberately lets a lead on an unboxed corpse reclaim loot;
+            # its actual lead attachment action is meaningful on a coffin.
+            load(4); boolean(True); a.op(0xb6, cp.method(C, 'setCoffin', '(Z)V'))
         click(EG, kind='lead'); removed('tools.lead_removed'); canceled('tools.lead_canceled', EG)
         click(kind=r.TOOLS[0]); removed('tools.wand_removed'); canceled('tools.wand_canceled', ES)
         click(); removed('tools.normal_removed'); collected('tools.normal_items')
@@ -227,7 +231,19 @@ def run_fixture(java, jar):
     with tempfile.TemporaryDirectory(prefix='corpse-cleanup-jvm-') as td:
         folder = pathlib.Path(td)
         classes = r.build_classes(jar, jar)
-        classes['CleanupHarness'] = harness_class()
+        click_guard = 'dev/settledlands/npc/CorpseClickGuard' in classes
+        if click_guard:
+            # Supply the newer event/hand signatures while keeping this fixture's
+            # original isolated recovery APIs. Full provenance is tested by 244.
+            import jvm_corpse_click244 as newer
+            classes[r.IVY] = r.subset(jar, r.IVY,
+                {'editingTool', 'onInteractCorpse', 'onInteractSpecificCorpse', newer.p.EDIT_BRIDGE})
+            classes[r.P] = newer.player_hands(classes[r.P])
+            classes[r.E] = newer.t.rewrite(classes[r.E], add_methods=[
+                (1, 'isRemoved', '()Z', 1, 1, lambda k: b'\x2a' + newer.t.op(0xb4, k.add_fieldref(r.E, 'removed', 'Z')) + b'\xac')])
+            classes[r.HAND] = newer.hand_class(); classes[r.INTERACTION] = newer.result_class()
+            for event in (r.EVENT_S, r.EVENT_G): classes[event] = newer.with_event_api(classes[event], event)
+        classes['CleanupHarness'] = harness_class(click_guard)
         for name, raw in classes.items():
             path = folder / (name + '.class'); path.parent.mkdir(parents=True, exist_ok=True); path.write_bytes(raw)
         p = subprocess.run([str(java), '-Xshare:off', '-Xverify:all', '-cp', str(folder), 'CleanupHarness'],

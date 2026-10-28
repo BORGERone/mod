@@ -1,0 +1,14 @@
+Проверка SettledLands build 244 после скачивания
+
+Ожидаемый файл: settledlands-0.8.0-build244-corpse-click.jar
+Ожидаемый размер: 1 559 202 байта
+SHA-256: d9e558d17ba4ff123e6588d7048a5b0cdfbf359eac092101553da54b1eaae2c8
+
+В PowerShell, из папки с файлом:
+  (Get-Item '.\settledlands-0.8.0-build244-corpse-click.jar').Length
+  (Get-FileHash '.\settledlands-0.8.0-build244-corpse-click.jar' -Algorithm SHA256).Hash
+  certutil -hashfile settledlands-0.8.0-build244-corpse-click.jar SHA256
+
+При несовпадении повторите скачивание; повреждённый файл не запускать. Сделайте
+копию мира и оставьте в mods только этот JAR SettledLands. Backup ZIP в mods
+не класть. Статус проверок и ограничения — README-Build244-CorpseClick-RU.txt.
