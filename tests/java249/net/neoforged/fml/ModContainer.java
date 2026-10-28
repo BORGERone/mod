@@ -1,0 +1,1 @@
+package net.neoforged.fml; import net.neoforged.neoforgespi.language.IModInfo; public class ModContainer { public IModInfo getModInfo(){return ()->new org.apache.maven.artifact.versioning.ArtifactVersion(){ public String toString(){return ModList.VERSION;} };} }

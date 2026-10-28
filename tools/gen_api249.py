@@ -1,0 +1,29 @@
+#!/usr/bin/env python3
+"""Compile-only API silhouettes for 1.21.1; never include in a mod jar."""
+import pathlib,sys
+import gen_api248
+SRC=dict(gen_api248.SRC)
+SRC.update({
+'net/minecraft/world/entity/Entity.java':'''package net.minecraft.world.entity; import java.util.UUID; public class Entity { public UUID getUUID(){return null;} public Entity getVehicle(){return null;} public boolean isPassenger(){return false;} public boolean shouldRiderSit(){return true;} }''',
+'net/minecraft/world/entity/LivingEntity.java':'''package net.minecraft.world.entity; public class LivingEntity extends Entity { public float getAttackAnim(float t){return 0;} public boolean isBaby(){return false;} public boolean isAlive(){return true;} }''',
+'net/minecraft/client/Minecraft.java':'''package net.minecraft.client; import net.minecraft.client.renderer.entity.EntityRenderDispatcher; public class Minecraft { public static Minecraft getInstance(){return null;} public EntityRenderDispatcher getEntityRenderDispatcher(){return null;} }''',
+'net/minecraft/client/renderer/entity/EntityRenderer.java':'''package net.minecraft.client.renderer.entity; import net.minecraft.world.entity.Entity; public class EntityRenderer<T extends Entity> {}''',
+'net/minecraft/client/renderer/entity/EntityRenderDispatcher.java':'''package net.minecraft.client.renderer.entity; import net.minecraft.world.entity.Entity; public class EntityRenderDispatcher { public <T extends Entity> EntityRenderer<? super T> getRenderer(T e){return null;} }''',
+'net/minecraft/client/renderer/entity/LivingEntityRenderer.java':'''package net.minecraft.client.renderer.entity; import net.minecraft.client.model.EntityModel; import net.minecraft.world.entity.LivingEntity; public class LivingEntityRenderer<T extends LivingEntity,M extends EntityModel<T>> extends EntityRenderer<T> { public M getModel(){return null;} }''',
+'net/minecraft/client/renderer/entity/player/PlayerRenderer.java':'''package net.minecraft.client.renderer.entity.player; import net.minecraft.client.model.PlayerModel; import net.minecraft.client.player.AbstractClientPlayer; import net.minecraft.client.renderer.entity.LivingEntityRenderer; public class PlayerRenderer extends LivingEntityRenderer<AbstractClientPlayer,PlayerModel<AbstractClientPlayer>> {}''',
+'net/minecraft/client/model/EntityModel.java':'''package net.minecraft.client.model; import net.minecraft.world.entity.Entity; public abstract class EntityModel<T extends Entity> { public boolean riding,young; public float attackTime; public void prepareMobModel(T e,float a,float b,float c){} public abstract void setupAnim(T e,float a,float b,float c,float d,float f); }''',
+'net/minecraft/client/model/HumanoidModel.java':'''package net.minecraft.client.model; import net.minecraft.client.model.geom.ModelPart; import net.minecraft.world.entity.LivingEntity; public class HumanoidModel<T extends LivingEntity> extends EntityModel<T> { public ModelPart body,head,rightArm,leftArm,rightLeg,leftLeg; public boolean crouching; public ArmPose rightArmPose,leftArmPose; public enum ArmPose { EMPTY,ITEM } public void prepareMobModel(T e,float a,float b,float c){} public void setupAnim(T e,float a,float b,float c,float d,float f){} }''',
+'net/minecraft/client/model/PlayerModel.java':'''package net.minecraft.client.model; import net.minecraft.client.model.geom.ModelPart; import net.minecraft.client.model.geom.builders.*; import net.minecraft.world.entity.LivingEntity; public class PlayerModel<T extends LivingEntity> extends HumanoidModel<T> { public PlayerModel(ModelPart root,boolean slim){} public static MeshDefinition createMesh(CubeDeformation c,boolean slim){return null;} public void setupAnim(T e,float a,float b,float c,float d,float f){} }''',
+'net/minecraft/client/model/geom/ModelPart.java':'''package net.minecraft.client.model.geom; import java.util.*; import java.util.stream.Stream; public final class ModelPart { public float x,y,z,xRot,yRot,zRot,xScale=1,yScale=1,zScale=1; public ModelPart(List<?> cubes,Map<String,ModelPart> children){} public Stream<ModelPart> getAllParts(){return Stream.of(this);} public void resetPose(){} }''',
+'net/minecraft/client/model/geom/builders/CubeDeformation.java':'''package net.minecraft.client.model.geom.builders; public class CubeDeformation { public static final CubeDeformation NONE=null; }''',
+'net/minecraft/client/model/geom/builders/MeshDefinition.java':'''package net.minecraft.client.model.geom.builders; public class MeshDefinition {}''',
+'net/minecraft/client/model/geom/builders/LayerDefinition.java':'''package net.minecraft.client.model.geom.builders; import net.minecraft.client.model.geom.ModelPart; public class LayerDefinition { public static LayerDefinition create(MeshDefinition m,int w,int h){return null;} public ModelPart bakeRoot(){return null;} }''',
+'net/minecraft/util/Mth.java':'''package net.minecraft.util; public class Mth { public static float wrapDegrees(float v){return v;} }''',
+'dev/settledlands/model/BbModel.java':'''package dev.settledlands.model; import net.minecraft.client.model.geom.ModelPart; import net.minecraft.world.entity.LivingEntity; import com.mojang.blaze3d.vertex.PoseStack; import net.minecraft.client.renderer.MultiBufferSource; public class BbModel { public String getName(){return null;} public ModelPart getPart(String name){return null;} public ModelPart getRootPart(){return null;} public void settledlands$renderActorOriginal(LivingEntity e,float s,float partial,PoseStack p,MultiBufferSource b,int light){} public void setupAnimRaw(boolean a,boolean b,String c,String d,boolean e,int f,int g,float h,float i,float j,float k,float l,float m){} }''',
+})
+def main(dest):
+ root=pathlib.Path(dest)
+ for name,content in SRC.items():
+  path=root/name;path.parent.mkdir(parents=True,exist_ok=True);path.write_text(content+'\n',encoding='utf8')
+ print('wrote',len(SRC),'249 compile-only silhouettes')
+if __name__=='__main__':main(sys.argv[1])

@@ -1,0 +1,1 @@
+package net.minecraft.client.renderer.entity;import net.minecraft.client.model.EntityModel;import net.minecraft.world.entity.LivingEntity;public class LivingEntityRenderer<T extends LivingEntity,M extends EntityModel<T>> extends EntityRenderer<T> {public M model;public M getModel(){return model;}}

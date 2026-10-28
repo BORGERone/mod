@@ -1,0 +1,2 @@
+package net.minecraft.client.renderer.entity;import net.minecraft.world.entity.Entity;import net.minecraft.client.renderer.entity.player.PlayerRenderer;
+public class EntityRenderDispatcher {public final PlayerRenderer renderer=new PlayerRenderer();public boolean absent;@SuppressWarnings("unchecked") public <T extends Entity> EntityRenderer<? super T> getRenderer(T e){return absent?null:(EntityRenderer<? super T>)renderer;}}

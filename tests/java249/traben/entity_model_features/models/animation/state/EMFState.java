@@ -1,0 +1,1 @@
+package traben.entity_model_features.models.animation.state; import traben.entity_model_features.utils.EMFEntity; public class EMFState { public static boolean FIRST_PERSON; public static EMFEntity ENTITY; public static EMFEntityRenderState state(){return ENTITY==null?null:()->ENTITY;} public static float getFrameCounter(){return 1;} }
