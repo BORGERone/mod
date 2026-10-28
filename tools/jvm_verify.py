@@ -270,6 +270,20 @@ def main():
                 ref = k.utf8(e["a"])
                 if ref in real:
                     add_chain(ref)
+    # Reflection also resolves real types mentioned only in descriptors (not
+    # necessarily CONSTANT_Class entries). Include their real ancestry so an
+    # external superclass such as SavedData is actually stubbed. This is a
+    # one-level expansion, not a claim that the synthetic APIs are Minecraft.
+    for cls in list(need):
+        k = parsed[cls]
+        descs = [m['desc'] for m in k.methods] + [field['desc'] for field in k.fields]
+        for e in k.cp:
+            if e and e['tag'] in (9, 10, 11):
+                descs.append(k.utf8(k.cp[e['b']]['b']))
+        for desc in descs:
+            for ref in types_in_desc(desc):
+                if ref in real:
+                    add_chain(ref)
     # --- внешние типы и их члены
     stubs = {}          # name -> dict(fields=set, methods=set, iface=bool)
     for cls in need:

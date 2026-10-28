@@ -1,0 +1,13 @@
+Проверка SettledLands build 243 после скачивания
+
+Ожидаемый файл: settledlands-0.8.0-build243-body-without-queue.jar
+Ожидаемый размер: 1 555 767 байт
+SHA-256: a78c2943ec481aab0ed9b9fa67b6aa09a905d019b46b9866a5e6feab91cc584c
+
+В PowerShell, из папки с файлом:
+  (Get-Item '.\settledlands-0.8.0-build243-body-without-queue.jar').Length
+  (Get-FileHash '.\settledlands-0.8.0-build243-body-without-queue.jar' -Algorithm SHA256).Hash
+
+Если размер или SHA не совпадают, скачайте файл заново; не запускайте обрезанный JAR.
+Сохраните копию мира и оставьте в mods только этот JAR SettledLands. Backup ZIP не
+класть в mods. Статус проверок и ограничения — README-Build243-BodyWithoutQueue-RU.txt.

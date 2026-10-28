@@ -173,10 +173,17 @@ def run_fixture(java, jar_path):
         with zipfile.ZipFile(jar_path) as jar:
             actual = jar.read(LIFECYCLE + '.class')
             new_hook = 'dev/settledlands/npc/AltarCorpseRevival' in {x[:-6] for x in jar.namelist() if x.endswith('.class')}
+            new_guard = 'dev/settledlands/npc/CorpseDeathGuard.class' in jar.namelist()
         classes = {LIFECYCLE: actual, ENTITY: f.blank_class(ENTITY), LIVING: subclass(LIVING, ENTITY),
                    PLAYER: player_class(), LEVEL: f.blank_class(LEVEL), SERVER: server_class(),
                    EVENT: event_class(), TYPE: type_class(), CONTENT: content_class(),
                    CORPSE: corpse_class(), 'CorpseSpawnHarness': harness_class()}
+        if new_guard:
+            # This OLD fixture isolates pre-spawn animation/owner ordering, not
+            # death eligibility. The real guard is executed in jvm_noqueue243.
+            guard = 'dev/settledlands/npc/CorpseDeathGuard'
+            classes[guard] = f.fake_class(guard, [], [(9, 'selectLevel', '(L' + PLAYER + ';)L' + LEVEL + ';', 1, 1,
+                lambda cp: b'\x2a' + f.op(0xb6, cp.method(PLAYER, 'level', '()L' + LEVEL + ';')) + b'\xb0')])
         if new_hook:
             helper = 'dev/settledlands/npc/AltarCorpseRevival'
             classes[helper] = f.fake_class(helper, [], [

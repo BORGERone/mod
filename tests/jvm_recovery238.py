@@ -753,6 +753,13 @@ def build_classes(jar, helper_jar):
              f.op(0xb8, cp.method(POSS, 'findOwnerCorpse', find_desc)) + b'\xb0'),
             (9, 'movePendingSafely', move_desc, 2, 2, lambda cp: b'\x2a\x2b' +
              f.op(0xb8, cp.method(POSS, 'movePendingItemsToCorpse', move_desc)) + b'\xb1')])
+    with zipfile.ZipFile(jar) as z:
+        if 'dev/settledlands/npc/CorpseDeathGuard.class' in z.namelist():
+            # This old fixture isolates the existing item recovery component.
+            # Real dimension/death eligibility executes in jvm_noqueue243.py.
+            guard = 'dev/settledlands/npc/CorpseDeathGuard'
+            classes[guard] = f.fake_class(guard, [], [(9, 'eligible', '(L' + SP + ';)Z', 1, 1,
+                lambda cp: b'\x2a' + op(0xb8, cp.method(POSS_SYS, 'isPossessed', '(L' + E + ';)Z')) + b'\xac')])
     return classes
 
 

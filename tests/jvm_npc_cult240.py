@@ -11,6 +11,9 @@ import argparse
 import pathlib
 import subprocess
 import tempfile
+import zipfile
+import jvm_altar242 as altar
+import patch_cultprobe243 as probe
 
 import jvm_recovery238 as r
 from patch_probe233 import Asm
@@ -333,6 +336,33 @@ def build_classes(jar):
             (9, 'create', '(L' + KEY + ';L' + RESOURCE + ';)L' + KEY + ';', 2, 2, return_new(KEY))]),
         'net/minecraft/world/effect/MobEffect': f.blank_class('net/minecraft/world/effect/MobEffect'),
     }
+    # Builds >=243 optionally contain the read-only attempt probe. Add actual
+    # bytecode and game API doubles only in that case, retaining older tests.
+    with zipfile.ZipFile(jar) as archive:
+        if probe.PROBE + '.class' in archive.namelist():
+            classes[probe.PROBE] = archive.read(probe.PROBE + '.class')
+            def adapter(k):
+                from types import SimpleNamespace
+                return SimpleNamespace(field=k.add_fieldref,method=k.add_methodref,cls=k.add_class,string=k.add_string)
+            def tag_type(k):
+                cp=adapter(k)
+                a=Asm(); a.raw(0x2a); a.op(0xb4,cp.field(NBT,'map','Ljava/util/HashMap;')); a.raw(0x2b)
+                a.op(0xb6,cp.method('java/util/HashMap','get','(Ljava/lang/Object;)Ljava/lang/Object;')); a.raw(0x4d)
+                for typ,val in ((NBT,10),('java/lang/Number',3),('java/lang/String',8)):
+                    a.raw(0x2c); a.op(0xc1,cp.cls(typ)); a.jump(0x99,'not_'+str(val)); const(a,val); a.raw(0xac)
+                    a.label('not_'+str(val))
+                a.raw(0x03,0xac); return a.finish()
+            classes[NBT]=altar.rewrite(classes[NBT],add_methods=[(1,'getTagType','(Ljava/lang/String;)B',2,3,tag_type)])
+            def uuid(k):
+                cp=adapter(k)
+                a=Asm(); text(a,cp,'00000000-0000-0000-0000-000000000099')
+                a.op(0xb8,cp.method('java/util/UUID','fromString','(Ljava/lang/String;)Ljava/util/UUID;')); a.raw(0xb0);return a.finish()
+            classes[E]=altar.rewrite(classes[E],add_methods=[(1,'getUUID','()Ljava/util/UUID;',1,1,uuid)])
+            classes[IT]=altar.rewrite(classes[IT],add_methods=[(1,'getItem','()L'+ITEM+';',1,1,
+                lambda k:getfield(IT,'kind','L'+ITEM+';',0xb0)(adapter(k)))])
+            classes[r.INTERACT_EVENT]=altar.rewrite(classes[r.INTERACT_EVENT],add_methods=[
+                (1,'getHand','()L'+probe.HAND+';',1,1,lambda cp:b'\x01\xb0')])
+            classes[probe.HAND]=f.blank_class(probe.HAND)
     return classes
 
 
