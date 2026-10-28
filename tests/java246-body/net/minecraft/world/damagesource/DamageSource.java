@@ -1,0 +1,1 @@
+package net.minecraft.world.damagesource;import net.minecraft.world.entity.Entity;public class DamageSource{public Entity attacker;public DamageSource(Entity e){attacker=e;}public Entity getEntity(){return attacker;}}

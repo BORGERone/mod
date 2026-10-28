@@ -38,8 +38,12 @@ def install(classes,jar):
   classes[BS]=z.read(BS+'.class')
  classes[AA]=attrs();classes[LIVING]=living()
  from classedit import Klass
- if not Klass(classes[NBT]).find_method('contains','(Ljava/lang/String;I)Z'):
-  classes[NBT]=t.rewrite(classes[NBT],add_methods=[(1,'contains','(Ljava/lang/String;I)Z',2,3,lambda k:b'\x2a\x2b'+t.op(0xb6,k.add_methodref(NBT,'contains','(Ljava/lang/String;)Z'))+b'\xac')])
+ def contains_type(k):
+  a=Asm();a.raw(0x2a);a.op(0xb4,k.add_fieldref(NBT,'map','Ljava/util/HashMap;'));a.raw(0x2b);a.op(0xb6,k.add_methodref('java/util/HashMap','get','(Ljava/lang/Object;)Ljava/lang/Object;'));a.raw(0x4e,0x1c,0x06);a.jump(0xa0,'compound');a.raw(0x2d);a.op(0xc1,k.add_class('java/lang/Number'));a.raw(0xac);a.label('compound');a.raw(0x2d);a.op(0xc1,k.add_class(NBT));a.raw(0xac);return a.finish()
+ if Klass(classes[NBT]).find_method('contains','(Ljava/lang/String;I)Z'):
+  classes[NBT]=t.rewrite(classes[NBT],replace=[('contains','(Ljava/lang/String;I)Z',2,4,contains_type)])
+ else:
+  classes[NBT]=t.rewrite(classes[NBT],add_methods=[(1,'contains','(Ljava/lang/String;I)Z',2,4,contains_type)])
  classes[SG]=f.fake_class(SG,[],[(9,name,'(L'+GRAPH+';)I',1,1,lambda cp:b'\x10\x0a\xac') for name in ('health','damage','speed')]+[(9,'clamp','(I)I',1,1,lambda cp:b'\x1a\xac')])
  classes[GRAPH]=f.blank_class(GRAPH)
  classes[PROFILE]=f.fake_class(PROFILE,[(1,'dialogueGraph','L'+GRAPH+';')],[(1,'<init>','()V',1,1,f.empty_init())])

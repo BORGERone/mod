@@ -1,0 +1,1 @@
+package dev.settledlands.npc;public class NpcStatsGraph{public static int clamp(int n){return Math.min(100,Math.max(1,n));}public static int health(NpcDialogueGraph g){return g==null?10:g.h;}public static int damage(NpcDialogueGraph g){return g==null?10:g.d;}public static int speed(NpcDialogueGraph g){return g==null?10:g.s;}}
