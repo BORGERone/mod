@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""IN PROGRESS: deterministic build 246 from exact 245; DO NOT DISTRIBUTE without gate."""
+"""Deterministic build 246 from exact 245; require full gate before distribution."""
 import argparse,hashlib,json,pathlib,struct,subprocess,sys,tempfile,tomllib,zipfile
 ROOT=pathlib.Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'))
 import classedit,decode,gen_api246,patch_body_wear245 as prev,patch_corpse_click244 as v244

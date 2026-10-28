@@ -1,0 +1,41 @@
+build246 size=1587651 sha256=fe62c48b5bfbb0607cf1fa1e9996649bcd90a144de57ca991dfb737ff78cc819
+Java: openjdk version "21.0.8" 2025-07-15 LTS
+OK complete build245 gate incl. 244–237 and HANDOFF §8
+OK 246 deterministic build
+OK 246 structural validator
+OK 246 CRC, TOML, locales, mixins and strict diff
+OK 246 exact entry diff, no API stubs, mixin arrays/descriptor, events and lifecycle hooks
+OK 246 broken CRC is rejected
+OK 246 missing language is rejected
+OK 246 missing mixin config is rejected
+OK 246 branchless mixin checker
+OK JVM verifier negative control build234
+OK JVM verifies 245 inherited targets
+OK JVM verifies 246 new targets
+OK 237 renderer regression jvm_corpse_load.py
+OK 237 renderer regression jvm_corpse_spawn.py
+OK 237 renderer regression jvm_corpse_dress.py
+OK 237 renderer regression jvm_corpse_realprofile.py
+OK 239 cleanup regression
+OK 243 no-queue regression jvm_noqueue243.py
+OK 243 no-queue regression jvm_noqueue_altar243.py
+OK 243 no-queue regression jvm_queue_disabled243.py
+OK 243 no-queue regression jvm_server_tick243.py
+OK 243 no-queue regression jvm_login243.py
+OK 243 read-only cult diagnostic
+OK 244 regression jvm_corpse_click244.py
+OK 244 regression jvm_real_corpse_dialogue244.py
+OK 244 regression jvm_self_escape244.py
+OK 245 regression jvm_body_wear245.py
+OK 245 regression jvm_wear_login245.py
+OK 246 behavior jvm_graph_stats246.py
+OK 246 behavior jvm_graph_ui246.py
+OK 246 behavior jvm_graph_undo246.py
+OK 246 behavior jvm_network_stats246.py
+OK 246 behavior jvm_body_stats246.py
+OK 246 behavior jvm_possession_stats246.py
+OK 246 behavior jvm_stats_screen246.py
+OK 246 behavior jvm_gravity246.py
+OK 245 negative mutants on 246
+OK 246 negative mutants
+BUILD 246 GATE: PASS (Java 21 + synthetic APIs; Minecraft/NeoForge and actual mixin application NOT run)
