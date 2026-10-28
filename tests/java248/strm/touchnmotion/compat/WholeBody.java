@@ -1,0 +1,1 @@
+package strm.touchnmotion.compat; import net.minecraft.client.player.AbstractClientPlayer; public class WholeBody { public static boolean HELD=false; public static boolean held(AbstractClientPlayer p){return HELD;} public static boolean seated(AbstractClientPlayer p){return false;} }

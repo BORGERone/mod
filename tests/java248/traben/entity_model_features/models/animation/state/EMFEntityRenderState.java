@@ -1,0 +1,1 @@
+package traben.entity_model_features.models.animation.state; import traben.entity_model_features.utils.EMFEntity; public interface EMFEntityRenderState { EMFEntity emfEntity(); default boolean isFirstPersonHand(){return EMFState.FIRST_PERSON;} }

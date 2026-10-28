@@ -1,0 +1,2 @@
+a07262fb01223f5418e124bd4ad4715d4b8d23bdc318d9ec324c46970e5ed782  settledlands-0.8.0-build248-touchmotion-player.jar
+c4cf4c4e41f6656d8c3664918a7dfa25abe8f1f81c919ac3fc01e3f8af60e546  SettledLands-Build248-TouchMotionPlayer-Source.zip

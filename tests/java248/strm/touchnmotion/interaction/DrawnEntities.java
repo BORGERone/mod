@@ -1,0 +1,1 @@
+package strm.touchnmotion.interaction; import net.minecraft.world.entity.Entity; public class DrawnEntities { public static boolean IN_WORLD=true; public static boolean inWorld(Entity e){return IN_WORLD;} }

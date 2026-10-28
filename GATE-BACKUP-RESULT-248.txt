@@ -1,0 +1,51 @@
+build248 experimental size=1599840 sha256=a07262fb01223f5418e124bd4ad4715d4b8d23bdc318d9ec324c46970e5ed782
+Java: openjdk version "21.0.8" 2025-07-15 LTS
+OK indexed real TnM 1.0.4 private/public descriptors and exact external SHA
+OK complete build247 gate incl. 246–237 / HANDOFF §8
+OK 248 deterministic build
+OK 248 structural validator
+OK 248 CRC, TOML, locales, mixins and strict diff
+OK 248 exact entries + methods; wrapper/before/after around native pose; no stub or TnM bundled
+OK 248 broken CRC rejected
+OK 248 missing language rejected
+OK 248 missing mixin config rejected
+OK 248 incomplete bridge rejected
+OK 248 missing model hook rejected
+OK 248 JVM verifies actual BbModel bytecode
+OK 247 JVM verifies 245 inherited targets
+OK 247 JVM verifies 246 inherited targets
+OK 247 JVM verifies 247 new targets
+OK 247 renderer regression jvm_corpse_load.py
+OK 247 renderer regression jvm_corpse_spawn.py
+OK 247 renderer regression jvm_corpse_dress.py
+OK 247 renderer regression jvm_corpse_realprofile.py
+OK 247 cleanup regression
+OK 247 no-queue regression jvm_noqueue243.py
+OK 247 no-queue regression jvm_noqueue_altar243.py
+OK 247 no-queue regression jvm_queue_disabled243.py
+OK 247 no-queue regression jvm_server_tick243.py
+OK 247 no-queue regression jvm_login243.py
+OK 247 read-only cult diagnostic
+OK 247 corpse regression jvm_corpse_click244.py
+OK 247 corpse regression jvm_real_corpse_dialogue244.py
+OK 247 corpse regression jvm_self_escape244.py
+OK 247 wear regression jvm_body_wear245.py
+OK 247 wear regression jvm_wear_login245.py
+OK 247 246 regression jvm_graph_stats246.py
+OK 247 246 regression jvm_graph_ui246.py
+OK 247 246 regression jvm_graph_undo246.py
+OK 247 246 regression jvm_network_stats246.py
+OK 247 246 regression jvm_body_stats246.py
+OK 247 246 regression jvm_possession_stats246.py
+OK 247 246 regression jvm_stats_screen246.py
+OK 247 246 regression jvm_gravity246.py
+OK 247 legacy wear mutants
+OK 247 legacy stats mutants
+OK 248 preserves bodiless damage/milk
+OK 248 legacy bodiless mutants
+OK 248 JVM bridge + 1200 real JOML property poses
+OK 248 23 calibrated negative behavioral mutants
+OK 248 actual TnM bytecode with controlled stubs hook
+OK 248 actual TnM bytecode with controlled stubs --real-foot
+OK 248 actual TnM bytecode with controlled stubs --real-torso
+BUILD 248 GATE: PASS (experimental player-only; no actual Minecraft/NeoForge/game/visual test; NPC/first person NOT supported)

@@ -1,0 +1,26 @@
+Независимый backup build 248 содержит AI-GUIDE, инструкции, исходники 246–248,
+ECJ и его лицензию, MIT-исходники JOML 1.10.5 и лицензию, инструменты, тесты,
+JAR 245–248 и исторические входы 230/232–244. BACKUP-MANIFEST.sha256 содержит
+SHA-256 каждого файла архива. 230/233/234 — заведомо сломанные негативные
+контроли, в игру их ставить нельзя.
+
+Minecraft, NeoForge, Java, готовые классы JOML и сторонний GPL JAR Touch'n Motion
+не включены. Требуются Python 3.11+, Java 21 и для полного gate дополнительно
+внешний тестовый TnM 1.0.4 SHA-256:
+3754909bf0d12445b18a60de315619734c1229bcc621f88f315ccf076701ab56
+TnM можно получить отдельно из собственных файлов или из публичного модпака:
+https://github.com/Eldodoron/PEAK-dev/blob/5d6be28b42e0c9fe95cde184ddeb7e6fde9615f6/minecraft/mods/touch_n_motion_neoforge_1.21.1_1.0.4.jar
+Проверить лицензию и точную контрольную сумму файла перед использованием.
+
+После независимой распаковки:
+sha256sum -c BACKUP-MANIFEST.sha256
+python3 tests/gate_build248.py --inputs test-inputs --base245 settledlands-0.8.0-build245-body-wear.jar --base246 settledlands-0.8.0-build246-npc-characteristics.jar --base247 settledlands-0.8.0-build247-bodiless-protection.jar --java /путь/к/java21 --jar settledlands-0.8.0-build248-touchmotion-player.jar --tnm /путь/к/точному-tnm-1.0.4.jar
+
+Ожидается BUILD 248 GATE: PASS. Пересборка JAR из точной базы 247:
+python3 tools/patch_touchmotion248.py --base settledlands-0.8.0-build247-bodiless-protection.jar --out /tmp/rebuilt248.jar --java /путь/к/java21
+Сравнить SHA-256 с SHA исходного JAR. Архив самовоспроизводим из собственного
+снимка, но для тестов реальных классов TnM нужен указанный внешний GPL JAR.
+Стенды и настоящие классы TnM с заглушками не являются запуском Minecraft.
+NPC и первое лицо в 248 не поддерживаются. Итоговые логи gate и SHA самого ZIP
+хранятся отдельно от архива, чтобы снимок и его воспроизведение не зависели от
+результатов проверки, выполненной уже после создания архива.
