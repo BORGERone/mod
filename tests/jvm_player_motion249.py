@@ -2,7 +2,7 @@
 """Actual 249 bridge on JVM 21/JOML; vanilla, NeoForge and TnM here are test doubles."""
 import argparse,pathlib,shutil,subprocess,sys,tempfile
 ROOT=pathlib.Path(__file__).resolve().parents[1];sys.path.insert(0,str(ROOT/'tools'));import build_joml248
-SCENARIOS=('normal','idle','stale','crouch','ride','standvehicle','baby','nested','rotated','repeat','absent','unknown','notworld','wrongstate','firstperson','parcool','held','othermodel','badrig','duplicate','nonplayer','beforeError','applyError','nan','shear','renderer')
+SCENARIOS=('normal','idle','stale','crouch','ride','standvehicle','baby','nested','rotated','repeat','restrot','absent','unknown','notworld','wrongstate','firstperson','parcool','held','othermodel','badrig','duplicate','nonplayer','beforeError','applyError','nan','shear','renderer')
 def main():
  q=argparse.ArgumentParser();q.add_argument('--java',required=True,type=pathlib.Path);q.add_argument('--jar',required=True,type=pathlib.Path);a=q.parse_args()
  with tempfile.TemporaryDirectory(prefix='jvm249-') as td:

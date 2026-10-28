@@ -6,6 +6,7 @@ public class PoseStack {
  public PoseStack(){poses.push(new Pose(new Matrix4f(),new Matrix3f()));}
  public void pushPose(){Pose t=poses.peek();poses.push(new Pose(new Matrix4f(t.pose),new Matrix3f(t.normal)));}
  public void popPose(){if(poses.size()==1)throw new IllegalStateException("underflow");poses.pop();}
+ public void scale(float x,float y,float z){poses.peek().pose.scale(x,y,z);poses.peek().normal.scale(x,y,z);}
  public void translate(float x,float y,float z){poses.peek().pose.translate(x,y,z);}
  public void mulPose(org.joml.Quaternionf q){poses.peek().pose.rotate(q);poses.peek().normal.rotate(q);}
  public Matrix4f matrix(){return poses.peek().pose;}

@@ -1,0 +1,1 @@
+package net.minecraft.world.item;public class ItemStack {public static final ItemStack EMPTY=new ItemStack();public boolean isEmpty(){return true;}public Item getItem(){return null;}public String getDescriptionId(){return "";}public UseAnim getUseAnimation(){return UseAnim.NONE;}}

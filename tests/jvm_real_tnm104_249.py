@@ -101,6 +101,7 @@ MANUAL_SRC={
 def main():
  MANUAL_SRC.pop('net/minecraft/client/model/HumanoidModel.java')
  MANUAL_SRC.pop('net/minecraft/client/Minecraft.java')
+ MANUAL_SRC.pop('net/minecraft/world/phys/Vec3.java')
  q=argparse.ArgumentParser();q.add_argument('--java',required=True,type=pathlib.Path);q.add_argument('--jar',required=True,type=pathlib.Path);q.add_argument('--tnm',required=True,type=pathlib.Path);modes=q.add_mutually_exclusive_group();modes.add_argument('--real-foot',action='store_true');modes.add_argument('--real-torso',action='store_true');a=q.parse_args()
  assert hashlib.sha256(a.tnm.read_bytes()).hexdigest()==SHA,'not the indexed TnM 1.0.4 binary'
  with tempfile.TemporaryDirectory(prefix='real-tnm248-') as tmp:
@@ -129,8 +130,8 @@ def main():
    assert r.returncode==0 and 'PASS real TnM 1.0.4 torso' in r.stdout,(r.stdout,r.stderr)
    print(r.stdout.strip());print('Real torso mode uses a manually injected lean and synthetic model space/world; NOT a game test')
   else:
-   for scenario in ('normal','idle','stale','crouch','ride','standvehicle','baby','nested','rotated','repeat','absent','unknown','notworld','wrongstate','firstperson','parcool','held','othermodel','badrig','duplicate','nonplayer','beforeError','applyError','nan','shear','renderer'):
+   for scenario in ('normal','idle','stale','crouch','ride','standvehicle','baby','nested','rotated','repeat','restrot','absent','unknown','notworld','wrongstate','firstperson','parcool','held','othermodel','badrig','duplicate','nonplayer','beforeError','applyError','nan','shear','renderer'):
     r=subprocess.run([str(a.java),'-Xverify:all','-cp',classpath,'testing.Bridge249Scenarios',scenario],capture_output=True,text=True)
     assert r.returncode==0 and ('PASS '+scenario) in r.stdout,(scenario,r.stdout,r.stderr)
-   print('Actual TnM 1.0.4 ModelSpace + private applyAll/applyAllParts executed with',count,'synthetic feature providers: PASS 26; NOT a game test')
+   print('Actual TnM 1.0.4 ModelSpace + private applyAll/applyAllParts executed with',count,'synthetic feature providers: PASS 27; NOT a game test')
 if __name__=='__main__':main()

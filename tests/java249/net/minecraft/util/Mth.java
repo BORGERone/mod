@@ -1,1 +1,1 @@
-package net.minecraft.util;public class Mth {public static float wrapDegrees(float a){float x=a%360;if(x>=180)x-=360;if(x< -180)x+=360;return x;}}
+package net.minecraft.util;public class Mth {public static float rotLerp(float t,float a,float b){return a+(b-a)*t;}public static float cos(float x){return (float)Math.cos(x);}public static float clamp(float x,float lo,float hi){return Math.max(lo,Math.min(hi,x));}public static float wrapDegrees(float a){float x=a%360;if(x>=180)x-=360;if(x< -180)x+=360;return x;}}

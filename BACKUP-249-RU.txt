@@ -1,0 +1,19 @@
+Независимый backup build 249 содержит AI-GUIDE, инструкции, исходники 246–249,
+лицензированный ECJ, MIT-исходники JOML, тесты/инструменты, JAR 245–249 и
+исторические входы 230/232–244. BACKUP-MANIFEST.sha256 описывает все файлы.
+230/233/234 — негативные контроли, не ставить их в игру.
+
+Minecraft, NeoForge, Java, готовый JOML и сторонний GPL JAR Touch'n Motion не
+включены. Для полного gate требуются Python 3.11+, Java 21 и внешний TnM 1.0.4
+SHA-256 3754909bf0d12445b18a60de315619734c1229bcc621f88f315ccf076701ab56.
+Источники внешнего JAR и лицензия описаны в BACKUP-248-RU.txt.
+
+После независимой распаковки:
+sha256sum -c BACKUP-MANIFEST.sha256
+python3 tests/gate_build249.py --inputs test-inputs --base245 settledlands-0.8.0-build245-body-wear.jar --base246 settledlands-0.8.0-build246-npc-characteristics.jar --base247 settledlands-0.8.0-build247-bodiless-protection.jar --base248 settledlands-0.8.0-build248-touchmotion-player.jar --java /путь/к/java21 --jar settledlands-0.8.0-build249-player-motion.jar --tnm /путь/к/точному-tnm-1.0.4.jar
+
+Ожидается BUILD 249 GATE: PASS. Пересборка из точной базы 247:
+python3 tools/patch_player_motion249.py --base settledlands-0.8.0-build247-bodiless-protection.jar --out /tmp/rebuilt249.jar --java /путь/к/java21
+Сравнить SHA-256 с исходным JAR. Архив должен воспроизводиться побайтно из
+своего снимка. Итоговые логи gate и SHA самого ZIP — вне архива. Проверки
+стендов не являются игрой; NPC и первое лицо не поддерживаются мостом 249.

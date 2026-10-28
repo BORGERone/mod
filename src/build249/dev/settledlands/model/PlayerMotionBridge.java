@@ -222,7 +222,9 @@ public final class PlayerMotionBridge {
                 }
                 if (applied && !reportedActive) {
                     reportedActive = true;
-                    System.out.println("[SettledLands/TouchMotion249] Vanilla player pose + Touch'n Motion applied to Ivy; embedded actor clips skipped.");
+                    System.out.println("[SettledLands/TouchMotion249] Vanilla player pose + Touch'n Motion applied; embedded actor clips skipped. model="
+                        + model.getName() + " texture=" + model.getTextureLocation()
+                        + " uv=" + model.getTextureWidth() + "x" + model.getTextureHeight());
                 }
             } catch (Throwable error) {
                 disabled = true;

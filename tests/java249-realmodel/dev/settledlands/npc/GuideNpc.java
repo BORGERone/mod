@@ -1,0 +1,2 @@
+package dev.settledlands.npc;
+public class GuideNpc extends net.minecraft.world.entity.LivingEntity {public int tickCount,hurtTime;public float getHealth(){return 20;}public boolean isTalking(){return false;}public NpcProfile profile(){return null;}public String getCustomAnimName(){return "";}public String getCustomAnimBone(){return "";}public boolean isCustomAnimLoop(){return false;}public int getCustomAnimStartTick(){return 0;}}

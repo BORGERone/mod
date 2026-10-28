@@ -1,1 +1,1 @@
-package net.minecraft.world.entity.player; public class Player extends net.minecraft.world.entity.LivingEntity implements traben.entity_model_features.utils.EMFEntity {}
+package net.minecraft.world.entity.player;public class Player extends net.minecraft.world.entity.LivingEntity implements traben.entity_model_features.utils.EMFEntity {public final Inventory inv=new Inventory();public Inventory getInventory(){return inv;}public float getAttackStrengthScale(float p){return 1;}}

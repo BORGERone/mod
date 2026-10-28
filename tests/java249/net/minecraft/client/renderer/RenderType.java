@@ -1,0 +1,1 @@
+package net.minecraft.client.renderer;import net.minecraft.resources.ResourceLocation;public class RenderType {public static RenderType entityCutout(ResourceLocation r){return new RenderType();}public static RenderType entityCutoutNoCull(ResourceLocation r){return new RenderType();}}

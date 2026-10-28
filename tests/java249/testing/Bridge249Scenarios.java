@@ -12,9 +12,9 @@ public class Bridge249Scenarios {
   check(eq(m.drawn.get("rightarmitemlocator"),new Matrix4f(m.drawn.get("rightarm")).translate(-1f/16,10f/16,0)),"item locator follows hand");
  }
  public static void main(String[] args){String mode=args[0];AbstractClientPlayer p=new AbstractClientPlayer();EMFState.ENTITY=p;BbModel m=new BbModel();PoseStack s=new PoseStack();
-  LivingEntity actor=mode.equals("nonplayer")?new LivingEntity():p;Map<String,Matrix4f> before=rest(m);
-  boolean good=Set.of("normal","idle","stale","crouch","ride","standvehicle","baby","nested","rotated","repeat").contains(mode);
-  Probe.mutate=Set.of("normal","stale","crouch","ride","standvehicle","baby","nested","rotated","repeat").contains(mode);Probe.rotateBefore=mode.equals("rotated");
+  LivingEntity actor=mode.equals("nonplayer")?new LivingEntity():p;if(mode.equals("restrot")){m.getPart("waist").zRot=.4f;m.getPart("waist").saveRest();}Map<String,Matrix4f> before=rest(m);
+  boolean good=Set.of("normal","idle","stale","crouch","ride","standvehicle","baby","nested","rotated","repeat","restrot").contains(mode);
+  Probe.mutate=Set.of("normal","stale","crouch","ride","standvehicle","baby","nested","rotated","repeat","restrot").contains(mode);Probe.rotateBefore=mode.equals("rotated");
   if(mode.equals("idle")){m.swing=0;m.amount=0;m.headYaw=0;m.pitch=0;}
   if(mode.equals("stale")){m.getPart("bone").x=99;m.getPart("bone").zRot=1;m.getPart("waist").zRot=.7f;m.getPart("root").xScale=2;}
   if(mode.equals("absent"))ModList.LOADED=false;if(mode.equals("unknown"))ModList.VERSION="1.0.5";if(mode.equals("notworld"))DrawnEntities.IN_WORLD=false;
@@ -28,11 +28,11 @@ public class Bridge249Scenarios {
   if(mode.equals("ride")||mode.equals("standvehicle")){p.passenger=true;p.vehicle=new Entity();p.vehicle.riderSit=mode.equals("ride");}
   if(mode.equals("baby"))p.baby=true;
   if(mode.equals("nested")){AbstractClientPlayer other=new AbstractClientPlayer();BbModel second=new BbModel();m.nested=()->{EMFState.ENTITY=other;PlayerMotionBridge.render(second,other,1,.5f,s,null,15);check(s.depth()==3,"nested stack");EMFState.ENTITY=p;};}
-  PlayerMotionBridge.render(m,actor,1,.5f,s,null,15);check(s.depth()==1,"stack restored");
+  try{PlayerMotionBridge.render(m,actor,1,.5f,s,null,15);}catch(IllegalStateException e){throw new AssertionError("pose stack or original render failed",e);}check(s.depth()==1,"stack restored");
   if(good){check(Probe.nativeCount==0,"embedded clip skipped");check(Probe.events.containsAll(List.of("before","prepare","vanilla","record","apply","draw")),"correct hooks");
    check(eq(m.drawnStack,new Matrix4f().translate(0,1.125f,0).rotateZ(mode.equals("rotated")?.4f:0)),"modelSpace applied");assertRetarget(m,before);
    if(mode.equals("idle"))for(String n:before.keySet())check(eq(m.drawn.get(n),before.get(n)),"exact Ivy rest "+n);
-   if(mode.equals("normal")){check(!eq(before.get("rightleg"),m.drawn.get("rightleg")),"walk moves leg");check(Math.abs(Probe.initial.get("right_arm").m30()+5f/16)<1e-6,"TnM sees vanilla right arm pivot");}
+   if(mode.equals("normal")){check(Probe.events.equals(List.of("before","prepare","vanilla","record","apply","draw")),"exact one-shot animation order");check(!eq(before.get("rightleg"),m.drawn.get("rightleg")),"walk moves leg");check(Math.abs(Probe.initial.get("right_arm").m30()+5f/16)<1e-6,"TnM sees vanilla right arm pivot");}
    if(mode.equals("crouch")){check(Probe.values[8]==1&&Probe.values[9]==1&&Probe.values[10]==0,"renderer pose forwarded");check(Math.abs(Probe.values[5]-.335f)<1e-6,"attack interpolation forwarded");}
    if(mode.equals("ride"))check(Probe.values[0]==0&&Probe.values[1]==0&&Probe.values[6]==1,"sitting suppresses walk");
    if(mode.equals("standvehicle"))check(Probe.values[0]==2&&Probe.values[1]==.75f&&Probe.values[6]==0,"standing passenger walks");
