@@ -1,0 +1,13 @@
+Независимый backup build 247 включает AI-GUIDE, инструкции, исходники build 246/247,
+ECJ и лицензию, инструменты, тесты, JAR 245/246/247 и исторические входы
+230/232–244. Внутренний BACKUP-MANIFEST.sha256 проверяет каждый записанный файл.
+Java и Minecraft в архив не включены. Нужны Python 3.11+ и Java 21.
+
+Из распакованной папки:
+sha256sum -c BACKUP-MANIFEST.sha256
+python3 tests/gate_build247.py --inputs test-inputs --base245 settledlands-0.8.0-build245-body-wear.jar --base246 settledlands-0.8.0-build246-npc-characteristics.jar --java /путь/к/java21 --jar settledlands-0.8.0-build247-bodiless-protection.jar
+
+Ожидается BUILD 247 GATE: PASS. Новый JAR воспроизводится из точной 246:
+python3 tools/patch_bodiless247.py --base settledlands-0.8.0-build246-npc-characteristics.jar --out /tmp/rebuilt247.jar --java /путь/к/java21
+Сравнить SHA / файлы; правила в AI-GUIDE и HANDOFF. Тесты со стендами не являются
+запуском Minecraft/NeoForge или проверкой игры.

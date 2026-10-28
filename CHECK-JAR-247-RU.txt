@@ -1,0 +1,8 @@
+Проверка скачанного JAR build 247 (Windows):
+1. Сохраните ссылку как файл settledlands-0.8.0-build247-bodiless-protection.jar.
+2. Проверьте размер: 1 589 582 байта.
+3. В cmd в папке файла выполните:
+certutil -hashfile settledlands-0.8.0-build247-bodiless-protection.jar SHA256
+4. Ожидаемая SHA-256:
+c3130e136018342d133b710812e6c86fc0fcf5f181146c6973f055abba3798f1
+5. Сохраните копию мира; в mods должен быть только один JAR SettledLands. ZIP в mods не класть. Игровой прогон описан в CHECKLIST-TEST-BUILD247-RU.md.

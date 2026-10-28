@@ -1,0 +1,43 @@
+build247 size=1589582 sha256=c3130e136018342d133b710812e6c86fc0fcf5f181146c6973f055abba3798f1
+Java: openjdk version "21.0.8" 2025-07-15 LTS
+OK complete build246 gate incl. 245–237 and HANDOFF §8
+OK 247 deterministic build
+OK 247 structural validator
+OK 247 CRC, TOML, locales, mixins and strict diff
+OK 247 exact entry diff, no stubs or new mixin, subscriber/method annotations and API descriptors
+OK 247 broken CRC rejected
+OK 247 missing language rejected
+OK 247 missing mixin config rejected
+OK 247 missing subscriber rejected by allowlist
+OK 247 JVM verifies 245 inherited targets
+OK 247 JVM verifies 246 inherited targets
+OK 247 JVM verifies 247 new targets
+OK 247 renderer regression jvm_corpse_load.py
+OK 247 renderer regression jvm_corpse_spawn.py
+OK 247 renderer regression jvm_corpse_dress.py
+OK 247 renderer regression jvm_corpse_realprofile.py
+OK 247 cleanup regression
+OK 247 no-queue regression jvm_noqueue243.py
+OK 247 no-queue regression jvm_noqueue_altar243.py
+OK 247 no-queue regression jvm_queue_disabled243.py
+OK 247 no-queue regression jvm_server_tick243.py
+OK 247 no-queue regression jvm_login243.py
+OK 247 read-only cult diagnostic
+OK 247 corpse regression jvm_corpse_click244.py
+OK 247 corpse regression jvm_real_corpse_dialogue244.py
+OK 247 corpse regression jvm_self_escape244.py
+OK 247 wear regression jvm_body_wear245.py
+OK 247 wear regression jvm_wear_login245.py
+OK 247 246 regression jvm_graph_stats246.py
+OK 247 246 regression jvm_graph_ui246.py
+OK 247 246 regression jvm_graph_undo246.py
+OK 247 246 regression jvm_network_stats246.py
+OK 247 246 regression jvm_body_stats246.py
+OK 247 246 regression jvm_possession_stats246.py
+OK 247 246 regression jvm_stats_screen246.py
+OK 247 246 regression jvm_gravity246.py
+OK 247 legacy wear mutants
+OK 247 legacy stats mutants
+OK 247 real bytecode: events, milk and attributed damage
+OK 247 negative behavioral mutants
+BUILD 247 GATE: PASS (Java 21 + synthetic APIs; Minecraft/NeoForge and real event bus/mixins NOT run)

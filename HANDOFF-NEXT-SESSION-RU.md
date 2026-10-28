@@ -1,6 +1,19 @@
 # ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0
 
-## Актуальное состояние: build 246 — читать раньше истории ниже
+## Актуальное состояние: build 247 — читать раньше истории
+
+`settledlands-0.8.0-build247-bodiless-protection.jar`, 1 589 582 байта, SHA-256 `c3130e136018342d133b710812e6c86fc0fcf5f181146c6973f055abba3798f1`; воспроизводимо от точной 246 через `tools/patch_bodiless247.py`. Добавлен один новый класс и изменены только TOML/patch-info, все классы 246 сохранены. `BodilessProtection` обычными событиями NeoForge отменяет прямые атаки и урон с узнаваемым бестелесным источником в `minecraft:overworld`, а также применение от такого источника яда, иссушения и голода. В `settledlands:purgatory` бой разрешён; молоко не снимает эффект, но нормальное снятие и другие эффекты молока не менялись. Огонь/лава/падение и другое без установленного виновника могут обходить запрет, как и нестандартные чужие механизмы. Реальный Minecraft/NeoForge, регистрация bus и mixin не запускались. Подробнее — README, игровой чеклист и `API-COMPAT-247-RU.md`.
+
+Статус основного и независимого полного gate — в `GATE-RESULT-247.txt` и `GATE-BACKUP-RESULT-247.txt`. Из распакованного backup, Python 3.11+ / Java 21:
+
+```bash
+sha256sum -c BACKUP-MANIFEST.sha256
+python3 tests/gate_build247.py --inputs test-inputs --base245 settledlands-0.8.0-build245-body-wear.jar --base246 settledlands-0.8.0-build246-npc-characteristics.jar --java /path/to/java21 --jar settledlands-0.8.0-build247-bodiless-protection.jar
+```
+
+Ожидается `BUILD 247 GATE: PASS`: полный gate 246–237/§8 плюс те же регрессии на JAR 247, actual 247/246 bytecode со стендами, 17 новых и 50 наследованных мутантов. Стенды не заменяют игру. Каждый будущий билд снова требует полный gate и независимый backup с AI-GUIDE и повторной проверкой из распаковки; работать только на ветке текущей сессии.
+
+## История: build 246 — читать после 247
 
 `settledlands-0.8.0-build246-npc-characteristics.jar`, 1 587 651 байт, SHA-256 `fe62c48b5bfbb0607cf1fa1e9996649bcd90a144de57ca991dfb737ff78cc819`, детерминированно создан от точной базы 245 через `tools/patch_npc_stats246.py` и ECJ `tools/vendor/` (EPL-2.0). Копия мира обязательна; игровой чеклист — `CHECKLIST-TEST-BUILD246-RU.md`. Пользователь подтвердил в игре 244; 245 и 246 в игре не проверены.
 
