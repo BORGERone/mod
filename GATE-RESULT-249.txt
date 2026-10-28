@@ -1,0 +1,53 @@
+build249 experimental size=1602595 sha256=904ea1cb82c43735ec6f18dce60382c0ccafe7654045556fe1dccee10187b272
+Java: openjdk version "21.0.8" 2025-07-15 LTS
+OK complete build248 gate incl. 247–237 / HANDOFF §8
+OK 249 deterministic rebuild
+OK 249 structural validator
+OK 249 CRC TOML locales mixins strict diff
+OK exact 249 patch + wrapper/vanilla bridge; NPC setupAnim and original setupAnimRaw byte-for-byte unchanged
+OK identical 247 asset/UV/texture/parser/renderer bytes; embedded Ivy PNG equals external 128x128; NPC clips retained
+OK 249 broken CRC rejected
+OK 249 missing language rejected
+OK 249 missing mixin rejected
+OK 249 incomplete bridge rejected
+OK 249 changed texture/UV resource rejected
+OK 249 missing actor bridge rejected
+OK 249 JVM verification of actual BbModel
+OK 247 JVM verifies 245 inherited targets
+OK 247 JVM verifies 246 inherited targets
+OK 247 JVM verifies 247 new targets
+OK 247 renderer regression jvm_corpse_load.py
+OK 247 renderer regression jvm_corpse_spawn.py
+OK 247 renderer regression jvm_corpse_dress.py
+OK 247 renderer regression jvm_corpse_realprofile.py
+OK 247 cleanup regression
+OK 247 no-queue regression jvm_noqueue243.py
+OK 247 no-queue regression jvm_noqueue_altar243.py
+OK 247 no-queue regression jvm_queue_disabled243.py
+OK 247 no-queue regression jvm_server_tick243.py
+OK 247 no-queue regression jvm_login243.py
+OK 247 read-only cult diagnostic
+OK 247 corpse regression jvm_corpse_click244.py
+OK 247 corpse regression jvm_real_corpse_dialogue244.py
+OK 247 corpse regression jvm_self_escape244.py
+OK 247 wear regression jvm_body_wear245.py
+OK 247 wear regression jvm_wear_login245.py
+OK 247 246 regression jvm_graph_stats246.py
+OK 247 246 regression jvm_graph_ui246.py
+OK 247 246 regression jvm_graph_undo246.py
+OK 247 246 regression jvm_network_stats246.py
+OK 247 246 regression jvm_body_stats246.py
+OK 247 246 regression jvm_possession_stats246.py
+OK 247 246 regression jvm_stats_screen246.py
+OK 247 246 regression jvm_gravity246.py
+OK 247 legacy wear mutants
+OK 247 legacy stats mutants
+OK 249 preserves bodiless damage/milk
+OK 249 legacy bodiless mutants
+OK 249 real BbModel/BbAnimation/actor with synthetic dependencies
+OK 249 JVM bridge and 1200 JOML poses
+OK 249 32 calibrated negative behavioral mutants
+OK 249 real TnM bytecode with controlled stubs hook
+OK 249 real TnM bytecode with controlled stubs --real-foot
+OK 249 real TnM bytecode with controlled stubs --real-torso
+BUILD 249 GATE: PASS (experimental player-only; no Minecraft/NeoForge/game/visual test; NPC/first person NOT supported)
