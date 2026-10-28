@@ -66,6 +66,9 @@ def build_classes(jar):
     names = {'<clinit>', 'safe', 'data', 'onPlayerDeath', 'onPlayerClone', 'onPlayerDrops', 'onCorpseJoin', 'ownerUuid',
              'dressBodyCorpse', 'findOwnerCorpse', 'movePendingItemsToCorpse', 'onServerTick', 'nearRevivalAltar',
              'clearMarker', 'repossess', 'restoreBodyItems', 'guaranteeCorpses', 'healStuckIvyBodies'}
+    with zipfile.ZipFile(jar) as z:
+        if r.f.classedit.Klass(z.read(POSS + '.class')).find_method('settledlands$cancelDeadWatches'):
+            names.add('settledlands$cancelDeadWatches')
     classes[POSS] = r.subset(jar, POSS, names)
     # The visual dressing and unrelated sweep are the only stubbed mod methods.
     # The event handlers, UUID association, tick decisions, drop capture,
@@ -150,6 +153,17 @@ def build_classes(jar):
     classes[PLAYERLIST] = t.rewrite(classes[PLAYERLIST], replace=[
         ('getPlayer', '(Ljava/util/UUID;)L' + SP + ';', 2, 4, find_player)])
     return classes, noqueue
+
+
+def build_with_wear(jar):
+    # 245 retains the real wear helper in these earlier end-to-end scenarios;
+    # the health/world APIs remain synthetic. Older baselines are unchanged.
+    with zipfile.ZipFile(jar) as z:
+        has_wear = 'dev/settledlands/npc/BodyWear.class' in z.namelist()
+    if has_wear:
+        import wear_fixture245
+        return wear_fixture245.build(jar), True
+    return build_classes(jar)
 
 
 def harness():
@@ -272,7 +286,7 @@ def harness():
 
 
 def run(java, jar):
-    classes, noqueue = build_classes(jar); classes['NoQueueDeathHarness'] = harness()
+    classes, noqueue = build_with_wear(jar); classes['NoQueueDeathHarness'] = harness()
     with tempfile.TemporaryDirectory(prefix='noqueue243-jvm-') as td:
         root = pathlib.Path(td)
         for name, raw in classes.items():

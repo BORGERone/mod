@@ -127,7 +127,7 @@ def harness():
 
 
 def run(java, jar):
-    classes, _ = v.build_classes(jar); classes['NoQueueAltarHarness'] = harness()
+    classes, _ = v.build_with_wear(jar); classes['NoQueueAltarHarness'] = harness()
     with tempfile.TemporaryDirectory(prefix='noqueue-altar-jvm-') as td:
         root = pathlib.Path(td)
         for name, raw in classes.items():

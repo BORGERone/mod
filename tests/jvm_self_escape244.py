@@ -10,6 +10,7 @@ import argparse
 import pathlib
 import subprocess
 import tempfile
+import zipfile
 
 import jvm_noqueue243 as v
 import jvm_corpse_click244 as b
@@ -22,7 +23,15 @@ PLAYERLIST, DEATH, CLONE, RESPAWN, POST = v.PLAYERLIST, v.DEATH, v.CLONE, v.RESP
 
 
 def build_classes(jar):
-    classes, _ = v.build_classes(jar)
+    with zipfile.ZipFile(jar) as archive:
+        has_wear = 'dev/settledlands/npc/BodyWear.class' in archive.namelist()
+    if has_wear:
+        # Exercise the real 245 wear hook as well; its attribute APIs are
+        # explicit stand-ins, not a NeoForge event bus or a game.
+        import wear_fixture245
+        classes = wear_fixture245.build(jar)
+    else:
+        classes, _ = v.build_classes(jar)
     click = b.build_classes(jar)
     # Keep the real lifecycle/clone/server-tick/altar methods from v; overlay
     # only the UI dispatch stand-ins and actual event/corpse-click entry points.

@@ -1,0 +1,14 @@
+Проверка SettledLands build 245 после скачивания
+
+Ожидаемый файл: settledlands-0.8.0-build245-body-wear.jar
+Ожидаемый размер: 1 563 087 байт
+SHA-256: b6825213caa98096881f02659f81f719cb5f86588c22c2899ccca09f139aca86
+
+В PowerShell, из папки с файлом:
+  (Get-Item '.\settledlands-0.8.0-build245-body-wear.jar').Length
+  (Get-FileHash '.\settledlands-0.8.0-build245-body-wear.jar' -Algorithm SHA256).Hash
+  certutil -hashfile settledlands-0.8.0-build245-body-wear.jar SHA256
+
+При несовпадении повторите скачивание; повреждённый файл не запускать. Сделайте
+копию мира и оставьте в mods только этот JAR SettledLands. Backup ZIP в mods
+не класть. Статус проверок и ограничения — README-Build245-BodyWear-RU.txt.

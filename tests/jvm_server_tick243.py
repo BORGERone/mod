@@ -39,7 +39,7 @@ def fake_iterator():
 
 
 def build_classes(jar):
-    classes,noqueue=v.build_classes(jar)
+    classes,noqueue=v.build_with_wear(jar)
     def clinit(k):
         code=t.pm_clinit(k)[:-1]
         code+=(op(0xbb,k.add_class('java/util/ArrayList'))+b'\x59'+op(0xb7,k.add_methodref('java/util/ArrayList','<init>','()V'))+

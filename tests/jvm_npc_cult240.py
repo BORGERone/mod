@@ -363,6 +363,22 @@ def build_classes(jar):
             classes[r.INTERACT_EVENT]=altar.rewrite(classes[r.INTERACT_EVENT],add_methods=[
                 (1,'getHand','()L'+probe.HAND+';',1,1,lambda cp:b'\x01\xb0')])
             classes[probe.HAND]=f.blank_class(probe.HAND)
+    # Build 245's real possess() resets body wear. Load the real helper and
+    # executable 1.21 attribute stand-ins rather than a no-op reset when it is
+    # present; older candidates keep their original isolated fixtures.
+    with zipfile.ZipFile(jar) as archive:
+        import patch_body_wear245 as wear
+        if wear.WEAR + '.class' in archive.namelist():
+            import wear_fixture245 as x
+            classes[wear.WEAR] = archive.read(wear.WEAR + '.class')
+            classes[x.RL] = x.resource()
+            classes[x.H], classes[x.FH] = x.holder_classes()
+            classes[x.A] = x.attribute_type()
+            classes[x.AA] = x.attributes_class()
+            classes[x.OP] = x.operations_class()
+            classes[x.MOD] = x.modifier_class()
+            classes[x.ATTR] = x.attribute_instance()
+            classes[x.LIVING] = x.living_entity()
     return classes
 
 

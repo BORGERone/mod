@@ -54,7 +54,7 @@ def harness():
 
 
 def run(java,jar):
-    classes,_=v.build_classes(jar);classes['Login243Harness']=harness()
+    classes,_=v.build_with_wear(jar);classes['Login243Harness']=harness()
     with tempfile.TemporaryDirectory(prefix='login243-jvm-') as td:
         root=pathlib.Path(td)
         for name,raw in classes.items():
