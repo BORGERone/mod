@@ -11,3 +11,11 @@ python3 tests/gate_build247.py --inputs test-inputs --base245 settledlands-0.8.0
 python3 tools/patch_bodiless247.py --base settledlands-0.8.0-build246-npc-characteristics.jar --out /tmp/rebuilt247.jar --java /путь/к/java21
 Сравнить SHA / файлы; правила в AI-GUIDE и HANDOFF. Тесты со стендами не являются
 запуском Minecraft/NeoForge или проверкой игры.
+
+Выпущенный ZIP: SettledLands-Build247-BodilessProtection-Source.zip
+Размер: 29 760 065 байт
+SHA-256: dd0e369edb0315dfdc9444a0c7ea73037e6c6a432aa96baaf088b798afa7aa9a
+Проверка из независимой распаковки: все 199 записей manifest OK; полный gate
+247 PASS. Архив воспроизведён побайтно из собственного содержимого. Лог
+GATE-BACKUP-RESULT-247.txt находится во внешнем репозитории после проверки;
+его копия внутри ZIP описывает проверку до её выполнения (нет самоссылки).

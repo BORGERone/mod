@@ -1,1 +1,2 @@
 c3130e136018342d133b710812e6c86fc0fcf5f181146c6973f055abba3798f1  settledlands-0.8.0-build247-bodiless-protection.jar
+dd0e369edb0315dfdc9444a0c7ea73037e6c6a432aa96baaf088b798afa7aa9a  SettledLands-Build247-BodilessProtection-Source.zip
