@@ -1,0 +1,2 @@
+a3be663ea42de11e815b67b710e589bb92dd2752eb6fbd0d5408fdba3c9d256a  settledlands-0.8.0-build251-crawl-hns.jar
+6b5a7acf69bd7276ebc34c78aaa961cb43a1dd75139642c9aa97c6983eaf517f  SettledLands-Build251-CrawlHnS-Source.zip

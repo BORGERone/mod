@@ -1,0 +1,1 @@
+package net.dndats.hackersandslashers.impl.combat.mechanics.combo;public class ClientCombatState {public String currentMoveId,currentRootMotionAnim;public java.util.Set<String> firedInstructions=java.util.Set.of();public float currentWeaponReachScale=.5f,fpCameraYOffset,currentCameraYOffset;public int lastCameraOffsetUpdateTick;}

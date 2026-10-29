@@ -1,0 +1,2 @@
+package net.minecraft.client.renderer;import net.minecraft.world.entity.LivingEntity;import net.minecraft.world.item.*;import com.mojang.blaze3d.vertex.PoseStack;
+public class ItemInHandRenderer {public void renderItem(LivingEntity e,ItemStack i,ItemDisplayContext c,boolean left,PoseStack p,MultiBufferSource b,int light){testing.Probe251.items.put(left?"left":"right",new org.joml.Matrix4f(p.matrix()));testing.Probe251.itemNormals.put(left?"left":"right",p.last().transformNormal(1,2,3,new org.joml.Vector3f()));testing.Probe.events.add("item-"+(left?"left":"right"));}}

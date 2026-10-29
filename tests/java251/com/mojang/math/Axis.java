@@ -1,0 +1,2 @@
+package com.mojang.math;import org.joml.Quaternionf;
+public interface Axis {Axis XP=d->new Quaternionf().rotationX((float)Math.toRadians(d)); Axis YP=d->new Quaternionf().rotationY((float)Math.toRadians(d));Axis ZP=d->new Quaternionf().rotationZ((float)Math.toRadians(d));Quaternionf rotationDegrees(float degrees);default Quaternionf rotation(float radians){return rotationDegrees((float)Math.toDegrees(radians));}}

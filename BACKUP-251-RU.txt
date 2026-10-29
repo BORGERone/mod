@@ -1,0 +1,19 @@
+Backup 251 содержит AI-GUIDE, инструкции, исходники патчей/тестов, лицензированный ECJ и исходники JOML, JAR 245–251 и входы предыдущих шлюзов 230–244. В нём НЕТ пользовательского лога или HnS JAR/ресурсов, FA, PAL, TnM, EMF, ETF и официального архива исходников Gson. Конечные логи проверки и контрольные суммы находятся вне архива, чтобы не было циклической зависимости.
+
+Для полного повторения из распакованного архива нужны Python 3.11+, Java 21 и отдельно те же внешние тестовые входы:
+PAL 1.1.6 SHA-256 e41ee06000fc95444a482018ec24b3f1e79eb111ca6b8ca119e61ceabf9136c5
+пользовательский HnS beta2.5-bettercombat-test SHA-256 0e1e54fc03adcd59bd1d46f821d42788bc8d9757cd8f41ed118cfc30c241a7bb
+официальные исходники Gson 2.10.1 SHA-256 e358710d663ca799101a51d0568ccc6dbd30be9bc55b1a85b1a21a93e96e8a9b
+TnM 1.0.4 SHA-256 3754909bf0d12445b18a60de315619734c1229bcc621f88f315ccf076701ab56
+EMF 3.3.12 SHA-256 3ba0bf7b487660920d12cc0ff6cb5de1763f024a080fe0cd7d64e1c8e0f7f190
+ETF 7.2.6 SHA-256 b47173468febc21bb565af19a82bcd2f851e34ecb333660cdc48a8c37c27c1cd
+
+EMF/ETF здесь нужны только для теста внешних компонентов, их версии отличаются от установленных пользователем. Архив Gson можно получить из официального тега https://codeload.github.com/google/gson/tar.gz/refs/tags/gson-parent-2.10.1; тест компилирует его в отдельном временном каталоге. Пользовательский HnS и его ресурсы не распространять.
+
+Сначала проверить все строки BACKUP-MANIFEST.sha256, затем запустить:
+python3 tests/gate_build251.py --inputs test-inputs --base245 settledlands-0.8.0-build245-body-wear.jar --base246 settledlands-0.8.0-build246-npc-characteristics.jar --base247 settledlands-0.8.0-build247-bodiless-protection.jar --base248 settledlands-0.8.0-build248-touchmotion-player.jar --base249 settledlands-0.8.0-build249-player-motion.jar --base250 settledlands-0.8.0-build250-fresh-motion.jar --java /path/to/java21 --jar settledlands-0.8.0-build251-crawl-hns.jar --tnm /path/to/tnm104.jar --emf /path/to/emf3312.jar --etf /path/to/etf726.jar --pal /path/to/pal116.jar --hns /path/to/user-hns.jar --gson-source /path/to/gson-source.tar.gz
+
+Ожидается BUILD 251 GATE: PASS. Gate включает полный 250–237/§8 на точных базах, проверку восстановления модели после входа (с базовой 250 и 9 мутантами), все проверки движения и четыре настоящих HnS-модификатора. При необходимости последний тест можно запустить отдельно:
+python3 tests/jvm_hns_modifiers251.py --java /path/to/java21 --jar settledlands-0.8.0-build251-crawl-hns.jar --pal /path/to/pal116.jar --hns /path/to/user-hns.jar --gson-source /path/to/gson-source.tar.gz
+
+Для воспроизведения самого ZIP: python3 tools/make_backup251.py --inputs test-inputs --out /tmp/reproduced251.zip; сверить SHA-256 и байты. Результаты JVM-стендов не доказывают визуальную работу в Minecraft или запуск NeoForge/mixins; полный HnS-контроллер не исполнялся.

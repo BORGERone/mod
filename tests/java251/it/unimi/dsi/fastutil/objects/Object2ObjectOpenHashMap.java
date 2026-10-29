@@ -1,0 +1,1 @@
+package it.unimi.dsi.fastutil.objects; public class Object2ObjectOpenHashMap<K,V> extends java.util.HashMap<K,V> {public Object2ObjectOpenHashMap(){super();}public Object2ObjectOpenHashMap(int n){super(n);} }

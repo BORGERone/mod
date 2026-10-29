@@ -36,6 +36,12 @@ def install(classes,jar):
  with zipfile.ZipFile(jar) as z:
   if BS+'.class' not in z.namelist():return classes
   classes[BS]=z.read(BS+'.class')
+  # These legacy fixtures test health/wear, not network transport. A separate
+  # build-251 fixture executes the actual login-sync helper and client renderer.
+  login_sync='dev/settledlands/npc/PossessionLoginSync251'
+  if login_sync+'.class' in z.namelist():
+   desc='(Lnet/neoforged/neoforge/event/entity/player/PlayerEvent$PlayerLoggedInEvent;)V'
+   classes[login_sync]=f.fake_class(login_sync,[],[(9,'login',desc,0,1,lambda cp:b'\xb1')])
  classes[AA]=attrs();classes[LIVING]=living()
  from classedit import Klass
  def contains_type(k):

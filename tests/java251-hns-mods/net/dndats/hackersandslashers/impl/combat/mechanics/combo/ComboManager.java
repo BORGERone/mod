@@ -1,0 +1,1 @@
+package net.dndats.hackersandslashers.impl.combat.mechanics.combo;import net.minecraft.world.entity.player.Player;public class ComboManager {private static final ClientCombatState STATE=new ClientCombatState();public static ClientCombatState getState(Player p){return STATE;}}

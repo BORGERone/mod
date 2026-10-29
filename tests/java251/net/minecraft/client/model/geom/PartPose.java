@@ -1,0 +1,1 @@
+package net.minecraft.client.model.geom;public class PartPose {public final float x,y,z,xRot,yRot,zRot;public PartPose(float a,float b,float c,float d,float e,float f){x=a;y=b;z=c;xRot=d;yRot=e;zRot=f;}}

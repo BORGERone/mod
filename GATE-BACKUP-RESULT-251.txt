@@ -1,0 +1,56 @@
+build251 experimental size=1616133 sha256=a3be663ea42de11e815b67b710e589bb92dd2752eb6fbd0d5408fdba3c9d256a
+Java: openjdk version "21.0.8" 2025-07-15 LTS
+OK complete 250 gate incl. 249–237 / HANDOFF §8 on the exact 250 base
+OK 251 deterministic rebuild
+OK 251 structural validator
+OK 251 CRC TOML locales mixins exact diff
+OK exact 251 diff: two actor methods and login appearance-sync hook; other NPC/gameplay/FA helper unchanged; no external libraries bundled
+OK identical asset/UV/texture/parser/NPC renderer; possession differs only in verified login method
+OK 251 broken CRC rejected
+OK 251 missing language rejected
+OK 251 missing mixin rejected
+OK 251 incomplete bridge rejected
+OK missing actor/item bridge rejected
+OK 251 JVM verifies real model and PAL adapter declarations
+OK 247 JVM verifies 245 inherited targets
+OK 247 JVM verifies 246 inherited targets
+OK 247 JVM verifies 247 new targets
+OK 247 renderer regression jvm_corpse_load.py
+OK 247 renderer regression jvm_corpse_spawn.py
+OK 247 renderer regression jvm_corpse_dress.py
+OK 247 renderer regression jvm_corpse_realprofile.py
+OK 247 cleanup regression
+OK 247 no-queue regression jvm_noqueue243.py
+OK 247 no-queue regression jvm_noqueue_altar243.py
+OK 247 no-queue regression jvm_queue_disabled243.py
+OK 247 no-queue regression jvm_server_tick243.py
+OK 247 no-queue regression jvm_login243.py
+OK 247 read-only cult diagnostic
+OK 247 corpse regression jvm_corpse_click244.py
+OK 247 corpse regression jvm_real_corpse_dialogue244.py
+OK 247 corpse regression jvm_self_escape244.py
+OK 247 wear regression jvm_body_wear245.py
+OK 247 wear regression jvm_wear_login245.py
+OK 247 246 regression jvm_graph_stats246.py
+OK 247 246 regression jvm_graph_ui246.py
+OK 247 246 regression jvm_graph_undo246.py
+OK 247 246 regression jvm_network_stats246.py
+OK 247 246 regression jvm_body_stats246.py
+OK 247 246 regression jvm_possession_stats246.py
+OK 247 246 regression jvm_stats_screen246.py
+OK 247 246 regression jvm_gravity246.py
+OK 247 legacy wear mutants
+OK 247 legacy stats mutants
+OK 251 relog appearance, real payload and renderer regression
+OK 251 nine verifier-valid relog appearance mutants
+OK 251 preserves bodiless damage/milk
+OK 251 legacy bodiless mutants
+OK 251 FA bridge regression and 1200 poses
+OK 251 inherited FA negative mutants
+OK 251 actual EMF root and TnM hook with controlled providers
+OK 251 actual actor, crawl, PAL, nested and rollback scenarios
+OK 251 37 calibrated crawl/PAL negative mutants
+OK 251 HnS JSON through real PAL controller and item mixin
+OK 251 four genuine HnS modifiers plus negative controls
+OK 251 combined PAL + real EMF root/TnM hook with HnS frames
+BUILD 251 GATE: PASS (experimental player-only; actual game/NeoForge/visual NOT run; NPC/first person NOT supported)

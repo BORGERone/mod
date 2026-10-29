@@ -1,0 +1,1 @@
+package it.unimi.dsi.fastutil.objects; public class ObjectArrayList<K> extends java.util.ArrayList<K> { public ObjectArrayList(){super();} public ObjectArrayList(int n){super(n);} @SafeVarargs public static <K> ObjectArrayList<K> of(K... values){ObjectArrayList<K> l=new ObjectArrayList<>(values.length);java.util.Collections.addAll(l,values);return l;} }

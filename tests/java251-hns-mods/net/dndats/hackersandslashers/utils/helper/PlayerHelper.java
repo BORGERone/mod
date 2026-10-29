@@ -1,0 +1,1 @@
+package net.dndats.hackersandslashers.utils.helper;import net.minecraft.world.entity.player.Player;import net.dndats.hackersandslashers.datapacks.models.WeaponComboStep;public class PlayerHelper {public static WeaponComboStep lastComboStep(Player p){return new WeaponComboStep();}public static boolean wasLastAttackLeftHanded(Player p){return false;}}

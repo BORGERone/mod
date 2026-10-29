@@ -1,0 +1,1 @@
+package it.unimi.dsi.fastutil.floats;@FunctionalInterface public interface Float2FloatFunction extends java.util.function.Function<Float,Float> {float get(float x);default Float apply(Float x){return get(x.floatValue());}}

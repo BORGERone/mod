@@ -1,0 +1,2 @@
+package net.minecraft.resources;
+public class ResourceLocation { public final String name;public ResourceLocation(){name="";}private ResourceLocation(String n){name=n;}public static ResourceLocation fromNamespaceAndPath(String namespace,String path){return new ResourceLocation(namespace+":"+path);}public boolean equals(Object o){return o instanceof ResourceLocation r && r.name.equals(name);}public int hashCode(){return name.hashCode();}public String toString(){return name;} }
