@@ -1,0 +1,58 @@
+build252 experimental size=1627973 sha256=29a0e6e6245d9a906865a4020cf0f2c4532e3a488914260bf9d80df4e57dbc3d
+Java: openjdk version "21.0.8" 2025-07-15 LTS
+OK separately completed full 251 gate incl. 250–237 / HANDOFF §8: /home/user/mod/GATE-BASE-RESULT-252.txt
+OK 252 deterministic rebuild
+OK 252 structural validator
+OK 252 CRC TOML locales mixins exact diff
+OK exact 252 diff: single offset-0 hook in PlayerBodyRenderer.onRenderPlayerPre + isolated FP bridge; all 251 actor/crawl/login/NPC/gameplay classes byte-identical
+OK identical asset/UV/texture/parser/NPC renderer and 251 third-person pipelines
+OK 252 broken CRC rejected
+OK 252 missing language rejected
+OK 252 missing mixin rejected
+OK 252 incomplete bridge rejected
+OK missing renderer first-person bridge rejected
+OK 252 JVM verifies real renderer and FP HnS bridge declarations
+OK 247 JVM verifies 245 inherited targets
+OK 247 JVM verifies 246 inherited targets
+OK 247 JVM verifies 247 new targets
+OK 247 renderer regression jvm_corpse_load.py
+OK 247 renderer regression jvm_corpse_spawn.py
+OK 247 renderer regression jvm_corpse_dress.py
+OK 247 renderer regression jvm_corpse_realprofile.py
+OK 247 cleanup regression
+OK 247 no-queue regression jvm_noqueue243.py
+OK 247 no-queue regression jvm_noqueue_altar243.py
+OK 247 no-queue regression jvm_queue_disabled243.py
+OK 247 no-queue regression jvm_server_tick243.py
+OK 247 no-queue regression jvm_login243.py
+OK 247 read-only cult diagnostic
+OK 247 corpse regression jvm_corpse_click244.py
+OK 247 corpse regression jvm_real_corpse_dialogue244.py
+OK 247 corpse regression jvm_self_escape244.py
+OK 247 wear regression jvm_body_wear245.py
+OK 247 wear regression jvm_wear_login245.py
+OK 247 246 regression jvm_graph_stats246.py
+OK 247 246 regression jvm_graph_ui246.py
+OK 247 246 regression jvm_graph_undo246.py
+OK 247 246 regression jvm_network_stats246.py
+OK 247 246 regression jvm_body_stats246.py
+OK 247 246 regression jvm_possession_stats246.py
+OK 247 246 regression jvm_stats_screen246.py
+OK 247 246 regression jvm_gravity246.py
+OK 247 legacy wear mutants
+OK 247 legacy stats mutants
+OK 252 preserves 251 relog appearance, payload and renderer
+OK 252 nine verifier-valid relog appearance mutants
+OK 252 preserves bodiless damage/milk
+OK 252 legacy bodiless mutants
+OK 252 FA bridge regression and 1200 poses
+OK 252 inherited FA negative mutants
+OK 252 actual EMF root and TnM hook with controlled providers
+OK 252 actual actor, crawl, PAL, nested and rollback scenarios
+OK 252 37 calibrated crawl/PAL negative mutants
+OK 252 HnS JSON through real PAL controller and item mixin
+OK 252 four genuine HnS modifiers plus negative controls
+OK 252 combined 3rd-person PAL + real EMF root/TnM hook with HnS frames
+OK 252 first-person HnS+PAL+EMF+Core+TnM + BladeTracker reach (plus 251 bug reproduction)
+OK 252 ten verifier-valid first-person HnS mutants
+BUILD 252 GATE: PASS (experimental first-person HnS + 251 crawl/3rd-person/login; actual game/NeoForge/visual NOT run; NPC TnM NOT supported)

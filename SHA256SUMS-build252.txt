@@ -1,0 +1,2 @@
+29a0e6e6245d9a906865a4020cf0f2c4532e3a488914260bf9d80df4e57dbc3d  settledlands-0.8.0-build252-fp-hns.jar
+aaf0c8e5c935175c81479e9fa97fd0c88152ac396727ccdd7a24345793286f42  SettledLands-Build252-FirstPersonHnS-Source.zip
