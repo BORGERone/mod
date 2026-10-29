@@ -1,137 +1,137 @@
 import sys, json, math
+import numpy as np
 from PIL import Image, ImageDraw
 
 bb_path, tex_path, out_path = sys.argv[1], sys.argv[2], sys.argv[3]
-with open(bb_path, "r") as f:
+with open(bb_path) as f:
     bb = json.load(f)
 tex = Image.open(tex_path).convert("RGBA")
 tw, th = tex.size
+tpx = np.array(tex, dtype=np.uint8)
 
-def rot_vec(v, rot):
-    if not rot:
-        return v
-    x, y, z = v
-    rx, ry, rz = [math.radians(a) for a in rot]
-    cr, sr = math.cos(rx), math.sin(rx)
-    y, z = y * cr - z * sr, y * sr + z * cr
-    cp, sp = math.cos(ry), math.sin(ry)
-    x, z = x * cp + z * sp, -x * sp + z * cp
-    cy, sy = math.cos(rz), math.sin(rz)
-    x, y = x * cy - y * sy, x * sy + y * cy
-    return [x, y, z]
+def rot_x(v, a):
+    c, s = math.cos(a), math.sin(a)
+    return np.array([v[0], v[1]*c - v[2]*s, v[1]*s + v[2]*c])
+def rot_y(v, a):
+    c, s = math.cos(a), math.sin(a)
+    return np.array([v[0]*c + v[2]*s, v[1], -v[0]*s + v[2]*c])
+def rot_z(v, a):
+    c, s = math.cos(a), math.sin(a)
+    return np.array([v[0]*c - v[1]*s, v[0]*s + v[1]*c, v[2]])
 
-def rot_pt(p, origin, rot):
-    if not rot:
-        return p
-    v = [p[0] - origin[0], p[1] - origin[1], p[2] - origin[2]]
-    rv = rot_vec(v, rot)
-    return [rv[0] + origin[0], rv[1] + origin[1], rv[2] + origin[2]]
+def get_box_uv_faces(el):
+    u0, v0 = el["uv_offset"]
+    fr, to = el["from"], el["to"]
+    dx = int(math.floor(abs(to[0] - fr[0])))
+    dy = int(math.floor(abs(to[1] - fr[1])))
+    dz = int(math.floor(abs(to[2] - fr[2])))
+    return {
+        "up":    (u0 + dz + dx,     v0 + dz, u0 + dz,               v0),
+        "down":  (u0 + dz + dx + dx,v0,      u0 + dz + dx,          v0 + dz),
+        "east":  (u0,               v0 + dz, u0 + dz,               v0 + dz + dy),
+        "north": (u0 + dz,          v0 + dz, u0 + dz + dx,          v0 + dz + dy),
+        "west":  (u0 + dz + dx,     v0 + dz, u0 + dz + dx + dz,     v0 + dz + dy),
+        "south": (u0 + dz + dx + dz,v0 + dz, u0 + dz + dx + dz + dx,v0 + dz + dy),
+    }
 
-FACE_DEFS = {
-    "north": ([0, 1, 2, 3], (0, 0, -1)),
-    "south": ([4, 5, 6, 7], (0, 0,  1)),
-    "east":  ([7, 6, 1, 0], (1, 0,  0)),
-    "west":  ([3, 2, 5, 4], (-1, 0, 0)),
-    "up":    ([7, 0, 3, 4], (0, 1,  0)),
-    "down":  ([1, 6, 5, 2], (0, -1, 0)),
-}
+views = [
+    ("Front",       math.radians(180),  -0.10),
+    ("Front-Left",  math.radians(148),  -0.12),
+    ("Left",        math.radians(90),   -0.08),
+    ("Right",       math.radians(-90),  -0.08),
+    ("Back",        math.radians(0),    -0.10),
+]
 
-views = [0, 28, 90, -90, 180]
-panel_w, panel_h = 256, 320
-canvas = Image.new("RGBA", (panel_w * len(views), panel_h), (38, 38, 44, 255))
-draw = ImageDraw.Draw(canvas)
+W, H = 256, 320
+canvas = Image.new("RGBA", (W * len(views), H), (40, 40, 48, 255))
 
-pitch = math.radians(6.0)
-cp_cam, sp_cam = math.cos(pitch), math.sin(pitch)
-
-for vi, yaw_deg in enumerate(views):
-    yaw = math.radians(yaw_deg)
-    cy, sy = math.cos(yaw), math.sin(yaw)
+for vi, (vname, yaw, pitch) in enumerate(views):
     quads = []
-    for ei, el in enumerate(bb.get("elements", [])):
+    for el in bb.get("elements", []):
         if not el.get("visibility", True):
             continue
-        x0, y0, z0 = el["from"]
-        x1, y1, z1 = el["to"]
-        is_plane = (abs(x1 - x0) < 0.01) or (abs(y1 - y0) < 0.01) or (abs(z1 - z0) < 0.01)
-        origin = el.get("origin", [0, 0, 0])
-        rot = el.get("rotation", None)
-        corners = [
-            [x1, y1, z0], [x1, y0, z0], [x0, y0, z0], [x0, y1, z0],
-            [x0, y1, z1], [x0, y0, z1], [x1, y0, z1], [x1, y1, z1],
-        ]
-        rc = [rot_pt(c, origin, rot) for c in corners]
-        faces = el.get("faces", {})
-        for fn, (idxs, norm) in FACE_DEFS.items():
-            if fn not in faces:
-                continue
-            rn = rot_vec(norm, rot)
-            nx = rn[0] * cy + rn[2] * sy
-            nz = -rn[0] * sy + rn[2] * cy
-            ny = rn[1] * cp_cam - nz * sp_cam
-            nz_cam = rn[1] * sp_cam + nz * cp_cam
-            if not is_plane and nz_cam > 0.05:
-                continue
-            if not is_plane and el.get("box_uv") and "uv_offset" in el:
-                uo, vo = el["uv_offset"]
-                dx = int(math.floor(x1 - x0 + 1e-5))
-                dy = int(math.floor(y1 - y0 + 1e-5))
-                dz = int(math.floor(z1 - z0 + 1e-5))
-                box_map = {
-                    "east":  (uo, vo + dz, uo + dz, vo + dz + dy),
-                    "north": (uo + dz, vo + dz, uo + dz + dx, vo + dz + dy),
-                    "west":  (uo + dz + dx, vo + dz, uo + 2 * dz + dx, vo + dz + dy),
-                    "south": (uo + 2 * dz + dx, vo + dz, uo + 2 * dz + 2 * dx, vo + dz + dy),
-                    "up":    (uo + dz + dx, vo + dz, uo + dz, vo),
-                    "down":  (uo + 2 * dz + dx, vo, uo + dz + dx, vo + dz),
-                }
-                u0, v0, u1, v1 = box_map[fn]
-                du, dv = u1 - u0, v1 - v0
-                steps_u = max(1, abs(du))
-                steps_v = max(1, abs(dv))
-            else:
-                uv = faces[fn].get("uv")
-                if not uv:
-                    continue
-                u0, v0, u1, v1 = uv
-                du, dv = u1 - u0, v1 - v0
-                steps_u = max(1, int(math.ceil(abs(du))))
-                steps_v = max(1, int(math.ceil(abs(dv))))
-            p0, p1, p2, p3 = [rc[i] for i in idxs]
-            for iv in range(steps_v):
-                tv0 = iv / steps_v
-                tv1 = (iv + 1) / steps_v
-                tu_v = v0 + (iv + 0.5) / steps_v * dv
-                py = max(0, min(th - 1, int(tu_v)))
-                for iu in range(steps_u):
-                    tu0 = iu / steps_u
-                    tu1 = (iu + 1) / steps_u
-                    tu_u = u0 + (iu + 0.5) / steps_u * du
-                    px = max(0, min(tw - 1, int(tu_u)))
-                    rgba = tex.getpixel((px, py))
-                    if rgba[3] < 16:
-                        continue
-                    def bilerp(u, v):
-                        return [
-                            (1 - u) * (1 - v) * p0[k] + u * (1 - v) * p3[k] + u * v * p2[k] + (1 - u) * v * p1[k]
-                            for k in range(3)
-                        ]
-                    q = [bilerp(tu0, tv0), bilerp(tu1, tv0), bilerp(tu1, tv1), bilerp(tu0, tv1)]
-                    pts2d = []
-                    zs = []
-                    for pt in q:
-                        rx = pt[0] * cy + pt[2] * sy
-                        rz = -pt[0] * sy + pt[2] * cy
-                        ry = pt[1] * cp_cam - rz * sp_cam
-                        rz_c = pt[1] * sp_cam + rz * cp_cam
-                        sx = vi * panel_w + panel_w // 2 - rx * 6.8
-                        sy_scr = panel_h - 42 - ry * 6.8
-                        pts2d.append((sx, sy_scr))
-                        zs.append(rz_c)
-                    quads.append((sum(zs) / 4.0, pts2d, rgba[:3]))
-    quads.sort(key=lambda item: item[0], reverse=True)
-    for _, pts2d, col in quads:
-        draw.polygon(pts2d, fill=col)
+        fr = np.array(el["from"], dtype=float)
+        to = np.array(el["to"], dtype=float)
+        inf = float(el.get("inflate", 0.0))
+        fr = fr - inf
+        to = to + inf
+        orig = np.array(el.get("origin", [0, 0, 0]), dtype=float)
+        rot = [math.radians(r) for r in el.get("rotation", [0, 0, 0])]
+        box_faces = get_box_uv_faces(el) if "uv_offset" in el else {}
 
-canvas.convert("RGB").save(out_path)
+        x0, y0, z0 = fr
+        x1, y1, z1 = to
+        face_defs = {
+            "north": ([ [x1,y1,z0], [x0,y1,z0], [x0,y0,z0], [x1,y0,z0] ], 0.98),
+            "south": ([ [x0,y1,z1], [x1,y1,z1], [x1,y0,z1], [x0,y0,z1] ], 0.92),
+            "east":  ([ [x1,y1,z1], [x1,y1,z0], [x1,y0,z0], [x1,y0,z1] ], 0.86),
+            "west":  ([ [x0,y1,z0], [x0,y1,z1], [x0,y0,z1], [x0,y0,z0] ], 0.86),
+            "up":    ([ [x1,y1,z1], [x0,y1,z1], [x0,y1,z0], [x1,y1,z0] ], 1.00),
+            "down":  ([ [x1,y0,z0], [x0,y0,z0], [x0,y0,z1], [x1,y0,z1] ], 0.75),
+        }
+        faces = el.get("faces", {})
+        for fname, (corners, shade) in face_defs.items():
+            if fname in box_faces:
+                u0, v0, u1, v1 = box_faces[fname]
+            elif fname in faces and "uv" in faces[fname]:
+                u0, v0, u1, v1 = faces[fname]["uv"]
+            else:
+                continue
+            du = max(1, int(round(abs(u1 - u0))))
+            dv = max(1, int(round(abs(v1 - v0))))
+            if abs(u1 - u0) < 1e-4 and abs(v1 - v0) < 1e-4:
+                continue
+            c3d = []
+            for p in corners:
+                v = np.array(p, dtype=float) - orig
+                v = rot_x(v, rot[0])
+                v = rot_y(v, rot[1])
+                v = rot_z(v, rot[2])
+                v = v + orig
+                v = rot_y(v, yaw)
+                v = rot_x(v, pitch)
+                c3d.append(v)
+            p0, p1, p2, p3 = c3d
+            n = np.cross(p1 - p0, p3 - p0)
+            is_plane = (abs(fr[0]-to[0]) < 1e-3) or (abs(fr[1]-to[1]) < 1e-3) or (abs(fr[2]-to[2]) < 1e-3)
+            if not is_plane and n[2] >= -1e-4:
+                continue
+            if is_plane and fname not in ("north", "south"):
+                continue
+            if is_plane and n[2] >= -1e-4:
+                continue
+            for iu in range(du):
+                for iv in range(dv):
+                    uu = int(u0 + (iu + 0.5) * (u1 - u0) / du)
+                    vv = int(v0 + (iv + 0.5) * (v1 - v0) / dv)
+                    if not (0 <= uu < tw and 0 <= vv < th):
+                        continue
+                    rgba = tpx[vv, uu]
+                    if rgba[3] < 20:
+                        continue
+                    s0, s1 = iu / du, (iu + 1) / du
+                    t0, t1 = iv / dv, (iv + 1) / dv
+                    def bilerp(s, t):
+                        return (1-s)*(1-t)*p0 + s*(1-t)*p1 + s*t*p2 + (1-s)*t*p3
+                    q0, q1, q2, q3 = bilerp(s0,t0), bilerp(s1,t0), bilerp(s1,t1), bilerp(s0,t1)
+                    zavg = (q0[2] + q1[2] + q2[2] + q3[2]) * 0.25
+                    col = (
+                        min(255, int(rgba[0] * shade)),
+                        min(255, int(rgba[1] * shade)),
+                        min(255, int(rgba[2] * shade)),
+                        int(rgba[3])
+                    )
+                    quads.append((zavg, [q0, q1, q2, q3], col))
+
+    quads.sort(key=lambda x: x[0])
+    img = Image.new("RGBA", (W, H), (40, 40, 48, 255))
+    draw = ImageDraw.Draw(img)
+    scale = 7.5
+    cx, cy = W // 2, int(H * 0.85)
+    for _, pts, col in quads:
+        poly = [(cx + p[0] * scale, cy - p[1] * scale) for p in pts]
+        draw.polygon(poly, fill=col)
+    canvas.paste(img, (vi * W, 0))
+
+canvas.save(out_path)
 print("Saved 3D preview to", out_path)
