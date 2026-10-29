@@ -1,0 +1,71 @@
+build256 candidate size=2254719 sha256=024937159ceb6f7173591dacf30d0c46b2fcc5233e8b495e4918d56b715c2021
+Java: openjdk version "21.0.8" 2025-07-15 LTS
+OK separately completed full 255 gate incl. 254–237 / HANDOFF §8: GATE-RESULT-255.txt
+OK 256 deterministic rebuild
+OK 256 structural validator
+OK 256 CRC TOML locales mixins exact diff
+OK exact 256 diff: NPC FA+TnM bridge, FP Inventory gate + arm subscriber/mixins, server-safe CorpseRecovery 1/60 HP; all 255-250 bridges byte-identical
+OK preserved all 255/254 assets byte-for-byte including ivy_oleander.bbmodel & locales
+OK 256 broken CRC rejected
+OK 256 missing language rejected
+OK 256 missing mixin rejected
+OK 256 missing npc-motion-bridge rejected
+OK 256 missing fp-possession rejected
+OK 256 missing ivy-asset rejected
+OK unpatched-bbmodel rejected
+OK unpatched-playerbody rejected
+OK unpatched-corpserecovery rejected
+OK 256 JVM verifies all 256/255/254/253/252/251 declarations
+OK 254 JVM verifies 245 inherited targets
+OK 254 JVM verifies 246 inherited targets
+OK 254 JVM verifies 247 inherited targets
+OK 254 renderer regression jvm_corpse_load.py
+OK 254 renderer regression jvm_corpse_spawn.py
+OK 254 renderer regression jvm_corpse_dress.py
+OK 254 renderer regression jvm_corpse_realprofile.py
+OK 254 cleanup regression
+OK 254 no-queue regression jvm_noqueue243.py
+OK 254 no-queue regression jvm_noqueue_altar243.py
+OK 254 no-queue regression jvm_queue_disabled243.py
+OK 254 no-queue regression jvm_server_tick243.py
+OK 254 no-queue regression jvm_login243.py
+OK 254 read-only cult diagnostic
+OK 254 corpse regression jvm_corpse_click244.py
+OK 254 corpse regression jvm_real_corpse_dialogue244.py
+OK 254 corpse regression jvm_self_escape244.py
+OK 254 wear regression jvm_body_wear245.py
+OK 254 wear regression jvm_wear_login245.py
+OK 254 stats/graph regression jvm_graph_stats254.py
+OK 254 stats/graph regression jvm_graph_ui254.py
+OK 254 stats/graph regression jvm_graph_undo254.py
+OK 254 stats/graph regression jvm_network_stats246.py
+OK 254 stats/graph regression jvm_body_stats246.py
+OK 254 stats/graph regression jvm_possession_stats246.py
+OK 254 stats/graph regression jvm_stats_screen246.py
+OK 254 stats/graph regression jvm_gravity246.py
+OK 254 legacy wear mutants
+OK 254 legacy stats mutants
+OK 256 preserves 251 relog appearance, payload and renderer
+OK 256 nine verifier-valid relog appearance mutants
+OK 256 preserves bodiless damage/milk
+OK 256 legacy bodiless mutants
+OK 256 FA bridge regression and 1200 poses
+OK 256 inherited FA negative mutants
+OK 256 actual EMF root and TnM hook with controlled providers
+OK 256 actual actor, crawl, PAL, nested, rollback and shield-tilt-free scenarios
+OK 256 37 calibrated crawl/PAL negative mutants
+OK 256 HnS JSON through real PAL controller and item mixin
+OK 256 four genuine HnS modifiers plus negative controls
+OK 256 combined 3rd-person PAL + real EMF root/TnM hook with HnS frames
+OK 256 first-person HnS+PAL+EMF+Core+TnM + BladeTracker reach
+OK 256 ten verifier-valid first-person HnS mutants
+OK 256 NPC copy pick-block, ENTITY_DATA id, ItemStack.save & spawn
+OK 256 eleven verifier-valid shield & NPC copy behavioral mutants
+OK 256 UI & Ivy Oleander end-to-end JVM verification (plus 253 bug reproduction)
+OK 256 seventeen verifier-valid UI & Ivy behavioral mutants
+OK 256 Autonomous NPC AI end-to-end JVM verification (plus 254 baseline check)
+OK 256 twenty-four verifier-valid Autonomous NPC AI behavioral mutants
+OK 256 Corpse 1/60 HP & Coffin 60/60 HP JVM verification (plus 255 1/1 HP bug reproduction)
+OK 256 NPC FA+TnM, First-Person Possession & Corpse 1/60 HP end-to-end JVM verification (plus 255 bug reproduction)
+OK 256 twenty-four verifier-valid NPC FA+TnM, First-Person & Corpse HP behavioral mutants
+BUILD 256 GATE: PASS (GuideNpc FA+TnM+held-items+combos+corpse-guard+fallback + possessed 1st-person Inventory/GUI/bed + 1st-person NPC arms & PAL/HnS sword + corpse 1/60 HP + 255-237 regressions; actual game/NeoForge/visual NOT run)
