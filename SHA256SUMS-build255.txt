@@ -1,0 +1,5 @@
+7866e20a75eb5ef53e254e8e34a5eacc155d0b3ac768b99977ad4d95358b6541  settledlands-0.8.0-build255-auto-ai.jar
+125031bddbe4afa1020a5ce55ea295dc34dddb0d95cf5909dcded8ecc33bc430  SettledLands-Build255-AutoAi-Source.zip
+19634ba583fd6f196973416d9420b0b20b58a4508dd5c65a7a061094cdd11f5c  settledlands-0.8.0-build254-ui-ivy.jar
+7d5cb410b26d9e12f07ac0fd6722bce9129a5bc8875abb4fc32b7d6cb7d11dc5  GATE-RESULT-255.txt
+d80afc90b2ce60c97d854304ded5f9083e4686d7cbd133a4287f615098856f69  GATE-BACKUP-RESULT-255.txt
