@@ -1,0 +1,23 @@
+Backup 254 содержит AI-GUIDE, актуальные инструкции, исходники патчей и тестов 246–254, модель `ivy_oleander.bbmodel`, лицензированный ECJ, исходники JOML 1.10.5 (MIT), релизные JAR 245–254 и входы предыдущих шлюзов 230–244. В архиве НЕТ пользовательских логов, пользовательского HnS JAR/ресурсов, ресурспаков FA, а также сторонних JAR PAL, TnM, EMF Compat Core, EMF, ETF и архива исходников Gson. Итоговые логи шлюза (`GATE-RESULT-254.txt`, `GATE-BASE-RESULT-254.txt`, `GATE-BACKUP-RESULT-254.txt`) и `SHA256SUMS-build254.txt` хранятся вне архива, чтобы исключить циклическую зависимость.
+
+Для полного повторения шлюза из распакованного архива нужны Python 3.11+, Java 21 и внешние тестовые входы с точными SHA-256:
+PAL 1.1.6: e41ee06000fc95444a482018ec24b3f1e79eb111ca6b8ca119e61ceabf9136c5
+HnS beta2.5-bettercombat-test: 0e1e54fc03adcd59bd1d46f821d42788bc8d9757cd8f41ed118cfc30c241a7bb (или публичный релиз beta2.5-bettercombat-test: f759036b3fd8e4572789d4b93911d9bfd58bf797d70e61a228b81a153a1f5aba)
+официальные исходники Gson 2.10.1: e358710d663ca799101a51d0568ccc6dbd30be9bc55b1a85b1a21a93e96e8a9b
+TnM 1.0.4: 3754909bf0d12445b18a60de315619734c1229bcc621f88f315ccf076701ab56
+EMF Compat Core 2.3.2: 7fbf5a1f7fc65c8adc29092aa08e212c4a43c6ff82d92af99f90f0066914e951
+EMF 3.3.12: 3ba0bf7b487660920d12cc0ff6cb5de1763f024a080fe0cd7d64e1c8e0f7f190
+ETF 7.2.6: b47173468febc21bb565af19a82bcd2f851e34ecb333660cdc48a8c37c27c1cd
+
+Сначала проверить манифест:
+sha256sum -c BACKUP-MANIFEST.sha256
+
+Затем запустить полный шлюз 254 (воспроизведение багов 253, все проверки 254, 17 мутантов `tests/mutants254.py` и регрессии 237–253):
+python3 tests/gate_build254.py --inputs test-inputs --base245 settledlands-0.8.0-build245-body-wear.jar --base246 settledlands-0.8.0-build246-npc-characteristics.jar --base247 settledlands-0.8.0-build247-bodiless-protection.jar --base248 settledlands-0.8.0-build248-touchmotion-player.jar --base249 settledlands-0.8.0-build249-player-motion.jar --base250 settledlands-0.8.0-build250-fresh-motion.jar --base251 settledlands-0.8.0-build251-crawl-hns.jar --base252 settledlands-0.8.0-build252-fp-hns.jar --base253 settledlands-0.8.0-build253-shield-copy.jar --java /path/to/java21 --jar settledlands-0.8.0-build254-ui-ivy.jar --tnm /path/to/tnm104.jar --core /path/to/emf_compat_core232.jar --emf /path/to/emf3312.jar --etf /path/to/etf726.jar --pal /path/to/pal116.jar --hns /path/to/hns.jar --gson-source /path/to/gson-source.tar.gz
+
+Ожидается: BUILD 254 GATE: PASS.
+
+Для побайтового воспроизведения самого ZIP из распаковки:
+python3 tools/make_backup254.py --inputs test-inputs --out /tmp/reproduced254.zip
+
+JVM-стенды не заменяют запуск реального клиента Minecraft/NeoForge и проверку в игре.

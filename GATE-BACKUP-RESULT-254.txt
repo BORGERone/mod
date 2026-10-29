@@ -1,0 +1,67 @@
+build254 candidate size=2181852 sha256=19634ba583fd6f196973416d9420b0b20b58a4508dd5c65a7a061094cdd11f5c
+Java: openjdk version "21.0.8" 2025-07-15 LTS
+OK separately completed full 253 gate incl. 252–237 / HANDOFF §8: GATE-RESULT-253.txt
+OK 254 deterministic rebuild
+OK 254 structural validator
+OK 254 CRC TOML locales mixins exact diff
+OK exact 254 diff: left-of-entry stats, zero-shadow UI, Z=+500 dropdown popups, server-safe ivy_oleander default, bottom Randomize; all 253/252/251 classes byte-identical
+OK bundled ivy_oleander.bbmodel (128x128 UV, 27 elements, 82 animations, embedded PNG) and preserved 253 assets
+OK 254 broken CRC rejected
+OK 254 missing language rejected
+OK 254 missing mixin rejected
+OK 254 missing helper-class rejected
+OK 254 missing ivy-asset rejected
+OK unpatched-profile rejected
+OK unpatched-guidenpc rejected
+OK unpatched-npcclient rejected
+OK unpatched-cfgscreen rejected
+OK unpatched-branchscreen rejected
+OK 254 JVM verifies all 254/253/252/251 declarations
+OK 254 JVM verifies 245 inherited targets
+OK 254 JVM verifies 246 inherited targets
+OK 254 JVM verifies 247 inherited targets
+OK 254 renderer regression jvm_corpse_load.py
+OK 254 renderer regression jvm_corpse_spawn.py
+OK 254 renderer regression jvm_corpse_dress.py
+OK 254 renderer regression jvm_corpse_realprofile.py
+OK 254 cleanup regression
+OK 254 no-queue regression jvm_noqueue243.py
+OK 254 no-queue regression jvm_noqueue_altar243.py
+OK 254 no-queue regression jvm_queue_disabled243.py
+OK 254 no-queue regression jvm_server_tick243.py
+OK 254 no-queue regression jvm_login243.py
+OK 254 read-only cult diagnostic
+OK 254 corpse regression jvm_corpse_click244.py
+OK 254 corpse regression jvm_real_corpse_dialogue244.py
+OK 254 corpse regression jvm_self_escape244.py
+OK 254 wear regression jvm_body_wear245.py
+OK 254 wear regression jvm_wear_login245.py
+OK 254 stats/graph regression jvm_graph_stats254.py
+OK 254 stats/graph regression jvm_graph_ui254.py
+OK 254 stats/graph regression jvm_graph_undo254.py
+OK 254 stats/graph regression jvm_network_stats246.py
+OK 254 stats/graph regression jvm_body_stats246.py
+OK 254 stats/graph regression jvm_possession_stats246.py
+OK 254 stats/graph regression jvm_stats_screen246.py
+OK 254 stats/graph regression jvm_gravity246.py
+OK 254 legacy wear mutants
+OK 254 legacy stats mutants
+OK 254 preserves 251 relog appearance, payload and renderer
+OK 254 nine verifier-valid relog appearance mutants
+OK 254 preserves bodiless damage/milk
+OK 254 legacy bodiless mutants
+OK 254 FA bridge regression and 1200 poses
+OK 254 inherited FA negative mutants
+OK 254 actual EMF root and TnM hook with controlled providers
+OK 254 actual actor, crawl, PAL, nested, rollback and shield-tilt-free scenarios
+OK 254 37 calibrated crawl/PAL negative mutants
+OK 254 HnS JSON through real PAL controller and item mixin
+OK 254 four genuine HnS modifiers plus negative controls
+OK 254 combined 3rd-person PAL + real EMF root/TnM hook with HnS frames
+OK 254 first-person HnS+PAL+EMF+Core+TnM + BladeTracker reach
+OK 254 ten verifier-valid first-person HnS mutants
+OK 254 NPC copy pick-block, ENTITY_DATA id, ItemStack.save & spawn
+OK 254 eleven verifier-valid shield & NPC copy behavioral mutants
+OK 254 UI & Ivy Oleander end-to-end JVM verification (plus 253 bug reproduction)
+OK 254 seventeen verifier-valid UI & Ivy behavioral mutants
+BUILD 254 GATE: PASS (left-of-entry stats + zero-shadow sliders + Z=500 dropdowns + ivy_oleander default + bottom Randomize + 253-237 regressions; actual game/NeoForge/visual NOT run; NPC TnM NOT supported)
