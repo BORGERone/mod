@@ -1,0 +1,2 @@
+a5ac75dfbf24ad4fd0e06fcdcc3c4da51b2ab64bdea24440f43903259d01814e  settledlands-0.8.0-build253-shield-copy.jar
+56ea74a6b607fe4d4fe6b77c2e71faca440f5ff062ccabf1afd71fc73599a83f  SettledLands-Build253-ShieldCopy-Source.zip

@@ -1,0 +1,61 @@
+build253 candidate size=1629114 sha256=a5ac75dfbf24ad4fd0e06fcdcc3c4da51b2ab64bdea24440f43903259d01814e
+Java: openjdk version "21.0.8" 2025-07-15 LTS
+OK separately completed full 252 gate incl. 251–237 / HANDOFF §8: GATE-BASE-RESULT-253.txt
+OK 253 deterministic rebuild
+OK 253 structural validator
+OK 253 CRC TOML locales mixins exact diff
+OK exact 253 diff: shield blocking tilt removed in BbModel.renderActorHeldItem + entity id populated in NpcCopyPickPayload.buildCopyEgg; all 252/251/NPC/gameplay classes byte-identical
+OK identical asset/UV/texture/parser/NPC renderer and 252/251 pipelines
+OK 253 broken CRC rejected
+OK 253 missing language rejected
+OK 253 missing mixin rejected
+OK 253 missing NpcCopyEggFix253 rejected
+OK unpatched-bbmodel rejected
+OK unpatched-copypayload rejected
+OK 253 JVM verifies patched BbModel, NpcCopyPickPayload, NpcCopyEggFix253 and 252/251 declarations
+OK 247 JVM verifies 245 inherited targets
+OK 247 JVM verifies 246 inherited targets
+OK 247 JVM verifies 247 new targets
+OK 247 renderer regression jvm_corpse_load.py
+OK 247 renderer regression jvm_corpse_spawn.py
+OK 247 renderer regression jvm_corpse_dress.py
+OK 247 renderer regression jvm_corpse_realprofile.py
+OK 247 cleanup regression
+OK 247 no-queue regression jvm_noqueue243.py
+OK 247 no-queue regression jvm_noqueue_altar243.py
+OK 247 no-queue regression jvm_queue_disabled243.py
+OK 247 no-queue regression jvm_server_tick243.py
+OK 247 no-queue regression jvm_login243.py
+OK 247 read-only cult diagnostic
+OK 247 corpse regression jvm_corpse_click244.py
+OK 247 corpse regression jvm_real_corpse_dialogue244.py
+OK 247 corpse regression jvm_self_escape244.py
+OK 247 wear regression jvm_body_wear245.py
+OK 247 wear regression jvm_wear_login245.py
+OK 247 246 regression jvm_graph_stats246.py
+OK 247 246 regression jvm_graph_ui246.py
+OK 247 246 regression jvm_graph_undo246.py
+OK 247 246 regression jvm_network_stats246.py
+OK 247 246 regression jvm_body_stats246.py
+OK 247 246 regression jvm_possession_stats246.py
+OK 247 246 regression jvm_stats_screen246.py
+OK 247 246 regression jvm_gravity246.py
+OK 247 legacy wear mutants
+OK 247 legacy stats mutants
+OK 253 preserves 251 relog appearance, payload and renderer
+OK 253 nine verifier-valid relog appearance mutants
+OK 253 preserves bodiless damage/milk
+OK 253 legacy bodiless mutants
+OK 253 FA bridge regression and 1200 poses
+OK 253 inherited FA negative mutants
+OK 253 actual EMF root and TnM hook with controlled providers
+OK 253 actual actor, crawl, PAL, nested, rollback and shield-tilt-free scenarios (plus 252 tilt reproduction)
+OK 253 37 calibrated crawl/PAL negative mutants
+OK 253 HnS JSON through real PAL controller and item mixin
+OK 253 four genuine HnS modifiers plus negative controls
+OK 253 combined 3rd-person PAL + real EMF root/TnM hook with HnS frames
+OK 253 first-person HnS+PAL+EMF+Core+TnM + BladeTracker reach (plus 251 bug reproduction)
+OK 253 ten verifier-valid first-person HnS mutants
+OK 253 NPC copy pick-block, ENTITY_DATA id, ItemStack.save & spawn (plus 252 freeze/crash reproduction)
+OK 253 eleven verifier-valid shield & NPC copy behavioral mutants
+BUILD 253 GATE: PASS (shield-tilt removed + NPC copy ENTITY_DATA id fixed + 252/251 HnS/FA/TnM/crawl/login; actual game/NeoForge/visual NOT run; NPC TnM NOT supported)
