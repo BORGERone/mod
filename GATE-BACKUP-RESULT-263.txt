@@ -1,19 +1,19 @@
-BUILD 263 BACKUP GATE: PASS (candidate without method-shadow; not game-verified)
+BUILD 263 BACKUP GATE: PASS (technical candidate c80; UI regression unresolved)
 
 Candidate JAR: settledlands-0.8.0-build263-cutscene-fade.jar
 Size: 2,274,559 bytes
 SHA-256: c80fa6948ef3817b04922542a0de70c03bb0ce06d95f928bd033d771e5aed13b
 Source ZIP: SettledLands-Build263-Cutscene-Fade-Source.zip
-Archive size: 9,644,259 bytes
-Archive SHA-256: 26c538b8b8271bf2a8f71b38d5ae6460420e84ceac76a2f91591e955a6a61ef3
+Archive size: 9,645,371 bytes
+Archive SHA-256: 3e9a8e8cfb75c9a48edad25c6253a2a9de5b5c5914a78675c5db12e654c8cb6f
 Manifest: PASS (670/670 files)
 Byte-identical ZIP reproduction from its own extracted contents: PASS
 
 Independent extracted technical release gate:
 - Deterministic Build 263 rebuild identical to bundled candidate JAR.
 - Structural JAR validation and exact Build 262 diff validation: PASS.
-- UI regression guards verify no method-shadow of `node()`, use of target `graph/selected`, no mutation of shared `buildingInspector`, and explicit registration of only the two new fade buttons.
-- Java 21 JVM verification of patched methods and all new callbacks: PASS.
-- Java 21 runtime scenarios for fade timing, camera ordering, graph NBT/copy and chained scenes: PASS.
+- UI source guards: no method-shadow of `node()`, uses `graph/selected`, does not mutate shared `buildingInspector`, and registers only the two fade controls explicitly.
+- Java 21 verifier for patched methods and all added mixin/helper callbacks: PASS.
+- Java 21 runtime scenarios for fade timing, camera order, graph NBT/copy, undo, and chained scenes: PASS.
 
-Important: Build262 works in the user's environment. The original Build263 inspector was empty; the candidate with `@Shadow node()` caused the right panel to disappear. Fresh `latest-4.log` shows `(3).jar` and Build263 version, but no specific Mixin error. This candidate removes that method-shadow; its in-game UI is NOT confirmed. Gates do not apply Mixin in real Minecraft. Minecraft/NeoForge was not launched.
+User testing history: Build262's inspector works. The first Build263 UI-hotfix left the panel body empty; candidate 293 (with `@Shadow node()`) made the right panel disappear; current c80 candidate restored the panel but user reports the selected node's body is empty again (screenshot `image-5.png`, header `Реплика #0`). Do not mark the UI issue fixed. User explicitly refuses to provide installed-JAR SHA; do not request again. `latest-4.log` pertains to earlier `(3).jar`, not the latest screenshot. No game/UI runtime is available in this sandbox; gates do not test visual Mixin behavior.
