@@ -16,7 +16,15 @@ Build 263 `settledlands-0.8.0-build263-cutscene-fade.jar`, 2,274,540 байт, S
 * Единственное 263-изменение, затрагивающее экран — миксин `CutsceneGraphFadeUiMixin263` (`@Inject at RETURN` на `widgets()`). Для CUTSCENE-нод он добавляет две fade-кнопки в `inspectorWidgets`, делает `sidebarHeight += 40` и ставит `visible` fade-кнопок через `fitsInspector`. Не очищает `inspectorWidgets`, не трогает `buildingInspector`, не скрывает и не переставляет существующие контроллы (подтверждено UI-guard в `tests/gate_build263.py`).
 * Путь выбора ноды (`mouseClicked` → `NpcAutoAiGraphUi255.mouseClicked` → `settledlands$mouseClickedOriginal` → `selected`/`sidebarScroll = 0` → `widgets()`) класса сборки 255, не затронут Build 263.
 
-Вывод: статически пустое тело инспектора НЕ объясняется ни байткодом `widgets()` (идентичен 262), ни структурой миксина (он не может скрыть уже построенное тело). Остаётся единственный подозреваемый — выполнение миксина `CutsceneGraphFadeUiMixin263` под реальным NeoForge Mixin (трансформация `widgets()` itself, `@Shadow private void widgets() {}` + `@Inject at RETURN`), которое статически не воспроизводить без запуска игры. Подтверждение требует свежего `latest.log` от запуска кандидата c80 (ошибки трансформации Mixin для `NpcDialogueGraphScreen`/`CutsceneGraphFadeUiMixin263`) либо диагностического отключения миксина `CutsceneGraphFadeUiMixin263` в `settledlands.mixins.json` — только как эксперимент, не как фикс.
+Вывод: статически пустое тело инспектора НЕ объясняется ни байткодом `widgets()` (идентичен 262), ни структурой миксина (он не может скрыть уже построенное тело). Остаётся единственный подозреваемый — выполнение миксина `CutsceneGraphFadeUiMixin263` под реальным NeoForge Mixin (трансформация `widgets()` itself, `@Shadow private void widgets() {}` + `@Inject at RETURN`), которое статически не воспроизводить без запуска игры. Свежий `latest.log` от запуска Build 263 (`settledlands-0.8.0-build263-cutscene-fade(4).jar`, строка 3880 лога: `[settledlands] loaded 0.8.0-build263-cutscene-fade`) проанализирован:
+* мод загружен успешно, ошибок Mixin/ClassNotFound/NoSuchMethod/VerifyError для `NpcDialogueGraphScreen`, `CutsceneGraphFadeUiMixin263`, `widgets`, инспектора в логе нет;
+* ошибки `ClassNotFound` в логе относятся только к чужим модам (fieldguide, immediatelyfast, mekanism и т.д.), не к SettledLands.
+Вывод: под реальным NeoForge Mixin миксин не падал и не скрывал тело инспектора. Статическая причина пустого тела не найдена ни по байткоду, ни по логу.
+
+Диагностический эксперимент (только для поиска причины, не фикс): временно закомментировать строку `CutsceneGraphFadeUiMixin263` в блоке `client` файла `settledlands.mixins.json`, перезагрузить игру и проверить, появляется ли тело инспектора у выбранной ноды.
+* Если тело появляется — причина в трансформации `widgets()` миксином `CutsceneGraphFadeUiMixin263` под реальным Mixin; нужно разбирать байткод смешанного класса.
+* Если тело остаётся пустым — причина не в миксине fade, искать дальше.
+После эксперимента вернуть миксин на место, не выпускать 후보 без понимания причины.
 
 Fade-требования сохранены: миксины камеры/overlay не трогались, два независимых toggle, 500 мс, камера после полного чёрного, fade-in после playing-signal callback.
 
