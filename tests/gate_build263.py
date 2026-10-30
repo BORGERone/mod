@@ -133,7 +133,8 @@ def static_semantics(base: pathlib.Path, jar: pathlib.Path) -> None:
     assert 'for (AbstractWidget' not in ui_mixin
     assert '@Shadow(remap = false) private boolean buildingInspector;' not in ui_mixin
     assert 'buildingInspector =' not in ui_mixin
-    assert 'NpcDialogueGraph.Node node = node();' in ui_mixin
+    assert '@Shadow(remap = false) private NpcDialogueGraph.Node node()' not in ui_mixin
+    assert 'NpcDialogueGraph.Node node = graph.get(selected);' in ui_mixin
     assert 'inspectorWidgets.add(fadeOut);' in ui_mixin
     assert 'inspectorWidgets.add(fadeIn);' in ui_mixin
     assert 'fadeOut.visible = fitsInspector(fadeOut);' in ui_mixin

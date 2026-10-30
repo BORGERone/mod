@@ -1,19 +1,19 @@
-BUILD 263 BACKUP GATE: PASS (revised UI candidate; user reports previous candidate failed)
+BUILD 263 BACKUP GATE: PASS (candidate without method-shadow; not game-verified)
 
 Candidate JAR: settledlands-0.8.0-build263-cutscene-fade.jar
-Size: 2,274,519 bytes
-SHA-256: 293a22505849b92cec191d66fafe189cd401dc66b7a7f17904d79d057af03bc0
+Size: 2,274,559 bytes
+SHA-256: c80fa6948ef3817b04922542a0de70c03bb0ce06d95f928bd033d771e5aed13b
 Source ZIP: SettledLands-Build263-Cutscene-Fade-Source.zip
-Archive size: 9,644,494 bytes
-Archive SHA-256: 3b529da0154a6c4808e1fbfd1747d03fa1d49b8fb70dde3015d926818e317913
+Archive size: 9,644,259 bytes
+Archive SHA-256: 26c538b8b8271bf2a8f71b38d5ae6460420e84ceac76a2f91591e955a6a61ef3
 Manifest: PASS (670/670 files)
 Byte-identical ZIP reproduction from its own extracted contents: PASS
 
 Independent extracted technical release gate:
 - Deterministic Build 263 rebuild identical to bundled candidate JAR.
 - Structural JAR validation and exact Build 262 diff validation: PASS.
-- UI regression guards verify the hook uses target `node()`, never changes shared `buildingInspector`, preserves existing inspector visibility, and explicitly registers only the two new fade buttons.
+- UI regression guards verify no method-shadow of `node()`, use of target `graph/selected`, no mutation of shared `buildingInspector`, and explicit registration of only the two new fade buttons.
 - Java 21 JVM verification of patched methods and all new callbacks: PASS.
 - Java 21 runtime scenarios for fade timing, camera ordering, graph NBT/copy and chained scenes: PASS.
 
-Important: the user confirmed the previous candidate SHA `03e3d9c9152adaf7b8afeb3c6a7693787987221a825944aad445f03a1830c716` was active, Build262 works, and Build263's inspector was blank. This revised candidate changes only the UI mixin implementation; the visual fix is NOT yet user-confirmed. Gates do not apply Mixin in real Minecraft and do not prove the graph editor UI. Minecraft/NeoForge was not launched.
+Important: Build262 works in the user's environment. The original Build263 inspector was empty; the candidate with `@Shadow node()` caused the right panel to disappear. Fresh `latest-4.log` shows `(3).jar` and Build263 version, but no specific Mixin error. This candidate removes that method-shadow; its in-game UI is NOT confirmed. Gates do not apply Mixin in real Minecraft. Minecraft/NeoForge was not launched.

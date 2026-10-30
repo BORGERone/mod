@@ -23,7 +23,7 @@ Build 263 собран только от Build 262 с SHA-256
 - `NpcDialogueGraph.save(): CompoundTag`, `load(CompoundTag): NpcDialogueGraph`,
   `Node.copy(): Node` и `NpcDialogueGraphScreen.widgets(): void`.
 
-После пользовательского подтверждения, что прежний hotfix не исправил пустой инспектор (Build262 на том же графе исправен), новый candidate меняет только UI hook. Он получает текущую ноду через штатный `node()`, вызывает существующие `button`, `remember`, `changed`, `widgets` и после базового `widgets()` напрямую добавляет лишь два созданных fade-контрола в `inspectorWidgets`. Больше не меняет shared `buildingInspector`; видимость существующих виджетов не переписывается. Новый JAR SHA `293a22505849b92cec191d66fafe189cd401dc66b7a7f17904d79d057af03bc0`, size 2,274,519 bytes. Это не подтверждённый визуальный фикс: Minecraft/NeoForge не запускались.
+После пользовательского подтверждения, что прежний hotfix не исправил пустой инспектор (Build262 на том же графе исправен), UI hook сначала переписали, но shadow-метод `node()` в последнем кандидате совпал по времени с полным исчезновением панели. Новый candidate удаляет этот method-shadow и снова использует точные поля `graph`/`selected` базового экрана; добавляет кнопки напрямую в `inspectorWidgets` и не меняет shared `buildingInspector`. JAR SHA `c80fa6948ef3817b04922542a0de70c03bb0ce06d95f928bd033d771e5aed13b`, size 2,274,559 bytes. Это не подтверждённый визуальный фикс: Minecraft/NeoForge не запускались.
 
 Fade flags — отдельные `@Unique` Node-поля через `CutsceneFadeNodeAccess263`;
 `Node.copy()` переносит их в undo/duplicate snapshots. NBT записывает

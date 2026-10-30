@@ -15,8 +15,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Appends fade switches without rewriting visibility on the screen's existing node widgets. */
 @Mixin(targets = {"dev.settledlands.npc.client.NpcDialogueGraphScreen"}, remap = false)
 public abstract class CutsceneGraphFadeUiMixin263 {
+    @Shadow(remap = false) private NpcDialogueGraph graph;
+    @Shadow(remap = false) private int selected;
     @Shadow(remap = false) private List<AbstractWidget> inspectorWidgets;
-    @Shadow(remap = false) private NpcDialogueGraph.Node node() { return null; }
     @Shadow(remap = false) private int inspectorX;
     @Shadow(remap = false) private int inspectorY;
     @Shadow(remap = false) private int inspectorW;
@@ -33,7 +34,8 @@ public abstract class CutsceneGraphFadeUiMixin263 {
 
     @Inject(method = {"widgets()V"}, at = {@At(value = "RETURN")}, remap = false)
     private void settledlands$appendCutsceneFadeSwitches(CallbackInfo ci) {
-        NpcDialogueGraph.Node node = node();
+        if (graph == null || selected < 0) return;
+        NpcDialogueGraph.Node node = graph.get(selected);
         if (node == null || node.type != NpcDialogueGraph.CUTSCENE) return;
 
         int x = inspectorX + 8;
