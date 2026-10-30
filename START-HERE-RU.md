@@ -1,20 +1,24 @@
 # SettledLands: продолжить работу
 
-## 1. Актуальное состояние
+## Текущий пакет: Build 264 — профессии/скины NPC
+
+Build 264 собран от точной базы Build 262 и намеренно не включает код Build 263 для CUTSCENE fade. `tests/gate_build264.py` прошёл: повторная сборка идентична, точный diff/JAR валидны, существующие поля узла сохраняются, а helper выбрал точные embedded-текстуры для всех 64 комбинаций. Minecraft/NeoForge не запускались; визуальная проверка обязательна по `CHECKLIST-TEST-BUILD264-RU.md`. Дистрибутив и source ZIP описаны в `README-Build264-Profession-Skins-RU.txt` и `BACKUP-264-RU.txt`.
+
+Историческое состояние Build 263 ниже сохранено. Известную проблему пустого инспектора Build 263 не считать исправленной и не переносить его CUTSCENE fade в Build 264 без отдельного решения пользователя.
+
+## 1. Архивное состояние Build 263
 
 **Build 263 — регрессия инспектора всё ещё не исправлена.** После выдачи кандидата SHA `c80fa6948ef3817b04922542a0de70c03bb0ce06d95f928bd033d771e5aed13b` пользователь сообщил: правая панель снова есть, но содержимое выбранной ноды опять пустое; screenshot `image-5.png` показывает заголовок «Реплика #0» и пустое тело. Build262 у него работает. Не просить SHA — пользователь отказался; не просить видео. Последний `latest-4.log` относится к более раннему `(3).jar`, где сообщается version Build263 и нет ошибки нашего Mixin, но его нельзя считать логом текущей проверки. Код после кандидата c80 не меняли. Следующей сессии не выпускать догадочный hotfix: локализовать почему `NpcDialogueGraphScreen.widgets()` не оставляет видимые widgets в Build263, сравнить реальное поведение с Build262 и сохранить fade-требования (два независимых флага, 500 мс, камера после полного затемнения, fade-in после playing signal).
 
 Исходный Build 262 с плавным idle-поворотом NPC сохранён побайтно, кроме заявленных 7 изменённых записей; добавлены 11 class-файлов. Fade-флаги хранятся отдельно и не переиспользуют поля анимации/перемещения.
 
-Прочитать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`; затем Build 263 README/API/checklist/backup notes.
+Для следующей работы читать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`, затем `README-Build264-Profession-Skins-RU.txt`, `CHECKLIST-TEST-BUILD264-RU.md`, `BACKUP-264-RU.txt` и `GATE-RESULT-264.txt`. Проверку игры проводить только на копии мира; видео не просить.
 
-Затем прочитать `SESSION-STATE.md`, `README-Build263-Cutscene-Fade-RU.txt`, `API-COMPAT-263-RU.md`, `CHECKLIST-TEST-BUILD263-RU.md` и `BACKUP-263-RU.txt`. Видео не просить.
+## Архивные инструкции Build 263 (не применять к текущему пакету Build 264)
 
-## 2. Установка и статус
+Инструкции ниже относятся только к Build 263. Для Build 264 на копии мира установите только JAR Build264 и следуйте `CHECKLIST-TEST-BUILD264-RU.md`; визуальная проверка ещё не выполнялась.
 
-На копии мира удалите прежние JAR SettledLands и оставьте только Build 263. Java 21 release gate и независимый source ZIP gate прошли; Minecraft/NeoForge/modpack **не запускались**. Пройти `CHECKLIST-TEST-BUILD263-RU.md`: отдельно проверить каждую галку, обе вместе и последовательность связанных катсцен. При проблеме приложить свежий `latest.log` и crash report, видео не просить.
-
-JAR и Source ZIP, размеры и SHA — в `SHA256SUMS-build263.txt`; независимая распаковка и gate отражены в `GATE-BACKUP-RESULT-263.txt`. Source ZIP содержит точные Build-262 baseline и Build-263 candidate, инструменты, исходники, тесты, документы и manifest.
+Исторический Build263 release gate и source ZIP gate прошли; тогда Minecraft/NeoForge/modpack не запускались. Архивные размеры/SHA лежат в `SHA256SUMS-build263.txt`, независимая проверка — в `GATE-BACKUP-RESULT-263.txt`. В архиве Build263 были точная база Build262, исходники, инструменты, тесты, документы и manifest.
 
 ## Историческая документация build 256
 

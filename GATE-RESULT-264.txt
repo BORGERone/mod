@@ -1,0 +1,39 @@
+BUILD 264 GATE: PASS
+
+Команда:
+  python3 tests/gate_build264.py --java /home/user/mod/.venv/lib/python3.11/site-packages/jdk4py/java-runtime/bin/java
+
+Результат:
+  deterministic rebuild: PASS (побайтно совпадает с выданным кандидатом)
+  validate_jar.py: PASS (toml, 381 class, 429 entries, структура/пул/операнды/атрибуты/mixins)
+  verify_jar.py: PASS (точный diff относительно закреплённого Build262)
+  сериализация: PASS (Node.copy и graph save/load содержат damageFilter/minDamage и DamageFilter/MinDamage)
+  модель: PASS (Blockbench Bedrock; embedded PNG декодируются, 128x128; все имена из mapping присутствуют)
+  реальный Java helper из JAR: PASS (64/64 сочетаний профессии и флагов выбрали точные source bytes по SHA-256)
+  Minecraft/NeoForge: NOT RUN (визуальная проверка не проводилась)
+
+BUILD 264 BACKUP GATE: PASS (manifest, extraction, deterministic rebuild, повторный full gate).
+ZIP: SettledLands-Build264-Profession-Skins-Source.zip, 11 286 684 bytes,
+SHA-256 7cccb34e186b5d91b7df80628211560ae204bf9d7044c835be7aa5d31f857ce4.
+
+Точный JAR diff к Build262:
+  5 новых entries:
+    assets/settledlands/dragon_default/ivy_oleander_professions.bbmodel
+    dev/settledlands/mixin/GuideNpcProfessionSkinMixin264.class
+    dev/settledlands/mixin/NpcProfessionModelStorageMixin264.class
+    dev/settledlands/npc/NpcProfessionSkin264.class
+    dev/settledlands/npc/client/NpcProfessionModel264.class
+  7 изменённых entries:
+    META-INF/neoforge.mods.toml
+    assets/settledlands/lang/en_us.json
+    assets/settledlands/lang/ru_ru.json
+    dev/settledlands/npc/NpcStatsGraph.class
+    dev/settledlands/npc/client/NpcStatsGraphUi.class
+    settledlands-patch-info.txt
+    settledlands.mixins.json
+  417 entries идентичны, удалённых entries нет.
+
+Кандидат:
+  settledlands-0.8.0-build264-profession-skins.jar
+  3 075 502 bytes
+  SHA-256 f9bb1fce2ec0d42fcd4e78f24d2753a3762f729a97293c6089f08ab311b9a790

@@ -1,0 +1,22 @@
+Архив исходников SettledLands Build 264
+
+ZIP: SettledLands-Build264-Profession-Skins-Source.zip
+
+В архив включены точный baseline Build 262, кандидат Build 264, модель Blockbench,
+исходники шести производственных Java-классов, compile-time API-заглушки, builder,
+тестовый gate, его Java fixture, документы и BACKUP-MANIFEST.sha256. Build 263 fade
+не включён в код Build 264. Java runtime не входит в архив.
+
+Проверить manifest после распаковки из корня архива:
+  python3 -c "import hashlib,pathlib; p=pathlib.Path('.'); bad=[]; lines=(p/'BACKUP-MANIFEST.sha256').read_text().splitlines(); [bad.append(n) for h,n in (x.split('  ',1) for x in lines) if hashlib.sha256((p/n).read_bytes()).hexdigest()!=h]; print('OK' if not bad else bad)"
+
+Пересобрать кандидат (Python 3.11+, Java 21):
+  python3 tools/patch_profession_skins264.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --out settledlands-0.8.0-build264-profession-skins.jar --java /path/to/java21
+
+Запустить release gate:
+  python3 tests/gate_build264.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --jar settledlands-0.8.0-build264-profession-skins.jar --java /path/to/java21
+
+Ожидается `BUILD 264 GATE: PASS`. Gate подтверждает детерминированную сборку,
+структуру/точный diff JAR, сериализуемые поля, совместимость используемых модельных
+данных с кодом и точный выбор всех 64 вариантов embedded-текстуры. Он не запускает
+Minecraft/NeoForge и не заменяет проверку в игре по CHECKLIST-TEST-BUILD264-RU.md.

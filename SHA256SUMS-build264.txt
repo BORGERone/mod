@@ -1,0 +1,2 @@
+f9bb1fce2ec0d42fcd4e78f24d2753a3762f729a97293c6089f08ab311b9a790  settledlands-0.8.0-build264-profession-skins.jar
+7cccb34e186b5d91b7df80628211560ae204bf9d7044c835be7aa5d31f857ce4  SettledLands-Build264-Profession-Skins-Source.zip
