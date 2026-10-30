@@ -1,10 +1,16 @@
-# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — текущий пакет Build 265
+# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — текущий пакет Build 266 diagnostic probe
 
-## Build 265: dropdown профессии и применение скина
+## Build 266: установить участок сбоя применения профессии
 
-Пользователь прислал скрин Build 264: вместо выпадающего списка был переключатель со стрелками, а выбранная профессия визуально не поменяла скин. В Build 264 был путь модели gated условием `profile.texture == ivy_oleander.bbmodel`; Build 265 снимает этот фильтр для активной профессии и использует штатный popup `NpcUi.NpcDropdown`. Профессия=0 продолжает оставлять исходную текстуру. Это обоснованное исправление кода, но Minecraft/NeoForge здесь не запускались, поэтому реальный результат в мире не подтверждён.
+Пользователь сообщил, что скин не меняется даже с Build265, и прислал `latest-6.log`. Файл подтверждает, что `settledlands-0.8.0-build265-profession-dropdown.jar` действительно загружен (NeoForge version 21.1.253 / Minecraft 1.21.1). В логе нет ошибок миксинов профессии, но нет и признаков выбора/сохранения графа или запрошенного варианта модели. `ivy_oleander.bbmodel` в сообщениях `GuideNpc:handler$...earlyTexture` — значение, которое существующий `EarlyCorpseTextureMixin` пишет в HEAD `applyProfile()`, а не итог после выполнения тела; это не доказательство, что хвостовой skin mixin не сработал. Несвязанный NPE HnS происходит в атаке `Player.attack`/`GuideNpc.hurt` и не объясняет скин.
 
-Build265 строится от точного Build262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`, без Build263 CUTSCENE fade. `tests/gate_build265.py` и `tests/gate_backup265.py` — PASS. Кандидат 3 076 205 bytes, SHA-256 `e29bcc39052de489fb1eb489c152334a86e16a9d4fb028460631fe9bf4569589`; состав JAR: 5 новых записей, 7 изменённых, 417 идентичных. Тестировать на копии мира по `CHECKLIST-TEST-BUILD265-RU.md`. При закрытии graph screen изменения графа отправляются; пользователь должен подтвердить, что профиль визуально применился.
+Причина пока не доказана. Build266 — временный read-only диагностический probe: Build265 logic плюс `[SL-PROFESSION-266] apply` после применения профиля (UUID, concrete subclass, server/client, characteristics node, выбранный и фактический texture path) и `[SL-PROFESSION-266] resolve` при первом поиске variant model file. Нет per-frame trace. Использовать на копии мира по `CHECKLIST-TEST-BUILD266-RU.md`, прислать свежий `latest.log` после выбора, сохранения и показа целевого NPC. Build266 не объявлять исправлением и удалить после измерения.
+
+Build266 основан на точном Build262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`, без Build263 CUTSCENE fade. `tests/gate_build266.py` — PASS. Кандидат ожидает итогового хэша после проверки ZIP; Minecraft/NeoForge не запускались. Source/docs: `README-Build266-Profession-Probe-RU.txt`, `CHECKLIST-TEST-BUILD266-RU.md`, `BACKUP-266-RU.txt`.
+
+## Build 265: предыдущий dropdown/skin кандидат — не решает проблему пользователя
+
+Build265 действительно заменяет carousel штатным `NpcUi.NpcDropdown`, но пользователь подтвердил: внешний вид NPC всё ещё не изменился. Не выдавать его за фикс; его исходный hash и gate result сохранены в release-файлах Build265. В Build265 отсутствовала runtime-телеметрия пути, чем и вызвана необходимость Build266 probe.
 
 ## Архив Build 264: первоначальная профессия/скины
 

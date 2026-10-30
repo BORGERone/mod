@@ -1,0 +1,2 @@
+92a920f55dac3cefe4e87482739b80ec1c0a46ebd8115f33dae9e36395cefb60  settledlands-0.8.0-build266-profession-probe.jar
+016bdef27b9bafe1dac6c22084b34acaa2c4f8f2ccfd26058cf13720d9c91d4e  SettledLands-Build266-Profession-Probe-Source.zip

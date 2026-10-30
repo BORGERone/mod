@@ -1,0 +1,13 @@
+Исходный диагностический архив SettledLands Build266
+
+ZIP: SettledLands-Build266-Profession-Probe-Source.zip
+Содержит Build262 baseline, кандидат Build266, Build266 источники, инструменты, compile-time fixtures, gate-скрипты и manifest. Внешние библиотеки JDK и пользовательские логи не включены.
+
+Пересобрать JAR (Python 3.11+, Java 21):
+  python3 tools/patch_profession_probe266.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --out settledlands-0.8.0-build266-profession-probe.jar --java /path/to/java21
+
+Прогнать гейты:
+  python3 tests/gate_build266.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --jar settledlands-0.8.0-build266-profession-probe.jar --java /path/to/java21
+  python3 tests/gate_backup266.py --zip SettledLands-Build266-Profession-Probe-Source.zip --java /path/to/java21
+
+Для теста в игре следовать CHECKLIST-TEST-BUILD266-RU.md. Build266 диагностический, Minecraft/NeoForge здесь не запускались и визуальная работа скина не подтверждена.
