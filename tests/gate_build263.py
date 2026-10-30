@@ -130,11 +130,14 @@ def static_semantics(base: pathlib.Path, jar: pathlib.Path) -> None:
     assert 'CutsceneFadeNodeAccess263' in helper and 'CutsceneFadeGraphData263.copy' in (
         ROOT / 'src/build263/dev/settledlands/mixin/CutsceneNodeFadeMixin263.java').read_text()
     ui_mixin = (ROOT / 'src/build263/dev/settledlands/mixin/CutsceneGraphFadeUiMixin263.java').read_text()
-    assert 'inspectorWidgets' not in ui_mixin and 'for (AbstractWidget' not in ui_mixin
-    assert 'boolean wasBuildingInspector = buildingInspector;' in ui_mixin
-    assert 'buildingInspector = wasBuildingInspector;' in ui_mixin
-    assert 'fadeOutWidget.visible = fitsInspector(fadeOutWidget);' in ui_mixin
-    assert 'fadeInWidget.visible = fitsInspector(fadeInWidget);' in ui_mixin
+    assert 'for (AbstractWidget' not in ui_mixin
+    assert '@Shadow(remap = false) private boolean buildingInspector;' not in ui_mixin
+    assert 'buildingInspector =' not in ui_mixin
+    assert 'NpcDialogueGraph.Node node = node();' in ui_mixin
+    assert 'inspectorWidgets.add(fadeOut);' in ui_mixin
+    assert 'inspectorWidgets.add(fadeIn);' in ui_mixin
+    assert 'fadeOut.visible = fitsInspector(fadeOut);' in ui_mixin
+    assert 'fadeIn.visible = fitsInspector(fadeIn);' in ui_mixin
     print('OK exact Build 262 diff; isolated fade-widget clipping, independent node fields, persistence, undo copy, and chained play hooks', flush=True)
 
 

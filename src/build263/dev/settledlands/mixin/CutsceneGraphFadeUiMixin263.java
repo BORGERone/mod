@@ -2,9 +2,9 @@ package dev.settledlands.mixin;
 
 import dev.settledlands.npc.CutsceneFadeGraphData263;
 import dev.settledlands.npc.NpcDialogueGraph;
-import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import java.util.List;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.gen.Invoker;
@@ -15,15 +15,14 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 /** Appends fade switches without rewriting visibility on the screen's existing node widgets. */
 @Mixin(targets = {"dev.settledlands.npc.client.NpcDialogueGraphScreen"}, remap = false)
 public abstract class CutsceneGraphFadeUiMixin263 {
-    @Shadow(remap = false) private NpcDialogueGraph graph;
-    @Shadow(remap = false) private int selected;
+    @Shadow(remap = false) private List<AbstractWidget> inspectorWidgets;
+    @Shadow(remap = false) private NpcDialogueGraph.Node node() { return null; }
     @Shadow(remap = false) private int inspectorX;
     @Shadow(remap = false) private int inspectorY;
     @Shadow(remap = false) private int inspectorW;
     @Shadow(remap = false) private int inspectorH;
     @Shadow(remap = false) private int sidebarHeight;
     @Shadow(remap = false) private int sidebarScroll;
-    @Shadow(remap = false) private boolean buildingInspector;
     @Shadow(remap = false) private void remember() {}
     @Shadow(remap = false) private void changed() {}
     @Shadow(remap = false) private void widgets() {}
@@ -34,47 +33,39 @@ public abstract class CutsceneGraphFadeUiMixin263 {
 
     @Inject(method = {"widgets()V"}, at = {@At(value = "RETURN")}, remap = false)
     private void settledlands$appendCutsceneFadeSwitches(CallbackInfo ci) {
-        if (graph == null || selected < 0) return;
-        NpcDialogueGraph.Node node = graph.get(selected);
+        NpcDialogueGraph.Node node = node();
         if (node == null || node.type != NpcDialogueGraph.CUTSCENE) return;
 
         int x = inspectorX + 8;
         int width = Math.max(0, inspectorW - 16);
         int y = inspectorY + 24 + sidebarHeight - sidebarScroll;
-        boolean wasBuildingInspector = buildingInspector;
-        Button fadeOut;
-        Button fadeIn;
-        try {
-            buildingInspector = true;
-            fadeOut = settledlands$addInspectorButton(CutsceneFadeGraphData263.fadeOut(node)
-                            ? "gui.settledlands.graph.cutscene_fade_out_on"
-                            : "gui.settledlands.graph.cutscene_fade_out_off",
-                    x, y, width, 16, () -> {
-                        remember();
-                        CutsceneFadeGraphData263.setFadeOut(node, !CutsceneFadeGraphData263.fadeOut(node));
-                        changed();
-                        widgets();
-                    });
-            fadeIn = settledlands$addInspectorButton(CutsceneFadeGraphData263.fadeIn(node)
-                            ? "gui.settledlands.graph.cutscene_fade_in_on"
-                            : "gui.settledlands.graph.cutscene_fade_in_off",
-                    x, y + 20, width, 16, () -> {
-                        remember();
-                        CutsceneFadeGraphData263.setFadeIn(node, !CutsceneFadeGraphData263.fadeIn(node));
-                        changed();
-                        widgets();
-                    });
-        } finally {
-            buildingInspector = wasBuildingInspector;
-        }
+        Button fadeOut = settledlands$addInspectorButton(CutsceneFadeGraphData263.fadeOut(node)
+                        ? "gui.settledlands.graph.cutscene_fade_out_on"
+                        : "gui.settledlands.graph.cutscene_fade_out_off",
+                x, y, width, 16, () -> {
+                    remember();
+                    CutsceneFadeGraphData263.setFadeOut(node, !CutsceneFadeGraphData263.fadeOut(node));
+                    changed();
+                    widgets();
+                });
+        Button fadeIn = settledlands$addInspectorButton(CutsceneFadeGraphData263.fadeIn(node)
+                        ? "gui.settledlands.graph.cutscene_fade_in_on"
+                        : "gui.settledlands.graph.cutscene_fade_in_off",
+                x, y + 20, width, 16, () -> {
+                    remember();
+                    CutsceneFadeGraphData263.setFadeIn(node, !CutsceneFadeGraphData263.fadeIn(node));
+                    changed();
+                    widgets();
+                });
 
-        // Preserve the base screen's visibility decisions for every existing inspector
-        // widget; only the two controls added here receive local clipping decisions.
+        // The base widgets() has already reset buildingInspector and applied its own
+        // clipping. Register only these two additions explicitly; never toggle the
+        // screen's shared inspector-building flag after the base pass has finished.
+        inspectorWidgets.add(fadeOut);
+        inspectorWidgets.add(fadeIn);
         sidebarHeight += 40;
-        AbstractWidget fadeOutWidget = fadeOut;
-        AbstractWidget fadeInWidget = fadeIn;
-        fadeOutWidget.visible = fitsInspector(fadeOutWidget);
-        fadeInWidget.visible = fitsInspector(fadeInWidget);
+        fadeOut.visible = fitsInspector(fadeOut);
+        fadeIn.visible = fitsInspector(fadeIn);
     }
 
     private boolean fitsInspector(AbstractWidget button) {

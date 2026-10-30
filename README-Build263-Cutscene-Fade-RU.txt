@@ -26,11 +26,8 @@ save/load, copy и chained playback подключены отдельными mi
 новых class-записей добавлены; остальные файлы JAR побайтно сохранены. Список,
 размеры и SHA-256 — в `GATE-RESULT-263.txt` и `SHA256SUMS-build263.txt`.
 
-Проверки: deterministic rebuild, структурный валидатор, exact diff, Java 21 verifier
-всех callbacks и runtime-регрессии очередности fade/camera/NBT/copy/chained scenes.
-После сообщения о пустых инспекторах UI-mixin изменён: он больше не переписывает
-видимость всех уже созданных inspector widgets; clipping вычисляется только для двух
-новых fade-кнопок, состояние `buildingInspector` восстанавливается в `finally`.
-Основной и независимый source ZIP gates после этого hotfix PASS; manifest 670/670,
-архив воспроизводится побайтно. Minecraft/NeoForge не запускались; инспекторы всех
-типов нод нужно проверить на копии мира по `CHECKLIST-TEST-BUILD263-RU.md`. Видео не нужно.
+Пользователь подтвердил, что прежний UI-hotfix (`03e3d9c9152adaf7b8afeb3c6a7693787987221a825944aad445f03a1830c716`) не помог: в Build263 инспектор пустой у всех типов нод, тогда как в Build262 на том же графе он работает. На screenshot Build263 выбрана CUTSCENE-нода, но заголовок правой панели показывает «Урон #4», тело панели пустое.
+
+Подготовлена следующая candidate-ревизия с сохранением fade-механики: UI hook получает активную ноду через штатный `node()`, не меняет shared-флаг `buildingInspector` после завершения базового `widgets()` и явно добавляет только два созданных fade-контрола в `inspectorWidgets`. Кандидат: SHA-256 `293a22505849b92cec191d66fafe189cd401dc66b7a7f17904d79d057af03bc0`, 2,274,519 bytes.
+
+Проверки: deterministic rebuild, структурный валидатор, exact diff, Java 21 verifier всех callbacks и runtime-регрессии fade/camera/NBT/copy/chained scenes — PASS. Основной gate и независимый source ZIP gate после обновления прошли; manifest 670/670, побайтное воспроизведение архива PASS. Minecraft/NeoForge не запускались; это candidate для проверки, а не подтверждённый визуальный фикс. По чеклисту сначала проверить обычные ноды, заголовок/поля CUTSCENE и клики двух переключателей. Видео не нужно.
