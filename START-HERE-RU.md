@@ -2,15 +2,15 @@
 
 ## 1. Актуальное состояние
 
-**Build 261 — idle-взгляд, единый путь анимаций и интеграция PlayerModel first-person для Punchy-style рендера.** Основной JVM gate PASS; пакет собран от точного Build 260. Idle NPC плавно осматривается только головой. На Ivy риге FA/TnM продолжает работать при уроне, диалоге и полнотельных Blockbench-клипах; шаги ног сохраняются во время ходьбы/атаки. Первый-person PlayerModel-проход вселённого игрока использует руки/текстуру модели NPC. Build 260 sound/facing/dialogue и все прежние механики сохранены.
+**Build 262 — плавный поворот NPC после остановки и случайный idle-поворот корпуса/головы.** Собран от точного Build 261; Java 21 runtime и два release gates PASS. После ходьбы NPC сохраняет направление последнего шага: первая idle-цель достигается постепенно, затем голова сканирует быстрее, а торс плавно следует за ней. Сохранены Build 261 animation/first-person/Punchy-support paths и все прежние механики.
 
-Прочитать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`; затем `SESSION-STATE.md`, `README-Build261-IdleLook-Punchy-Animation-RU.txt`, `API-COMPAT-261-RU.md`, `CHECKLIST-TEST-BUILD261-RU.md` и `BACKUP-261-RU.txt`. Видео не просить.
+Прочитать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`; затем `SESSION-STATE.md`, `README-Build262-Smooth-Npc-Turning-RU.txt`, `API-COMPAT-262-RU.md`, `CHECKLIST-TEST-BUILD262-RU.md` и `BACKUP-262-RU.txt`. Видео не просить.
 
 ## 2. Установка и статус
 
-На копии мира удалите прежние JAR SettledLands и оставьте только Build 261. Java 21 runtime-сценарии, воспроизводимая сборка, diff и end-to-end fixture прошли. Minecraft/NeoForge/modpack **не запускались**; версия Punchy пользователя не сообщена и с самим модом не проверялась. Обязательно пройти `CHECKLIST-TEST-BUILD261-RU.md`, отдельно проверить руки NPC в первом лице с используемой версией Punchy. Если есть проблема — свежий `latest.log` и crash report, видео не просить.
+На копии мира удалите прежние JAR SettledLands и оставьте только Build 262. Java 21 runtime-сценарии, воспроизводимая сборка, точный diff и independent source ZIP gate прошли. Minecraft/NeoForge/modpack **не запускались**. Пройти `CHECKLIST-TEST-BUILD262-RU.md`, особенно сценарий «ходьба → остановка → idle» и сохранность торса после остановки. Если есть проблема — свежий `latest.log` и crash report, видео не просить.
 
-JAR и Source ZIP размеры/SHA — в `SHA256SUMS-build261.txt`. Source ZIP содержит builder, исходники и tests, Build-260 baseline, Build-261 candidate и manifest; контрольный результат независимой распаковки — `GATE-BACKUP-RESULT-261.txt`.
+JAR и Source ZIP размеры/SHA — в `SHA256SUMS-build262.txt`. Source ZIP содержит builder, исходники и tests, Build-261 baseline, Build-262 candidate и manifest; результат независимой распаковки — `GATE-BACKUP-RESULT-262.txt`.
 
 ## Историческая документация build 256
 

@@ -1,6 +1,17 @@
-# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально build 261
+# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально build 262
 
-## Build 261: idle-взгляд, согласование анимаций, руки NPC в Punchy-style first person
+## Build 262: плавный переход ходьба → остановка → idle и поворот торса
+
+От точного Build 261 (`settledlands-0.8.0-build261-idle-look-punchy-animation.jar`, SHA `979d64831b47336a84a72ec0d803da4f19d5ee6e1fdb85e542e7e08b03647df6`) собран `settledlands-0.8.0-build262-smooth-npc-turning.jar`, 2 260 085 байт, SHA-256 `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`. JAR отличается ровно тремя entries: Auto-AI engine, TOML и patch-info; renderer Build 261 остался побайтово без изменений.
+
+- При горизонтальном движении yaw корпуса и сущности выставляется по вектору движения и сохраняет направление после остановки.
+- Следующая случайная idle-цель не выполняет мгновенный разворот: корпус/entity yaw плавно следуют с коэффициентом `0.035F`, голова — быстрее (`0.12F`). Диалог, бой, активный маршрут/движение и взгляд на ближайшего игрока сохраняют приоритет.
+- `tests/gate_build262.py` PASS: deterministic rebuild, точный diff/ABI/JAR checks, Java 21 «walk → stop → first torso step → randomized head/body scan», диалог, inherited AI/combo, Build 261 animation/first-person regressions; verifier-valid no-op torso mutant убит. `tests/gate_backup262.py` PASS: manifest и побайтовое воспроизведение ZIP, полный gate из чистой распаковки.
+- Minecraft/NeoForge/modpack не запускались. Обязателен тест на копии мира по `CHECKLIST-TEST-BUILD262-RU.md`; видео не просить.
+
+Файлы: `README-Build262-Smooth-Npc-Turning-RU.txt`, `API-COMPAT-262-RU.md`, `CHECKLIST-TEST-BUILD262-RU.md`, `BACKUP-262-RU.txt`, `GATE-RESULT-262.txt`, `GATE-BACKUP-RESULT-262.txt`, `SHA256SUMS-build262.txt`. Source ZIP: `SettledLands-Build262-Smooth-Npc-Turning-Source.zip`.
+
+## Build 261 (предыдущая сборка): idle-взгляд, согласование анимаций, руки NPC в Punchy-style first person
 
 От точного Build 260 собран кандидат `settledlands-0.8.0-build261-idle-look-punchy-animation.jar`, 2 259 841 байт, SHA-256 `979d64831b47336a84a72ec0d803da4f19d5ee6e1fdb85e542e7e08b03647df6`. Source ZIP: `SettledLands-Build261-IdleLook-Punchy-Animation-Source.zip`; финальный размер/hash лежит в `SHA256SUMS-build261.txt`.
 

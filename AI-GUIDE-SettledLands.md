@@ -1,8 +1,14 @@
-# AI-GUIDE — актуальное состояние build 261 (idle gaze / animations / Punchy)
+# AI-GUIDE — актуальное состояние build 262 (smooth post-stop turning)
 
 Сначала `START-HERE-RU.md` → `HANDOFF-NEXT-SESSION-RU.md` → этот файл; затем обновлять `SESSION-STATE.md`. Отвечать по-русски. Видео не просить.
 
-## Build 261 — текущий релизный кандидат
+## Build 262 — текущий релизный кандидат
+
+Baseline Build 261 SHA `979d64831b47336a84a72ec0d803da4f19d5ee6e1fdb85e542e7e08b03647df6`. `runMobilityAndAutoAi` сохраняет yaw корпуса/entity по горизонтальному вектору шага до idle tick. После остановки голова плавно сканирует случайные цели; корпус и entity yaw медленно следуют за ними. Это убирает мгновенный обратный разворот и даёт поворот торса. Диалог, бой, active navigation/movement и player-look сохраняют приоритет. Renderer Build 261 побайтово сохранён; его transient movement-facing override восстанавливает состояние как прежде.
+
+Build 262 JAR `settledlands-0.8.0-build262-smooth-npc-turning.jar`, 2 260 085 байт, SHA-256 `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`. `tests/gate_build262.py` и independent backup gate PASS; Java 21 runtime покрывает stop transition, первый небольшой torso step, случайные ranges головы/корпуса, dialogue priority и inherited AI/combo, плюс Build 261 render/first-person regression. Minecraft/NeoForge/modpack НЕ запускались — нужен пользовательский тест по `CHECKLIST-TEST-BUILD262-RU.md`, видео не просить.
+
+## Build 261 — исторический релизный кандидат
 
 Точный baseline Build 260 (`8d47171845652c1a3499643ca1936a7d6b742d9e88811751d94d84bef47d2ebc`). `NpcAutoAiEngine255.tickIdleLookAround` медленно/случайно меняет только yaw головы, когда NPC действительно idle; игрок, диалог, бой, маршрут и движение имеют приоритет. Для Ivy при доступном EMF/ETF один Fresh Animations/TnM bridge остаётся активным также в разговоре и при full-body Blockbench-клипе. Клип накладывается поверх FA/TnM, а обе ноги при реальном перемещении сохраняют базовую gait-позу. При отказе optional animation stack остаётся BBModel actor fallback.
 

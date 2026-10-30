@@ -1,0 +1,10 @@
+SettledLands Build 262 source backup
+
+ZIP: SettledLands-Build262-Smooth-Npc-Turning-Source.zip
+Содержит точный Build 261 baseline JAR и Build 262 candidate JAR, source Builds 260–262, builder/runtime/gate scripts, release docs и BACKUP-MANIFEST.sha256. Java runtime и внешние Gson sources архивом не комплектуются.
+
+Сборка: `python3 tools/patch_auto_ai262.py --base settledlands-0.8.0-build261-idle-look-punchy-animation.jar --out settledlands-0.8.0-build262-smooth-npc-turning.jar --java <путь-к-Java-21>`.
+Основной gate: `python3 tests/gate_build262.py --base ...build261...jar --jar ...build262...jar --java <путь-к-Java-21> --gson-source <gson-source.tar.gz>`.
+Independent gate проверяет manifest, побайтовое воспроизведение ZIP и прогоняет основной gate из чистой распаковки.
+
+Версии JAR, ZIP, размеры и SHA-256 приведены в `SHA256SUMS-build262.txt`. Основной и backup gate evidence: `GATE-RESULT-262.txt`, `GATE-BACKUP-RESULT-262.txt`. Minecraft/NeoForge/modpack не запускались.

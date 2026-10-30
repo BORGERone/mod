@@ -1,0 +1,21 @@
+BUILD 262 GATE: PASS
+Дата: 2026-10-30
+
+Точная база Build 261:
+  settledlands-0.8.0-build261-idle-look-punchy-animation.jar
+  SHA-256 979d64831b47336a84a72ec0d803da4f19d5ee6e1fdb85e542e7e08b03647df6
+
+Candidate:
+  settledlands-0.8.0-build262-smooth-npc-turning.jar
+  2 260 085 bytes
+  SHA-256 21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531
+
+PASS gates:
+- Deterministic Build 262 rebuild is byte-identical to the candidate.
+- JAR structure, TOML, ZIP, entry set, and exact diff are valid. Only Engine class, metadata TOML, and patch-info changed from Build 261; all remaining entries are byte-identical.
+- Java 21 bytecode/runtime tests: travel-facing during motion; preserved body yaw at stop; gradual first idle torso + entity-yaw step; broad randomized torso/head scan; dialogue priority; inherited Auto-AI, combos and wander scenarios.
+- Build 261 animation and first-person regression fixture passes; renderer bridge remains byte-identical.
+- ABI reference `AttributeInstance.removeModifier(ResourceLocation): boolean` retained.
+- Verifier-valid no-op idle torso mutant was killed by the post-stop transition assertion.
+
+Minecraft/NeoForge/modpack were NOT launched. This gate is not a substitute for the in-game checklist.

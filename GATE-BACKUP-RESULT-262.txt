@@ -1,0 +1,14 @@
+BUILD 262 BACKUP GATE: PASS
+Дата: 2026-10-30
+
+Archive: SettledLands-Build262-Smooth-Npc-Turning-Source.zip
+  9 624 735 bytes
+  SHA-256 ad0bc40aef3522c756d3267e99cf5d3fd2304cff95e7aab3d7d4cbcbfd458403
+
+Independent extraction results:
+- ZIP integrity and duplicate-path checks PASS.
+- BACKUP-MANIFEST.sha256 validated all 618/618 archived files.
+- `tools/make_backup262.py` reproduced the archive byte-for-byte; matching SHA-256 above.
+- Full `tests/gate_build262.py` rerun from the clean extracted source package: PASS, including deterministic candidate rebuild, exact diff, Java 21 runtime post-stop scenario, Build 261 animation/first-person regression, and verifier-valid negative control.
+
+Java runtime and external Gson source archive were passed to the gate and are intentionally not embedded in the source ZIP. Minecraft/NeoForge/modpack were NOT launched.
