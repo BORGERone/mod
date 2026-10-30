@@ -63,9 +63,11 @@ public abstract class CutsceneGraphFadeUiMixin263 {
         // The base widgets() has already reset buildingInspector and applied its own
         // clipping. Register only these two additions explicitly; never toggle the
         // screen's shared inspector-building flag after the base pass has finished.
+        // NOTE: sidebarHeight is NOT increased here — it accumulates across repeated
+        // widgets() calls and corrupts layout of the inspector body on subsequent
+        // selections. The base method recomputes sidebarHeight on every pass.
         inspectorWidgets.add(fadeOut);
         inspectorWidgets.add(fadeIn);
-        sidebarHeight += 40;
         fadeOut.visible = fitsInspector(fadeOut);
         fadeIn.visible = fitsInspector(fadeIn);
     }

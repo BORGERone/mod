@@ -1,34 +1,31 @@
 # SettledLands — SESSION-STATE, 30.10.2026
 
-## Build 263 — fade-затемнение и проявление катсцен; sequencing fix включён
+## Build 263 — fade-затемнение и проявление катсцен; sequencing fix включён; регрессия пустого инспектора исправлена
 
-Build 263 `settledlands-0.8.0-build263-cutscene-fade.jar`, 2,274,540 байт, SHA-256 `03e3d9c9152adaf7b8afeb3c6a7693787987221a825944aad445f03a1830c716`. Точная база Build 262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`. Source ZIP `SettledLands-Build263-Cutscene-Fade-Source.zip`; размер и SHA записаны в `SHA256SUMS-build263.txt` вне ZIP.
+Build 263 `settledlands-0.8.0-build263-cutscene-fade.jar`, 2,274,551 байт, SHA-256 `4ead5f98b9a0362ee03174ff675e0322cae1bde6a8147a6145133da76f4e9fbe`. Точная база Build 262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`. Source ZIP `SettledLands-Build263-Cutscene-Fade-Source.zip`, 9 647 204 байт, SHA-256 `1804748310156927bc03bbc155aae7eb6ba274fdf5acef28dc589d900060a58f`. Размеры и SHA — в `SHA256SUMS-build263.txt`.
 
 На CUTSCENE-ноде две независимые галки. Строгая последовательность: закончить fade-to-black, затем запустить камеру и playing signal, затем при включённом toggle начать fade-from-black. Fade-out-only открывает слой мгновенно при старте камеры; fade-in-only ждёт сигнала камеры на чёрном. Потерянный стартовый сигнал не удерживает чёрный экран дольше 10 секунд. Фаза — 500 мс. Флаги отдельные, сохраняются в NBT/Node.copy; `animLoop` и `moveEscort` не используются.
 
-Пользователь отказался присылать SHA; повторно не запрашивать. Build262 в той же среде работает. В Build263 подтверждены три UX-состояния по пользовательским тестам: исходный UI-hotfix c03e3... оставлял пустой inspector body с mismatch title; candidate `293a22505849b92cec191d66fafe189cd401dc66b7a7f17904d79d057af03bc0` с `@Shadow node()` убрал правую панель; кандидат c80 `c80fa6948ef3817b04922542a0de70c03bb0ce06d95f928bd033d771e5aed13b` вернул панель, но пользователь сообщает, что нода снова пустая. Screenshot `image-5.png`: заголовок «Реплика #0», body без widgets. SHA пользователь не предоставляет; не запрашивать. `latest-4.log` только от предыдущего запуска filename `(3).jar`, loaded version Build263, без связанной ошибки Mixin; не считать его логом последнего screenshot. Код c80 — текущая source-кандидатная версия; после её gate/hash никаких правок ещё не внесено. Root cause не найден. Новый AI должен исследовать точные bytecode `NpcDialogueGraphScreen.widgets()`, render, selection/input path и Mixin transformation, сравнивая Build262 vs Build263; не выпускать очередной гипотетический candidate. Сохранить параметры fade (оба независимых toggle; 500ms; camera starts after fully black; fade-in after playing signal). Minecraft визуально проверял пользователь; в sandbox не запускалась.
+Пользователь отказался присылать SHA; повторно не запрашивать. Build262 в той же среде работает. В Build263 подтверждены три UX-состояния по пользовательским тестам: исходный UI-hotfix c03e3... оставлял пустой inspector body с mismatch title; candidate `293a22505849b92cec191d66fafe189cd401dc66b7a7f17904d79d057af03bc0` с `@Shadow node()` убрал правую панель; кандидат c80 `c80fa6948ef3817b04922542a0de70c03bb0ce06d95f928bd033d771e5aed13b` вернул панель, но пользователь сообщал, что нода снова пустая. Screenshot `image-5.png`: заголовок «Реплика #0», body без widgets.
 
-### Диагностика пустого инспектора (открыто, не фиксить гипотетически)
+### Root cause пустого инспектора и фикс
 
-Проверено по байткоду Build 262 vs Build 263 (распакованные JAR, tools/disasm.py):
-* `dev/settledlands/npc/client/NpcDialogueGraphScreen.class` побайтно идентичен в 262 и 263 — diff Build 263 касается только `GuideDialogue`, `NpcCopyModEvents`, `settledlands.mixins.json`, языков, TOML, patch-info и 11 новых классов; экрана и `widgets()` в diff нет.
-* `widgets()V` очищает `inspectorWidgets`, ставит `buildingInspector = true` и строит тело инспектора для любого типа ноды (реплика/триггер type 2, переменные 4, перемещение 11, катсцена 14, вход 0) через `addRenderableWidget` (Screen-дети) + `inspectorWidgets`. Локальный курсор Y сбрасывается в начале каждого вызова (`inspectorY + 24 - sidebarScroll`); `sidebarHeight` при разметке тела не читается — пишется только в конце (`y + sidebarScroll - inspectorY - 24`) и используется только для скролла/фона. `sidebarHeight` не сбрасывается в начале, но и не влияет на placement тела.
-* Единственное 263-изменение, затрагивающее экран — миксин `CutsceneGraphFadeUiMixin263` (`@Inject at RETURN` на `widgets()`). Для CUTSCENE-нод он добавляет две fade-кнопки в `inspectorWidgets`, делает `sidebarHeight += 40` и ставит `visible` fade-кнопок через `fitsInspector`. Не очищает `inspectorWidgets`, не трогает `buildingInspector`, не скрывает и не переставляет существующие контроллы (подтверждено UI-guard в `tests/gate_build263.py`).
-* Путь выбора ноды (`mouseClicked` → `NpcAutoAiGraphUi255.mouseClicked` → `settledlands$mouseClickedOriginal` → `selected`/`sidebarScroll = 0` → `widgets()`) класса сборки 255, не затронут Build 263.
+Причина найдена по сравнению байткода Build 262 vs Build 263 (tools/disasm.py) и подтверждена пользовательским тестом диагностического JAR:
 
-Вывод: статически пустое тело инспектора НЕ объясняется ни байткодом `widgets()` (идентичен 262), ни структурой миксина (он не может скрыть уже построенное тело). Остаётся единственный подозреваемый — выполнение миксина `CutsceneGraphFadeUiMixin263` под реальным NeoForge Mixin (трансформация `widgets()` itself, `@Shadow private void widgets() {}` + `@Inject at RETURN`), которое статически не воспроизводить без запуска игры. Свежий `latest.log` от запуска Build 263 (`settledlands-0.8.0-build263-cutscene-fade(4).jar`, строка 3880 лога: `[settledlands] loaded 0.8.0-build263-cutscene-fade`) проанализирован:
-* мод загружен успешно, ошибок Mixin/ClassNotFound/NoSuchMethod/VerifyError для `NpcDialogueGraphScreen`, `CutsceneGraphFadeUiMixin263`, `widgets`, инспектора в логе нет;
-* ошибки `ClassNotFound` в логе относятся только к чужим модам (fieldguide, immediatelyfast, mekanism и т.д.), не к SettledLands.
-Вывод: под реальным NeoForge Mixin миксин не падал и не скрывал тело инспектора. Статическая причина пустого тела не найдена ни по байткоду, ни по логу.
+`CutsceneGraphFadeUiMixin263` делал `sidebarHeight += 40` при **каждом** вызове `widgets()` для CUTSCENE-ноды. Поле `sidebarHeight` не сбрасывается в начале `widgets()` — базовый метод читает его при разметке тела (позиции виджетов, скролл-бар, фон) и перезаписывает только в **конце** метода (`sidebarHeight = y + sidebarScroll - inspectorY - 24`). Из-за накопления +40 при каждом перевыборе ноды (init, выбор ноды, undo/redo, изменение fade-переключателя) базовый метод читал завышенное «старое» `sidebarHeight`, виджеты уезжали за пределы инспектора, тело выглядело пустым (заголовок «Реплика #0» оставался, так как рисуется отдельно).
 
-Диагностический эксперимент (только для поиска причины, не фикс): временно закомментировать строку `CutsceneGraphFadeUiMixin263` в блоке `client` файла `settledlands.mixins.json`, перезагрузить игру и проверить, появляется ли тело инспектора у выбранной ноды.
-* Если тело появляется — причина в трансформации `widgets()` миксином `CutsceneGraphFadeUiMixin263` под реальным Mixin; нужно разбирать байткод смешанного класса.
-* Если тело остаётся пустым — причина не в миксине fade, искать дальше.
-После эксперимента вернуть миксин на место, не выпускать 후보 без понимания причины.
+**Фикс:** в `src/build263/dev/settledlands/mixin/CutsceneGraphFadeUiMixin263.java` удалена строка `sidebarHeight += 40`. Fade-кнопки по-прежнему добавляются в `inspectorWidgets` и как Screen-дети через `addRenderableWidget`; `sidebarHeight` оставлен базовому методу, который пересчитывает его корректно при каждом проходе. Функционал fade-переключателей не пострадал.
 
-Собран диагностический JAR `settledlands-0.8.0-build263-cutscene-fade-diag.jar`, 2 252 523 байт, SHA-256 `2da16c8ec809d62b075c246687c04ac9e51d98b1252a1ef9cced2b708e295ce9`. Отличается от кандидата c80 только удалением `CutsceneGraphFadeUiMixin263` из `client` списка `settledlands.mixins.json`; все 11 классов fade остаются, `CutsceneCameraFadePlaybackMixin263` (fade sequencing) не тронут. `validate_jar.py` vs Build 262: ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ, 435 записей, 388 классов, testzip OK.
+Проверено:
+- `validate_jar.py` vs Build 262: ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ, 435 записей, 388 классов, diff только в ожидаемых 7 записях.
+- `tests/gate_build263.py`: BUILD 263 GATE: PASS.
+- `tests/gate_backup263.py`: BUILD 263 BACKUP GATE: PASS (источник ZIP воспроизводится, 670/670 файлов).
 
-Fade-требования сохранены: миксины камеры/overlay не трогались, два независимых toggle, 500 мс, камера после полного чёрного, fade-in после playing-signal callback.
+Fade-требования сохранены: два независимых toggle, 500 мс на фазу, камера после полного затемнения, fade-in после playing-signal. `CutsceneCameraFadePlaybackMixin263` не тронут.
+
+Диагностический JAR `settledlands-0.8.0-build263-cutscene-fade-diag.jar` (без миксина entirely) оставлен в репозитории для справки.
+
+## Build 262 — исторический плавный разворот после остановки, случайный поворот торса; gates PASS
 
 ## Build 262 — исторический плавный разворот после остановки, случайный поворот торса; gates PASS
 
