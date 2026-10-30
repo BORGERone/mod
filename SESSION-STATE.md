@@ -1,5 +1,21 @@
 # SettledLands — SESSION-STATE, 30.10.2026
 
+## Build 257: два полных build-257 gate PASS; готов к игровой проверке
+
+Текущий запрос: сохранить боевой темп NPC, замедлить спокойную ходьбу вдвое, увеличить стоянку на месте, исправить автоатаку hostile-мобов при включённом toggle, брать HP/урон/скорость из индивидуальной ноды «Характеристики». Сохранить UI Auto-AI в config/graph, Ivy melee combos без fireballs, wandering вокруг исходной home точки с возвратом, защиты трупов/гробов/поводка/вещей и остальное из builds 237–256. Ответы по-русски; видео не просить.
+
+**JAR 257:** `settledlands-0.8.0-build257-calm-ai-stats.jar`, 2 256 459 байт, SHA-256 `93013d8380263c3fdc4f5245a6ce4178f30bcda61478081bd9d10c93e42c45b1`. Детерминированно собран точечно от точного build 256 (`024937159ceb6f7173591dacf30d0c46b2fcc5233e8b495e4918d56b715c2021`). Изменены ровно четыре записи: `GuideNpc.class`, `NpcAutoAiEngine255.class`, `META-INF/neoforge.mods.toml`, `settledlands-patch-info.txt`; остальные 419 JAR entries идентичны. В GuideNpc тронуты только методы `customServerAiStep()V` и `walkingNavigationSpeed(Z)D`.
+
+Поведение: дополнительный navigation factor 0.5 в спокойном состоянии и 1.0 в активном бою (сохранение прежнего combat pace), при node speed 5/10/20 сохраняется индивидуальная шкала. Stop в достигнутой точке прогулки — 400–900 ticks (20–45 секунд). Stats из своего graph node синхронизируются в атрибуты NPC: `MAX_HEALTH` `2 × health` HP; урон и скорость — множители `damage/10`, `speed/10`; снижение максимума clamping current HP. Для включённой hostile автоатаки legacy AI ветка теперь пропускает старый Ivy tick и отдаёт тик Auto-AI; выключенный флаг сохраняет прежнюю ветку. Автономное melee, без fireballs.
+
+**Основной gate:** `tests/gate_build257.py` — PASS, лог `GATE-RESULT-257.txt`. **Независимый gate:** тот же скрипт PASS из распакованного ZIP, лог `GATE-BACKUP-RESULT-257.txt`. Проверены deterministic rebuild bytes, exact four-entry diff, structural validators, Java 21 verifier, inherited build-255 JVM regressions и 4/4 verifier-valid mutants. Отдельно SHA256 подтверждены исторические полные gate 256 в основном checkout и чистой распаковке; они покрывают унаследованную цепочку 255–237/HANDOFF §8, но не запускались заново в build-257 gate. Реальные Minecraft/NeoForge и визуальная проверка не выполнялись.
+
+**Source backup:** `SettledLands-Build257-CalmAiStats-Source.zip`. 559 записей manifest OK; детерминированная упаковка побайтно воспроизводится; полный gate из независимой распаковки PASS. Итоговые размеры/SHA JAR, ZIP и gate logs — во внешнем `SHA256SUMS-build257.txt` (не входит в ZIP). Внешние Gson source/JDK не включены.
+
+Код/инструменты: `src/build257/dev/settledlands/npc/NpcAutoAiEngine255.java`, `tools/gen_api257.py`, `tools/patch_auto_ai257.py`, `tests/jvm_auto_ai257.py`, `tests/mutants257.py`, `tests/gate_build257.py`, `tools/make_backup257.py`. Docs: `README-Build257-CalmAiStats-RU.txt`, `API-COMPAT-257-RU.md`, `CHECKLIST-TEST-BUILD257-RU.md`, `BACKUP-257-RU.txt`.
+
+Финальные `sha256sum -c SHA256SUMS-build257.txt`, manifest, побайтовая воспроизводимость ZIP и повторный независимый gate из распаковки прошли. Следующий необходимый шаг — игровой тест на копии мира по чеклисту (один JAR SettledLands), без видео; при проблеме нужны точные шаги и свежий `latest.log`. Git-изменения сохранить только в текущей ветке `arena/24676dbe-mod`; в финальном ответе представить JAR через `present_file` последним.
+
 ## Build 256: готов к игровой проверке (полный gate и независимый backup gate PASS)
 
 По итогам игровой проверки **build 255** пользователь поставил три задачи для **build 256** от точной базы **`settledlands-0.8.0-build255-auto-ai.jar`** (`2 215 570` Б, SHA-256 `7866e20a75eb5ef53e254e8e34a5eacc155d0b3ac768b99977ad4d95358b6541`):

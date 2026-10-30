@@ -1,0 +1,27 @@
+Build 257 — резервная копия и воспроизведение
+
+Архив `SettledLands-Build257-CalmAiStats-Source.zip` содержит исходный код, скрипты сборки, JVM-тесты и четыре negative controls, полный JAR build 257, точную базу 256, JAR 255 и предыдущий backup 256 с унаследованными входами и gate-результатами. `BACKUP-MANIFEST.sha256` позволяет сверить все файлы. Не включены внешние Gson sources, JDK, сторонние моды/ресурспаки и пользовательские игровые данные/logs.
+
+Для полного повторного build-257 gate нужны Python 3.11+, Java 21 и отдельный исходный архив Gson 2.10.1 (тестовый input, SHA-256 `e358710d663ca799101a51d0568ccc6dbd30be9bc55b1a85b1a21a93e96e8a9b`). Из корня распакованного архива:
+
+```bash
+sha256sum -c BACKUP-MANIFEST.sha256
+python3 tests/gate_build257.py \
+  --base settledlands-0.8.0-build256-npc-fp-corpse.jar \
+  --jar settledlands-0.8.0-build257-calm-ai-stats.jar \
+  --java /path/to/java21 \
+  --gson-source /path/to/gson-2.10.1.tar.gz
+```
+
+Ожидается `BUILD 257 GATE: PASS`. Gate повторно собирает патч от точной базы 256 и сравнивает побайтно, проверяет структурные/контрактные свойства, Java 21, унаследованные тесты Auto-AI 255, build-257 runtime scenarios и четыре verifier-valid негативных контроля. Он также проверяет опубликованные checksum и два результата полного build-256 gate, которые сохранены в архиве.
+
+Собрать архив повторно в рабочем checkout:
+
+```bash
+python3 tools/make_backup257.py \
+  --base256-zip SettledLands-Build256-NpcFpCorpse-Source.zip \
+  --out /tmp/reproduced257.zip
+cmp SettledLands-Build257-CalmAiStats-Source.zip /tmp/reproduced257.zip
+```
+
+Полноценный Minecraft/NeoForge, конкретные сторонние моды и визуальная проверка не выполнялись; перед установкой используйте копию мира и `CHECKLIST-TEST-BUILD257-RU.md`.

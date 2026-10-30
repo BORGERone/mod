@@ -1,0 +1,12 @@
+OK verify recorded build-256 release and dual-gate checksums
+OK exact build 256 base and independently repeated prior full release gates
+OK deterministic Build 257 rebuild
+OK reproducible candidate sha256=93013d8380263c3fdc4f5245a6ce4178f30bcda61478081bd9d10c93e42c45b1 size=2256459
+OK base-256 validator calibration
+OK candidate structural validator
+OK candidate ZIP/TOML/assets/mixins validator
+OK exact four-entry diff; only two GuideNpc methods changed; engine has no client references
+OK Java 21 verifier declarations for new NPC AI paths
+OK Java 21 inherited Auto-AI 255 and new 257 end-to-end scenarios under -Xverify:all
+OK four verifier-valid negative controls for stats sync, calm pace, legacy priority, and dwell
+BUILD 257 GATE: PASS (calm walk half-speed; combat pace preserved; 20–45 s dwell; hostile toggle priority; node-backed NPC HP/damage/speed; inherited build 255 scenarios; four verifier-valid mutants killed; actual Minecraft/NeoForge/visual test NOT run)
