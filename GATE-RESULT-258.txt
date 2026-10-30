@@ -1,0 +1,11 @@
+OK exact Build 257 ancestry and recorded prior gates; this hotfix adds real ABI conformance
+OK deterministic build-258 ABI hotfix rebuild
+OK reproducible hotfix sha256=15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e size=2256623
+OK base-257 validator calibration
+OK hotfix structural validator
+OK hotfix ZIP/TOML/assets/mixins validator
+OK exact three-entry hotfix; only ABI changed, call descriptor is removeModifier(ResourceLocation)Z
+OK Java 21 verification of NPC synchronization and navigation
+OK Java 21 functional scenarios with exact boolean AttributeInstance ABI and default-stat removal path
+OK four verifier-valid Auto-AI/Stats negative controls
+BUILD 258 GATE: PASS (1.21.1 removeModifier(ResourceLocation)Z; default and changed Stats; preserved Auto-AI behavior; 4 mutants killed; full game not run)

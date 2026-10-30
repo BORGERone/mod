@@ -2,19 +2,15 @@
 
 ## 1. Текущая сборка
 
-**Build 257 — основной и независимый backup gates PASS, ожидает игровой проверки:** `settledlands-0.8.0-build257-calm-ai-stats.jar`, 2 256 459 байт, SHA-256 `93013d8380263c3fdc4f5245a6ce4178f30bcda61478081bd9d10c93e42c45b1`; source ZIP `SettledLands-Build257-CalmAiStats-Source.zip`. Итоговые размеры/SHA обоих артефактов указаны во внешнем `SHA256SUMS-build257.txt`. Собрана детерминированно от точной базы build 256 (`024937159ceb6f7173591dacf30d0c46b2fcc5233e8b495e4918d56b715c2021`). Build-257 gate проверяет побайтное воспроизведение, точный diff, структуру/JVM, наследованные AI 255 сценарии и 4 verifier-valid мутанта: Stats sync, половинный спокойный темп, приоритет автоатаки и увеличенное ожидание. Логи — `GATE-RESULT-257.txt` и `GATE-BACKUP-RESULT-257.txt`; SHA — `SHA256SUMS-build257.txt`.
+**Build 258 — hotfix вылета, основной и независимый JVM-gate PASS:** `settledlands-0.8.0-build258-stats-abi-fix.jar`. Он заменяет ошибочный build 257: в crash log пользователя Minecraft 1.21.1 / NeoForge 21.1.253 обнаружено `NoSuchMethodError` на `AttributeInstance.removeModifier(ResourceLocation)`. Реальная функция возвращает `boolean`; build 257 вызывал её с `void`. Build 258 исправляет descriptor на точный `(...)Z`, `GuideNpc` и остальной код AI не переписаны. SHA/размер JAR, source ZIP и gate logs будут перечислены во внешнем `SHA256SUMS-build258.txt`.
 
-Прочитать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`; затем `SESSION-STATE.md`, `README-Build257-CalmAiStats-RU.txt`, `API-COMPAT-257-RU.md`, `CHECKLIST-TEST-BUILD257-RU.md` и `BACKUP-257-RU.txt`. Видео у пользователя не просить.
+Прочитать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`; затем `SESSION-STATE.md`, `README-Build258-StatsAbiFix-RU.txt`, `API-COMPAT-258-RU.md`, `CHECKLIST-TEST-BUILD258-RU.md` и `BACKUP-258-RU.txt`. Видео у пользователя не просить.
 
-## 2. Что добавлено в 257 поверх 256
+## 2. Срочное действие
 
-- Спокойная ходьба NPC — половина его привычного темпа; боевой темп build 255 сохранён. Оба темпа используют скорость из ноды «Характеристики» данного NPC.
-- Увеличено время стоянки в прогулочной точке до 20–45 секунд; возвращение домой и прежние приоритеты маршрута/скриптов сохранены.
-- Исправлен конфликт включённой автоатаки и legacy Ivy AI: включённый флаг больше не отдаёт ход старому боевому тику, враждебная цель атакуется ближним боем, без фаерболов.
-- HP, урон и скорость синхронизируются из индивидуальной Stats-ноды конкретного NPC; изменение максимума здоровья ограничивает текущие HP.
-- Сохранены build 255 настройки в конфиге и редакторе графа, комбо Иви, и подтверждённые ранее исправления 237–256.
+Не запускать build 257 (`settledlands-0.8.0-build257-calm-ai-stats.jar`, SHA `93013d8380263c3fdc4f5245a6ce4178f30bcda61478081bd9d10c93e42c45b1`): он падает на первом server AI tick GuideNpc при синхронизации Stats. Удалить его из `mods`, поставить только build 258 и сначала открыть копию мира.
 
-Предыдущая сборка 256 и полный gate доступны ниже как историческая база. Игровой Minecraft/NeoForge не запускался. Перед тестом сделать копию мира, установить только один JAR SettledLands и пройти `CHECKLIST-TEST-BUILD257-RU.md`.
+Build 258 сохраняет функцию 257: спокойная скорость половинная, боевая прежняя; стоянка 20–45 секунд; автоатака hostile-мобов и per-NPC HP/урон/скорость из Stats-ноды. Исправлены и повторно протестированы значения 10/10/10, смена параметров и возврат к 10.
 
 ## Историческая документация build 256
 

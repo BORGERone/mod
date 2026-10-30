@@ -1,0 +1,4 @@
+15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e  settledlands-0.8.0-build258-stats-abi-fix.jar
+7f16330b621eb928567e9c186fcda60d12345c9c54a7c1ac5f441285de2d9688  SettledLands-Build258-StatsAbiFix-Source.zip
+f7bf6a236e9dcc59d5ce027b8a91abe233eee350ebcd92ef3a6b45c7c0bf8bd8  GATE-RESULT-258.txt
+f7bf6a236e9dcc59d5ce027b8a91abe233eee350ebcd92ef3a6b45c7c0bf8bd8  GATE-BACKUP-RESULT-258.txt

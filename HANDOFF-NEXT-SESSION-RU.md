@@ -1,16 +1,26 @@
-# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально 257
+# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально 258
 
-Текущий запрос пользователя: сохранить боевую скорость NPC, ходить в спокойном состоянии вдвое медленнее, дольше ждать на месте, исправить автоатаку hostile-мобов и брать HP/урон/скорость из индивидуальной Stats-ноды. Также остаются все ранее согласованные механики и UI builds 237–256. Ответы по-русски; видео не просить.
+Пользователь сообщил «вылет» и приложил `/tmp/arena-coding-uploads/latest-2.log` (SHA-256 `9a4bb92e96813944bddebbe335317d9609eae734e1a85c39b97eae4bc349291a`). Лог — Minecraft 1.21.1, NeoForge 21.1.253, FML 4.0.45, Java 21.0.7; фатальная причина серверного `Ticking entity`:
 
-**Build 257:** `settledlands-0.8.0-build257-calm-ai-stats.jar`, 2 256 459 байт, SHA-256 `93013d8380263c3fdc4f5245a6ce4178f30bcda61478081bd9d10c93e42c45b1`. Точная база — build 256 (`024937159ceb6f7173591dacf30d0c46b2fcc5233e8b495e4918d56b715c2021`). Изменены ровно четыре записи: `GuideNpc.class`, `NpcAutoAiEngine255.class`, `META-INF/neoforge.mods.toml`, `settledlands-patch-info.txt`; остальные 419 записей совпадают с базой. В `GuideNpc` изменены только `customServerAiStep()V` и `walkingNavigationSpeed(Z)D`.
+```text
+NoSuchMethodError: void AttributeInstance.removeModifier(ResourceLocation)
+  at NpcAutoAiEngine255.setModifier
+  at NpcAutoAiEngine255.syncStatsFromGraph
+  at NpcAutoAiEngine255.syncStats
+  at GuideNpc.customServerAiStep
+```
 
-Реализация: в спокойном движении применяется коэффициент 0.5 к node-scaled скорости, в бою сохраняется полная скорость build 255. Остановка в каждой прогулочной точке — 400–900 ticks (20–45 секунд). Статы конкретного NPC синхронизируются в атрибуты: HP `2 × health`, множитель урона `damage / 10`, скорость `speed / 10`; при снижении максимума текущее HP ограничивается. Причина провала автоатаки устранена на проверенном конфликтном пути: при включённом флаге `legacyAiMode` отдаёт управление Auto-AI, не позволяя прежнему Ivy combat tick перехватить ход; сохранён обычный legacy путь при выключенном флаге. Автоатака выполняется ближними комбо, фаерболы не добавлялись. Настройки в config и graph из 255 сохранены.
+Диагноз подтверждён: `AttributeInstance.removeModifier(ResourceLocation)` в MC 1.21.1 возвращает `boolean`, а build 257 был скомпилирован по ошибочному compile-time stub с `void`. Моя фикстура повторила эту ошибку стенда, поэтому прежние synthetic JVM tests не выявили binary-linkage несовпадение. Это моя ошибка; настоящий crash log доказал несовместимый descriptor. Другие Recipe/Sable/JEI warnings/errors в логе не находятся в этом fatal stack и не являются причиной данного падения.
 
-**Оба build-257 gate пройдены:** основной `GATE-RESULT-257.txt` и независимый повтор из распакованного source backup `GATE-BACKUP-RESULT-257.txt`. Gate проверяет детерминированную побайтную пересборку, exact diff/структуру, Java 21 `-Xverify:all`, наследованные AI-255 сценарии и четыре verifier-valid отрицательных мутанта (Stats sync, calm half-speed, legacy priority, dwell). В основной gate проверены исходные checksum и оба результата полного build-256 gate. Это не повтор всей исторической цепочки в одной команде: build-256 gate 255–237 и его независимый повтор подтверждаются сохранёнными логами/SHA. Полноценная Minecraft/NeoForge/визуальная проверка не запускалась.
+**Build 257 отозван — не устанавливать:** `settledlands-0.8.0-build257-calm-ai-stats.jar`, SHA `93013d8380263c3fdc4f5245a6ce4178f30bcda61478081bd9d10c93e42c45b1`. Его исходные требования по скорости/паузе/автоатаке/Stats остаются целями hotfix.
 
-Source ZIP `SettledLands-Build257-CalmAiStats-Source.zip` содержит исходники, инструменты и точный JAR. Проверены manifest 559/559, побайтовая воспроизводимость и полный build-257 gate из независимой распаковки. Итоговые размеры/SHA ZIP, JAR и gate-логов записаны во внешнем `SHA256SUMS-build257.txt` (сам checksum-файл не входит в ZIP). Gson source и Java 21 нужны внешне и не входят в архив; сторонние моды, пользовательские логи/ресурсы не упакованы.
+**Build 258:** `settledlands-0.8.0-build258-stats-abi-fix.jar`, 2 256 623 байта, SHA-256 `15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e`; точная база — build 257. Изменены ровно три JAR entries: `NpcAutoAiEngine255.class`, `META-INF/neoforge.mods.toml`, `settledlands-patch-info.txt`; `GuideNpc` и остальные 420 записей идентичны базе. Engine теперь ссылается на `removeModifier(ResourceLocation)Z`, результат boolean корректно снимается со стека.
 
-Следующий шаг — игровая проверка на копии мира по `CHECKLIST-TEST-BUILD257-RU.md`, один JAR SettledLands в `mods`. Если проблема — свежий `logs/latest.log` и точные шаги; видео не нужно. Порядок ответа/выдачи: короткий чейнджлог, кликабельная ссылка на JAR перед ZIP, размеры и SHA для обоих, затем основной JAR открыть через `present_file` последним. Работать и пушить только в закреплённую ветку `arena/24676dbe-mod`.
+`tests/gate_build258.py` — PASS на Java 21 и в основном checkout, и из независимой распаковки source ZIP; тестирует правильный descriptor, default Stats 10/10/10, применение и удаление модификаторов при возврате к 10, наследуемые сценарии Auto-AI 255, exact diff и 4 verifier-valid negative controls. Логи: `GATE-RESULT-258.txt`, `GATE-BACKUP-RESULT-258.txt`; checksum: `SHA256SUMS-build258.txt`. Gate 258 исправляет точную причину crash log, но не является повторным реальным full-modpack запуском пользователя. Полноценный Minecraft/NeoForge после hotfix не запускался.
+
+Source ZIP `SettledLands-Build258-StatsAbiFix-Source.zip` включает исходники/тесты, точную базу 257 и новый JAR; проверить `BACKUP-MANIFEST.sha256`. Перед выдачей — независимый распакованный gate и воспроизводимость ZIP. Не включать присланный `latest-2.log` в Git/backup; его checksum и итог причины записаны выше.
+
+Дальше: удалить build 257 из `mods`, поставить только build 258; сначала сделать копию мира. Использовать `CHECKLIST-TEST-BUILD258-RU.md`, попросить кратко подтвердить, что мир загрузился и NPC тик не приводит к вылету. Если снова упадёт — свежие `latest.log` и crash report; видео не просить. Сохранить все договорённости/mechanics 237–256. Работать и пушить только `arena/24676dbe-mod`; JAR-ссылка перед ZIP, SHA/размер обоих, JAR открыть через `present_file` последним.
 
 ## История build 254
 

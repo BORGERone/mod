@@ -1,0 +1,16 @@
+Build 258 — резервная копия и воспроизведение
+
+`SettledLands-Build258-StatsAbiFix-Source.zip` содержит исходник build 258, API silhouette с правильным ABI, тесты, инструменты, точную базу JAR 257 и hotfix JAR. В нём сохранены build-257 gate logs для ancestry; манифест перечисляет все файлы. Персональный crash log, Java и внешний Gson test-source не включены.
+
+Требуется Python 3.11+, Java 21 и отдельно Gson 2.10.1 source (SHA-256 `e358710d663ca799101a51d0568ccc6dbd30be9bc55b1a85b1a21a93e96e8a9b`). Из корня распакованного архива:
+
+```bash
+sha256sum -c BACKUP-MANIFEST.sha256
+python3 tests/gate_build258.py \
+  --base settledlands-0.8.0-build257-calm-ai-stats.jar \
+  --jar settledlands-0.8.0-build258-stats-abi-fix.jar \
+  --java /path/to/java21 \
+  --gson-source /path/to/gson-2.10.1.tar.gz
+```
+
+Ожидается `BUILD 258 GATE: PASS`. Для независимого повторения запускайте именно из распакованной копии. Minecraft/NeoForge modpack не запускается этим gate; реальную проверку выполняйте по `CHECKLIST-TEST-BUILD258-RU.md` на копии мира.
