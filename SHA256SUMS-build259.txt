@@ -1,0 +1,4 @@
+ab44f422a423a428f198ae4393e55ad8409857e10e85674d1ccfa093790f5da7  settledlands-0.8.0-build259-npc-combo-tuning.jar
+2e5145129cd9363b6358dc7fe5852ea2f445126c0fd441677d4cb47f793c7b27  SettledLands-Build259-NpcComboTuning-Source.zip
+a3bd3c792523c3ea877ab5ab8d6d4579ae959f8c101b5a05dfa35e78826cd5eb  GATE-RESULT-259.txt
+a3bd3c792523c3ea877ab5ab8d6d4579ae959f8c101b5a05dfa35e78826cd5eb  GATE-BACKUP-RESULT-259.txt

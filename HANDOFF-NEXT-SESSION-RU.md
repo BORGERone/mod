@@ -1,26 +1,23 @@
-# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально 258
+# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально build 259
 
-Пользователь сообщил «вылет» и приложил `/tmp/arena-coding-uploads/latest-2.log` (SHA-256 `9a4bb92e96813944bddebbe335317d9609eae734e1a85c39b97eae4bc349291a`). Лог — Minecraft 1.21.1, NeoForge 21.1.253, FML 4.0.45, Java 21.0.7; фатальная причина серверного `Ticking entity`:
+## Build 259: NPC movement/combo tuning поверх ABI hotfix 258
 
-```text
-NoSuchMethodError: void AttributeInstance.removeModifier(ResourceLocation)
-  at NpcAutoAiEngine255.setModifier
-  at NpcAutoAiEngine255.syncStatsFromGraph
-  at NpcAutoAiEngine255.syncStats
-  at GuideNpc.customServerAiStep
-```
+Новый запрос: NPC во время ходьбы не должен разворачивать корпус к игроку/цели (head-only было опционально; выбрано совсем не целиться во время движения), скорость ходьбы немного увеличить, атаки выполнять сериями Ivy вместо одиночного первого удара.
 
-Диагноз подтверждён: `AttributeInstance.removeModifier(ResourceLocation)` в MC 1.21.1 возвращает `boolean`, а build 257 был скомпилирован по ошибочному compile-time stub с `void`. Моя фикстура повторила эту ошибку стенда, поэтому прежние synthetic JVM tests не выявили binary-linkage несовпадение. Это моя ошибка; настоящий crash log доказал несовместимый descriptor. Другие Recipe/Sable/JEI warnings/errors в логе не находятся в этом fatal stack и не являются причиной данного падения.
+**Build 259:** `settledlands-0.8.0-build259-npc-combo-tuning.jar`, 2 256 712 байт, SHA-256 `ab44f422a423a428f198ae4393e55ad8409857e10e85674d1ccfa093790f5da7`. Точная база — build 258 `settledlands-0.8.0-build258-stats-abi-fix.jar`, SHA `15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e`. Меняются ровно три JAR entries: `NpcAutoAiEngine255.class`, TOML, patch-info; остальные 420 entries, включая `GuideNpc.class` и анимационный рендер, идентичны базе.
 
-**Build 257 отозван — не устанавливать:** `settledlands-0.8.0-build257-calm-ai-stats.jar`, SHA `93013d8380263c3fdc4f5245a6ce4178f30bcda61478081bd9d10c93e42c45b1`. Его исходные требования по скорости/паузе/автоатаке/Stats остаются целями hotfix.
+Решения реализации:
+- Во время navigation в `stepCombat` больше не вызываются `faceTarget` и `LookControl.setLookAt(target,...)`; целевой взгляд (включая head-only) во время ходьбы не задаётся. В стационарной фазе боевого действия facing сохранён; навигационное движение должно дать модели корпус по направлению движения.
+- Спокойный коэффициент `navigationSpeedFactor`: `0.50 → 0.55` (+10%). Боевая скорость `1.0`, Stats multiplier, inverse movement-attribute compensation и общий stat-driven speed не менялись.
+- `pickMeleeCombo` всегда выбирает `JAB_RIGHT_CROSS` или `JAB_JAB_HOOK`; оба используют существующие Ivy multi-hit clips/impact ticks. Дальний lunge также запускает одну из серий; короткое скольжение импульса сохранено. Отдельный dodge и его анимация сохранены.
 
-**Build 258:** `settledlands-0.8.0-build258-stats-abi-fix.jar`, 2 256 623 байта, SHA-256 `15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e`; точная база — build 257. Изменены ровно три JAR entries: `NpcAutoAiEngine255.class`, `META-INF/neoforge.mods.toml`, `settledlands-patch-info.txt`; `GuideNpc` и остальные 420 записей идентичны базе. Engine теперь ссылается на `removeModifier(ResourceLocation)Z`, результат boolean корректно снимается со стека.
+`tests/gate_build259.py` прошёл в основном дереве и независимо из source ZIP: deterministic rebuild, exact diff, boolean ABI, Java 21 verification, fixture с первым и follow-up hit, Stats 10/10/10 и обновлениями, наследуемый Auto-AI, 4 verifier-valid mutants. Логи: `GATE-RESULT-259.txt`, `GATE-BACKUP-RESULT-259.txt`; checksums: `SHA256SUMS-build259.txt`. Реальный Minecraft/NeoForge/full modpack **не запускался** — не заявлять игровую проверку.
 
-`tests/gate_build258.py` — PASS на Java 21 и в основном checkout, и из независимой распаковки source ZIP; тестирует правильный descriptor, default Stats 10/10/10, применение и удаление модификаторов при возврате к 10, наследуемые сценарии Auto-AI 255, exact diff и 4 verifier-valid negative controls. Логи: `GATE-RESULT-258.txt`, `GATE-BACKUP-RESULT-258.txt`; checksum: `SHA256SUMS-build258.txt`. Gate 258 исправляет точную причину crash log, но не является повторным реальным full-modpack запуском пользователя. Полноценный Minecraft/NeoForge после hotfix не запускался.
+Source ZIP: `SettledLands-Build259-NpcComboTuning-Source.zip`; включает точный base-258 JAR, build-259 JAR, исходники, builder и tests. Проверить `BACKUP-MANIFEST.sha256` и независимую повторяемость ZIP. Инструкции повтора — `BACKUP-259-RU.txt`.
 
-Source ZIP `SettledLands-Build258-StatsAbiFix-Source.zip` включает исходники/тесты, точную базу 257 и новый JAR; проверить `BACKUP-MANIFEST.sha256`. Перед выдачей — независимый распакованный gate и воспроизводимость ZIP. Не включать присланный `latest-2.log` в Git/backup; его checksum и итог причины записаны выше.
+Следующий игровой шаг: копия мира, только build 259 в `mods`; проверить body направление на пути к hostile цели, спокойную скорость, два удара в Ivy-комбо/последовательность при lunge, Stats, Auto-AI, wandering/return, обычный ABI-тест. Чеклист `CHECKLIST-TEST-BUILD259-RU.md`. Видео не просить; если падает — свежие `latest.log`/crash report. Все ранее согласованные механики 237–258 сохранять.
 
-Дальше: удалить build 257 из `mods`, поставить только build 258; сначала сделать копию мира. Использовать `CHECKLIST-TEST-BUILD258-RU.md`, попросить кратко подтвердить, что мир загрузился и NPC тик не приводит к вылету. Если снова упадёт — свежие `latest.log` и crash report; видео не просить. Сохранить все договорённости/mechanics 237–256. Работать и пушить только `arena/24676dbe-mod`; JAR-ссылка перед ZIP, SHA/размер обоих, JAR открыть через `present_file` последним.
+Работать/пушить только ветку `arena/24676dbe-mod`. При выдаче jar — ссылка на jar первой, source ZIP второй, SHA+размер, JAR открыть через `present_file` последним.
 
 ## История build 254
 

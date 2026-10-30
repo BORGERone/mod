@@ -1,16 +1,16 @@
 # SettledLands — SESSION-STATE, 30.10.2026
 
-## Build 258 — hotfix собран, оба JVM gate PASS; нужен повтор пользователя
+## Build 259 — готов к игровой проверке; JVM gate и независимый backup gate PASS
 
-Пользователь приложил `latest-2.log` с вылетом на build257. Файл SHA-256 `9a4bb92e96813944bddebbe335317d9609eae734e1a85c39b97eae4bc349291a`, Minecraft 1.21.1 / NeoForge 21.1.253 / Java 21.0.7. Fatal `NoSuchMethodError: void AttributeInstance.removeModifier(ResourceLocation)` из `NpcAutoAiEngine255.setModifier -> syncStatsFromGraph -> syncStats -> GuideNpc.customServerAiStep`. В 1.21.1 реальный `removeModifier(ResourceLocation)` возвращает boolean. Build257 API silhouette и его fixture ошибочно объявили `void`; synthetic тесты воспроизводили одинаковую ошибку и не проверяли production ABI. Это моя ошибка в тестовом контракте/сборке; именно её следует признать. Другие resource/recipe/Sable/JEI ошибки не находятся в фатальном стеке.
+Пользователь попросил: во время ходьбы не поворачивать корпус NPC к игроку/цели; head-only было необязательным, выбрано вообще не задавать взгляд на цель при движении; слегка увеличить скорость; использовать серии атак Иви, а не одиночный первый удар.
 
-**Build257 отозван, не предлагать запускать повторно:** JAR SHA `93013d8380263c3fdc4f5245a6ce4178f30bcda61478081bd9d10c93e42c45b1`.
+Кандидат `settledlands-0.8.0-build259-npc-combo-tuning.jar`, 2 256 712 байт, SHA-256 `ab44f422a423a428f198ae4393e55ad8409857e10e85674d1ccfa093790f5da7`, точная база build 258 SHA `15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e`. Три-entry diff: Engine, TOML, patch-info; все 420 прочих записей идентичны.
 
-Hotfix **build258** от точного build257: `settledlands-0.8.0-build258-stats-abi-fix.jar`, 2 256 623 байта, SHA-256 `15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e`. Ровно 3 entries: Engine class, `META-INF/neoforge.mods.toml`, patch-info; `GuideNpc` и остальные 420 entries byte-identical. Вызов исправлен на `(ResourceLocation)Z`; значение boolean снимается со стека. Поведение pace/wait/hostile toggle/Stats не изменено.
+Во время combat navigation удалены `faceTarget` и `LookControl.setLookAt(target,...)`; `faceTarget` при остановке и атаке оставлен. Спокойный navigation speed `0.50 → 0.55` (+10%), combat pace `1.0` и Stats scaling сохранены. Melee combo picker выбирает только multi-hit `orthodox_left_jab_right_cross` или `orthodox_jab_jab_hook`; lunge также запускает одну из серий, impulse glide сохраняется. В тесте JVM реально подтверждён follow-up удар.
 
-Основной и независимый из ZIP gate 258 PASS: `GATE-RESULT-258.txt`, `GATE-BACKUP-RESULT-258.txt`; проверить exact source ZIP manifest/byte-for-byte reproduction и `SHA256SUMS-build258.txt`. Gate проверяет реальную boolean ABI стенда, default Stats 10/10/10, обновление и удаление всех modifiers при возврате к 10, наследуемые AI255 тесты, 4 verifier-valid mutants и воспроизводимую сборку. Это точечно закрывает crash stack, но пользовательский full modpack после hotfix не запускался.
+Основной и распакованный source ZIP gates прошли: `GATE-RESULT-259.txt`, `GATE-BACKUP-RESULT-259.txt`; SHA/размеры в `SHA256SUMS-build259.txt`. Путь воспроизводится `tests/gate_build259.py`, четыре verifier-valid mutants убиты. ABI hotfix 258 сохранён. Это не игровой тест: настоящий Minecraft/NeoForge/full modpack не запускался.
 
-Текущий игровой шаг: удалить build257, поставить только build258, проверить на копии мира; попросить кратко подтвердить, что world load / NPC tick не падает и Stats-тест проходит. Видео не нужно. Если снова падает — свежие latest.log и crash report. Branch только `arena/24676dbe-mod`; в ответе сначала ссылка на JAR, затем ZIP, размеры/SHA, JAR открыть через `present_file` последним.
+Артефакты: `SettledLands-Build259-NpcComboTuning-Source.zip`, `BACKUP-259-RU.txt`, `CHECKLIST-TEST-BUILD259-RU.md`, `API-COMPAT-259-RU.md`, `README-Build259-NpcComboTuning-RU.txt`. Следующий шаг — пользовательская проверка на копии мира и только build259: ориентация корпуса при подходе, скорость ходьбы, оба удара combo, Stats/Auto-AI/wander/return и запуск после ABI hotfix. Видео не просить. Ветка строго `arena/24676dbe-mod`.
 
 ## Build 256: готов к игровой проверке (полный gate и независимый backup gate PASS)
 

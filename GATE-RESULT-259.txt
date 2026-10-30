@@ -1,0 +1,10 @@
+OK exact Build 258 ancestry and recorded gate evidence
+OK deterministic Build 259 rebuild
+OK reproducible JAR sha256=ab44f422a423a428f198ae4393e55ad8409857e10e85674d1ccfa093790f5da7 size=2256712
+OK structural JAR validator
+OK ZIP/TOML/assets/mixins validator
+OK three-entry diff; 1.21.1 boolean ABI preserved; movement does not target-face; multi-hit animations and 0.55 pace present
+OK Java 21 verification of AI and preserved Stats ABI
+OK Java 21 scenarios: default/changed Stats, combat target, Ivy combo follow-up hit, faster calm pace
+OK four verifier-valid Auto-AI/Stats regression mutants
+BUILD 259 GATE: PASS (body-target turning removed during navigation; calm speed +10%; multi-hit Ivy combos; 1.21.1 ABI retained; 4 mutants killed; full game not run)

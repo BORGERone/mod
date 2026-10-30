@@ -1,0 +1,16 @@
+Build 259 — резервная копия и воспроизведение
+
+`SettledLands-Build259-NpcComboTuning-Source.zip` включает документы, source build257–259, builder/gates, build258 base JAR, build259 JAR, необходимый предыдущий gate evidence и `BACKUP-MANIFEST.sha256`. Java и Gson source — внешние prerequisites, в ZIP не включены.
+
+Нужны Python 3.11+, Java 21 и Gson 2.10.1 source tarball с SHA-256 `e358710d663ca799101a51d0568ccc6dbd30be9bc55b1a85b1a21a93e96e8a9b`. Из корня распакованного ZIP:
+
+```bash
+sha256sum -c BACKUP-MANIFEST.sha256
+python3 tests/gate_build259.py \
+  --base settledlands-0.8.0-build258-stats-abi-fix.jar \
+  --jar settledlands-0.8.0-build259-npc-combo-tuning.jar \
+  --java /path/to/java21 \
+  --gson-source /path/to/gson-2.10.1.tar.gz
+```
+
+Ожидается `BUILD 259 GATE: PASS`. Build повторяется скриптом `tools/patch_auto_ai259.py`; gate сравнивает байты повторной сборки с JAR. Пак Minecraft/NeoForge этим не запускается: после установки на копию мира проверьте `CHECKLIST-TEST-BUILD259-RU.md`. Не утверждать, что игровой прогон уже выполнен.

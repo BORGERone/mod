@@ -1,22 +1,24 @@
-# AI-GUIDE — актуальное состояние build 258 (ABI hotfix после crash log)
+# AI-GUIDE — актуальное состояние build 259 (NPC movement/combo tuning)
 
 Сначала `START-HERE-RU.md` → `HANDOFF-NEXT-SESSION-RU.md` → этот файл; затем обновлять `SESSION-STATE.md`. Отвечать по-русски. Видео не просить.
 
-## Актуальный crash и отзыв build 257
+## Build 259 — актуальный кандидат
 
-Пользователь сообщил «вылет» и приложил свежий `latest-2.log`. Загружен Minecraft 1.21.1 / NeoForge 21.1.253 / Java 21.0.7, mod SettledLands build 257. Сервер упал в `GuideNpc.customServerAiStep` при `syncStats`; точный fatal — `NoSuchMethodError: void AttributeInstance.removeModifier(ResourceLocation)`. MCP 1.21.1 источник класса показывает `boolean removeModifier(ResourceLocation)`. Причина — неверный compile-only API stub в build257 и его synthetic fixture (обе объявили `void`), а не сторонний мод. Структурная/JVM fixture тестировала ошибочную сигнатуру и не выявила linkage mismatch. Признавать это явно, не обвинять пользователя/модпак.
+Пользователь попросил, чтобы NPC при ходьбе не поворачивал корпус на игрока/цель, немного увеличить скорость и заставить атаки идти Ivy-сериями. Head-only look был необязателен; выбрано не задавать взгляд на цель во время ходьбы.
 
-**Build 257 отозван.** JAR SHA `93013d8380263c3fdc4f5245a6ce4178f30bcda61478081bd9d10c93e42c45b1`; не советовать дальнейший запуск.
+`settledlands-0.8.0-build259-npc-combo-tuning.jar`: 2 256 712 байт, SHA `ab44f422a423a428f198ae4393e55ad8409857e10e85674d1ccfa093790f5da7`; точная база build258 SHA `15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e`. Только три JAR entries изменены: Engine class, TOML, patch-info; прочие 420 идентичны. На пути к цели больше не вызываются `faceTarget` и `LookControl.setLookAt(target,...)`; при атаке/остановке поворот на цель сохранён. Calm movement factor `0.50 → 0.55` (+10%), combat `1.0` сохранён. Every ordinary/dash attack selects one of existing multi-hit sequences: `orthodox_left_jab_right_cross` or `orthodox_jab_jab_hook`; impact arrays unchanged. Lunge impulse glide retained.
 
-## Build 258 hotfix
+Основной и распакованный backup gate 259 PASS: reproducible build; exact 3-entry diff; Java 21 linkage; runtime test confirms follow-up hit; Stats default/update/reset and inherited Auto-AI tests; 4 negative mutants. Логи `GATE-RESULT-259.txt` и `GATE-BACKUP-RESULT-259.txt`, checksum index `SHA256SUMS-build259.txt`. `SettledLands-Build259-NpcComboTuning-Source.zip` содержит reproducible source/tests и build258/259 JAR, manifest обязателен. Полный Minecraft/NeoForge/full modpack не запускался — просить пользователя протестировать на копии мира по `CHECKLIST-TEST-BUILD259-RU.md`; не называть JVM-fixture игровой проверкой.
 
-Точная база — build257. `settledlands-0.8.0-build258-stats-abi-fix.jar`, 2 256 623 байта, SHA `15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e`. Три изменённые записи: Engine class, TOML, patch-info. `NpcAutoAiEngine255` теперь вызывает `AttributeInstance.removeModifier(ResourceLocation)Z`; boolean результат игнорируется корректным `pop`. GuideNpc и весь остальной payload совпадают с базой. Версия 258 сохраняет 257-функции: спокойная скорость 1/2, боевой pace 100%, dwell 20–45 s, hostile toggle priority и Stats node-backed HP/damage/speed.
+Сохранять все остальные согласованные механики: Auto-AI hostile targets, Stats-driven HP/damage/speed, wander/return-home, melee animations, build258 boolean ABI fix и ранее согласованные функции. Текущая ветка `arena/24676dbe-mod`; только она для изменений/пуша. Перед ответом сверять SHA и размеры, давать jar-ссылку первой, ZIP второй, открыть JAR последним.
 
-**Гейт 258 пройден дважды**, в checkout и в независимой чистой распаковке: `GATE-RESULT-258.txt`, `GATE-BACKUP-RESULT-258.txt`. Проверены воспроизводимость, точные entry changes, правильный method descriptor, Java 21, реальный Engine bytecode в compile/runtime fixture с boolean ABI, Stats default 10/10/10 (включая удаление модификаторов при возврате к 10), наследуемые Auto-AI 255 scenarios, 4 verifier-valid mutants. Это исправляет точный стек из crash log, но не заменяет реальный retry в full user modpack. После hotfix-фикса реальная игра ещё не запускалась.
+---
 
-Source ZIP: `SettledLands-Build258-StatsAbiFix-Source.zip`; содержит код/тесты, base257 JAR, hotfix258 JAR, прошлые gate logs; внешний Gson source/Java не включены. ZIP должен пройти manifest + byte-for-byte reproduction + независимый полный gate. Пользовательский crash log не включать в Git/ZIP; его SHA записан в HANDOFF/API doc. Для проверки просить заменить JAR, не оставлять 257 рядом, копию мира, затем кратко подтвердить старт и NPC ticks; видео не просить.
+## История инцидента: Build 257 ABI mismatch / Build 258 hotfix
 
-Код/тесты: `src/build258`, `tools/gen_api258.py`, `tools/patch_auto_ai258.py`, `tests/jvm_auto_ai258.py`, `tests/mutants258.py`, `tests/gate_build258.py`, `tools/make_backup258.py`; документы `README-Build258-StatsAbiFix-RU.txt`, `API-COMPAT-258-RU.md`, `CHECKLIST-TEST-BUILD258-RU.md`, `BACKUP-258-RU.txt`. В конце проверить `SHA256SUMS-build258.txt`, branch/status, GitHub raw sizes, запушить только `arena/24676dbe-mod`; в ответе по-русски JAR-ссылка первая, ZIP после неё, размер/SHA обоих, основной JAR `present_file` последним. Не сообщать, что инцидент окончательно исчез до проверки пользователем.
+Пользователь сообщил «вылет» на build 257. В Minecraft 1.21.1 / NeoForge 21.1.253 / Java 21.0.7 fatal был `NoSuchMethodError: void AttributeInstance.removeModifier(ResourceLocation)` на первом NPC server AI tick. Реальная сигнатура `removeModifier(ResourceLocation)` возвращает `boolean`; build257 synthetic API stub ошибочно объявил `void`, из-за чего предыдущие тесты воспроизвели ошибку стенда. Признавать это как свою ошибку тестового контракта, не обвинять пользователя/модпак. Build257 отозван, SHA `93013d8380263c3fdc4f5245a6ce4178f30bcda61478081bd9d10c93e42c45b1`.
+
+Build258 исправил точный boolean ABI и прошёл основной/backup gate. Build259 основан на этом исправлении и сохраняет call descriptor `(ResourceLocation)Z`; не откатывать и не менять ABI stub обратно. Crashlog не включать в Git/backup; его SHA сохранён в истории.
 
 ---
 

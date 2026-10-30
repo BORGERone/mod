@@ -1,16 +1,16 @@
 # SettledLands: продолжить работу
 
-## 1. Текущая сборка
+## 1. Актуальное состояние
 
-**Build 258 — hotfix вылета, основной и независимый JVM-gate PASS:** `settledlands-0.8.0-build258-stats-abi-fix.jar`. Он заменяет ошибочный build 257: в crash log пользователя Minecraft 1.21.1 / NeoForge 21.1.253 обнаружено `NoSuchMethodError` на `AttributeInstance.removeModifier(ResourceLocation)`. Реальная функция возвращает `boolean`; build 257 вызывал её с `void`. Build 258 исправляет descriptor на точный `(...)Z`, `GuideNpc` и остальной код AI не переписаны. SHA/размер JAR, source ZIP и gate logs будут перечислены во внешнем `SHA256SUMS-build258.txt`.
+**Build 259 — NPC movement/combo tuning, основной и независимый JVM-gate PASS:** `settledlands-0.8.0-build259-npc-combo-tuning.jar`, собран от build 258. У NPC удалён явный поворот корпуса/взгляда на combat target во время ходьбы; спокойная скорость повышена на 10%; ближние и рывковые атаки используют многосоставные Ivy-комбинации с несколькими попаданиями. Поворот головы к цели во время ходьбы намеренно не включён. Build 258 boolean ABI hotfix и ранее согласованные Stats/Auto-AI/прогулка/возврат домой сохранены.
 
-Прочитать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`; затем `SESSION-STATE.md`, `README-Build258-StatsAbiFix-RU.txt`, `API-COMPAT-258-RU.md`, `CHECKLIST-TEST-BUILD258-RU.md` и `BACKUP-258-RU.txt`. Видео у пользователя не просить.
+Прочитать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`; затем `SESSION-STATE.md`, `README-Build259-NpcComboTuning-RU.txt`, `API-COMPAT-259-RU.md`, `CHECKLIST-TEST-BUILD259-RU.md` и `BACKUP-259-RU.txt`. Видео не просить.
 
-## 2. Срочное действие
+## 2. Установка и статус
 
-Не запускать build 257 (`settledlands-0.8.0-build257-calm-ai-stats.jar`, SHA `93013d8380263c3fdc4f5245a6ce4178f30bcda61478081bd9d10c93e42c45b1`): он падает на первом server AI tick GuideNpc при синхронизации Stats. Удалить его из `mods`, поставить только build 258 и сначала открыть копию мира.
+На копии мира удалите старые JAR SettledLands и оставьте только build 259. Автоатака hostile-мобов, масштабирование HP/урона/скорости через Stats, автономное блуждание и возврат домой сохранены. Основной и независимый JVM gate прошли, включая второе попадание в Ivy-комбо; реальный Minecraft/NeoForge или пользовательский modpack **не запускался**, игровое подтверждение ещё нужно.
 
-Build 258 сохраняет функцию 257: спокойная скорость половинная, боевая прежняя; стоянка 20–45 секунд; автоатака hostile-мобов и per-NPC HP/урон/скорость из Stats-ноды. Исправлены и повторно протестированы значения 10/10/10, смена параметров и возврат к 10.
+Точный JAR/Source ZIP SHA и размеры — в `SHA256SUMS-build259.txt`. Для ручного теста используйте `CHECKLIST-TEST-BUILD259-RU.md`; если будет ошибка, нужны свежие `latest.log` и crash report, видео не требуется.
 
 ## Историческая документация build 256
 
