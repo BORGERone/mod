@@ -8,7 +8,7 @@ Build 261 `settledlands-0.8.0-build261-idle-look-punchy-animation.jar`, разм
 
 `tests/gate_build261.py`: PASS deterministic JAR, validators, exact diff, Java 21 idle gaze/body invariance/dialogue, inherited Auto-AI/combo, full-body + leg gait, hurt→talk, Punchy-style nested PlayerModel arms/texture, and two killed verifier-valid mutants. `GATE-RESULT-261.txt` PASS. `tests/gate_backup261.py`: PASS manifest `602/602`, byte-identical source ZIP reproduction, independent extracted source JAR rebuild/runtime gate; log `GATE-BACKUP-RESULT-261.txt`. Package checksum/size: `SHA256SUMS-build261.txt`. Minecraft/NeoForge не запускался; версия Punchy пользователя не сообщена и Punchy binary не тестировалась. Обязателен пользовательский real-game check на копии мира; видео не просить.
 
-Следующий шаг: выполнить финальные hash/diff/status checks, commit и push только в `arena/24676dbe-mod`; предоставить JAR первым, Source ZIP следующим, открыть JAR последним и попросить тест по checklist. Ожидать пользовательскую игру: сохранить фактическое ограничение, что Minecraft/Punchy ещё не запускались, и запросить Punchy/Minecraft версии только если generic first-person patch не сработает.
+Build 261 закоммичен и запушен в `arena/24676dbe-mod` как `36477adf30b7d997208061caaf7ccc3170731c81`; рабочее дерево чистое, SHA/JAR/source/gate logs сверены. Следующий шаг — дождаться пользовательского теста на копии мира по checklist. Minecraft/Punchy в этом стенде не запускались; при неработающем generic first-person patch запросить точные Minecraft/NeoForge/Punchy версии и свежий latest.log (видео не нужно).
 
 ## Build 260 — историческая база; основной и backup gates PASS
 

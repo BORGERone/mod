@@ -1,6 +1,6 @@
 OK extracted backup manifest: 603/603 files
-/tmp/sl261-backup-gate-c2068ivf/reproduced-source.zip: 9593325 bytes sha256=7701f0b1e440b444d1436e80796487ee6537f389f00f13501ff9f03627cdc88b; files=604
-OK byte-for-byte source ZIP reproduction sha256=7701f0b1e440b444d1436e80796487ee6537f389f00f13501ff9f03627cdc88b
+/tmp/sl261-backup-gate-fdxffk2r/reproduced-source.zip: 9593336 bytes sha256=e2b92d27f4e8d5383c83e3254b293c210cabd8b03cda4ad4f8f8fd94ebeb6892; files=604
+OK byte-for-byte source ZIP reproduction sha256=e2b92d27f4e8d5383c83e3254b293c210cabd8b03cda4ad4f8f8fd94ebeb6892
 OK exact Build 260 base hash and release evidence
 OK deterministic Build 261 rebuild
 OK reproducible JAR sha256=979d64831b47336a84a72ec0d803da4f19d5ee6e1fdb85e542e7e08b03647df6 size=2259841
