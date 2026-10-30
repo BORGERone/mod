@@ -1,12 +1,14 @@
-# Текущий статус — 30.10.2026
+# Текущий статус — 31.10.2026
 
-## Build271 — candidate; нужен реальный клиентский тест
+## Build271 — опубликованный кандидат; нужен реальный клиентский тест
 
-Пользовательский `latest-10.log` выявил два Build270 runtime-дефекта. При создании Trigger-ноды падение `AbstractMethodError`: Build270 обращался к abstract `Screen` invoker, для которого Mixin не предоставил реализацию. При записи Guide NPC возникал `NoSuchMethodError` для `CompoundTag.remove(String): Object`; Compile stub неверно описывал NBT descriptor, и сущность не сохранялась. Build270 и Build269 отозваны.
+`latest-10.log` выявил два Build270 runtime-дефекта: `AbstractMethodError` при создании Trigger-ноды из-за неработающего abstract Screen invoker и `NoSuchMethodError: CompoundTag.remove(String): Object` при сохранении NPC из-за неверного compile stub. Build269 и Build270 отозваны.
 
-Build271 добавляет самостоятельные пункты/ноды графа преследования (начать NPC, начать игрок, прекратить) и убирает accessor. Ноды визуально подписаны; под капотом используют стандартный Trigger action, чтобы не менять схему сохранения графа. Inactive pursuit marker записывается boolean=false вместо вызова `remove`. В Build271 source gate проверяет этот method-ref отсутствующим и декодирует рядовую геометрию/команды.
+Build271 добавляет три отдельные ноды преследования (начать NPC, начать игрок, прекратить), удаляет accessor и исправляет inactive NBT path. Подписи различимы, совместимость graph data сохранена через Trigger actions. Требования к цели/поведению описаны в начале `HANDOFF-NEXT-SESSION-RU.md`.
 
-JAR: `settledlands-0.8.0-build271-pursuit-node-hotfix.jar`, SHA/size в `SHA256SUMS-build271-release.txt`. `tests/gate_pursuit271.py` PASS; backup gate и удалённые артефакты должны быть перепроверены до выдачи. **Minecraft/NeoForge не запускались**, поэтому ждать тест старта, spawn dedicated nodes и save/reload NPC по `CHECKLIST-TEST-BUILD271-RU.md`; не называть игровое поведение подтверждённым. Build268 подтверждён; pursuit сохранился; CUTSCENE fade 263 не включён.
+Основной gate и независимый backup gate PASS. JAR/ZIP локальные SHA и размеры, GitHub Contents API и Google Drive `get_file` проверены; повторная сборка/загрузка не нужны. JAR `settledlands-0.8.0-build271-pursuit-node-hotfix.jar`, 3,105,702 байта, SHA-256 `e7c2f13e5d371bc52c23959b61f14e61f4c8223800b656a11f74532320c106b1`. ZIP `SettledLands-Build271-Pursuit-Nodes-Source.zip`, 20,651,141 байт, SHA-256 `943625306f26e50cb47856b35afe627065b2b8c6b77baffa51be4857cf1f3187`. Commit/push `b3d734739acec980daafbaeb79563c9474eb2975` на `arena/24676dbe-mod`.
+
+**Minecraft/NeoForge не запускались.** Остался только тест на копии мира по `CHECKLIST-TEST-BUILD271-RU.md` и пользовательский свежий лог/обратная связь. Не утверждать игровое поведение подтверждённым. Build268 подтверждён; Build263 CUTSCENE fade не менять. Пользователь попросил подготовить передачу следующему ИИ: отвечать кратко, не повторять завершённые действия, видео/SHA установленного JAR не просить.
 
 # SettledLands — SESSION-STATE, 30.10.2026
 

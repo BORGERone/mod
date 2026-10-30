@@ -14,7 +14,17 @@ Build271 также удаляет неработающий Screen accessor и �
 
 Build271 основан на Build270 JAR только как на неизменяемом predecessor-пакете; сам его JAR diff точно фиксирует удаление проблемных mixins и изменения menu/NBT. Build268 profession/skin baseline и pursuit logic сохранены; CUTSCENE fade Build263 не переносился.
 
-Перед публикацией: gate + archive gate, стандартный `sha256sum -c SHA256SUMS-build271-release.txt`, GitHub raw sizes через `gh api`, загрузка и удалённые размеры Drive. Затем JAR-first, ZIP-second, PowerShell `certutil` команда и инструкция «Сохранить ссылку как…» по §10. Работать только в `arena/24676dbe-mod`.
+## Передача после публикации (2026-10-31)
+
+Build271 опубликован и проверен; повторная сборка или повторная загрузка не нужны без новой причины. Локальные `sha256sum -c SHA256SUMS-build271-release.txt` → оба файла OK; локальные размеры JAR `3,105,702` и ZIP `20,651,141` байт. GitHub Contents API вернул те же размеры; Drive `get_file` подтвердил точные имена, ссылки и размеры обоих файлов.
+
+- JAR SHA-256: `e7c2f13e5d371bc52c23959b61f14e61f4c8223800b656a11f74532320c106b1`; Drive ID `1UeWpJlCAPYAI1De7dOvfVI7uWocIZryz`; ссылка: https://drive.google.com/file/d/1UeWpJlCAPYAI1De7dOvfVI7uWocIZryz/view?usp=drivesdk
+- Source ZIP SHA-256: `943625306f26e50cb47856b35afe627065b2b8c6b77baffa51be4857cf1f3187`; Drive ID `1HGXD-ra5htPvb9QP9lzLZM35GZFiVXtk`; ссылка: https://drive.google.com/file/d/1HGXD-ra5htPvb9QP9lzLZM35GZFiVXtk/view?usp=drivesdk
+- Git commit/push: `b3d734739acec980daafbaeb79563c9474eb2975` в `arena/24676dbe-mod`. При начале этой передачи локальный clone неожиданно стоял на `10b423f`; удалённая ветка проверена через `git ls-remote`, затем локальная ветка была fast-forward до `b3d7347`. Текущий worktree чистый на этом commit, кроме правок handoff, внесённых этой передачей.
+
+Пользователь уже получил оба артефакта. Ссылка на JAR ранее показана через `present_file`. Остался только пользовательский запуск Build271 на копии мира по `CHECKLIST-TEST-BUILD271-RU.md` и свежая обратная связь/log; Minecraft/NeoForge в этой среде не запускались. Пользователь попросил подготовить передачу следующему ИИ; отвечать кратко и прямо, не повторять уже выполненные upload/build-шаги, не запрашивать видео или SHA установленного JAR.
+
+Работать только в `arena/24676dbe-mod`; Build269/270 не устанавливать; CUTSCENE fade Build263 не менять. При публикации любого нового билда заново выполнять release gates и §10, а не переносить эти подтверждения.
 
 ---
 
