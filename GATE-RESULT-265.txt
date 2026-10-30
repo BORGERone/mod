@@ -1,0 +1,27 @@
+BUILD 265 GATE: PASS
+
+Команда:
+  python3 tests/gate_build265.py --java /home/user/mod/.venv/lib/python3.11/site-packages/jdk4py/java-runtime/bin/java
+
+Проверки:
+  deterministic rebuild: PASS (побайтно совпадает с кандидатом)
+  validate_jar.py / verify_jar.py: PASS (структура, exact diff к Build262, TOML/языки/mixins/classfiles)
+  dropdown plumbing: PASS (используется NpcUi.dropdown, popupClicked и popup render path; arrow-carousel handler удалён)
+  profile skin selection: PASS (profile.texture больше не блокирует профессию; modelName разрешён для populated graph)
+  node copy + NBT save/load fields: PASS (damageFilter/minDamage, DamageFilter/MinDamage)
+  model/PNG: PASS (Blockbench Bedrock; embedded PNG, имена текстур совпали)
+  texture materialization: PASS (64 комбинации выбрали точные embedded source bytes)
+  Minecraft/NeoForge: NOT RUN (визуальная проверка не проводилась)
+
+BUILD 265 BACKUP GATE: PASS
+  манифест, чистая распаковка, deterministic rebuild и full gate из ZIP.
+  ZIP: 11 303 422 bytes; SHA-256 358cc7932dc2f9d1d8475473a21a0de910aa7e016e6b0e06af10f5fb56151abf.
+
+Точный diff к Build262:
+  5 новых entries: модель, 2 mixin-класса и 2 helper-класса.
+  7 изменённых entries: mixin JSON, patch-info, ru/en языки, TOML, NpcStatsGraph, NpcStatsGraphUi.
+  417 идентичны; удалённых entries нет.
+
+JAR: settledlands-0.8.0-build265-profession-dropdown.jar
+Размер: 3 076 205 bytes
+SHA-256: e29bcc39052de489fb1eb489c152334a86e16a9d4fb028460631fe9bf4569589.

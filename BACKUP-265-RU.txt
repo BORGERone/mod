@@ -1,0 +1,22 @@
+Архив исходников SettledLands Build 265
+
+ZIP: SettledLands-Build265-Profession-Dropdown-Source.zip
+
+Архив содержит точный baseline Build 262, кандидат Build 265, исходники,
+compile-time API fixtures, модель Blockbench, builder, Java probe, release gate,
+документацию и BACKUP-MANIFEST.sha256. Build 263 CUTSCENE fade не включён.
+JDK/runtime в архив не входят.
+
+Проверить manifest из корня распакованного архива:
+  python3 -c "import hashlib,pathlib; p=pathlib.Path('.'); bad=[]; lines=(p/'BACKUP-MANIFEST.sha256').read_text().splitlines(); [bad.append(n) for h,n in (x.split('  ',1) for x in lines) if hashlib.sha256((p/n).read_bytes()).hexdigest()!=h]; print('OK' if not bad else bad)"
+
+Пересобрать кандидат (Python 3.11+, Java 21):
+  python3 tools/patch_profession_dropdown265.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --out settledlands-0.8.0-build265-profession-dropdown.jar --java /path/to/java21
+
+Запустить gate:
+  python3 tests/gate_build265.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --jar settledlands-0.8.0-build265-profession-dropdown.jar --java /path/to/java21
+  python3 tests/gate_backup265.py --zip SettledLands-Build265-Profession-Dropdown-Source.zip --java /path/to/java21
+
+Gate проверяет сборку, архив и 64 пары profession/gender/region в локальных Java fixtures.
+Minecraft/NeoForge не запускаются; реальная проверка интерфейса и внешнего вида —
+по CHECKLIST-TEST-BUILD265-RU.md на копии мира.

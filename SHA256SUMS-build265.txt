@@ -1,0 +1,2 @@
+e29bcc39052de489fb1eb489c152334a86e16a9d4fb028460631fe9bf4569589  settledlands-0.8.0-build265-profession-dropdown.jar
+358cc7932dc2f9d1d8475473a21a0de910aa7e016e6b0e06af10f5fb56151abf  SettledLands-Build265-Profession-Dropdown-Source.zip
