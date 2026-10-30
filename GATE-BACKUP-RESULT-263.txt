@@ -1,8 +1,8 @@
-BUILD 263 BACKUP GATE: PASS (UI hotfix candidate; user reports issue remains)
+BUILD 263 BACKUP GATE: PASS (candidate SHA verified by user in active mods; UI regression remains unresolved)
 
 Source ZIP: SettledLands-Build263-Cutscene-Fade-Source.zip
-Archive size: 9,643,280 bytes
-Archive SHA-256: 2cac73131c98ddf90236808681d3c581ec95e37a8fad9c5c14f34a042490c2da
+Archive size: 9,643,654 bytes
+Archive SHA-256: a11118d7681ebfbeabb9623482f998d3145148c0631e7ac4c5bae70c3a09ad2f
 Manifest: PASS (670/670 files)
 Byte-identical ZIP reproduction from its own extracted contents: PASS
 
@@ -13,4 +13,4 @@ Independent extracted technical release gate:
 - Java 21 JVM verification of patched methods and all new callbacks: PASS.
 - Java 21 runtime scenarios for fade timing, camera ordering, graph NBT/copy and chained scenes: PASS.
 
-Important: user reports the visible inspector regression was NOT fixed by this hotfix. These technical gates do not apply Mixin in real Minecraft and do not prove the graph editor UI. Do not mark the bug resolved until diagnosed and user-tested. Minecraft/NeoForge was not launched.
+Important: the user confirmed the active JAR SHA matches this candidate exactly, yet the inspector regression persists. This proves the issue is not explained by an old/different JAR. Gates do not apply Mixin in real Minecraft and do not prove the graph editor UI. Do not mark the bug resolved or make another speculative patch. Next diagnostic input: exact remaining symptom and minimal reproduction steps. Minecraft/NeoForge was not launched.
