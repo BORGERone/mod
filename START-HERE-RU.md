@@ -2,15 +2,19 @@
 
 ## 1. Актуальное состояние
 
-**Build 262 — плавный поворот NPC после остановки и случайный idle-поворот корпуса/головы.** Собран от точного Build 261; Java 21 runtime и два release gates PASS. После ходьбы NPC сохраняет направление последнего шага: первая idle-цель достигается постепенно, затем голова сканирует быстрее, а торс плавно следует за ней. Сохранены Build 261 animation/first-person/Punchy-support paths и все прежние механики.
+**Build 263 — два независимых fade-переключателя в ноде катсцены.** Затемнение строго заканчивается до запуска камеры; проявление начинается только после сигнала фактического старта. Основной gate и independent source ZIP gate PASS после timing fix. Фаза 500 мс. Minecraft/NeoForge не запускались; нужен игровой прогон на копии мира по `CHECKLIST-TEST-BUILD263-RU.md`.
 
-Прочитать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`; затем `SESSION-STATE.md`, `README-Build262-Smooth-Npc-Turning-RU.txt`, `API-COMPAT-262-RU.md`, `CHECKLIST-TEST-BUILD262-RU.md` и `BACKUP-262-RU.txt`. Видео не просить.
+Исходный Build 262 с плавным idle-поворотом NPC сохранён побайтно, кроме заявленных 7 изменённых записей; добавлены 11 class-файлов. Fade-флаги хранятся отдельно и не переиспользуют поля анимации/перемещения.
+
+Прочитать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`; затем Build 263 README/API/checklist/backup notes.
+
+Затем прочитать `SESSION-STATE.md`, `README-Build263-Cutscene-Fade-RU.txt`, `API-COMPAT-263-RU.md`, `CHECKLIST-TEST-BUILD263-RU.md` и `BACKUP-263-RU.txt`. Видео не просить.
 
 ## 2. Установка и статус
 
-На копии мира удалите прежние JAR SettledLands и оставьте только Build 262. Java 21 runtime-сценарии, воспроизводимая сборка, точный diff и independent source ZIP gate прошли. Minecraft/NeoForge/modpack **не запускались**. Пройти `CHECKLIST-TEST-BUILD262-RU.md`, особенно сценарий «ходьба → остановка → idle» и сохранность торса после остановки. Если есть проблема — свежий `latest.log` и crash report, видео не просить.
+На копии мира удалите прежние JAR SettledLands и оставьте только Build 263. Java 21 release gate и независимый source ZIP gate прошли; Minecraft/NeoForge/modpack **не запускались**. Пройти `CHECKLIST-TEST-BUILD263-RU.md`: отдельно проверить каждую галку, обе вместе и последовательность связанных катсцен. При проблеме приложить свежий `latest.log` и crash report, видео не просить.
 
-JAR и Source ZIP размеры/SHA — в `SHA256SUMS-build262.txt`. Source ZIP содержит builder, исходники и tests, Build-261 baseline, Build-262 candidate и manifest; результат независимой распаковки — `GATE-BACKUP-RESULT-262.txt`.
+JAR и Source ZIP, размеры и SHA — в `SHA256SUMS-build263.txt`; независимая распаковка и gate отражены в `GATE-BACKUP-RESULT-263.txt`. Source ZIP содержит точные Build-262 baseline и Build-263 candidate, инструменты, исходники, тесты, документы и manifest.
 
 ## Историческая документация build 256
 

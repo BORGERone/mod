@@ -1,0 +1,24 @@
+SettledLands Build 263 source backup
+
+ZIP: SettledLands-Build263-Cutscene-Fade-Source.zip
+
+Архив содержит точный baseline Build 262, кандидат Build 263, builder, исходники,
+compile-time API fixtures, полный набор tests/tools, инструкции и
+BACKUP-MANIFEST.sha256. Внешние JDK/Java runtime в архив не входят. Внутрь ZIP
+не включаются итоговые gate logs и SHA256SUMS; они хранятся отдельно в репозитории.
+
+Проверить manifest после распаковки:
+  python3 -c "import hashlib,pathlib; p=pathlib.Path('.'); bad=[]; lines=(p/'BACKUP-MANIFEST.sha256').read_text().splitlines(); [bad.append(n) for h,n in (x.split('  ',1) for x in lines) if hashlib.sha256((p/n).read_bytes()).hexdigest()!=h]; print('OK' if not bad else bad)"
+
+Пересобрать candidate JAR из распакованного архива (Python 3.11+, Java 21):
+  python3 tools/patch_cutscene_fade263.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --out settledlands-0.8.0-build263-cutscene-fade.jar --java /path/to/java21
+
+Запустить полный release gate:
+  python3 tests/gate_build263.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --jar settledlands-0.8.0-build263-cutscene-fade.jar --java /path/to/java21
+
+Запустить независимый backup gate:
+  python3 tests/gate_backup263.py --zip SettledLands-Build263-Cutscene-Fade-Source.zip --java /path/to/java21
+
+Ожидается `BUILD 263 GATE: PASS` и `BUILD 263 BACKUP GATE: PASS`. JVM/API fixtures
+не являются запуском Minecraft/NeoForge. Настоящая игра обязательна для визуального
+подтверждения; см. `CHECKLIST-TEST-BUILD263-RU.md`.

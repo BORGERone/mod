@@ -1,4 +1,14 @@
-# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально build 262
+# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально build 263
+
+## Build 263: затухание и проявление в начале катсцены
+
+Пользователь попросил в инспекторе CUTSCENE-ноды два независимых переключателя: плавное затемнение до показа сцены и плавное проявление после фактического старта камеры. Обе галки дают переход через чёрный. Фаза фиксирована на 500 мс; длительность отдельно не уточнялась.
+
+После позднего ревью исправлен порядок: клиент удерживает payload камеры и `handlePlaying(true)` до полного чёрного, затем воспроизводит их на client thread; fade-in стартует только в callback после реального `handlePlaying(true)`. Fade-out-only открывается мгновенно при старте камеры, fade-in-only ждёт сигнал на чёрном. Есть timeout на случай потерянного start packet. Точный diff от Build 262: 7 изменённых entries и 11 новых class entries. Два флага — собственные Node mixin fields; `Node.copy()`/NBT сохраняют их; `animLoop`/`moveEscort` не используются. Chained scenes получают параметры отдельно.
+
+Текущий JAR после fix: 2,274,568 байт, SHA-256 `5d7d6bee530d28f48b62cd2b598ecd24cb084628317e7f5692f8077edfbcc4cd`. Основной `tests/gate_build263.py` и `tests/gate_backup263.py` PASS; backup manifest 668/668, ZIP побайтно воспроизводится, полный gate прошёл из независимой распаковки. JVM проверяет `handlePlay([[DFI)V`, cancellable callbacks и runtime sequencing: до black camera/playing не запускаются; после black camera стартует; fade-in начинается после сигнала. Итоговые логи и SHA хранятся в корне репозитория (SHA-файл не включается внутрь ZIP). Следующее — проверить diff, commit/push только ветки `arena/24676dbe-mod`, remote GitHub file sizes и раздать ссылки. Minecraft/NeoForge не запускались; игровой прогон на копии мира нужен. Видео не просить.
+
+Файлы: `README-Build263-Cutscene-Fade-RU.txt`, `API-COMPAT-263-RU.md`, `CHECKLIST-TEST-BUILD263-RU.md`, `BACKUP-263-RU.txt`, `GATE-RESULT-263.txt`, `GATE-BACKUP-RESULT-263.txt`, `SHA256SUMS-build263.txt`, `SettledLands-Build263-Cutscene-Fade-Source.zip`.
 
 ## Build 262: плавный переход ходьба → остановка → idle и поворот торса
 

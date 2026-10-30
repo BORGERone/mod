@@ -102,12 +102,64 @@ def build(frames):
     return b"".join(out)
 
 
+def _shift_verification_types(payload, count, at, n, pos=0):
+    data = bytearray(payload)
+    for _ in range(count):
+        if pos >= len(data):
+            raise ValueError("обрыв verification_type_info при сдвиге StackMapTable")
+        tag = data[pos]
+        if tag in (7, 8):
+            if pos + 3 > len(data):
+                raise ValueError("обрыв Object/Uninitialized verification_type_info")
+            if tag == 8:
+                offset = struct.unpack(">H", data[pos + 1:pos + 3])[0]
+                if offset >= at:
+                    struct.pack_into(">H", data, pos + 1, offset + n)
+            pos += 3
+        elif 0 <= tag <= 6:
+            pos += 1
+        else:
+            raise ValueError(f"неизвестный verification_type {tag} при сдвиге")
+    return bytes(data), pos
+
+
+def _shift_payload(kind, payload, at, n):
+    """Пересчитать Uninitialized_variable_info offsets внутри frame payload."""
+    if kind <= 63 or 248 <= kind <= 251:
+        return payload
+    if 64 <= kind <= 127 or kind == 247:
+        shifted, end = _shift_verification_types(payload, 1, at, n)
+        if end != len(payload):
+            raise ValueError("лишние байты в same_locals_1_stack_item frame")
+        return shifted
+    if 252 <= kind <= 254:
+        shifted, end = _shift_verification_types(payload, kind - 251, at, n)
+        if end != len(payload):
+            raise ValueError("лишние байты в append_frame")
+        return shifted
+    if kind == 255:
+        data = bytearray(payload)
+        if len(data) < 4:
+            raise ValueError("обрыв full_frame payload")
+        locals_count = struct.unpack(">H", data[:2])[0]
+        shifted, pos = _shift_verification_types(data, locals_count, at, n, 2)
+        if pos + 2 > len(shifted):
+            raise ValueError("обрыв full_frame stack count")
+        stack_count = struct.unpack(">H", shifted[pos:pos + 2])[0]
+        shifted, end = _shift_verification_types(shifted, stack_count, at, n, pos + 2)
+        if end != len(shifted):
+            raise ValueError("лишние байты в full_frame")
+        return shifted
+    raise ValueError(f"недопустимый frame_type {kind}")
+
+
 def shift(frames, at, n):
-    """Сдвинуть фреймы: всё, что начинается с offset >= at, уезжает на n."""
+    """Сдвинуть frame offsets и все Uninitialized offsets после вставки bytecode."""
     out = []
     for f in frames:
         g = dict(f)
         if f["offset"] >= at:
             g["offset"] = f["offset"] + n
+        g["payload"] = _shift_payload(f["kind"], f.get("payload", b""), at, n)
         out.append(g)
     return out

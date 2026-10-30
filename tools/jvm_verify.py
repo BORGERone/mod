@@ -29,6 +29,27 @@ import decode  # noqa: E402
 from patch_earlytex_mixin import CP  # noqa: E402
 
 JAVA = "/home/user/tools/jdkpkg/jdk4py/java-runtime/bin/java"
+PRIMITIVE_DESCRIPTORS = {
+    "boolean": "Z", "byte": "B", "short": "S", "char": "C",
+    "int": "I", "long": "J", "float": "F", "double": "D",
+}
+
+
+def parameter_descriptor(parameter: str) -> str:
+    dimensions = 0
+    while parameter.endswith("[]"):
+        dimensions += 1
+        parameter = parameter[:-2]
+    base = PRIMITIVE_DESCRIPTORS.get(parameter)
+    if base is None:
+        base = "L" + parameter.replace(".", "/") + ";"
+    return "[" * dimensions + base
+
+
+def parameter_component(parameter: str) -> str:
+    while parameter.endswith("[]"):
+        parameter = parameter[:-2]
+    return parameter
 
 # Кто чей подтип — то, чего не видно по одному дескриптору.
 HINTS = {
@@ -155,12 +176,25 @@ def harness(main_class, targets):
     """main(): для каждой цели вызвать метод через рефлексию."""
     cp = CP()
     code = bytearray()
+    primitive_wrappers = {
+        "boolean": "java/lang/Boolean", "byte": "java/lang/Byte",
+        "short": "java/lang/Short", "char": "java/lang/Character",
+        "int": "java/lang/Integer", "long": "java/lang/Long",
+        "float": "java/lang/Float", "double": "java/lang/Double",
+    }
 
     def class_by_name(name):
+        if name.endswith("[]"):
+            array_name = parameter_descriptor(name).replace("/", ".")
+            name_load = ldc(cp, cp.string(array_name))
+        elif name in primitive_wrappers:
+            return b"\xb2" + u2(cp.field(primitive_wrappers[name], "TYPE", "Ljava/lang/Class;"))
+        else:
+            name_load = ldc(cp, cp.string(name.replace("/", ".")))
         # Do not initialize stub-backed classes before resolving the method.
-        # Class.forName also permits private nested parameter types, unlike ldc
+        # Class.forName also permits private nested and array types, unlike ldc
         # of a class constant from an unrelated VerifyHarness class.
-        return (ldc(cp, cp.string(name.replace("/", "."))) + b"\x03" +
+        return (name_load + b"\x03" +
                 b"\xb8" + u2(cp.method("java/lang/Thread", "currentThread", "()Ljava/lang/Thread;")) +
                 b"\xb6" + u2(cp.method("java/lang/Thread", "getContextClassLoader", "()Ljava/lang/ClassLoader;")) +
                 b"\xb8" + u2(cp.method("java/lang/Class", "forName",
@@ -235,11 +269,16 @@ def main():
             params = [p.strip() for p in rest.rstrip(")").split(",") if p.strip()]
         if cls not in real:
             ap.error(f"target class not in jar: {cls}")
-        if len(params) > 127 or any(p in {"boolean", "byte", "short", "char", "int", "long", "float", "double"}
-                                    or not re.fullmatch(r"[A-Za-z_$][\w$]*(?:[./][A-Za-z_$][\w$]*)*", p)
-                                    for p in params):
-            ap.error("only up to 127 non-array reference-type parameters are supported")
-        desc_prefix = "(" + "".join("L" + p.replace(".", "/") + ";" for p in params) + ")"
+        def valid_parameter(parameter):
+            base = parameter_component(parameter)
+            if not base or '[' in base or ']' in base:
+                return False
+            return base in PRIMITIVE_DESCRIPTORS or bool(
+                re.fullmatch(r"[A-Za-z_$][\w$]*(?:[./][A-Za-z_$][\w$]*)*", base))
+
+        if len(params) > 127 or any(not valid_parameter(p) for p in params):
+            ap.error("only up to 127 primitive, reference, or array parameters are supported")
+        desc_prefix = "(" + "".join(parameter_descriptor(p) for p in params) + ")"
         if not any(m["name"] == meth and m["desc"].startswith(desc_prefix) for m in parsed[cls].methods):
             ap.error(f"target method with parameters not in class: {cls}#{meth}{desc_prefix}")
         targets.append((cls, meth, params))
@@ -261,7 +300,9 @@ def main():
     for cls, _, params in targets:
         add_chain(cls)
         for p in params:
-            add_chain(p.replace(".", "/"))
+            component = parameter_component(p)
+            if component not in PRIMITIVE_DESCRIPTORS:
+                add_chain(component.replace(".", "/"))
     roots = set(need)
     for cls in roots:
         k = parsed[cls]

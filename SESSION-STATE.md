@@ -1,6 +1,16 @@
 # SettledLands — SESSION-STATE, 30.10.2026
 
-## Build 262 — плавный разворот после остановки, случайный поворот торса; gates PASS
+## Build 263 — fade-затемнение и проявление катсцен; sequencing fix включён
+
+Build 263 `settledlands-0.8.0-build263-cutscene-fade.jar`, 2,274,568 байт, SHA-256 `5d7d6bee530d28f48b62cd2b598ecd24cb084628317e7f5692f8077edfbcc4cd`. Точная база Build 262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`. Source ZIP `SettledLands-Build263-Cutscene-Fade-Source.zip`; размер и SHA записаны в `SHA256SUMS-build263.txt` вне ZIP.
+
+На CUTSCENE-ноде две независимые галки. Строгая последовательность: закончить fade-to-black, затем запустить камеру и playing signal, затем при включённом toggle начать fade-from-black. Fade-out-only открывает слой мгновенно при старте камеры; fade-in-only ждёт сигнала камеры на чёрном. Потерянный стартовый сигнал не удерживает чёрный экран дольше 10 секунд. Фаза — 500 мс. Флаги отдельные, сохраняются в NBT/Node.copy; `animLoop` и `moveEscort` не используются.
+
+Основной и независимый backup gates прошли после fix: deterministic rebuild, structural/exact diff, JVM verifier (включая `handlePlay(double[][],float,int)` и cancellable callbacks), runtime sequencing, NBT/copy/chained scenes; manifest 668/668 и ZIP reproduced byte-identically. Итоговые логи: `GATE-RESULT-263.txt`, `GATE-BACKUP-RESULT-263.txt`; суммы в `SHA256SUMS-build263.txt`. Minecraft/NeoForge не запускались; обязателен игровой тест на копии мира по `CHECKLIST-TEST-BUILD263-RU.md`. Видео не просить.
+
+Не commit/push ещё: branch `arena/24676dbe-mod`. Следом проверить diff/status, commit и push только в эту ветку, проверить GitHub remote sizes JAR/ZIP, затем выдать кликабельные ссылки (JAR первым, ZIP вторым) с размером/SHA, `certutil` и «Сохранить ссылку как…». `present_file` показать JAR последним.
+
+## Build 262 — исторический плавный разворот после остановки, случайный поворот торса; gates PASS
 
 Build 262 `settledlands-0.8.0-build262-smooth-npc-turning.jar`, 2 260 085 байт, SHA-256 `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`; точная база Build 261 SHA `979d64831b47336a84a72ec0d803da4f19d5ee6e1fdb85e542e7e08b03647df6`. Изменены ровно engine/TOML/patch-info; renderer остался побайтово идентичным.
 

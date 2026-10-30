@@ -1,0 +1,42 @@
+BUILD 263 GATE: PASS
+
+Baseline: settledlands-0.8.0-build262-smooth-npc-turning.jar
+Baseline SHA-256: 21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531
+Candidate: settledlands-0.8.0-build263-cutscene-fade.jar
+Candidate size: 2,274,568 bytes
+Candidate SHA-256: 5d7d6bee530d28f48b62cd2b598ecd24cb084628317e7f5692f8077edfbcc4cd
+
+Release gate command:
+python3 tests/gate_build263.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --jar settledlands-0.8.0-build263-cutscene-fade.jar --java /path/to/java21
+
+PASS checks:
+- Deterministic rebuild byte-for-byte identical to candidate.
+- `validate_jar.py`: ZIP integrity, 435 entries, 388 classes, TOML version, paired language keys, registered mixins, classfile structures.
+- `verify_jar.py`: expected exact diff, added classes, mixin configuration, metadata and languages.
+- Exact diff against Build 262: 7 changed entries; 11 added class entries; all other baseline entries byte-identical.
+- Java 21 `jvm_verify.py`: patched GuideDialogue and NpcCopyModEvents, actual `CutsceneCameraClient.handlePlay(double[][],float,int)` descriptor, and every new mixin/helper callback including cancellable start/playing hooks link and pass JVM bytecode verification.
+- Java 21 runtime on exact candidate class files: fade phases; camera and playing signal remain deferred until full black; queued start replays on client executor; fade-in begins only after camera-start callback; fade-out-only and fade-in-only semantics; missing-start timeout; stale previous-scene end signal does not cancel the pending scene; playback cleanup; NBT persistence; Node copy/undo; independent legacy animation/movement flags; initial and chained-scene ordering.
+
+Changed entries (7):
+META-INF/neoforge.mods.toml
+assets/settledlands/lang/en_us.json
+assets/settledlands/lang/ru_ru.json
+dev/settledlands/npc/GuideDialogue.class
+dev/settledlands/npc/NpcCopyModEvents.class
+settledlands-patch-info.txt
+settledlands.mixins.json
+
+Added entries (11):
+dev/settledlands/mixin/CutsceneCameraFadeChainMixin263.class
+dev/settledlands/mixin/CutsceneCameraFadePlaybackMixin263.class
+dev/settledlands/mixin/CutsceneGraphFadeDataMixin263.class
+dev/settledlands/mixin/CutsceneGraphFadeUiMixin263.class
+dev/settledlands/mixin/CutsceneNodeFadeMixin263.class
+dev/settledlands/npc/CutsceneFadeControl263$SceneFade.class
+dev/settledlands/npc/CutsceneFadeControl263.class
+dev/settledlands/npc/CutsceneFadeGraphData263.class
+dev/settledlands/npc/CutsceneFadeNodeAccess263.class
+dev/settledlands/npc/CutsceneFadePayload263.class
+dev/settledlands/npc/client/CutsceneFadeOverlay263.class
+
+Minecraft/NeoForge and the actual game were not launched. No in-game behavior is claimed; see `CHECKLIST-TEST-BUILD263-RU.md`.

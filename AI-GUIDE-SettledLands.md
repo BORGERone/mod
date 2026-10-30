@@ -1,8 +1,16 @@
-# AI-GUIDE — актуальное состояние build 262 (smooth post-stop turning)
+# AI-GUIDE — актуальное состояние build 263 (cutscene fade)
 
 Сначала `START-HERE-RU.md` → `HANDOFF-NEXT-SESSION-RU.md` → этот файл; затем обновлять `SESSION-STATE.md`. Отвечать по-русски. Видео не просить.
 
-## Build 262 — текущий релизный кандидат
+## Build 263 — текущий релизный кандидат
+
+Baseline Build 262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`. В инспекторе CUTSCENE-ноды две независимые галки. Строгая последовательность: затемнение до полного чёрного, затем запуск камеры/playing, и только после сигнала playing — проявление. Фаза 500 мс. Fade-out-only мгновенно открывается при старте; fade-in-only ждёт старта на чёрном; timeout не даёт потерянному сигналу навсегда оставить чёрный. `animLoop`/`moveEscort` не используются; Node.copy и NBT сохраняют два отдельных флага.
+
+Текущий JAR `settledlands-0.8.0-build263-cutscene-fade.jar`: 2,274,568 bytes, SHA-256 `5d7d6bee530d28f48b62cd2b598ecd24cb084628317e7f5692f8077edfbcc4cd`. Main gate и independent source ZIP gate прошли после fix: exact diff, structure, verifier (включая actual `handlePlay([[DFI)V`), runtime timing/NBT/copy/chained-scene tests, manifest и побайтное воспроизведение ZIP. Размеры/SHA в `SHA256SUMS-build263.txt` (этот итоговый файл хранится вне ZIP). Minecraft/NeoForge не запускались; нужен игровой тест на копии мира, видео не просить.
+
+`tools/jvm_verify.py` поддерживает primitive, reference и array parameter types, включая multidimensional arrays. `tools/smt.py` при вставках StackMapTable сдвигает frame PCs и offsets `Uninitialized_variable_info`. Не обходить `classedit.py`.
+
+## Build 262 — историческая база
 
 Baseline Build 261 SHA `979d64831b47336a84a72ec0d803da4f19d5ee6e1fdb85e542e7e08b03647df6`. `runMobilityAndAutoAi` сохраняет yaw корпуса/entity по горизонтальному вектору шага до idle tick. После остановки голова плавно сканирует случайные цели; корпус и entity yaw медленно следуют за ними. Это убирает мгновенный обратный разворот и даёт поворот торса. Диалог, бой, active navigation/movement и player-look сохраняют приоритет. Renderer Build 261 побайтово сохранён; его transient movement-facing override восстанавливает состояние как прежде.
 
