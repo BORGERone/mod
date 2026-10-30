@@ -1,2 +1,2 @@
 03e3d9c9152adaf7b8afeb3c6a7693787987221a825944aad445f03a1830c716  settledlands-0.8.0-build263-cutscene-fade.jar
-a3df278e7c93c2c021d0d33e36d178b64f6014acbfd8d569392a54987cd0c17c  SettledLands-Build263-Cutscene-Fade-Source.zip
+8014d7daae6c8320370362ff0bef89435c0c1bcbb92669a90bf2140c879272a6  SettledLands-Build263-Cutscene-Fade-Source.zip

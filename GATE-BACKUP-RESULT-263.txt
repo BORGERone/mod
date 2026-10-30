@@ -1,16 +1,16 @@
-BUILD 263 BACKUP GATE: PASS (UI hotfix revision)
+BUILD 263 BACKUP GATE: PASS (UI hotfix candidate; user reports issue remains)
 
 Source ZIP: SettledLands-Build263-Cutscene-Fade-Source.zip
-Archive size: 9,642,908 bytes
-Archive SHA-256: a3df278e7c93c2c021d0d33e36d178b64f6014acbfd8d569392a54987cd0c17c
+Archive size: 9,643,011 bytes
+Archive SHA-256: 8014d7daae6c8320370362ff0bef89435c0c1bcbb92669a90bf2140c879272a6
 Manifest: PASS (670/670 files)
 Byte-identical ZIP reproduction from its own extracted contents: PASS
 
-Independent extracted full release gate:
+Independent extracted technical release gate:
 - Deterministic Build 263 rebuild identical to bundled candidate JAR.
 - Structural JAR validation and exact Build 262 diff validation: PASS.
-- UI regression guard verifies the fade mixin does not mutate the base inspector-widget list/visibility and restores `buildingInspector` in `finally`.
+- UI source guard verifies the mixin no longer mutates the base inspector-widget list/visibility and restores `buildingInspector` in `finally`.
 - Java 21 JVM verification of patched methods, camera payload array signature and all new callbacks: PASS.
-- Java 21 runtime regression tests for strict fade-out → camera start → fade-in ordering, independent switches, timeout, stale previous-scene end signal, graph NBT/copy and chained scenes: PASS.
+- Java 21 runtime scenarios for fade timing, camera ordering, graph NBT/copy and chained scenes: PASS.
 
-Minecraft/NeoForge and the actual game were not launched. The editor hotfix still needs visual user testing across node types.
+Important: user reports the visible inspector regression was NOT fixed by this hotfix. These technical gates do not apply Mixin in real Minecraft and do not prove the graph editor UI. Do not mark the bug resolved until diagnosed and user-tested. Minecraft/NeoForge was not launched.
