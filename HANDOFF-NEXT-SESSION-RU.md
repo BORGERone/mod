@@ -1,4 +1,17 @@
-# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально build 260
+# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально build 261
+
+## Build 261: idle-взгляд, согласование анимаций, руки NPC в Punchy-style first person
+
+От точного Build 260 собран кандидат `settledlands-0.8.0-build261-idle-look-punchy-animation.jar`, 2 259 841 байт, SHA-256 `979d64831b47336a84a72ec0d803da4f19d5ee6e1fdb85e542e7e08b03647df6`. Source ZIP: `SettledLands-Build261-IdleLook-Punchy-Animation-Source.zip`; финальный размер/hash лежит в `SHA256SUMS-build261.txt`.
+
+Новые правки:
+- `NpcAutoAiEngine255.tickIdleLookAround` реализует ванильный по стилю idle head scan: случайные направления и мягкая интерполяция головы; body yaw/navigation не меняются. Игрок, бой, movement, активный маршрут и dialogue приоритетны.
+- `NpcMotionBridge256` на Ivy EMF/ETF не уходит на отдельный raw-Blockbench renderer во время `isTalking` или active full-body clip. FA/TnM база остаётся, разговорный/custom clip накладывается сверху. При движении точные базовые poses обеих ног сохраняются поверх full-body клипа.
+- `FirstPersonPossession256` и новый `PunchyFirstPersonContextMixin261` добавляют контекст на pass `ItemInHandRenderer.renderHandsWithItems`, чтобы прямой PlayerModel first-person hand render получил NPC arms/texture, даже без `RenderArmEvent`/PAL mark. Внешняя Punchy binary/version неизвестна; только общий PlayerModel fixture проверен.
+
+`tests/gate_build261.py` PASS: deterministic build, JAR validators, exact Build260 diff, runtime idle/body/dialogue, inherited AI, full-body/layer/leg, hurt→dialogue and first-person NPC arm/skin scenarios; два verifier-valid мутанта убиты. Настоящий Minecraft/NeoForge/modpack и Punchy не запускались. Нужен пользовательский тест на копии мира по `CHECKLIST-TEST-BUILD261-RU.md`; видео не просить.
+
+Файлы: `API-COMPAT-261-RU.md`, `README-Build261-IdleLook-Punchy-Animation-RU.txt`, `CHECKLIST-TEST-BUILD261-RU.md`, `BACKUP-261-RU.txt`, `GATE-RESULT-261.txt`, `GATE-BACKUP-RESULT-261.txt`, `SHA256SUMS-build261.txt`. История ниже — build 260 и ранее; вся прежняя функциональность сохранена.
 
 ## Build 260: звуки, корпус при ходьбе, взгляд в диалоге
 

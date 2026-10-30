@@ -1,6 +1,16 @@
 # SettledLands — SESSION-STATE, 30.10.2026
 
-## Build 260 — кандидат к игровой проверке; JVM и backup gates PASS
+## Build 261 — idle-взгляд, единый NPC animation path, Punchy-style arms; основной gate PASS
+
+Build 261 `settledlands-0.8.0-build261-idle-look-punchy-animation.jar`, размер `2 259 841` байт, SHA-256 `979d64831b47336a84a72ec0d803da4f19d5ee6e1fdb85e542e7e08b03647df6`; baseline Build 260 `8d47171845652c1a3499643ca1936a7d6b742d9e88811751d94d84bef47d2ebc`. Build 261 меняет только Auto-AI engine, NPC motion bridge, first-person possession context/mixin config, TOML и patch-info; 416 base entries identical + one added client mixin. Старые sounds/facing/dialogue, Auto-AI/Stats/combo/wander-return, first-person/HnS, corpse/trigger safeguards и ABI `removeModifier(ResourceLocation)Z` сохранены.
+
+Добавлен плавный idle head scan без body yaw/nav side effects. Для Ivy на EMF/ETF Fresh Animations/TnM pipeline больше не прерывается разговором/full-body Blockbench clip: talk/custom pose накладывается поверх анимированной базы, при ходьбе сохраняются углы обеих ног. Punchy-style first-person integration добавляет контекст к `ItemInHandRenderer.renderHandsWithItems`, заменяя PlayerModel руки на BBModel arms и NPC texture.
+
+`tests/gate_build261.py`: PASS deterministic JAR, validators, exact diff, Java 21 idle gaze/body invariance/dialogue, inherited Auto-AI/combo, full-body + leg gait, hurt→talk, Punchy-style nested PlayerModel arms/texture, and two killed verifier-valid mutants. `GATE-RESULT-261.txt` PASS. `tests/gate_backup261.py`: PASS manifest `602/602`, byte-identical source ZIP reproduction, independent extracted source JAR rebuild/runtime gate; log `GATE-BACKUP-RESULT-261.txt`. Package checksum/size: `SHA256SUMS-build261.txt`. Minecraft/NeoForge не запускался; версия Punchy пользователя не сообщена и Punchy binary не тестировалась. Обязателен пользовательский real-game check на копии мира; видео не просить.
+
+Следующий шаг: выполнить финальные hash/diff/status checks, commit и push только в `arena/24676dbe-mod`; предоставить JAR первым, Source ZIP следующим, открыть JAR последним и попросить тест по checklist. Ожидать пользовательскую игру: сохранить фактическое ограничение, что Minecraft/Punchy ещё не запускались, и запросить Punchy/Minecraft версии только если generic first-person patch не сработает.
+
+## Build 260 — историческая база; основной и backup gates PASS
 
 Пользователь сообщил о скелетных звуках, повороте корпуса к игроку при включённом look toggle, боковой ходьбе при выключенном toggle, и попросил сохранять взгляд на игрока во время диалога независимо от toggle.
 

@@ -1,0 +1,14 @@
+OK extracted backup manifest: 603/603 files
+/tmp/sl261-backup-gate-c2068ivf/reproduced-source.zip: 9593325 bytes sha256=7701f0b1e440b444d1436e80796487ee6537f389f00f13501ff9f03627cdc88b; files=604
+OK byte-for-byte source ZIP reproduction sha256=7701f0b1e440b444d1436e80796487ee6537f389f00f13501ff9f03627cdc88b
+OK exact Build 260 base hash and release evidence
+OK deterministic Build 261 rebuild
+OK reproducible JAR sha256=979d64831b47336a84a72ec0d803da4f19d5ee6e1fdb85e542e7e08b03647df6 size=2259841
+OK structural JAR validator
+OK ZIP/TOML/assets/mixins and exact-diff validator
+OK exact Build 260 ancestry/diff; idle gaze is head-only; Ivy full-body/talk clips layer consistently; walking legs retained; Punchy context is client-only; 1.21.1 ABI retained
+OK Java 21 runtime: idle head scan, body-yaw isolation, dialogue priority, inherited Auto-AI/combo tests
+OK Java 21 animation/first-person scenarios: Fresh+TnM during hurt/dialogue/full clips; locomotion legs; Punchy-style arm/skin replacement
+OK two verifier-valid idle-look and first-person-context mutants
+BUILD 261 GATE: PASS (Build 260 preserved; new renderer/AI scenarios and 2 negative controls pass; Minecraft/NeoForge itself not launched)
+BUILD 261 INDEPENDENT SOURCE-BACKUP GATE: PASS

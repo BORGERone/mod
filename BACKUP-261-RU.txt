@@ -1,0 +1,33 @@
+Build 261 — резервная копия исходников/повторные тесты
+
+Релизный JAR:
+  settledlands-0.8.0-build261-idle-look-punchy-animation.jar
+  2 259 841 bytes; SHA-256 979d64831b47336a84a72ec0d803da4f19d5ee6e1fdb85e542e7e08b03647df6
+
+Точная база:
+  settledlands-0.8.0-build260-npc-facing-sounds.jar
+  SHA-256 8d47171845652c1a3499643ca1936a7d6b742d9e88811751d94d84bef47d2ebc
+
+Source ZIP:
+  SettledLands-Build261-IdleLook-Punchy-Animation-Source.zip
+  Проверить `BACKUP-MANIFEST.sha256`; файлы Gate results, checksum и manifest создаются вне ZIP.
+
+Linux/Java 21 (gson source archive — внешний fixture, SHA-256 проверяется тестом):
+  python3 tools/patch_auto_ai261.py --base settledlands-0.8.0-build260-npc-facing-sounds.jar \
+      --out /tmp/rebuilt261.jar --java /path/to/java21/bin/java
+  cmp settledlands-0.8.0-build261-idle-look-punchy-animation.jar /tmp/rebuilt261.jar
+  python3 tests/gate_build261.py --base settledlands-0.8.0-build260-npc-facing-sounds.jar \
+      --jar settledlands-0.8.0-build261-idle-look-punchy-animation.jar \
+      --java /path/to/java21/bin/java --gson-source /path/to/gson-parent-2.10.1.tar.gz
+
+Изолированный runtime test idle gaze/Auto-AI:
+  python3 tests/jvm_auto_ai261.py --java /path/to/java21/bin/java \
+      --jar settledlands-0.8.0-build261-idle-look-punchy-animation.jar \
+      --gson-source /path/to/gson-parent-2.10.1.tar.gz
+
+Анимационный и Punchy-style first-person fixture:
+  python3 tests/jvm_punchy_fp261.py --java /path/to/java21/bin/java \
+      --jar settledlands-0.8.0-build261-idle-look-punchy-animation.jar \
+      --gson-source /path/to/gson-parent-2.10.1.tar.gz
+
+Полный Minecraft/NeoForge/modpack и конкретная версия Punchy не запускались. Release gate PASS не является подтверждением клиентской игровой визуализации.

@@ -1,8 +1,16 @@
-# AI-GUIDE — актуальное состояние build 260 (NPC sounds/facing/dialogue look)
+# AI-GUIDE — актуальное состояние build 261 (idle gaze / animations / Punchy)
 
 Сначала `START-HERE-RU.md` → `HANDOFF-NEXT-SESSION-RU.md` → этот файл; затем обновлять `SESSION-STATE.md`. Отвечать по-русски. Видео не просить.
 
-## Build 260 — актуальный кандидат
+## Build 261 — текущий релизный кандидат
+
+Точный baseline Build 260 (`8d47171845652c1a3499643ca1936a7d6b742d9e88811751d94d84bef47d2ebc`). `NpcAutoAiEngine255.tickIdleLookAround` медленно/случайно меняет только yaw головы, когда NPC действительно idle; игрок, диалог, бой, маршрут и движение имеют приоритет. Для Ivy при доступном EMF/ETF один Fresh Animations/TnM bridge остаётся активным также в разговоре и при full-body Blockbench-клипе. Клип накладывается поверх FA/TnM, а обе ноги при реальном перемещении сохраняют базовую gait-позу. При отказе optional animation stack остаётся BBModel actor fallback.
+
+First-person compatibility: добавлен client mixin на `ItemInHandRenderer.renderHandsWithItems` и possession-context для прямого `PlayerModel` рендера; так руки/texture NPC могут заменить Steve, даже когда first-person мод не идёт через `RenderArmEvent` или PAL marker. Код не зависит от классов Punchy и имеет `require=0`. Версия Punchy пользователя неизвестна, сам Punchy и игра не запускались: не выдавать тестовое покрытие за подтверждение конкретного mod build; обязательно отправить чеклист.
+
+`tests/gate_build261.py` PASS: reproducible JAR, точный seven-changed + one-added diff, структуру JAR/TOML/mixins, текущий 1.21.1 boolean ABI, idle-angle/body invariant, hurt→dialogue/full-body custom clip + locomotion fixture, first-person NPC texture/animated arm fixture и inherited AI checks. Real Minecraft/NeoForge/full modpack не запускались.
+
+## Build 260 — историческая база и сохранённые требования
 
 User reports и исправления: у обычного `GuideNpc` default ambient/hurt/death фактически были Skeleton sounds; заменены на Villager events. Тумблер «смотрит на игрока» раньше делал `LookControl.setLookAt`, тем самым поворачивая всё тело при walking; заменено на `lookHeadAtPlayer`. `shouldLookAtPlayer` принимает toggle OR `npc.isTalking()`, а оба рендер-режима пропускают head-yaw suppression во время диалога. Во время горизонтальной наземной ходьбы `NpcMotionBridge256` временно выравнивает корпус по `getDeltaMovement()` независимо от toggle, затем восстанавливает все body yaw значения.
 
