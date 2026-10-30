@@ -26,6 +26,8 @@ Build 263 `settledlands-0.8.0-build263-cutscene-fade.jar`, 2,274,540 байт, S
 * Если тело остаётся пустым — причина не в миксине fade, искать дальше.
 После эксперимента вернуть миксин на место, не выпускать 후보 без понимания причины.
 
+Собран диагностический JAR `settledlands-0.8.0-build263-cutscene-fade-diag.jar`, 2 252 523 байт, SHA-256 `2da16c8ec809d62b075c246687c04ac9e51d98b1252a1ef9cced2b708e295ce9`. Отличается от кандидата c80 только удалением `CutsceneGraphFadeUiMixin263` из `client` списка `settledlands.mixins.json`; все 11 классов fade остаются, `CutsceneCameraFadePlaybackMixin263` (fade sequencing) не тронут. `validate_jar.py` vs Build 262: ВСЕ ПРОВЕРКИ ПРОЙДЕНЫ, 435 записей, 388 классов, testzip OK.
+
 Fade-требования сохранены: миксины камеры/overlay не трогались, два независимых toggle, 500 мс, камера после полного чёрного, fade-in после playing-signal callback.
 
 ## Build 262 — исторический плавный разворот после остановки, случайный поворот торса; gates PASS
