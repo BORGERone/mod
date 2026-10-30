@@ -1,12 +1,13 @@
 # SESSION-STATE — SettledLands
 
-Обновлено: 2026-10-30. Ветка: `arena/b98b1cb0-mod` (имя ветки задаётся платформой, переименовать нельзя).
+Обновлено: 2026-10-31. Ветка: `arena/b98b1cb0-mod` (имя ветки задаётся платформой, переименовать нельзя).
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build274-pursuit-hitport-fix.jar` — Build 274, все 4 gates PASS.
-Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`).
-Что и почему исправлено — `README-Build273-RU.md`, `README-Build274-RU.md`.
+`settledlands-0.8.0-build275-pursuit-stock-node.jar` — Build 275, все 4 gates PASS.
+Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
+→ 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ).
+Что и почему исправлено — `README-Build273-RU.md`, `README-Build274-RU.md`, `README-Build275-RU.md`.
 
 ## Найденные краши (хронология)
 
@@ -30,6 +31,8 @@
 | `tools/classfile.py` | парсер class-файлов и байткода (без JDK) |
 | `tools/patch_build273.py` | патч 272→273 на уровне байткода (удаление методов, retarget shadow) |
 | `build273-src/` | исходники build 273 (2 mixin-а + скрипт + README) |
+| `build275-src/` | исходники build 275: `PursuitGraphNode272`, 2 mixin-а, `patch_build275.py`, README, stubs |
+| `tools/patch_build275.py` | сборка 275: подмена 3 классов, +1 новый mixin, mixins.json, toml, patch-info |
 | `AI-GUIDE-SettledLands.md` | гайд из build 228 (актуальные разделы про сборку/ритуал доставки) |
 | `latest.log` | лог от 27.10 — там битый `build236-corpse-tex.jar`, не код |
 
@@ -45,16 +48,18 @@ Gate 3 — единственный, который ловит «Critial injecti
 
 ## Открытый хвост
 
-* Ввод символов в поле ноды преследования: в build 272 он опирался на
-  `charTyped(CI)V`, которого у `NpcDialogueGraphScreen` нет. Нужна сборка из
-  исходников, где экран сам объявляет `charTyped(char,int)Z` (см.
-  `README-Build273-RU.md`, раздел «Что пока не работает»).
+* Build 275 закрыл три пункта из 274: портов не было (инжектор `hitPort` → -1 удалён),
+  карточка была 280×140 (теперь стоковая 220×100 со стоковой палитрой), ввод в поле
+  не работал (`charTyped(char,int)` слит в экран миксином `NpcPursuitTypingMixin275`).
+* Мёртвый код из 272 остался, не мешает: `NpcStatsGraphUi.width/height/hitPort` ветка
+  `type == 16` — таких нод нет (нода преследования имеет тип 2 / TRIGGER).
 * Build 263 CUTSCENE fade по-прежнему не включать.
 * Build 269/270 отозваны.
 
 ## Окружение песочницы
 
-* `python3` есть, JDK/javac — нет, поэтому пересборка Java-исходников здесь
-  невозможна: правки только на уровне байткода через `tools/`.
+* `python3` есть, JDK/javac в PATH нет; Java-исходники собираются вендорным
+  `tools/vendor/ecj-3.46.100.jar` против заглушек `tools/api271/` (нужен только
+  `java` из временного `/tmp/jdk4`). Home-путь сборки: `build275-src/`.
 * Прямого интернета нет; Google Drive и GitHub — через коннекторы.
 * Скачанные с Drive файлы попадают в `google_drive/` (в git не коммитятся).
