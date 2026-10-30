@@ -3,8 +3,8 @@ BUILD 263 GATE: PASS
 Baseline: settledlands-0.8.0-build262-smooth-npc-turning.jar
 Baseline SHA-256: 21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531
 Candidate: settledlands-0.8.0-build263-cutscene-fade.jar
-Candidate size: 2,274,568 bytes
-Candidate SHA-256: 5d7d6bee530d28f48b62cd2b598ecd24cb084628317e7f5692f8077edfbcc4cd
+Candidate size: 2,274,540 bytes
+Candidate SHA-256: 03e3d9c9152adaf7b8afeb3c6a7693787987221a825944aad445f03a1830c716
 
 Release gate command:
 python3 tests/gate_build263.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --jar settledlands-0.8.0-build263-cutscene-fade.jar --java /path/to/java21
@@ -14,6 +14,7 @@ PASS checks:
 - `validate_jar.py`: ZIP integrity, 435 entries, 388 classes, TOML version, paired language keys, registered mixins, classfile structures.
 - `verify_jar.py`: expected exact diff, added classes, mixin configuration, metadata and languages.
 - Exact diff against Build 262: 7 changed entries; 11 added class entries; all other baseline entries byte-identical.
+- UI regression guard: the new fade mixin does not mutate the base `inspectorWidgets` list or visibility of existing controls; it restores `buildingInspector` in `finally` and clips only its two added buttons.
 - Java 21 `jvm_verify.py`: patched GuideDialogue and NpcCopyModEvents, actual `CutsceneCameraClient.handlePlay(double[][],float,int)` descriptor, and every new mixin/helper callback including cancellable start/playing hooks link and pass JVM bytecode verification.
 - Java 21 runtime on exact candidate class files: fade phases; camera and playing signal remain deferred until full black; queued start replays on client executor; fade-in begins only after camera-start callback; fade-out-only and fade-in-only semantics; missing-start timeout; stale previous-scene end signal does not cancel the pending scene; playback cleanup; NBT persistence; Node copy/undo; independent legacy animation/movement flags; initial and chained-scene ordering.
 

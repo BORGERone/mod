@@ -23,11 +23,15 @@ Build 263 собран только от Build 262 с SHA-256
 - `NpcDialogueGraph.save(): CompoundTag`, `load(CompoundTag): NpcDialogueGraph`,
   `Node.copy(): Node` и `NpcDialogueGraphScreen.widgets(): void`.
 
-UI mixin повторно использует существующие `button`, `remember`, `changed`, `widgets`
-и inspector geometry. Fade flags — отдельные `@Unique` Node-поля через
-`CutsceneFadeNodeAccess263`; `Node.copy()` переносит их в undo/duplicate snapshots.
-NBT записывает `CutsceneFadeOut`/`CutsceneFadeIn`. Старые поля `animLoop` и
-`moveEscort` не переиспользуются.
+UI mixin использует существующие `button`, `remember`, `changed`, `widgets` и
+геометрию inspector. После сообщения о пустых инспекторах убран обход всего списка
+`inspectorWidgets`: базовый экран сам определяет видимость своих контролов; только две
+добавленные fade-кнопки получают локальную проверку clipping. Исходное значение
+`buildingInspector` возвращается через `finally`, даже при ошибке добавления кнопок.
+Fade flags — отдельные `@Unique` Node-поля через `CutsceneFadeNodeAccess263`;
+`Node.copy()` переносит их в undo/duplicate snapshots. NBT записывает
+`CutsceneFadeOut`/`CutsceneFadeIn`. Старые поля `animLoop` и `moveEscort` не
+переиспользуются.
 
 ## Сетевой/UI и временной порядок
 

@@ -2,13 +2,11 @@
 
 ## Build 263 — fade-затемнение и проявление катсцен; sequencing fix включён
 
-Build 263 `settledlands-0.8.0-build263-cutscene-fade.jar`, 2,274,568 байт, SHA-256 `5d7d6bee530d28f48b62cd2b598ecd24cb084628317e7f5692f8077edfbcc4cd`. Точная база Build 262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`. Source ZIP `SettledLands-Build263-Cutscene-Fade-Source.zip`; размер и SHA записаны в `SHA256SUMS-build263.txt` вне ZIP.
+Build 263 `settledlands-0.8.0-build263-cutscene-fade.jar`, 2,274,540 байт, SHA-256 `03e3d9c9152adaf7b8afeb3c6a7693787987221a825944aad445f03a1830c716`. Точная база Build 262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`. Source ZIP `SettledLands-Build263-Cutscene-Fade-Source.zip`; размер и SHA записаны в `SHA256SUMS-build263.txt` вне ZIP.
 
 На CUTSCENE-ноде две независимые галки. Строгая последовательность: закончить fade-to-black, затем запустить камеру и playing signal, затем при включённом toggle начать fade-from-black. Fade-out-only открывает слой мгновенно при старте камеры; fade-in-only ждёт сигнала камеры на чёрном. Потерянный стартовый сигнал не удерживает чёрный экран дольше 10 секунд. Фаза — 500 мс. Флаги отдельные, сохраняются в NBT/Node.copy; `animLoop` и `moveEscort` не используются.
 
-Основной и независимый backup gates прошли после fix: deterministic rebuild, structural/exact diff, JVM verifier (включая `handlePlay(double[][],float,int)` и cancellable callbacks), runtime sequencing, NBT/copy/chained scenes; manifest 668/668 и ZIP reproduced byte-identically. Итоговые логи: `GATE-RESULT-263.txt`, `GATE-BACKUP-RESULT-263.txt`; суммы в `SHA256SUMS-build263.txt`. Minecraft/NeoForge не запускались; обязателен игровой тест на копии мира по `CHECKLIST-TEST-BUILD263-RU.md`. Видео не просить.
-
-Не commit/push ещё: branch `arena/24676dbe-mod`. Следом проверить diff/status, commit и push только в эту ветку, проверить GitHub remote sizes JAR/ZIP, затем выдать кликабельные ссылки (JAR первым, ZIP вторым) с размером/SHA, `certutil` и «Сохранить ссылку как…». `present_file` показать JAR последним.
+Основной и независимый source ZIP gates прошли после UI hotfix: manifest 670/670, архив побайтно воспроизводится; static guard подтверждает, что новые fade-кнопки не переписывают visibility базовых inspector widgets. Ветка `arena/24676dbe-mod`; Build 262 и предыдущий Build 263 сохранены в Git history/source backup. Minecraft/NeoForge не запускались: перед финальной выдачей/подтверждением пройти проверку всех типов нод по обновлённому checklist. Не объявлять UI-фикс подтверждённым в игре.
 
 ## Build 262 — исторический плавный разворот после остановки, случайный поворот торса; gates PASS
 

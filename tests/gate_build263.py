@@ -129,7 +129,13 @@ def static_semantics(base: pathlib.Path, jar: pathlib.Path) -> None:
     assert 'node.animLoop' not in helper and 'node.moveEscort' not in helper
     assert 'CutsceneFadeNodeAccess263' in helper and 'CutsceneFadeGraphData263.copy' in (
         ROOT / 'src/build263/dev/settledlands/mixin/CutsceneNodeFadeMixin263.java').read_text()
-    print('OK exact Build 262 diff; independent node fields, persistence, undo copy, UI and chained play hooks', flush=True)
+    ui_mixin = (ROOT / 'src/build263/dev/settledlands/mixin/CutsceneGraphFadeUiMixin263.java').read_text()
+    assert 'inspectorWidgets' not in ui_mixin and 'for (AbstractWidget' not in ui_mixin
+    assert 'boolean wasBuildingInspector = buildingInspector;' in ui_mixin
+    assert 'buildingInspector = wasBuildingInspector;' in ui_mixin
+    assert 'fadeOutWidget.visible = fitsInspector(fadeOutWidget);' in ui_mixin
+    assert 'fadeInWidget.visible = fitsInspector(fadeInWidget);' in ui_mixin
+    print('OK exact Build 262 diff; isolated fade-widget clipping, independent node fields, persistence, undo copy, and chained play hooks', flush=True)
 
 
 def main() -> None:

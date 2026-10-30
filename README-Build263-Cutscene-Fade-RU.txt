@@ -26,11 +26,11 @@ save/load, copy и chained playback подключены отдельными mi
 новых class-записей добавлены; остальные файлы JAR побайтно сохранены. Список,
 размеры и SHA-256 — в `GATE-RESULT-263.txt` и `SHA256SUMS-build263.txt`.
 
-Проверки: детерминированная сборка, структурный валидатор, точный diff, Java 21
-verifier всех новых callbacks и runtime-регрессии очередности: камера не запускается
-до полного затемнения; отложенные play/playing сигналы освобождаются на чёрном;
-fade-in начинается только после старта камеры. Также проверены NBT/copy, старые
-поля и последовательные сцены. Основной и independent source ZIP gates прошли.
-Minecraft/NeoForge и игровой мир не запускались; реальное применение mixin/UI и
-интеграцию с модпаком нужно проверить на копии мира по
-`CHECKLIST-TEST-BUILD263-RU.md`. Видео не нужно.
+Проверки: deterministic rebuild, структурный валидатор, exact diff, Java 21 verifier
+всех callbacks и runtime-регрессии очередности fade/camera/NBT/copy/chained scenes.
+После сообщения о пустых инспекторах UI-mixin изменён: он больше не переписывает
+видимость всех уже созданных inspector widgets; clipping вычисляется только для двух
+новых fade-кнопок, состояние `buildingInspector` восстанавливается в `finally`.
+Основной и независимый source ZIP gates после этого hotfix PASS; manifest 670/670,
+архив воспроизводится побайтно. Minecraft/NeoForge не запускались; инспекторы всех
+типов нод нужно проверить на копии мира по `CHECKLIST-TEST-BUILD263-RU.md`. Видео не нужно.
