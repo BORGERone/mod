@@ -2,15 +2,15 @@
 
 ## 1. Актуальное состояние
 
-**Build 259 — NPC movement/combo tuning, основной и независимый JVM-gate PASS:** `settledlands-0.8.0-build259-npc-combo-tuning.jar`, собран от build 258. У NPC удалён явный поворот корпуса/взгляда на combat target во время ходьбы; спокойная скорость повышена на 10%; ближние и рывковые атаки используют многосоставные Ivy-комбинации с несколькими попаданиями. Поворот головы к цели во время ходьбы намеренно не включён. Build 258 boolean ABI hotfix и ранее согласованные Stats/Auto-AI/прогулка/возврат домой сохранены.
+**Build 260 — NPC sounds/facing/dialogue look, основной и независимый JVM-gate PASS:** `settledlands-0.8.0-build260-npc-facing-sounds.jar`, собран от build 259. Скелетные ambient/hurt/death звуки обычного GuideNpc заменены на звуки жителя. Тумблер «смотрит на игрока» теперь управляет только головой; отрисовываемый корпус при ходьбе выравнивается по движению при любом состоянии тумблера. Диалог принудительно разрешает смотреть на игрока даже при выключенном тумблере. Build 259 комбо/скорость и ABI hotfix 258 сохранены.
 
-Прочитать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`; затем `SESSION-STATE.md`, `README-Build259-NpcComboTuning-RU.txt`, `API-COMPAT-259-RU.md`, `CHECKLIST-TEST-BUILD259-RU.md` и `BACKUP-259-RU.txt`. Видео не просить.
+Прочитать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`; затем `SESSION-STATE.md`, `README-Build260-NpcFacingSounds-RU.txt`, `API-COMPAT-260-RU.md`, `CHECKLIST-TEST-BUILD260-RU.md` и `BACKUP-260-RU.txt`. Видео не просить.
 
 ## 2. Установка и статус
 
-На копии мира удалите старые JAR SettledLands и оставьте только build 259. Автоатака hostile-мобов, масштабирование HP/урона/скорости через Stats, автономное блуждание и возврат домой сохранены. Основной и независимый JVM gate прошли, включая второе попадание в Ivy-комбо; реальный Minecraft/NeoForge или пользовательский modpack **не запускался**, игровое подтверждение ещё нужно.
+На копии мира удалите предыдущие JAR SettledLands и оставьте только build 260. Основной и независимый JVM gate прошли; настоящий Minecraft/NeoForge/modpack **не запускался**, поэтому необходима пользовательская проверка по чеклисту. Если возникнет ошибка — свежие `latest.log` и crash report; видео не требуется.
 
-Точный JAR/Source ZIP SHA и размеры — в `SHA256SUMS-build259.txt`. Для ручного теста используйте `CHECKLIST-TEST-BUILD259-RU.md`; если будет ошибка, нужны свежие `latest.log` и crash report, видео не требуется.
+JAR/Source ZIP размеры и SHA — в `SHA256SUMS-build260.txt`. Архив содержит builder, исходники, runtime и negative-control tests.
 
 ## Историческая документация build 256
 

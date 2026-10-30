@@ -1,0 +1,4 @@
+8d47171845652c1a3499643ca1936a7d6b742d9e88811751d94d84bef47d2ebc  settledlands-0.8.0-build260-npc-facing-sounds.jar
+d7470c35583bf7a90bd385400205ad53ee6b1f8bb8bd1c50e1807004160e8ff0  SettledLands-Build260-NpcFacingSounds-Source.zip
+cc7b25b4a3135c13ea84afef7f43f10e6cdbf48ee3ec96f3350d6fcd61788d68  GATE-RESULT-260.txt
+cc7b25b4a3135c13ea84afef7f43f10e6cdbf48ee3ec96f3350d6fcd61788d68  GATE-BACKUP-RESULT-260.txt

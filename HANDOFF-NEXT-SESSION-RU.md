@@ -1,23 +1,26 @@
-# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально build 259
+# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — актуально build 260
 
-## Build 259: NPC movement/combo tuning поверх ABI hotfix 258
+## Build 260: звуки, корпус при ходьбе, взгляд в диалоге
 
-Новый запрос: NPC во время ходьбы не должен разворачивать корпус к игроку/цели (head-only было опционально; выбрано совсем не целиться во время движения), скорость ходьбы немного увеличить, атаки выполнять сериями Ivy вместо одиночного первого удара.
+Пользователь сообщил, что NPC звучат как скелеты; поворачиваются корпусом к игроку при включённом «смотрит на игрока»; при выключенном тумблере ходят боком; и попросил, чтобы во время диалога NPC смотрел на игрока даже при выключенном тумблере.
 
-**Build 259:** `settledlands-0.8.0-build259-npc-combo-tuning.jar`, 2 256 712 байт, SHA-256 `ab44f422a423a428f198ae4393e55ad8409857e10e85674d1ccfa093790f5da7`. Точная база — build 258 `settledlands-0.8.0-build258-stats-abi-fix.jar`, SHA `15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e`. Меняются ровно три JAR entries: `NpcAutoAiEngine255.class`, TOML, patch-info; остальные 420 entries, включая `GuideNpc.class` и анимационный рендер, идентичны базе.
+**Build 260**: `settledlands-0.8.0-build260-npc-facing-sounds.jar`, 2 257 565 байт, SHA-256 `8d47171845652c1a3499643ca1936a7d6b742d9e88811751d94d84bef47d2ebc`; точная база build 259 `settledlands-0.8.0-build259-npc-combo-tuning.jar`, SHA `ab44f422a423a428f198ae4393e55ad8409857e10e85674d1ccfa093790f5da7`. Source ZIP `SettledLands-Build260-NpcFacingSounds-Source.zip`: 9 549 285 байт, SHA-256 `44ff3e8bb1f5a4c0c3e58c5bce9ddcede205085168b063ca9cd30dfc3e619c5a`. В `GuideNpc` непосредственно подтверждены Skeleton constants в `getAmbientSound`, `getHurtSound`, `getDeathSound`; заменены на `VILLAGER_AMBIENT/HURT/DEATH`. Не смешивать это с остающимися combat sound cues Warden/Wolf: исходные три skeleton voices исправлены.
 
-Решения реализации:
-- Во время navigation в `stepCombat` больше не вызываются `faceTarget` и `LookControl.setLookAt(target,...)`; целевой взгляд (включая head-only) во время ходьбы не задаётся. В стационарной фазе боевого действия facing сохранён; навигационное движение должно дать модели корпус по направлению движения.
-- Спокойный коэффициент `navigationSpeedFactor`: `0.50 → 0.55` (+10%). Боевая скорость `1.0`, Stats multiplier, inverse movement-attribute compensation и общий stat-driven speed не менялись.
-- `pickMeleeCombo` всегда выбирает `JAB_RIGHT_CROSS` или `JAB_JAB_HOOK`; оба используют существующие Ivy multi-hit clips/impact ticks. Дальний lunge также запускает одну из серий; короткое скольжение импульса сохранено. Отдельный dodge и его анимация сохранены.
+В `GuideNpc.customServerAiStep` ветка player-look больше не вызывает `LookControl.setLookAt`, потому что он разворачивает torso. Условие заменено на `NpcAutoAiEngine255.shouldLookAtPlayer`: profile toggle OR active dialogue. Ближайшая цель обрабатывается как раньше, но `lookHeadAtPlayer` изменяет лишь `yHeadRot`. Рендерер больше не прячет yaw головы во время `isTalking`, даже если toggle off. `NpcMotionBridge256` при наземном горизонтальном движении временно выставляет `yBodyRotO/yBodyRot` по вектору движения для полного, Ivy/EMF и fallback render paths, затем всегда восстанавливает state в `finally`; применяется независимо от profile flag и без permanent entity mutation. Это закрывает отчёт «при выключенном всё равно идёт боком».
 
-`tests/gate_build259.py` прошёл в основном дереве и независимо из source ZIP: deterministic rebuild, exact diff, boolean ABI, Java 21 verification, fixture с первым и follow-up hit, Stats 10/10/10 и обновлениями, наследуемый Auto-AI, 4 verifier-valid mutants. Логи: `GATE-RESULT-259.txt`, `GATE-BACKUP-RESULT-259.txt`; checksums: `SHA256SUMS-build259.txt`. Реальный Minecraft/NeoForge/full modpack **не запускался** — не заявлять игровую проверку.
+Build 260 сохраняет 259 Ivy-combos/follow-up hits, +10% calm speed, Auto-AI, Stats, wander/return и boolean ABI hotfix 258. В JAR меняются ровно пять entries: `NpcAutoAiEngine255.class`, `GuideNpc.class`, `NpcMotionBridge256.class`, TOML, patch-info; остальные 418 идентичны базе.
 
-Source ZIP: `SettledLands-Build259-NpcComboTuning-Source.zip`; включает точный base-258 JAR, build-259 JAR, исходники, builder и tests. Проверить `BACKUP-MANIFEST.sha256` и независимую повторяемость ZIP. Инструкции повтора — `BACKUP-259-RU.txt`.
+`tests/gate_build260.py`: основной gate PASS и independent source ZIP gate PASS. Проверены deterministic rebuild, exact diff, звуковые field refs, отсутствие `LookControl.setLookAt` в patched branch, JVM linkage, runtime toggle/dialogue/head-only scenarios, наследуемые Stats/Auto-AI/combo tests и 5 verifier-valid mutants. Не заявлять реальную игру: Minecraft/NeoForge/full modpack не запускались.
 
-Следующий игровой шаг: копия мира, только build 259 в `mods`; проверить body направление на пути к hostile цели, спокойную скорость, два удара в Ivy-комбо/последовательность при lunge, Stats, Auto-AI, wandering/return, обычный ABI-тест. Чеклист `CHECKLIST-TEST-BUILD259-RU.md`. Видео не просить; если падает — свежие `latest.log`/crash report. Все ранее согласованные механики 237–258 сохранять.
+Source ZIP: `SettledLands-Build260-NpcFacingSounds-Source.zip`; включает baseline259/new260 JAR, code, tools, tests, manifest. Сверить `BACKUP-MANIFEST.sha256`, reproduce source ZIP и independent gate. Документы: `API-COMPAT-260-RU.md`, `README-Build260-NpcFacingSounds-RU.txt`, `CHECKLIST-TEST-BUILD260-RU.md`, `BACKUP-260-RU.txt`.
 
-Работать/пушить только ветку `arena/24676dbe-mod`. При выдаче jar — ссылка на jar первой, source ZIP второй, SHA+размер, JAR открыть через `present_file` последним.
+Следующий шаг: user test build260 на копии мира, без остальных JAR SettledLands: проверить ambient/hurt/death sound, orientation при walking с toggle on/off, head-only look и диалог при toggle off, а также regressions из чеклиста. Видео не просить. Ветка только `arena/24676dbe-mod`; jar link первой, ZIP второй, SHA+размер, открыть JAR последним.
+
+## История build 259 и сохранённые требования
+
+Build259 сначала убрал look-at на combat target в Auto-AI path, но user подтвердил, что profile toggle в `GuideNpc.customServerAiStep` всё ещё разворачивает корпус, а выключенный toggle оставляет walking torso боком. Не считать build259 исправлением этих замечаний; build260 добавляет отдельные fixes выше. Build259 intent/combos сохранены: calm pace +10%, multi-hit jab-cross/jab-jab-hook в обычных и lunge attacks.
+
+Все прежние settled features 237–258 сохранять, особенно Stats/Auto-AI hostile targets, wander/return, melee clips и build258 boolean ABI fix. Видео не просить.
 
 ## История build 254
 

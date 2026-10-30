@@ -1,0 +1,10 @@
+OK exact Build 259 ancestry and gate evidence
+OK deterministic Build 260 rebuild
+OK reproducible JAR sha256=8d47171845652c1a3499643ca1936a7d6b742d9e88811751d94d84bef47d2ebc size=2257565
+OK structural JAR validator
+OK ZIP/TOML/assets/mixins validator
+OK five-entry diff; villager voice refs; look toggle only changes head; dialogue override; torso follows movement; build-258 ABI retained
+OK Java 21 verification of GuideNpc look branch and sound helpers
+OK Java 21 scenarios: head-only look, toggle override in dialogue, inherited Stats/Auto-AI/combo behavior
+OK five verifier-valid Auto-AI, speed and look-toggle mutants
+BUILD 260 GATE: PASS (skeleton voice replaced; body follows travel direction; player-look is head-only; dialogue forces look; 1.21.1 ABI and Build 259 mechanics preserved; 5 mutants killed; full game not run)

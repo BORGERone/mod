@@ -1,16 +1,16 @@
 # SettledLands — SESSION-STATE, 30.10.2026
 
-## Build 259 — готов к игровой проверке; JVM gate и независимый backup gate PASS
+## Build 260 — кандидат к игровой проверке; JVM и backup gates PASS
 
-Пользователь попросил: во время ходьбы не поворачивать корпус NPC к игроку/цели; head-only было необязательным, выбрано вообще не задавать взгляд на цель при движении; слегка увеличить скорость; использовать серии атак Иви, а не одиночный первый удар.
+Пользователь сообщил о скелетных звуках, повороте корпуса к игроку при включённом look toggle, боковой ходьбе при выключенном toggle, и попросил сохранять взгляд на игрока во время диалога независимо от toggle.
 
-Кандидат `settledlands-0.8.0-build259-npc-combo-tuning.jar`, 2 256 712 байт, SHA-256 `ab44f422a423a428f198ae4393e55ad8409857e10e85674d1ccfa093790f5da7`, точная база build 258 SHA `15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e`. Три-entry diff: Engine, TOML, patch-info; все 420 прочих записей идентичны.
+Build260 `settledlands-0.8.0-build260-npc-facing-sounds.jar` основан на точном build259. В базовом `GuideNpc` найдены вызовы `SKELETON_AMBIENT/HURT/DEATH`, заменены на VILLAGER variants. Серверный `LookControl.setLookAt` в player-look branch заменён head-only yaw update. Новый predicate возвращает true для profile flag или `isTalking`; renderer не сбрасывает голову при диалоге с выключенным toggle. В `NpcMotionBridge256` корпус временно поворачивается по горизонтальному delta movement при ходьбе независимо от тумблера, old/current body yaw восстанавливаются в `finally`.
 
-Во время combat navigation удалены `faceTarget` и `LookControl.setLookAt(target,...)`; `faceTarget` при остановке и атаке оставлен. Спокойный navigation speed `0.50 → 0.55` (+10%), combat pace `1.0` и Stats scaling сохранены. Melee combo picker выбирает только multi-hit `orthodox_left_jab_right_cross` или `orthodox_jab_jab_hook`; lunge также запускает одну из серий, impulse glide сохраняется. В тесте JVM реально подтверждён follow-up удар.
+Кандидат: `settledlands-0.8.0-build260-npc-facing-sounds.jar`, 2 257 565 байт, SHA-256 `8d47171845652c1a3499643ca1936a7d6b742d9e88811751d94d84bef47d2ebc`; Source ZIP `SettledLands-Build260-NpcFacingSounds-Source.zip`, 9 549 285 байт, SHA-256 `44ff3e8bb1f5a4c0c3e58c5bce9ddcede205085168b063ca9cd30dfc3e619c5a`. Build260 сохраняет build259: Ivy multi-hit combos включая lunge, calm movement +10%, Stats-driven health/damage/speed, Auto-AI, wandering/return; и ABI fix 258. JAR diff ровно пять записей, прочие 418 идентичны.
 
-Основной и распакованный source ZIP gates прошли: `GATE-RESULT-259.txt`, `GATE-BACKUP-RESULT-259.txt`; SHA/размеры в `SHA256SUMS-build259.txt`. Путь воспроизводится `tests/gate_build259.py`, четыре verifier-valid mutants убиты. ABI hotfix 258 сохранён. Это не игровой тест: настоящий Minecraft/NeoForge/full modpack не запускался.
+Основной и независимый gate прошли: `GATE-RESULT-260.txt`, `GATE-BACKUP-RESULT-260.txt`; воспроизводимость jar/source ZIP, Java 21 linkage, runtime toggle/dialogue/head-only tests, звуковые refs, orientation source checks, пять verifier-valid mutants. Проверка в Minecraft/NeoForge/full modpack НЕ выполнялась. Передать пользователю checklist и просить real-game проверку на копии мира, видео не нужно.
 
-Артефакты: `SettledLands-Build259-NpcComboTuning-Source.zip`, `BACKUP-259-RU.txt`, `CHECKLIST-TEST-BUILD259-RU.md`, `API-COMPAT-259-RU.md`, `README-Build259-NpcComboTuning-RU.txt`. Следующий шаг — пользовательская проверка на копии мира и только build259: ориентация корпуса при подходе, скорость ходьбы, оба удара combo, Stats/Auto-AI/wander/return и запуск после ABI hotfix. Видео не просить. Ветка строго `arena/24676dbe-mod`.
+Artifacts: `SettledLands-Build260-NpcFacingSounds-Source.zip`, `API-COMPAT-260-RU.md`, `README-Build260-NpcFacingSounds-RU.txt`, `CHECKLIST-TEST-BUILD260-RU.md`, `BACKUP-260-RU.txt`, `SHA256SUMS-build260.txt`. Текущая ветка `arena/24676dbe-mod`, работать и пушить только её.
 
 ## Build 256: готов к игровой проверке (полный gate и независимый backup gate PASS)
 

@@ -1,18 +1,20 @@
-# AI-GUIDE — актуальное состояние build 259 (NPC movement/combo tuning)
+# AI-GUIDE — актуальное состояние build 260 (NPC sounds/facing/dialogue look)
 
 Сначала `START-HERE-RU.md` → `HANDOFF-NEXT-SESSION-RU.md` → этот файл; затем обновлять `SESSION-STATE.md`. Отвечать по-русски. Видео не просить.
 
-## Build 259 — актуальный кандидат
+## Build 260 — актуальный кандидат
 
-Пользователь попросил, чтобы NPC при ходьбе не поворачивал корпус на игрока/цель, немного увеличить скорость и заставить атаки идти Ivy-сериями. Head-only look был необязателен; выбрано не задавать взгляд на цель во время ходьбы.
+User reports и исправления: у обычного `GuideNpc` default ambient/hurt/death фактически были Skeleton sounds; заменены на Villager events. Тумблер «смотрит на игрока» раньше делал `LookControl.setLookAt`, тем самым поворачивая всё тело при walking; заменено на `lookHeadAtPlayer`. `shouldLookAtPlayer` принимает toggle OR `npc.isTalking()`, а оба рендер-режима пропускают head-yaw suppression во время диалога. Во время горизонтальной наземной ходьбы `NpcMotionBridge256` временно выравнивает корпус по `getDeltaMovement()` независимо от toggle, затем восстанавливает все body yaw значения.
 
-`settledlands-0.8.0-build259-npc-combo-tuning.jar`: 2 256 712 байт, SHA `ab44f422a423a428f198ae4393e55ad8409857e10e85674d1ccfa093790f5da7`; точная база build258 SHA `15698d90c57f2aca7b38e30474a130be1d9c17a489c08bf73e61b221553ad19e`. Только три JAR entries изменены: Engine class, TOML, patch-info; прочие 420 идентичны. На пути к цели больше не вызываются `faceTarget` и `LookControl.setLookAt(target,...)`; при атаке/остановке поворот на цель сохранён. Calm movement factor `0.50 → 0.55` (+10%), combat `1.0` сохранён. Every ordinary/dash attack selects one of existing multi-hit sequences: `orthodox_left_jab_right_cross` or `orthodox_jab_jab_hook`; impact arrays unchanged. Lunge impulse glide retained.
+`settledlands-0.8.0-build260-npc-facing-sounds.jar`: 2 257 565 байт, SHA-256 `8d47171845652c1a3499643ca1936a7d6b742d9e88811751d94d84bef47d2ebc`; source ZIP: 9 549 285 байт, SHA-256 `44ff3e8bb1f5a4c0c3e58c5bce9ddcede205085168b063ca9cd30dfc3e619c5a`. Build260 строится от build259 `ab44f422a423a428f198ae4393e55ad8409857e10e85674d1ccfa093790f5da7`. Exact five-entry diff: Engine, GuideNpc, renderer bridge, TOML, patch-info; 418 entries unchanged. Build258 `removeModifier(ResourceLocation)Z`, build259 Ivy multi-hit combos, +10% calm speed, Stats/Auto-AI/wander/return остаются.
 
-Основной и распакованный backup gate 259 PASS: reproducible build; exact 3-entry diff; Java 21 linkage; runtime test confirms follow-up hit; Stats default/update/reset and inherited Auto-AI tests; 4 negative mutants. Логи `GATE-RESULT-259.txt` и `GATE-BACKUP-RESULT-259.txt`, checksum index `SHA256SUMS-build259.txt`. `SettledLands-Build259-NpcComboTuning-Source.zip` содержит reproducible source/tests и build258/259 JAR, manifest обязателен. Полный Minecraft/NeoForge/full modpack не запускался — просить пользователя протестировать на копии мира по `CHECKLIST-TEST-BUILD259-RU.md`; не называть JVM-fixture игровой проверкой.
+`tests/gate_build260.py` основной и распакованный gates PASS; Java21 verifier, sound refs, profile/dialogue/toggle/head-only runtime fixtures, exact diff/rebuild, 5 negative controls. Настоящий Minecraft/NeoForge/modpack НЕ запускался: обязательно просить user проверить ambient/hurt/death, torso path facing при toggle ON/OFF и dialogue look при OFF на копии мира по чеклисту. Видео не просить.
 
-Сохранять все остальные согласованные механики: Auto-AI hostile targets, Stats-driven HP/damage/speed, wander/return-home, melee animations, build258 boolean ABI fix и ранее согласованные функции. Текущая ветка `arena/24676dbe-mod`; только она для изменений/пуша. Перед ответом сверять SHA и размеры, давать jar-ссылку первой, ZIP второй, открыть JAR последним.
+Source zip `SettledLands-Build260-NpcFacingSounds-Source.zip`, manifest обязателен. Только branch `arena/24676dbe-mod`; перед ответом сверить hashes/sizes. JAR download link первой, ZIP следующей, открыть JAR последним.
 
 ---
+
+## История инцидента:---
 
 ## История инцидента: Build 257 ABI mismatch / Build 258 hotfix
 

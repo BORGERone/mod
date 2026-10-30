@@ -1,0 +1,16 @@
+Build 260 — резервная копия и воспроизведение
+
+`SettledLands-Build260-NpcFacingSounds-Source.zip` включает исходники build259/260, exact build259 base JAR, build260 JAR, tools/tests, документы и `BACKUP-MANIFEST.sha256`. Java и Gson source не включены.
+
+Требуются Python 3.11+, Java 21 и Gson 2.10.1 source tarball SHA-256 `e358710d663ca799101a51d0568ccc6dbd30be9bc55b1a85b1a21a93e96e8a9b`. Из корня распакованного ZIP:
+
+```bash
+sha256sum -c BACKUP-MANIFEST.sha256
+python3 tests/gate_build260.py \
+  --base settledlands-0.8.0-build259-npc-combo-tuning.jar \
+  --jar settledlands-0.8.0-build260-npc-facing-sounds.jar \
+  --java /path/to/java21 \
+  --gson-source /path/to/gson-2.10.1.tar.gz
+```
+
+Ожидается `BUILD 260 GATE: PASS`. Build script `tools/patch_auto_ai260.py` должен байт-в-байт повторить JAR. Minecraft/NeoForge не запускается этим gate; реальную проверку звука, ориентации корпуса и диалогового взгляда выполняйте на копии мира по `CHECKLIST-TEST-BUILD260-RU.md`.
