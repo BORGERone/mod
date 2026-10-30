@@ -9,4 +9,7 @@ public interface GuiEventListener {
     default boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         return false;
     }
+
+    default void setFocused(boolean focused) {
+    }
 }

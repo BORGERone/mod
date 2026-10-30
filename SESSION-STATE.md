@@ -4,10 +4,11 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build275-pursuit-stock-node.jar` — Build 275, все 4 gates PASS.
+`settledlands-0.8.0-build276-pursuit-inspector.jar` — Build 276, все 4 gates PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
-→ 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ).
-Что и почему исправлено — `README-Build273-RU.md`, `README-Build274-RU.md`, `README-Build275-RU.md`.
+→ 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`).
+Что и почему исправлено — `README-Build273-RU.md`, `README-Build274-RU.md`, `README-Build275-RU.md`,
+`README-Build276-RU.md`.
 
 ## Найденные краши (хронология)
 
@@ -48,6 +49,12 @@ Gate 3 — единственный, который ловит «Critial injecti
 
 ## Открытый хвост
 
+* Build 276: `@Unique` на слитом `charTyped` в 275 приводил к переименованию метода —
+  ввода не было; теперь метод реально переопределяет `Screen#charTyped`. Инспектор ноды
+  преследования больше не триггерный: новый `NpcPursuitInspectorMixin276` прячет пресеты и
+  поле команды и строит панель «тип цели / значение / завершение».
+* Урок: `@Unique` на методе, который должен переопределять метод суперкласса, ломает
+  переопределение молча (gates этого не видят — метод структурно валиден).
 * Build 275 закрыл три пункта из 274: портов не было (инжектор `hitPort` → -1 удалён),
   карточка была 280×140 (теперь стоковая 220×100 со стоковой палитрой), ввод в поле
   не работал (`charTyped(char,int)` слит в экран миксином `NpcPursuitTypingMixin275`).
