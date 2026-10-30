@@ -20,6 +20,10 @@ Phase B - target resolution (catches "Critical injection failure" crashes)
     bytecode (injectors.defaultRequire=1 turns a miss into a hard crash)
   * @Shadow fields and methods exist in the target with the same descriptor
   * @Overwrite matches an existing method
+  * an @Inject handler that calls CallbackInfo.cancel() or
+    CallbackInfoReturnable.setReturnValue(...) but whose annotation is not
+    `cancellable = true` -> CancellationException at runtime
+    ("The call <method> is not cancellable")
   Targets from Minecraft or other mods cannot be resolved here - they are
   listed as "external" instead of being guessed at.
 
@@ -365,6 +369,8 @@ def check_targets(cf, entry, classes, problems, external, verbose):
             specs = as_str_list(cf, a.get("method"))
             if want == "overwrite":
                 specs = ["%s%s" % (m.name, m.desc)]
+            if want == "inject":
+                check_cancellable(cf, m, a, entry, problems)
             if not specs:
                 problems.append("%s: %s%s has a %s annotation without a method "
                                 "target" % (entry, m.name, m.desc, desc_kind))
@@ -442,6 +448,48 @@ def check_callback(cf, m, tm, tname, entry, kind, problems):
                            tm.desc, expected))
     if kind == "inject":
         return
+
+
+DESC_CB_INFO = "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;"
+DESC_CB_RET = "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;"
+
+
+def _invoked_returns(cf, m):
+    """True when the handler calls cancel() or setReturnValue(...)."""
+    code_attr = m.attr("Code")
+    if code_attr is None:
+        return False
+    r = Reader(code_attr.data, "%s.%s:Code" % (cf.name, m.name))
+    r.u2()
+    r.u2()
+    code = r.bytes(r.u4())
+    for off, op, _len in classfile.walk_code(code):
+        if op not in (0xb6, 0xb9):
+            continue
+        idx = int.from_bytes(code[off + 1:off + 3], "big")
+        if not 0 < idx < len(cf.cp) or cf.cp[idx] is None or cf.cp[idx][0] != 10:
+            continue
+        cls_i, nt_i = cf.cp[idx][1]
+        try:
+            owner = cf.class_name(cls_i)
+            name, desc = cf.utf8(cf.cp[nt_i][1][0]), cf.utf8(cf.cp[nt_i][1][1])
+        except ClassFormatError:
+            continue
+        if owner.startswith("org/spongepowered/asm/mixin/injection/callback/"):
+            if name in ("cancel", "setReturnValue"):
+                return True
+    return False
+
+
+def check_cancellable(cf, m, args, entry, problems):
+    """A handler that cancels must be declared cancellable = true."""
+    if as_bool(cf, args.get("cancellable"), False):
+        return
+    if _invoked_returns(cf, m):
+        problems.append(
+            "%s: %s%s calls cancel()/setReturnValue() but its @Inject is not "
+            "cancellable = true -> CancellationException \"The call is not "
+            "cancellable\" at runtime" % (entry, m.name, m.desc))
 
 
 def check_constant(cf, m, tm, tname, entry, args, problems):

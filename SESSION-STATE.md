@@ -4,9 +4,20 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build273-pursuit-mixinfix.jar` — Build 273, все 4 gates PASS.
-Собрана из build 272 (`google_drive/settledlands-0.8.0-build272-pursuit-single-node.jar`).
-Что и почему исправлено — `README-Build273-RU.md`.
+`settledlands-0.8.0-build274-pursuit-hitport-fix.jar` — Build 274, все 4 gates PASS.
+Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`).
+Что и почему исправлено — `README-Build273-RU.md`, `README-Build274-RU.md`.
+
+## Найденные краши (хронология)
+
+| Сборка | Симптом | Причина | Кто ловит |
+|--------|---------|---------|-----------|
+| 272 | старт клиента | CallbackInfoReturnable на void `focus`, @Shadow на несуществующий `selected()`, @Inject в несуществующий `charTyped` | gate 3 (цели mixin-ов) |
+| 273 | создание ноды преследования | `@Inject(TAIL)` без `cancellable = true` вызывает `setReturnValue` → CancellationException | gate 3, фаза `check_cancellable` |
+| 273 (лог 1) | старт клиента | чужой мод `hackersandslashers` (Forge-сигнатура `ModConfigSpec.Builder.define(String,String)`) | не наш код |
+
+Правило: перед каждой выдачей прогонять `tools/verify_jar.py`; если появляется
+новый класс ошибок — сначала дописать под него фазу в gate, потом чинить.
 
 ## Что лежит в репозитории
 
