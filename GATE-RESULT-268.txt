@@ -1,0 +1,2 @@
+BUILD 268 PROBE GATE: PASS (deterministic build, JAR/diff, runtime-visible Mixin metadata, dropdown plumbing, settings copy+NBT fields, model schema/PNG, 64 exact texture selections, event-only diagnostic traces)
+Minecraft/NeoForge was not launched; this probe has not been visually verified in-game.

@@ -1,14 +1,18 @@
-# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — текущий кандидат Build267
+# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — Build268, нужен игровой тест
 
-## Build267: диагностика отсутствующих skin-hook маркеров — причина не установлена
+## Build268: исправлен runtime visibility Mixin-аннотаций
 
-`latest-8.log` подтверждает загрузку Build267 и содержит рендер `GuideNpc`, но не содержит ни одной строки `[SL-PROFESSION-267]`. Пользователь подтвердил, что при выборе/сохранении графа появлялось штатное сообщение о сохранении. Дизассемблирование итогового Build267 JAR подтверждает путь: `GuideNpc.applyConfig` в GraphOnly-ветке вызывает `setProfile`, а `setProfile` непосредственно вызывает `applyProfile`. Поэтому версия «граф не сохранялся» теперь маловероятна; отсутствие метки указывает на непроявление callback либо на разницу логирования. Причина пока не доказана; визуальный эффект и реальные текстурные значения не подтверждены.
+Пользователь подтвердил штатное сообщение о сохранении графа. Байткод Build267: `GuideNpc.applyConfig` (GraphOnly) вызывает `setProfile`, который вызывает `applyProfile`; значит сохранение проходило.
 
-Из `latest-7.log` для Build266 известно, что старый handcrafted `EarlyCorpseTextureMixin` HEAD callback сработал дважды; новые Build266 `apply/resolve` метки отсутствовали. Build267 заменил этот обработчик на compiled Java `EarlyCorpseTextureMixin` (HEAD), плюс добавил common TAIL и client storage resolver; весь набор маркеров Build267 отсутствует. Это делает различие регистрации/compiled mixin байткода приоритетным направлением, но не доказывает его. В логе нет связанных SettledLands Mixin ошибок.
+Причина отсутствующих `[SL-PROFESSION-267]` установлена. Лог показывает SpongePowered Mixin 0.8.7. В helper API `tools/api264` аннотации `@Inject`, `@At`, `@Shadow`, `@Final` ошибочно имели retention `CLASS`; поэтому ECJ создал `RuntimeInvisibleAnnotations`. Mixin 0.8.7 обнаруживает injector через `InjectionInfo.getInjectorAnnotation` → `Annotations.getSingleVisible`, поэтому compiled handlers пропускались без ожидаемых callback-логов. Исходник для точного Mixin tag `releases/0.8.7` сверён, commit `4053421aa10aaac6127d969028a29c94fe3054f6`: эти аннотации имеют `RUNTIME`, а `@Mixin` правильно остаётся `CLASS`. Старый Build266 handwritten HEAD callback имел `RuntimeVisibleAnnotations` и срабатывал — это согласуется с диагнозом.
 
-**Не собирать/не выдавать новый JAR до локализации.** Build267 основан на точном Build262, без Build263 CUTSCENE fade; Minecraft/NeoForge здесь не запускались. Пользовательские логи не включать в backup.
+Build268 использует отдельные исправленные stubs `tools/api268`, сохраняет точную базу Build262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`, Build263 CUTSCENE fade исключён. Три `@Inject` handler и shadow-field annotations в JAR проверены как RuntimeVisible. Основной gate и полный gate из clean source ZIP: PASS. JAR 3 079 012 байт, SHA-256 `bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5`. Размеры/SHA обоих файлов — в `SHA256SUMS-build268.txt`. Minecraft/NeoForge не запускались и скин визуально не подтверждён.
 
-Build267 собирается от точной базы Build262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`; Build263 CUTSCENE fade не включён. `tests/gate_build267.py` и `tests/gate_backup267.py` — PASS. JAR 3 078 940 байт, SHA-256 `a555d675ed93546a244ceff445d538021e7e65572fa5636d0b7f69e8c0ebb7f6`. Diff baseline: 5 добавленных, 8 изменённых, 416 идентичных entries. SHA/размер source ZIP находятся в `GATE-RESULT-267.txt` и `SHA256SUMS-build267.txt` в репозитории; сам ZIP не включает собственные sums/GATE-файлы. Minecraft/NeoForge не запускались. Source/docs: `README-Build267-Profession-Skin-Probe-RU.txt`, `CHECKLIST-TEST-BUILD267-RU.md`, `BACKUP-267-RU.txt`.
+Дальше выдать пользователю Build268 на тест копии мира по `CHECKLIST-TEST-BUILD268-RU.md`; свежий лог должен показать `[SL-PROFESSION-268] early/apply`, затем `resolve ... exists=true`. Только после этого считать, что callback теперь работает; отдельное визуальное подтверждение всё равно обязательно. Пользовательские логи не включать в backup.
+
+## Build267: установленный диагностический пакет, не skin fix
+
+`latest-8.log` подтверждает загрузку Build267, рендер `GuideNpc`, сохранение графа и отсутствие всех `[SL-PROFESSION-267]` меток. Причину объясняет visibility-ошибка выше. Build267 не выдавать как исправление.
 
 ## Build266: диагностический predecessor, skin не подтвердил
 

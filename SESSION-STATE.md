@@ -1,12 +1,14 @@
 # SettledLands — SESSION-STATE, 30.10.2026
 
-## Текущее расследование: Build267 — профессия сохраняется, skin hooks не видны
+## Build268: причина отсутствующих callback установлена; ожидается игровой тест
 
-Пользователь подтвердил, что после выбора/закрытия графа в Build267 появлялось штатное сообщение о сохранении. `latest-8.log` однозначно показывает загрузку Build267 и рендер `GuideNpc`, однако в нём нет ни одной `[SL-PROFESSION-267]` метки и нет зафиксированных разрешений profession model.
+Пользователь подтвердил штатное сообщение о сохранении графа. Байткод Build267 подтверждает путь `GuideNpc.applyConfig` (GraphOnly) → `setProfile` → `applyProfile`.
 
-Байткод итогового JAR проверен: `GuideNpc.applyConfig` в `GraphOnly`-ветке вызывает `GuideNpc.setProfile`; метод `setProfile` записывает профиль и непосредственно вызывает `GuideNpc.applyProfile()`. Следовательно, предположение «граф не сохранён» не объясняет отсутствие меток, если сообщение относится к этому действию. В Build266 старый handcrafted HEAD `EarlyCorpseTextureMixin` печатал две строки, тогда как новые Build266 `apply/resolve` probes отсутствовали. В Build267 этот HEAD mixin заменён на ECJ-compiled Java handler; новый HEAD, новый common TAIL и client storage resolver все без маркеров. Это сужает исследование к реальному применению callbacks/сборке mixin-классов либо захвату их вывода, но конкретная причина не установлена.
+Причина отсутствия `[SL-PROFESSION-267]` установлена по класс-файлам и точному Mixin 0.8.7. В compiler stubs `tools/api264` у `@Inject`, `@At`, `@Shadow`, `@Final` была ошибочная `RetentionPolicy.CLASS`. Скомпилированные методы получили `RuntimeInvisibleAnnotations`, тогда как Mixin 0.8.7 распознаёт обработчики через `InjectionInfo.getInjectorAnnotation` → `Annotations.getSingleVisible`. Поэтому compiled handlers пропускались. Старый handcrafted Early hook Build266 имел `RuntimeVisibleAnnotations` и работал. Точный source tag `releases/0.8.7`, commit `4053421aa10aaac6127d969028a29c94fe3054f6`, подтверждает, что эти четыре аннотации имеют retention `RUNTIME`; `@Mixin` — `CLASS`.
 
-Ошибок Mixin, явно относящихся к SettledLands, в `latest-8.log` не найдено; присутствуют stdout-строки другого SettledLands renderer bridge, так что общий захват stdout работает, но различие источника логирования ещё следует исключить. Не выпускать новый JAR до локализации. Minecraft/NeoForge здесь не запускались; визуальное исправление не подтверждено. Не просить у пользователя SHA установленного JAR или видео.
+Build268 исправляет это изолированно в `tools/api268`. Итоговые class-файлы проверены: три `@Inject`-метода и shadow fields runtime-visible. `tests/gate_build268.py` и полный backup gate из clean extraction прошли. Кандидат JAR 3 079 012 байт SHA-256 `bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5`; source ZIP SHA и размер — в `SHA256SUMS-build268.txt`. База — точный Build262; Build263 CUTSCENE fade исключён.
+
+Пользовательский Minecraft/NeoForge тест ещё не проведён. Следующий шаг — выдать Build268 для проверки на копии мира; ожидать маркеры `[SL-PROFESSION-268] early/apply` и `resolve ... exists=true`, плюс отдельное визуальное подтверждение скина. Видео/SHA установленного JAR не просить.
 
 ## Build 263 — fade-затемнение и проявление катсцен; sequencing fix включён
 

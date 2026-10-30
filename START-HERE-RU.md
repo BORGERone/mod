@@ -1,14 +1,12 @@
 # SettledLands: продолжить работу
 
-## Текущий пакет: Build267 — разбор отсутствующих skin-hook маркеров
+## Текущий пакет: Build268 — исправлена причина неработавших Mixin-callback
 
-Пользователь подтвердил, что при проверке Build267 после выбора/сохранения графа появлялось штатное сообщение о сохранении. `latest-8.log` действительно показывает Build267 и рендер `GuideNpc`, но не содержит ни одной `[SL-PROFESSION-267]` метки. Дизассемблирование итогового Build267 JAR подтверждает путь: `GuideNpc.applyConfig` в GraphOnly-ветке вызывает `setProfile`, а `setProfile` непосредственно вызывает `applyProfile`. Значит версия «граф не сохранялся» теперь маловероятна; отсутствие метки указывает на непроявление callback либо на разницу логирования. Причина пока не доказана; визуальный эффект и реальные текстурные значения не подтверждены.
+Пользователь подтвердил сообщение о сохранении графа; байткод показывает путь `applyConfig → setProfile → applyProfile`. Причина отсутствующих меток Build267 установлена: compile-time stubs задавали `@Inject`, `@At`, `@Shadow`, `@Final` с `RetentionPolicy.CLASS`, поэтому обработчики попадали в `RuntimeInvisibleAnnotations`. Mixin 0.8.7 ищет инжекторы через `Annotations.getSingleVisible`; из-за этого callback не распознавались. Это также объясняет, почему старый вручную сформированный HEAD-hook Build266 с `RuntimeVisibleAnnotations` работал, а compiled mixins — нет. Сверено с исходником Mixin tag `releases/0.8.7`, commit `4053421aa10aaac6127d969028a29c94fe3054f6`.
 
-Сопоставить регистрацию/трансформацию Build267 mixins с рабочим ранним обработчиком Build266; проверить именно compiled handler annotations/field shadows and target transformation. Не собирать и не выдавать новый JAR до локализации. Minecraft/NeoForge локально не запускались.
+Build268 исправляет retention в отдельном `tools/api268`, не меняя старые stubs/гейты. Все три compiled `@Inject` handler и shadow-поля в итоговом JAR теперь имеют RuntimeVisible annotations. Build собран от точного Build262 без Build263 CUTSCENE fade. `tests/gate_build268.py` и повтор из исходного ZIP `tests/gate_backup268.py` — PASS. JAR: 3 079 012 байт, SHA-256 `bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5`. Размеры/SHA обоих файлов — в `SHA256SUMS-build268.txt`. Minecraft/NeoForge не запускались, визуальный эффект требует пользовательской проверки на копии мира по `CHECKLIST-TEST-BUILD268-RU.md`.
 
-Build267 — ранее выданный диагностический пакет, не подтверждённый skin fix. Его метки `[SL-PROFESSION-267] early/apply/resolve` отсутствуют в подтверждённом пользовательском логе, несмотря на сообщение о сохранении графа. До выяснения, почему hooks не наблюдаются, не собирать/не выдавать следующий JAR. Minecraft/NeoForge здесь не запускались; внешний вид не подтверждён.
-
-Build267 основан на точном Build262, без Build263 CUTSCENE fade. Гейты: `tests/gate_build267.py`, `tests/gate_backup267.py`. См. `README-Build267-Profession-Skin-Probe-RU.txt`, `CHECKLIST-TEST-BUILD267-RU.md`, `BACKUP-267-RU.txt`. Пользовательские логи не включать в архив.
+Build267 остаётся диагностическим неудачным пакетом; не выдавать за skin fix. Пользовательские логи не включать в архив.
 
 Историческое состояние Build263 ниже сохранено. Известную проблему пустого инспектора Build263 не считать исправленной и не переносить его CUTSCENE fade в текущую работу.
 
@@ -18,11 +16,11 @@ Build267 основан на точном Build262, без Build263 CUTSCENE fad
 
 Исходный Build 262 с плавным idle-поворотом NPC сохранён побайтно, кроме заявленных 7 изменённых записей; добавлены 11 class-файлов. Fade-флаги хранятся отдельно и не переиспользуют поля анимации/перемещения.
 
-Для следующей работы читать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`, затем Build267 README/checklist/backup/gate. Проверку игры проводить только на копии мира; видео не просить.
+Для следующей работы читать по порядку: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`, затем Build268 README/checklist/backup/gate. Проверку игры проводить только на копии мира; видео не просить.
 
-## Архивные инструкции Build 263 (не применять к текущему пакету Build267)
+## Архивные инструкции Build 263 (не применять к текущему пакету Build268)
 
-Инструкции ниже относятся только к Build263. Для текущей проверки Build267 используйте только его JAR на копии мира и следуйте `CHECKLIST-TEST-BUILD267-RU.md`; после теста приложите свежий лог с метками `[SL-PROFESSION-267]`. Это кандидат, не визуально подтверждённый skin fix.
+Инструкции ниже относятся только к Build263. Для текущей проверки Build268 используйте только его JAR на копии мира и следуйте `CHECKLIST-TEST-BUILD268-RU.md`; после теста приложите свежий лог с метками `[SL-PROFESSION-268]`. Это кандидат, не визуально подтверждённый skin fix.
 
 Исторический Build263 release gate и source ZIP gate прошли; тогда Minecraft/NeoForge/modpack не запускались. Архивные размеры/SHA лежат в `SHA256SUMS-build263.txt`, независимая проверка — в `GATE-BACKUP-RESULT-263.txt`. В архиве Build263 были точная база Build262, исходники, инструменты, тесты, документы и manifest.
 

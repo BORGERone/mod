@@ -1,0 +1,2 @@
+3079012  bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5  settledlands-0.8.0-build268-profession-skin-fix.jar
+11366589  dd65ceef6b9129368107a00dfab02450a9c5e21bb566a031b89c518715f3fd40  SettledLands-Build268-Profession-Skin-Fix-Source.zip

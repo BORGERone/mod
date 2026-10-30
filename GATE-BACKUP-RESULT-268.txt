@@ -1,0 +1,1 @@
+BUILD 268 BACKUP GATE: PASS (manifest, extraction, deterministic rebuild, full Build268 probe gate)
