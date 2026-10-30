@@ -1,3 +1,13 @@
+# Текущий статус — 30.10.2026
+
+## Build269 «Преследование» — кандидат, ожидает игрового теста
+
+Build268 JAR (`bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5`) подтверждён пользователем: «все прекрасно работает». Build269 построен от точного Build268; Build263 CUTSCENE fade исключён. Новый JAR `settledlands-0.8.0-build269-pursuit.jar`: 3 102 254 байта, SHA-256 `5fdd2044dc9e52a7df1cc768b1489b72960f5c4c4263c66f8c249fc665028189`.
+
+Цель NPC — точный существующий `NpcProfile.identifier`; игрок — ник. Команды старта и остановки отдельные и размещаются на отдельных Trigger-узлах графа. Строй шириной 3, первый ряд на расстоянии 1,4 блока вперёд от цели и боковой интервал 1,4; следующие ряды каждые 1,5 блока. Текущие defaults: цель вне доступа ждёт, состояние сохраняется, разные цели независимы.
+
+`tests/gate_pursuit269.py` PASS: reproducible rebuild, точный diff (5 changed, 7 added; 424 entries unchanged), Mixin/TOML/lang/JAR checks, JVM links и Java fixture команд/строя. Minecraft/NeoForge не запускались. Следующий шаг — тест на копии мира по `CHECKLIST-TEST-BUILD269-RU.md`; не заявлять игровой успех до ответа пользователя.
+
 # SettledLands — SESSION-STATE, 30.10.2026
 
 ## Build268: причина отсутствующих callback установлена; ожидается игровой тест

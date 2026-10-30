@@ -1,0 +1,2 @@
+5fdd2044dc9e52a7df1cc768b1489b72960f5c4c4263c66f8c249fc665028189  settledlands-0.8.0-build269-pursuit.jar  3102254 bytes
+869e9d5db17a485b02e0d965b3b9891bc1c9c7ebd0fe9a17b69ed47d60bbe512  SettledLands-Build269-Pursuit-Source.zip  14462049 bytes

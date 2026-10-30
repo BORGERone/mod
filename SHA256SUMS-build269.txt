@@ -1,0 +1,2 @@
+5fdd2044dc9e52a7df1cc768b1489b72960f5c4c4263c66f8c249fc665028189  settledlands-0.8.0-build269-pursuit.jar  3102254 bytes
+bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5  settledlands-0.8.0-build268-profession-skin-fix.jar  3079012 bytes

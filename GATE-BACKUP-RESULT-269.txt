@@ -1,0 +1,8 @@
+BACKUP 269 CLEAN-EXTRACTION GATE: PASS
+
+- `SettledLands-Build269-Pursuit-Source.zip` CRC and duplicate-entry checks: PASS;
+- all entries match `BACKUP-MANIFEST.sha256`: PASS;
+- full `tests/gate_pursuit269.py --java <Java 21>` executed from a clean extraction: PASS;
+- deterministic Build269 rebuild from the bundled exact Build268 JAR matched byte-for-byte.
+
+Minecraft/NeoForge was not launched. In-game UI/pathfinding remains unverified and must be checked on a copied world.

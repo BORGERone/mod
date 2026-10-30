@@ -1,0 +1,9 @@
+BUILD 269 PURSUIT GATE: PASS
+
+- deterministic rebuild from the exact user-confirmed Build268 JAR: byte-for-byte match;
+- strict JAR/TOML/JSON/mixin metadata checks: PASS;
+- exact Build268 diff: 5 changed entries, 7 added class files, no removals, 424 unchanged entries;
+- JVM-link checks for pursuit helper and mixin callback methods: PASS (the primitive-argument callback declarations are checked without invoking the null-argument verifier harness);
+- Java fixture for action recognition, front row, row spacing, and target yaw rotation: PASS.
+
+Minecraft/NeoForge was not launched. The graph UI and live navigation behavior have not yet been confirmed in-game. Test only on a copy of the world using CHECKLIST-TEST-BUILD269-RU.md.

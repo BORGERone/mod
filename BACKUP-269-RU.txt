@@ -1,0 +1,24 @@
+Build269 backup / source archive contains:
+
+- JAR Build269 and exact, user-confirmed Build268 base JAR;
+- complete Build268 source ZIP entries, preserving the prior baseline and Build268 skin fix;
+- new Java sources under `src/build269/`;
+- compile-only API stubs under `tools/api269/`;
+- deterministic builder `tools/patch_pursuit269.py` and exact release gate `tests/gate_pursuit269.py`;
+- Java fixture `tests/java269/PursuitFormationProbe269.java`;
+- README, API compatibility note, user test checklist, updated session/AI guides, build result, checksums, and `BACKUP-MANIFEST.sha256`.
+
+Rebuild from the archive root (Java 21):
+
+```bash
+python3 tools/patch_pursuit269.py --java /path/to/java
+python3 tests/gate_pursuit269.py --java /path/to/java
+```
+
+The expected baseline is Build268 with SHA-256 `bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5`. The source gate compares the rebuilt JAR byte-for-byte. It does not launch Minecraft/NeoForge.
+
+Every extracted file is listed in `BACKUP-MANIFEST.sha256`. Verify in the archive root with:
+
+```bash
+sha256sum -c BACKUP-MANIFEST.sha256
+```
