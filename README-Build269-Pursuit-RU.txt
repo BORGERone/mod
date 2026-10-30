@@ -1,4 +1,6 @@
-ОТОЗВАНО. Не устанавливать этот JAR: пользовательский latest-9.log подтвердил критический Mixin crash (`Screen` — class, но accessor был объявлен interface). Используйте только отдельный hotfix-кандидат Build270 после проверки на копии мира. Подробности: `REVOKED-BUILD269-RU.txt` и `README-Build270-Pursuit-Hotfix-RU.md`.
+ОТОЗВАНО. Не устанавливать Build269; Build270 также отозван после повторного пользовательского crash-log. Текущий кандидат Build271 — отдельные graph-ноды преследования; см. `README-Build271-Pursuit-Nodes-RU.md`.
+
+ОТОЗВАНО. Не устанавливать этот JAR: пользовательский latest-9.log подтвердил Mixin crash (`Screen` — class, accessor был interface). Build270 тоже отозван; используйте только Build271 после теста на копии мира. Подробности: `REVOKED-BUILD269-RU.txt`, `REVOKED-BUILD270-RU.txt` и `README-Build271-Pursuit-Nodes-RU.md`.
 
 SettledLands 0.8.0 — Build 269 «Преследование»
 

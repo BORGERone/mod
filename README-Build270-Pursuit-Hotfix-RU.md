@@ -1,3 +1,5 @@
+ОТОЗВАНО. Не устанавливать Build270: `latest-10.log` подтверждает `AbstractMethodError` при создании Trigger-ноды и отдельную ошибку NBT `NoSuchMethodError` при сохранении Guide NPC. Используйте Build271 только после теста на копии мира. Подробности: `REVOKED-BUILD270-RU.txt`.
+
 SettledLands 0.8.0 — Build270 «Преследование: hotfix Mixin»
 
 Build269 был отозван: `latest-9.log` показал вылет на старте из-за Mixin-интерфейса, нацеленного на класс `Screen`. В Build270 accessor исправлен на abstract class-mixin; UI обращается к публичному invoker через reflection. Это исправляет конкретное несоответствие типа, но клиент NeoForge/Minecraft здесь не запускался — успешный запуск пока не подтверждён.

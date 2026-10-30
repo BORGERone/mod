@@ -1,0 +1,13 @@
+Build271 source archive is based on the full Build270 source archive for reproducibility, overlays Build271 source/stubs/tests/current documents, and includes Build271 JAR. Build269 and Build270 binaries are explicitly marked revoked; do not install them.
+
+The candidate is deterministically rebuilt from settledlands-0.8.0-build270-pursuit-hotfix.jar (SHA-256 3f63e5a0adf09d1c848c8661886e83f0606ffb50c5bf15a0d70976629fe02711):
+
+    python3 tools/patch_pursuit271.py --java /path/to/java
+    python3 tests/gate_pursuit271.py --java /path/to/java
+    python3 tests/gate_backup271.py --java /path/to/java
+
+The gate checks exact JAR diff, mixin/client metadata, removal of the Screen accessor, annotation visibility, menu row constants, dedicated node action and title mapping, JVM links, row formation and absence of a CompoundTag.remove reference in pursuit persistence. It does not launch Minecraft/NeoForge or prove actual UI/save/reload behavior. User test on copied world remains mandatory.
+
+Verify archive entries from its root:
+
+    sha256sum -c BACKUP-MANIFEST.sha256

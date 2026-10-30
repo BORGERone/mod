@@ -1,14 +1,14 @@
-# SettledLands — актуальная передача, Build270 hotfix
+# SettledLands — актуальная передача, Build271
 
-## Текущий кандидат: Build270 «Преследование — hotfix Mixin»
+## Текущий кандидат: отдельные graph-ноды преследования
 
-Build269 запускался с критическим Mixin-crash: `ScreenAccessorPursuit269` был объявлен интерфейсом для класса `Screen`; `latest-9.log` сообщает `Screen is not an interface`. Build269 отозван — не устанавливать и не предлагать повторно. Build270 исправляет mixin на abstract class и вызывает публичный invoker через reflection.
+Build269 отозван за interface-mixin→class mismatch; Build270 тоже отозван: пользовательский `latest-10.log` показал вылет при создании Trigger-ноды из-за `AbstractMethodError` на абстрактном invoker-методе, а сохранение Guide NPC падало с `NoSuchMethodError` на неверный descriptor `CompoundTag.remove(String): Object`.
 
-Build270 пересобран от точного опубликованного Build269; diff — только два class-файла mixin, версия в TOML и patch-info. Преследование/Build268 profession-skin fix сохранены; CUTSCENE fade Build263 не добавлен. `tests/gate_pursuit270.py` PASS: детерминированная сборка, точный diff, проверка class-флага (не interface), JVM links и formation fixture. **Minecraft/NeoForge всё ещё не запускались**, поэтому запуск клиента и реальное взаимодействие UI необходимо проверить пользователю на копии мира. Не утверждать исправление вылета как доказанное запуском.
+Build271 исправляет обе причины: удалён Screen accessor-mixin; новые команды создаются отдельными пунктами контекстного меню графа — «Преследование — начать: NPC», «…начать: игрок», «…прекратить». Они являются отдельными видимыми graph nodes с собственными подписями; чтобы сохранить совместимость графа, внутри используется стандартный Trigger action. Для начала NPC впишите существующий идентификатор; для игрока — ник. Сохранение выключенного pursuit больше не вызывает `CompoundTag.remove`.
 
-Перед выпуском проверить `SHA256SUMS-build270-release.txt`, GitHub remote sizes и Drive upload. JAR и ZIP предоставлять по §10 AI-GUIDE; JAR первым. Работать только в `arena/24676dbe-mod`.
+`tests/gate_pursuit271.py` и gate из чистого source ZIP — PASS; проверены детерминированность, exact diff, Mixin metadata, меню-маппинг, JVM links, row fixture и отсутствие ошибочного NBT method reference. **Minecraft/NeoForge не запускались**; пользователь должен проверить запуск, создание всех трёх нод и сохранение NPC на копии мира. Build269 и Build270 не устанавливать. Build263 CUTSCENE fade не включать.
 
-Перед следующей правкой читать в порядке: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`.
+Перед следующей правкой читать в порядке: этот файл → `HANDOFF-NEXT-SESSION-RU.md` → `AI-GUIDE-SettledLands.md`. Отвечать по-русски; видео и SHA установленного JAR не просить. Работать только в `arena/24676dbe-mod`.
 
 ---
 

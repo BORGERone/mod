@@ -1,14 +1,20 @@
-# ПЕРЕДАЧА СМЕНЫ: SettledLands — Build270 Pursuit hotfix, нужен реальный запуск
+# ПЕРЕДАЧА СМЕНЫ: Build271 — pursuit nodes, нужен тест на копии мира
 
-## Инцидент Build269 и исправление
+## Причина последнего вылета и исправления
 
-Пользовательский `latest-9.log` показал точную причину вылета Build269: `ScreenAccessorPursuit269` был Mixin-интерфейсом, направленным на класс `net.minecraft.client.gui.screens.Screen`; Mixin 0.8.7 завершил подготовку с `InvalidMixinException: @Mixin target type mismatch`. Build269 `settledlands-0.8.0-build269-pursuit.jar` отозван, не рекомендовать к установке. Причина в нашем коде, не в сторонних предупреждениях.
+`latest-10.log` подтверждает вылет не при загрузке, а при клике создания Trigger-ноды. Вызов шёл по цепочке `NpcDialogueGraphScreen.mouseClicked → addAt → widgets → NpcPursuitGraphUiMixin`. Причина — Build270 пытался вызвать добавленный abstract invoker `settledlands$addRenderableWidget`, но Mixin не предоставил реализацию в `Screen`; итог — `AbstractMethodError`. Поэтому Build270 не использовать.
 
-Build270 hotfix строится от опубликованного Build269 (SHA `5fdd2044dc9e52a7df1cc768b1489b72960f5c4c4263c66f8c249fc665028189`). `ScreenAccessorPursuit269` теперь abstract class-mixin на `Screen`; UI-mixin вызывает public invoker через reflection без interface-cast. Build269-функциональность преследования и Build268 база сохранены; Build263 fade исключён. В Build270 diff к Build269 ровно четыре записи: два class-файла, TOML и patch-info.
+Лог также содержит независимую ошибку сохранения Guide NPC: `NoSuchMethodError: CompoundTag.remove(String): Object` внутри `NpcPursuit269.saveNpcData`. Компиляторный stub Build269/270 описывал возврат `remove` как `Object`; игровая NBT API имеет иной descriptor. При сохранении сущность не записывалась. Build271 пишет inactive marker=false и очищает значения без вызова этого несовместимого метода.
 
-`tests/gate_pursuit270.py` PASS: чистая детерминированная пересборка, exact diff, проверка class-флага и target строки accessor, наличие `@Invoker`, JVM links и fixture рядов. Это не запускает Mixin/NeoForge/Minecraft. Требуется реальный запуск Build270 и проверка UI на копии мира по `CHECKLIST-TEST-BUILD270-RU.md`; до ответа пользователя считать hotfix кандидатом, не подтверждённым.
+## Build271
 
-Выпускать только после проверки manifest, локального JAR/ZIP, push и удалённых размеров GitHub через `gh api`, а также Drive upload и удалённых размеров. JAR первым, ZIP вторым; SHA и `certutil -hashfile <file> SHA256`; ссылка «Сохранить ссылку как…» согласно §10. Работать только в `arena/24676dbe-mod`. Не менять Build269 артефакты; они остаются исторически отозванными.
+Добавлены отдельные видимые пункты в контекстное меню создания узла: «Преследование — начать: NPC», «Преследование — начать: игрок», «Преследование — прекратить». Каждый создаёт отдельную graph-ноду, автоматически соединяет её с текущим wire, если создание шло из порта, и даёт понятную подпись на холсте. Для совместимости формата графа они хранятся как обычные Trigger action-ноды. NPC target вводится существующим `NpcProfile.identifier`, игрок — ником. Отдельные start/stop действия сохранены.
+
+Build271 также удаляет неработающий Screen accessor и меняет ограничители прокрутки/row count меню. `tests/gate_pursuit271.py` должен проходить; `tests/gate_backup271.py` повторяет gate из распакованного ZIP. Этот gate не запускает настоящий Mixin/NeoForge/Minecraft. Провести пользовательский тест по `CHECKLIST-TEST-BUILD271-RU.md`; не выдавать поведение за подтверждённое до fresh log/ответа. Игра с Build269/270 опасна: не устанавливать. Тестировать только с копией мира и единственным Build271 JAR.
+
+Build271 основан на Build270 JAR только как на неизменяемом predecessor-пакете; сам его JAR diff точно фиксирует удаление проблемных mixins и изменения menu/NBT. Build268 profession/skin baseline и pursuit logic сохранены; CUTSCENE fade Build263 не переносился.
+
+Перед публикацией: gate + archive gate, стандартный `sha256sum -c SHA256SUMS-build271-release.txt`, GitHub raw sizes через `gh api`, загрузка и удалённые размеры Drive. Затем JAR-first, ZIP-second, PowerShell `certutil` команда и инструкция «Сохранить ссылку как…» по §10. Работать только в `arena/24676dbe-mod`.
 
 ---
 

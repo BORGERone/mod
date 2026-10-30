@@ -1,14 +1,12 @@
 # Текущий статус — 30.10.2026
 
-## Build270 — hotfix candidate; нужен запуск клиента
+## Build271 — candidate; нужен реальный клиентский тест
 
-Пользовательский `/tmp/arena-coding-uploads/latest-9.log` показал, что опубликованный Build269 падает при старте: `ScreenAccessorPursuit269` был Mixin-интерфейсом для class `Screen`, и Mixin 0.8.7 выбросил `InvalidMixinException: @Mixin target type mismatch`. Build269 отозван, повторно не выдавать.
+Пользовательский `latest-10.log` выявил два Build270 runtime-дефекта. При создании Trigger-ноды падение `AbstractMethodError`: Build270 обращался к abstract `Screen` invoker, для которого Mixin не предоставил реализацию. При записи Guide NPC возникал `NoSuchMethodError` для `CompoundTag.remove(String): Object`; Compile stub неверно описывал NBT descriptor, и сущность не сохранялась. Build270 и Build269 отозваны.
 
-Build270 JAR `settledlands-0.8.0-build270-pursuit-hotfix.jar`, 3 102 565 bytes, SHA-256 `3f63e5a0adf09d1c848c8661886e83f0606ffb50c5bf15a0d70976629fe02711`; source ZIP `SettledLands-Build270-Pursuit-Hotfix-Source.zip` (точный SHA и размер — в `SHA256SUMS-build270-release.txt`). Он точно пересобирается от Build269; к Build269 JAR diff ровно 4 записей. Accessor теперь abstract class-mixin, UI использует reflection invoker без interface-cast.
+Build271 добавляет самостоятельные пункты/ноды графа преследования (начать NPC, начать игрок, прекратить) и убирает accessor. Ноды визуально подписаны; под капотом используют стандартный Trigger action, чтобы не менять схему сохранения графа. Inactive pursuit marker записывается boolean=false вместо вызова `remove`. В Build271 source gate проверяет этот method-ref отсутствующим и декодирует рядовую геометрию/команды.
 
-`tests/gate_pursuit270.py` и чистая source ZIP проверка `tests/gate_backup270.py` PASS; manifest 896/896. **Minecraft/NeoForge не запускались**, поэтому hotfix остаётся кандидатом до реальной проверки старта и UI на копии мира по `CHECKLIST-TEST-BUILD270-RU.md`. Build268 SHA `bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5` — подтверждённая база; pursuit и Build268 исправление кожи сохранены; Build263 CUTSCENE fade не включён.
-
-SHA и размеры артефактов зафиксированы в `SHA256SUMS-build270-release.txt`. Перед выдачей загрузить/проверить GitHub и Drive по установленным инструкциям §10; JAR первым, ZIP вторым; не запрашивать видео или SHA у пользователя.
+JAR: `settledlands-0.8.0-build271-pursuit-node-hotfix.jar`, SHA/size в `SHA256SUMS-build271-release.txt`. `tests/gate_pursuit271.py` PASS; backup gate и удалённые артефакты должны быть перепроверены до выдачи. **Minecraft/NeoForge не запускались**, поэтому ждать тест старта, spawn dedicated nodes и save/reload NPC по `CHECKLIST-TEST-BUILD271-RU.md`; не называть игровое поведение подтверждённым. Build268 подтверждён; pursuit сохранился; CUTSCENE fade 263 не включён.
 
 # SettledLands — SESSION-STATE, 30.10.2026
 

@@ -1,0 +1,7 @@
+ОТОЗВАНО: settledlands-0.8.0-build270-pursuit-hotfix.jar
+
+Не устанавливать. В latest-10.log при клике создания обычной Trigger-ноды стек проходит через widgets() и Build270 pursuit UI mixin; reflection доходит до добавленного abstract invoker, но Mixin не предоставляет тело на Screen. Итог: AbstractMethodError, обёрнутый в IllegalStateException.
+
+Отдельно при сохранении Guide NPC возникает NoSuchMethodError: CompoundTag.remove(String): Object из NpcPursuit269.saveNpcData. Compile-only API stub ошибочно отдавал Object, в игровом NBT API descriptor другой; EntityStorage пишет, что сущность не будет сохранена.
+
+Build271 удаляет accessor-mixin, добавляет отдельные graph menu nodes и больше не вызывает remove в inactive pursuit path. Build271 всё ещё кандидат до реальной проверки пользователя.

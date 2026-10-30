@@ -1,0 +1,14 @@
+BUILD 271 PURSUIT NODE GATE: PASS
+
+- Build271 rebuilt byte-for-byte from its pinned Build270 base.
+- Exact diff validated: six changed entries, four added class files, two removed faulty UI accessor/mixin classes, 429 unchanged entries.
+- TOML, JAR structure, client mixin configuration and en/ru localization validated.
+- Removed the abstract Screen invoker and old pursuit dropdown hook.
+- Mixin handlers for the three dedicated graph menu nodes, canvas labels, context menu row count/scroll, and graph creation carry visible runtime annotations.
+- Menu row 16/17/18 maps to start NPC / start player / stop; ordinary rows remain unchanged. Node title/action fixture: PASS.
+- Pursuit row formation and command fixture: PASS.
+- JVM declarations/links for pursuit save/load, AI/action hooks and node helper checked.
+- NpcPursuit269 bytecode has no CompoundTag.remove method reference; inactive persistence writes false and neutral values.
+- Deterministic rebuild and JAR validators: PASS.
+
+Minecraft/NeoForge were not launched. Build271 remains a candidate pending user test of startup, the dedicated graph menu/node creation and entity save/reload on a copied world. Build269 and Build270 are revoked.

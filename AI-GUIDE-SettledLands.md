@@ -1,10 +1,11 @@
-# AI-GUIDE — актуальная задача Build270 Pursuit hotfix (2026-10-30)
+# AI-GUIDE — актуальная задача Build271, отдельные узлы преследования (2026-10-30)
 
-Сначала `START-HERE-RU.md` → `HANDOFF-NEXT-SESSION-RU.md` → этот файл. Отвечать кратко по-русски; видео и SHA установленного JAR не просить. Текущий branch только `arena/24676dbe-mod`.
+Сначала `START-HERE-RU.md` → `HANDOFF-NEXT-SESSION-RU.md` → этот файл. Отвечать кратко по-русски; видео и SHA установленного JAR не просить. Текущая ветка `arena/24676dbe-mod`.
 
-**Build269 отозван после подтверждённого пользовательским `latest-9.log` падения:** `ScreenAccessorPursuit269` был interface-mixin на класс `Screen`. Build270 меняет accessor на abstract class-mixin и reflection вместо cast. Проверить `tests/gate_pursuit270.py`; gate PASS, но Minecraft/NeoForge не запускались — нужен фактический запуск от пользователя. Не сообщать, что старт подтверждён, пока не получен свежий лог/результат пользователя.
+Build269 отозван из-за mixin kind mismatch. Build270 тоже отозван: `latest-10.log` подтвердил `AbstractMethodError` при клике создания Trigger-ноды (инвокер оставлен abstract на Screen) и `NoSuchMethodError` при сохранении сущности из-за compile stub `CompoundTag.remove` с неправильным возвратом `Object`.
 
-Build270 наследует преследование Build269 и подтверждённую пользователем Build268 базу. NPC-цель — по существующему `NpcProfile.identifier`, игрок — по нику; построение рядов; отдельные действия старта/остановки. CUTSCENE fade Build263 не развивать и не переносить. Перед выпуском повторить требования §10: GitHub raw-ссылки, размеры через `gh api`, Drive upload + проверка, SHA256, инструкция «Сохранить ссылку как…»; JAR перед ZIP.
+Build271 удаляет accessor, создаёт отдельные ноды из контекстного меню («Начать: NPC», «Начать: игрок», «Прекратить»), отображает их различимо, сохраняет command actions на стандартном Trigger node для совместимости графа, и исправляет NBT inactive path. Gate PASS — это не игровой запуск: нужен пользовательский тест старта/создания ноды/сохранения NPC на копии мира. Build269/270 не предлагать. Build263 CUTSCENE fade не развивать.
+
 
 ---
 
