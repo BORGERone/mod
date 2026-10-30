@@ -6,7 +6,7 @@
 
 Причина пока не доказана. Build266 — временный read-only диагностический probe: Build265 logic плюс `[SL-PROFESSION-266] apply` после применения профиля (UUID, concrete subclass, server/client, characteristics node, выбранный и фактический texture path) и `[SL-PROFESSION-266] resolve` при первом поиске variant model file. Нет per-frame trace. Использовать на копии мира по `CHECKLIST-TEST-BUILD266-RU.md`, прислать свежий `latest.log` после выбора, сохранения и показа целевого NPC. Build266 не объявлять исправлением и удалить после измерения.
 
-Build266 основан на точном Build262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`, без Build263 CUTSCENE fade. `tests/gate_build266.py` — PASS. Кандидат ожидает итогового хэша после проверки ZIP; Minecraft/NeoForge не запускались. Source/docs: `README-Build266-Profession-Probe-RU.txt`, `CHECKLIST-TEST-BUILD266-RU.md`, `BACKUP-266-RU.txt`.
+Build266 основан на точном Build262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`, без Build263 CUTSCENE fade. `tests/gate_build266.py` и `tests/gate_backup266.py` — PASS. Кандидат 3 077 766 байт, SHA-256 `92a920f55dac3cefe4e87482739b80ec1c0a46ebd8115f33dae9e36395cefb60`; diff от Build262: 6 добавленных, 7 изменённых, 417 идентичных entries. Source ZIP 11 320 856 байт, SHA-256 `016bdef27b9bafe1dac6c22084b34acaa2c4f8f2ccfd26058cf13720d9c91d4e`. Minecraft/NeoForge не запускались. Source/docs: `README-Build266-Profession-Probe-RU.txt`, `CHECKLIST-TEST-BUILD266-RU.md`, `BACKUP-266-RU.txt`.
 
 ## Build 265: предыдущий dropdown/skin кандидат — не решает проблему пользователя
 

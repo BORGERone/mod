@@ -8,6 +8,6 @@ PASS: diagnostic traces exist at profile application and first model-file resolu
 
 Diff from Build262: 6 added entries, 7 changed entries, 417 byte-identical entries.
 JAR: 3,077,766 bytes, SHA-256 92a920f55dac3cefe4e87482739b80ec1c0a46ebd8115f33dae9e36395cefb60.
-Source ZIP: 11,320,856 bytes, SHA-256 016bdef27b9bafe1dac6c22084b34acaa2c4f8f2ccfd26058cf13720d9c91d4e.
+Source ZIP: 11,320,988 bytes, SHA-256 d987d5d47ef05b82f56b8ac9d97a12aa666e2acf6614076cbfdcb04346df1e9b.
 
 Minecraft/NeoForge not launched here; probe and visual skin result are not verified in-game. Build266 is diagnostic only, not an asserted fix.
