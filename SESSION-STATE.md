@@ -1,5 +1,13 @@
 # SettledLands — SESSION-STATE, 30.10.2026
 
+## Текущее расследование: Build267 — профессия сохраняется, skin hooks не видны
+
+Пользователь подтвердил, что после выбора/закрытия графа в Build267 появлялось штатное сообщение о сохранении. `latest-8.log` однозначно показывает загрузку Build267 и рендер `GuideNpc`, однако в нём нет ни одной `[SL-PROFESSION-267]` метки и нет зафиксированных разрешений profession model.
+
+Байткод итогового JAR проверен: `GuideNpc.applyConfig` в `GraphOnly`-ветке вызывает `GuideNpc.setProfile`; метод `setProfile` записывает профиль и непосредственно вызывает `GuideNpc.applyProfile()`. Следовательно, предположение «граф не сохранён» не объясняет отсутствие меток, если сообщение относится к этому действию. В Build266 старый handcrafted HEAD `EarlyCorpseTextureMixin` печатал две строки, тогда как новые Build266 `apply/resolve` probes отсутствовали. В Build267 этот HEAD mixin заменён на ECJ-compiled Java handler; новый HEAD, новый common TAIL и client storage resolver все без маркеров. Это сужает исследование к реальному применению callbacks/сборке mixin-классов либо захвату их вывода, но конкретная причина не установлена.
+
+Ошибок Mixin, явно относящихся к SettledLands, в `latest-8.log` не найдено; присутствуют stdout-строки другого SettledLands renderer bridge, так что общий захват stdout работает, но различие источника логирования ещё следует исключить. Не выпускать новый JAR до локализации. Minecraft/NeoForge здесь не запускались; визуальное исправление не подтверждено. Не просить у пользователя SHA установленного JAR или видео.
+
 ## Build 263 — fade-затемнение и проявление катсцен; sequencing fix включён
 
 Build 263 `settledlands-0.8.0-build263-cutscene-fade.jar`, 2,274,540 байт, SHA-256 `03e3d9c9152adaf7b8afeb3c6a7693787987221a825944aad445f03a1830c716`. Точная база Build 262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`. Source ZIP `SettledLands-Build263-Cutscene-Fade-Source.zip`; размер и SHA записаны в `SHA256SUMS-build263.txt` вне ZIP.
