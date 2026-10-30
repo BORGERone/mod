@@ -1,1 +1,1 @@
-3f63e5a0adf09d1c848c8661886e83f0606ffb50c5bf15a0d70976629fe02711  settledlands-0.8.0-build270-pursuit-hotfix.jar  3102565 bytes
+3f63e5a0adf09d1c848c8661886e83f0606ffb50c5bf15a0d70976629fe02711  settledlands-0.8.0-build270-pursuit-hotfix.jar

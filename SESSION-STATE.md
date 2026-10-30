@@ -4,7 +4,7 @@
 
 Пользовательский `/tmp/arena-coding-uploads/latest-9.log` показал, что опубликованный Build269 падает при старте: `ScreenAccessorPursuit269` был Mixin-интерфейсом для class `Screen`, и Mixin 0.8.7 выбросил `InvalidMixinException: @Mixin target type mismatch`. Build269 отозван, повторно не выдавать.
 
-Build270 JAR `settledlands-0.8.0-build270-pursuit-hotfix.jar`, 3 102 565 bytes, SHA-256 `3f63e5a0adf09d1c848c8661886e83f0606ffb50c5bf15a0d70976629fe02711`; source ZIP `SettledLands-Build270-Pursuit-Hotfix-Source.zip`, 17 551 427 bytes, SHA-256 `3d0e527a302476c89907ab560f8d8df7d021c8fbb305d9012a621db59ef553d8`. Он точно пересобирается от Build269; к Build269 JAR diff ровно 4 записей. Accessor теперь abstract class-mixin, UI использует reflection invoker без interface-cast.
+Build270 JAR `settledlands-0.8.0-build270-pursuit-hotfix.jar`, 3 102 565 bytes, SHA-256 `3f63e5a0adf09d1c848c8661886e83f0606ffb50c5bf15a0d70976629fe02711`; source ZIP `SettledLands-Build270-Pursuit-Hotfix-Source.zip` (точный SHA и размер — в `SHA256SUMS-build270-release.txt`). Он точно пересобирается от Build269; к Build269 JAR diff ровно 4 записей. Accessor теперь abstract class-mixin, UI использует reflection invoker без interface-cast.
 
 `tests/gate_pursuit270.py` и чистая source ZIP проверка `tests/gate_backup270.py` PASS; manifest 896/896. **Minecraft/NeoForge не запускались**, поэтому hotfix остаётся кандидатом до реальной проверки старта и UI на копии мира по `CHECKLIST-TEST-BUILD270-RU.md`. Build268 SHA `bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5` — подтверждённая база; pursuit и Build268 исправление кожи сохранены; Build263 CUTSCENE fade не включён.
 

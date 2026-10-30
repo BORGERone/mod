@@ -1,2 +1,2 @@
-3f63e5a0adf09d1c848c8661886e83f0606ffb50c5bf15a0d70976629fe02711  settledlands-0.8.0-build270-pursuit-hotfix.jar  3102565 bytes
-cd94d49d988010ec57da9e4db040ef32e78dd25a345ec7eb5e24e64b368411ec  SettledLands-Build270-Pursuit-Hotfix-Source.zip  17551596 bytes
+3f63e5a0adf09d1c848c8661886e83f0606ffb50c5bf15a0d70976629fe02711  settledlands-0.8.0-build270-pursuit-hotfix.jar
+b30d33b0acb029e30cc4b4690fa150b1c3ebba96aed84fc178d0d0ab212545ee  SettledLands-Build270-Pursuit-Hotfix-Source.zip
