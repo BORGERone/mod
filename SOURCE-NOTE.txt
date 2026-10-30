@@ -1,0 +1,6 @@
+Исходники build 228 «scenefix». patch-src: три MERGED-файла (GuideDialogue,
+NpcDialogueGraph, client/NpcDialogueGraphScreen — слияние 172+226) + PlayerCorpsePossession.java
+с фиксами 227 (два трупа) и 228 (healStuckIvyBodies — лечение застрявшей сцены IvyDeathScene
+после перезагрузки чанка). resources/ — из jar228 (lang 698 ключей).
+Остальные файлы patch-src до-217 устарели (байтпатч/миксин-эра) — НЕ пересобирать из них!
+Донор-эпохи: SettledLands-Build188-SprintJump-Source.zip (Drive), архивы до-216 у авторов.
