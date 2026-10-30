@@ -1,16 +1,20 @@
-# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — текущий пакет Build 266 diagnostic probe
+# ПЕРЕДАЧА СМЕНЫ: SettledLands 0.8.0 — текущий кандидат Build267
 
-## Build 266: установить участок сбоя применения профессии
+## Build267: раннее применение пути профессии
 
-Пользователь сообщил, что скин не меняется даже с Build265, и прислал `latest-6.log`. Файл подтверждает, что `settledlands-0.8.0-build265-profession-dropdown.jar` действительно загружен (NeoForge version 21.1.253 / Minecraft 1.21.1). В логе нет ошибок миксинов профессии, но нет и признаков выбора/сохранения графа или запрошенного варианта модели. `ivy_oleander.bbmodel` в сообщениях `GuideNpc:handler$...earlyTexture` — значение, которое существующий `EarlyCorpseTextureMixin` пишет в HEAD `applyProfile()`, а не итог после выполнения тела; это не доказательство, что хвостовой skin mixin не сработал. Несвязанный NPE HnS происходит в атаке `Player.attack`/`GuideNpc.hurt` и не объясняет скин.
+`latest-7.log` подтверждает загрузку Build266. В нём есть две строки старого обработчика `earlyTexture` в начале `GuideNpc.applyProfile()`, но нет ни одной метки Build266 `apply` (хвост) или `resolve`. Это означает, что хвостовая трасса не достигла печати или сама завершилась ошибкой; наиболее вероятно, что выполнение уходит до `RETURN` либо падает расчёт пути. Это обоснованная гипотеза, не доказанная причина; Build266 callback печатал после вычисления и не мог поймать исключение внутри него.
 
-Причина пока не доказана. Build266 — временный read-only диагностический probe: Build265 logic плюс `[SL-PROFESSION-266] apply` после применения профиля (UUID, concrete subclass, server/client, characteristics node, выбранный и фактический texture path) и `[SL-PROFESSION-266] resolve` при первом поиске variant model file. Нет per-frame trace. Использовать на копии мира по `CHECKLIST-TEST-BUILD266-RU.md`, прислать свежий `latest.log` после выбора, сохранения и показа целевого NPC. Build266 не объявлять исправлением и удалить после измерения.
+Build267 заменяет существующий `EarlyCorpseTextureMixin`: в HEAD `applyProfile()` берёт профессию и ставит путь варианта сразу, до тела метода; если расчёт проваливается, сохраняет обычный `profile.texture`. Тот же путь устанавливается в TAIL при успешном завершении. Добавлены безопасная фиксация ошибки расчёта и адресные строки `[SL-PROFESSION-267] early/apply/resolve`. Нет per-frame логирования. Проверять на копии мира; по свежему `latest.log` подтвердить, что ранний путь содержит `ivy_oleander_prof264_...`, затем `resolve exists=true`. Полевой результат ещё неизвестен.
 
-Build266 основан на точном Build262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`, без Build263 CUTSCENE fade. `tests/gate_build266.py` и `tests/gate_backup266.py` — PASS. Кандидат 3 077 766 байт, SHA-256 `92a920f55dac3cefe4e87482739b80ec1c0a46ebd8115f33dae9e36395cefb60`; diff от Build262: 6 добавленных, 7 изменённых, 417 идентичных entries. Source ZIP 11 320 856 байт, SHA-256 `016bdef27b9bafe1dac6c22084b34acaa2c4f8f2ccfd26058cf13720d9c91d4e`. Minecraft/NeoForge не запускались. Source/docs: `README-Build266-Profession-Probe-RU.txt`, `CHECKLIST-TEST-BUILD266-RU.md`, `BACKUP-266-RU.txt`.
+Build267 собирается от точной базы Build262 SHA `21fc8fa7c861c3652f020ce9bb10bac133ac253675084982e65f16cc734f2531`; Build263 CUTSCENE fade не включён. `tests/gate_build267.py` и `tests/gate_backup267.py` — PASS. JAR 3 078 940 байт, SHA-256 `a555d675ed93546a244ceff445d538021e7e65572fa5636d0b7f69e8c0ebb7f6`. Diff baseline: 5 добавленных, 8 изменённых, 416 идентичных entries. SHA/размер source ZIP находятся в `GATE-RESULT-267.txt` и `SHA256SUMS-build267.txt` в репозитории; сам ZIP не включает собственные sums/GATE-файлы. Minecraft/NeoForge не запускались. Source/docs: `README-Build267-Profession-Skin-Probe-RU.txt`, `CHECKLIST-TEST-BUILD267-RU.md`, `BACKUP-267-RU.txt`.
 
-## Build 265: предыдущий dropdown/skin кандидат — не решает проблему пользователя
+## Build266: диагностический predecessor, skin не подтвердил
 
-Build265 действительно заменяет carousel штатным `NpcUi.NpcDropdown`, но пользователь подтвердил: внешний вид NPC всё ещё не изменился. Не выдавать его за фикс; его исходный hash и gate result сохранены в release-файлах Build265. В Build265 отсутствовала runtime-телеметрия пути, чем и вызвана необходимость Build266 probe.
+В пользовательском `latest-7.log` Build266 запущен, но отсутствуют его все probe-маркеры. Build266 не выдавать за исправление. Пользовательские логи не включать в source bundle.
+
+## Build265: предыдущий dropdown/skin candidate — проблема сохраняется
+
+Пользователь подтвердил: с Build265 внешний вид NPC не меняется. Build265 не выдавать за фикс; его source, gate и hash сохранены в release-файлах.
 
 ## Архив Build 264: первоначальная профессия/скины
 

@@ -1,0 +1,2 @@
+a555d675ed93546a244ceff445d538021e7e65572fa5636d0b7f69e8c0ebb7f6  settledlands-0.8.0-build267-profession-skin-probe.jar
+4e79d079eee338a3b9e98855b259c78692a4fc4615b619ad21525547e8c863f2  SettledLands-Build267-Profession-Skin-Probe-Source.zip

@@ -1,0 +1,13 @@
+SettledLands Build267 profession skin probe gate
+
+PASS: deterministic rebuild from exact pinned Build262.
+PASS: JAR integrity, version metadata, and exact baseline diff.
+PASS: profession dropdown, graph copy/NBT settings, model materializer, and all 64 embedded texture selections.
+PASS: early profile path override, return-path fallback, and event-only diagnostic traces.
+PASS: source ZIP manifest, extraction, deterministic rebuild, and full Build267 gate (`tests/gate_backup267.py`).
+
+Diff from Build262: 5 added entries, 8 changed entries, 416 byte-identical entries.
+JAR: 3,078,940 bytes; SHA-256 a555d675ed93546a244ceff445d538021e7e65572fa5636d0b7f69e8c0ebb7f6.
+Source ZIP: 11,337,822 bytes; SHA-256 4e79d079eee338a3b9e98855b259c78692a4fc4615b619ad21525547e8c863f2.
+
+Minecraft/NeoForge not launched; visual result is not verified. Build267 is a diagnostic fix candidate, not a confirmed in-game fix.

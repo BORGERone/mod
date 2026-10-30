@@ -1,0 +1,13 @@
+Архив исходников SettledLands Build267
+
+ZIP: SettledLands-Build267-Profession-Skin-Probe-Source.zip
+В архиве: точный baseline Build262, Build267 JAR и исходники, модель, builder, fixtures, tests, документация и manifest. Пользовательский latest.log не включается.
+
+Пересборка (Python 3.11+, Java 21):
+  python3 tools/patch_profession_skin_probe267.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --out settledlands-0.8.0-build267-profession-skin-probe.jar --java /path/to/java21
+
+Гейты:
+  python3 tests/gate_build267.py --base settledlands-0.8.0-build262-smooth-npc-turning.jar --jar settledlands-0.8.0-build267-profession-skin-probe.jar --java /path/to/java21
+  python3 tests/gate_backup267.py --zip SettledLands-Build267-Profession-Skin-Probe-Source.zip --java /path/to/java21
+
+Полевой прогон — по CHECKLIST-TEST-BUILD267-RU.md на копии мира. Игра не запускалась в этой сборочной среде.
