@@ -1,0 +1,16 @@
+Build270 source archive contains the complete Build269 source ZIP plus the Build270 hotfix inputs and current documentation.
+
+Build270 JAR is rebuilt deterministically from settledlands-0.8.0-build269-pursuit.jar (SHA-256 5fdd2044dc9e52a7df1cc768b1489b72960f5c4c4263c66f8c249fc665028189). It changes only the two pursuit UI accessor mixin class files, META-INF/neoforge.mods.toml, and settledlands-patch-info.txt relative to Build269.
+
+Rebuild (Java 21):
+
+    python3 tools/patch_pursuit270.py --java /path/to/java
+    python3 tests/gate_pursuit270.py --java /path/to/java
+
+The gate checks deterministic byte-for-byte rebuild, exact JAR diff, metadata/mixin configuration, accessor emitted as abstract class (not interface), target name Screen, @Invoker annotation, JVM links, command/formation fixture. It does not launch Mixin, NeoForge, Minecraft, or perform live UI/pathfinding tests. A user test on a copied world is required.
+
+The archive includes prior Build268/269 sources and binaries for reproducibility/history. Build269 is revoked because user log latest-9.log confirmed a fatal Mixin target-type mismatch; do not install or recommend that JAR. Build263 CUTSCENE fade remains excluded.
+
+All extracted files are listed in BACKUP-MANIFEST.sha256. Verify from the archive root:
+
+    sha256sum -c BACKUP-MANIFEST.sha256

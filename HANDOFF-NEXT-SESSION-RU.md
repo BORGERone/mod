@@ -1,14 +1,14 @@
-# ПЕРЕДАЧА СМЕНЫ: SettledLands — Build269 «Преследование», нужен игровой тест
+# ПЕРЕДАЧА СМЕНЫ: SettledLands — Build270 Pursuit hotfix, нужен реальный запуск
 
-## Текущий кандидат
+## Инцидент Build269 и исправление
 
-Build269 `settledlands-0.8.0-build269-pursuit.jar`, SHA-256 `5fdd2044dc9e52a7df1cc768b1489b72960f5c4c4263c66f8c249fc665028189`, 3 102 254 байта. Основан на Build268 JAR SHA `bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5`, который пользователь подтвердил словами «все прекрасно работает». Профессия/скин Build268 сохранены. CUTSCENE fade Build263 не включён.
+Пользовательский `latest-9.log` показал точную причину вылета Build269: `ScreenAccessorPursuit269` был Mixin-интерфейсом, направленным на класс `net.minecraft.client.gui.screens.Screen`; Mixin 0.8.7 завершил подготовку с `InvalidMixinException: @Mixin target type mismatch`. Build269 `settledlands-0.8.0-build269-pursuit.jar` отозван, не рекомендовать к установке. Причина в нашем коде, не в сторонних предупреждениях.
 
-Сделаны команды «Начать преследование» (NPC по `NpcProfile.identifier` или игрок по нику) и «Прекратить преследование» как отдельные действия обычных Trigger-узлов, без изменения формата graph links. NPC стоят рядами; недоступная цель по умолчанию ожидается, режим сохраняется, разные цели образуют независимые группы.
+Build270 hotfix строится от опубликованного Build269 (SHA `5fdd2044dc9e52a7df1cc768b1489b72960f5c4c4263c66f8c249fc665028189`). `ScreenAccessorPursuit269` теперь abstract class-mixin на `Screen`; UI-mixin вызывает public invoker через reflection без interface-cast. Build269-функциональность преследования и Build268 база сохранены; Build263 fade исключён. В Build270 diff к Build269 ровно четыре записи: два class-файла, TOML и patch-info.
 
-`tests/gate_pursuit269.py` PASS: детерминированная пересборка, точный diff (5 changed, 7 added; 424 entries идентичны Build268), JAR/TOML/JSON/Mixin проверки, JVM linking, fixture команд и геометрии. Игра/NeoForge не запускались; не выдавать за подтверждённое игровое поведение. Следующий шаг: попросить пользователя проверить JAR на копии мира по `CHECKLIST-TEST-BUILD269-RU.md`; видео и SHA установленного файла не просить.
+`tests/gate_pursuit270.py` PASS: чистая детерминированная пересборка, exact diff, проверка class-флага и target строки accessor, наличие `@Invoker`, JVM links и fixture рядов. Это не запускает Mixin/NeoForge/Minecraft. Требуется реальный запуск Build270 и проверка UI на копии мира по `CHECKLIST-TEST-BUILD270-RU.md`; до ответа пользователя считать hotfix кандидатом, не подтверждённым.
 
-Исходный архив должен включать полный Build268 backup, Build269 inputs, AI-GUIDE, gate и manifest. Исходники/JAR — GitHub + Google Drive; проверить удалённые размеры до заявления об успешной загрузке. Работать и отправлять только в `arena/24676dbe-mod`.
+Выпускать только после проверки manifest, локального JAR/ZIP, push и удалённых размеров GitHub через `gh api`, а также Drive upload и удалённых размеров. JAR первым, ZIP вторым; SHA и `certutil -hashfile <file> SHA256`; ссылка «Сохранить ссылку как…» согласно §10. Работать только в `arena/24676dbe-mod`. Не менять Build269 артефакты; они остаются исторически отозванными.
 
 ---
 

@@ -1,12 +1,14 @@
 # Текущий статус — 30.10.2026
 
-## Build269 «Преследование» — кандидат, ожидает игрового теста
+## Build270 — hotfix candidate; нужен запуск клиента
 
-Build268 JAR (`bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5`) подтверждён пользователем: «все прекрасно работает». Build269 построен от точного Build268; Build263 CUTSCENE fade исключён. Новый JAR `settledlands-0.8.0-build269-pursuit.jar`: 3 102 254 байта, SHA-256 `5fdd2044dc9e52a7df1cc768b1489b72960f5c4c4263c66f8c249fc665028189`.
+Пользовательский `/tmp/arena-coding-uploads/latest-9.log` показал, что опубликованный Build269 падает при старте: `ScreenAccessorPursuit269` был Mixin-интерфейсом для class `Screen`, и Mixin 0.8.7 выбросил `InvalidMixinException: @Mixin target type mismatch`. Build269 отозван, повторно не выдавать.
 
-Цель NPC — точный существующий `NpcProfile.identifier`; игрок — ник. Команды старта и остановки отдельные и размещаются на отдельных Trigger-узлах графа. Строй шириной 3, первый ряд на расстоянии 1,4 блока вперёд от цели и боковой интервал 1,4; следующие ряды каждые 1,5 блока. Текущие defaults: цель вне доступа ждёт, состояние сохраняется, разные цели независимы.
+Build270 JAR `settledlands-0.8.0-build270-pursuit-hotfix.jar`, 3 102 565 bytes, SHA-256 `3f63e5a0adf09d1c848c8661886e83f0606ffb50c5bf15a0d70976629fe02711`; source ZIP `SettledLands-Build270-Pursuit-Hotfix-Source.zip`, 17 551 427 bytes, SHA-256 `3d0e527a302476c89907ab560f8d8df7d021c8fbb305d9012a621db59ef553d8`. Он точно пересобирается от Build269; к Build269 JAR diff ровно 4 записей. Accessor теперь abstract class-mixin, UI использует reflection invoker без interface-cast.
 
-`tests/gate_pursuit269.py` PASS: reproducible rebuild, точный diff (5 changed, 7 added; 424 entries unchanged), Mixin/TOML/lang/JAR checks, JVM links и Java fixture команд/строя. Minecraft/NeoForge не запускались. Следующий шаг — тест на копии мира по `CHECKLIST-TEST-BUILD269-RU.md`; не заявлять игровой успех до ответа пользователя.
+`tests/gate_pursuit270.py` и чистая source ZIP проверка `tests/gate_backup270.py` PASS; manifest 896/896. **Minecraft/NeoForge не запускались**, поэтому hotfix остаётся кандидатом до реальной проверки старта и UI на копии мира по `CHECKLIST-TEST-BUILD270-RU.md`. Build268 SHA `bc4f01b8461ef36ab4d6a8cda35aaf10967c9becdc07c8f6ccba127aa39f1ea5` — подтверждённая база; pursuit и Build268 исправление кожи сохранены; Build263 CUTSCENE fade не включён.
+
+SHA и размеры артефактов зафиксированы в `SHA256SUMS-build270-release.txt`. Перед выдачей загрузить/проверить GitHub и Drive по установленным инструкциям §10; JAR первым, ZIP вторым; не запрашивать видео или SHA у пользователя.
 
 # SettledLands — SESSION-STATE, 30.10.2026
 

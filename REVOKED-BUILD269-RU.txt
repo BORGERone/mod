@@ -1,0 +1,5 @@
+ОТОЗВАНО: settledlands-0.8.0-build269-pursuit.jar
+
+Не устанавливать и не рекомендовать. Приложенный пользователем latest-9.log показал падение при запуске: ScreenAccessorPursuit269 был объявлен Mixin-интерфейсом для класса net.minecraft.client.gui.screens.Screen. Mixin 0.8.7 завершился InvalidMixinException: @Mixin target type mismatch (Screen is not an interface).
+
+Build270 — отдельный hotfix-кандидат; он меняет accessor на abstract class-mixin и убирает interface-cast из UI. Реальный запуск Build270 пользователем ещё необходим.

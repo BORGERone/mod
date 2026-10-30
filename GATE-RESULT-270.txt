@@ -1,0 +1,11 @@
+BUILD 270 HOTFIX GATE: PASS
+
+- Deterministic rebuild from exact published Build269 JAR: byte-for-byte identical.
+- Build269 -> Build270 JAR exact diff: 4 changed entries; 433 unchanged; no added/deleted entries.
+- JAR/TOML/mixin metadata and client mixin configuration validated.
+- ScreenAccessorPursuit269 class access flags: abstract class, not interface; Mixin target string is Screen; @Invoker annotation present.
+- UI source calls the public invoker through reflection, with no accessor-interface cast.
+- JVM link checks and pursuit command/row-formation Java fixture: PASS.
+- JAR integrity and bytecode structure validation: PASS.
+
+Minecraft/NeoForge were not launched. This gate does not prove real startup or live UI behavior. Build269 was revoked after the user-provided latest-9.log confirmed its startup crash. Build270 remains a hotfix candidate pending user launch and UI test on a copied world.
