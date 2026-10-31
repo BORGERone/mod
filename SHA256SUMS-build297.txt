@@ -1,0 +1,2 @@
+2fc481060c2083375fbba9083d43e237bc68804b3d5954a0b284e28da5c94ecc  settledlands-0.8.0-build297-if-own-variable.jar
+6a55344fac2d662794b3d3d1a3f00312d7356e71a33b0b234af946472eee37d9  SettledLands-Build297-IfOwnVariable-Source.zip
