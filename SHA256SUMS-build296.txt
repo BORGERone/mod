@@ -1,0 +1,2 @@
+801d5a30822d3f1884ae31f5eb353e815ad9d1c41cc201ab48e35b16de387e37  settledlands-0.8.0-build296-back-to-294.jar
+e9160abf50e95398222f8a2b3418c73f8e3d7d0f465fd618caa4bdadfea9a35e  SettledLands-Build296-Revert295-Source.zip
