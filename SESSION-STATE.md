@@ -4,7 +4,7 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build287-graph-hit-restore.jar` — Build 287, все гейты PASS (теперь их пять).
+`settledlands-0.8.0-build288-value-wire-cut-and-corpse-target.jar` — Build 288, все 5 гейтов PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -16,7 +16,8 @@
 → 284 (`tools/patch_build284.py`, цельный синий провод значения + вход цели у ноды)
 → 285 (`tools/patch_build285.py`, вылет NoSuchFieldError: Entity.walkAnimation → LivingEntity)
 → 286 (`tools/patch_build286.py`, провода значения штатным `curve` холста + модель профессий 63 текстуры)
-→ 287 (`tools/patch_build287.py`, возвращены `hit`/`visible` в `PursuitGraphNode272` + новый гейт `dangling_refs`).
+→ 287 (`tools/patch_build287.py`, возвращены `hit`/`visible` в `PursuitGraphNode272` + новый гейт `dangling_refs`)
+→ 288 (`tools/patch_build288.py`, средняя кнопка режет синий провод + труп как цель преследования).
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
@@ -26,6 +27,15 @@ walkAnimation`. Поле объявлено в `LivingEntity`; заглушка 
 поэтому код собрался и гейты прошли. `NpcLocoObserveMixin283` читает через `LivingEntity`,
 заглушка перенесена туда же. **Урок: заглушки MC должны повторять реального владельца поля/метода**,
 иначе ECJ не ловит ошибку.
+
+Build 288: (1) синие провода значения теперь режутся средней кнопкой, как штатные кабели, — по одному проводу:
+`PursuitGraphNode272.hitValueWire` сэмплирует ту же кубическую кривую, что и `NpcDialogueGraphScreen#curve`
+(горизонтальные касательные, `reach = max(25*zoom, |dx|*0.45)`), с допуском `max(1.8, min(5.5, 4*zoom+1.2))` как
+в `NpcGraphCanvas#hitCable`; резка идёт через `settledlands$remember()`, бросок тоже (штатная отмена). Миксин
+`NpcPursuitValuePinMixin286` заменён на `...288`, правый клик по ромбу остался ярлыком «снять все связи».
+(2) `NpcPursuit269.matches` больше не отбрасывает `GuideCorpseNpc` (раньше вместе с `GuideTriggerNpc`), поэтому
+нода преследования находит труп по `profile.identifier`; триггеры исключены, труп-преследователь по-прежнему
+запрещён в `run`. Внутренние классы `NpcPursuit269$*` намеренно не заменялись — поток инструкций идентичен.
 
 Build 287: вылет при открытии диалога с правкой — `NoSuchMethodError PursuitGraphNode272.hit(NpcGraphCanvas,
 NpcDialogueGraph, DD)I` из `NpcPursuitCanvasMixin272`. В 286 вместе со старым рисованием по пикселям из класса

@@ -1,0 +1,2 @@
+a0b1dc4ac1108c8533f9175b91213e06452e9e7acc580da41534b81b732a708c  settledlands-0.8.0-build288-value-wire-cut-and-corpse-target.jar
+f811bb4ffd6b24a8877a7a41505cda9edf9a5b6deb08ae7692c5736716fe547c  SettledLands-Build288-ValueWireCut-Source.zip
