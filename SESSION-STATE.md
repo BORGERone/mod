@@ -283,11 +283,13 @@ scanning...`, и **только при найденном теле** — `FIRED 
 то есть цепь стартует со СЛЕДУЮЩЕЙ ноды. При пустом радиусе обхода нет вообще, поэтому правка 294
 (внутри `resolveExecutionTarget`) никогда не выполнялась.
 
-295: `GuideDialogueEmptyCheck295` (`@Inject TAIL` на `tickGraphCheckNodes`) → `NpcValueSource290#
-tickEmptyChecks`. После штатного скана по каждому CHECK-узлу: пусто по `NpcCheckValue289#detected`
+295: `GuideNpcEmptyCheck295` (`@Inject HEAD` на `GuideNpc#customServerAiStep` — оттуда и вызывается
+`tickGraphCheckNodes`) → `NpcValueSource290#tickEmptyChecks` (раз в 10 тиков, свой кулдаун по ноде). После штатного скана по каждому CHECK-узлу: пусто по `NpcCheckValue289#detected`
 (скан 289 без кулдаунов) + нода питает синий вход (`varInputNode == id` у любого узла) + нет своего
 `action` + вышел кулдаун ноды (`checkCooldown*20` тиков, `LAST_EMPTY`) + `isIncomingIfSatisfied(null,…)`
-→ `GuideDialogue.resolveExecutionTarget(null, npc, null, graph, node.next, new HashSet<>())`.
+→ `GuideDialogue.resolveExecutionTarget(null, npc, null, graph, node.next, new HashSet<>())`. Первый пустой проход
+пишет одну строку `[settledlands] [graph] empty radius #N: chain starts at node #M` — доказательство, что
+хук в игре работает; дальше молчит.
 Действие и триггеры самой ноды на пустом проходе не выполняются; тело «на своём кулдауне» — это
 тело, им владеет штатный путь, двойного срабатывания нет. Поведение прочих графов не меняется.
 

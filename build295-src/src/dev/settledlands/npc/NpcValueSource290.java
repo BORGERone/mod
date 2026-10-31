@@ -252,40 +252,52 @@ public final class NpcValueSource290 {
      * Build 295: a check node that found nobody still has to run its chain.
      *
      * <p>Reported after 294: the same chain "В радиусе" #4 -&gt; "Условие" #5 ({@code #4 == 0})
-     * still printed nothing when the radius was empty. The log shows why - the scan in
-     * {@code tickGraphCheckNodes} only starts a chain when it finds a body: "check node #4
-     * target 0 radius 5 scanning..." every half second and no walk at all. The 294
-     * pass-through never began, because the walk that reaches the check node was never
-     * started; the chain is started at the node's next node, not at the node itself.</p>
+     * still printed nothing when the radius was empty. The log shows why - the scan only
+     * starts a chain when it finds a body: "check node #4 target 0 radius 5 scanning..."
+     * every half second and no walk at all. The 294 pass-through never began, because the
+     * walk that would reach the check node was never started; a chain starts at the node's
+     * next node, not at the node itself.</p>
      *
-     * <p>This runs at the end of that tick. For a check node that feeds a value wire it asks
-     * the node's own question through {@link NpcCheckValue289} (the scan built in 289) and,
-     * when the answer is "nobody", starts the chain at the node's next node with no
+     * <p>Called from the NPC's own server tick. For a check node that feeds a value wire it
+     * asks the node's own question through {@link NpcCheckValue289} (the scan built in 289)
+     * and, when the answer is "nobody", starts the chain at the node's next node with no
      * initiator. The value wire then reads 0 and the condition takes the branch that means
      * "nobody here".</p>
      *
-     * <p>Narrow on purpose: only value-wired check nodes, only when the radius is really
-     * empty (a body on its own cooldown is still a body - the stock path owns that case),
-     * only when the node carries no action of its own, and only once per the node's own
-     * cooldown. The node's action and trigger list do not run: nothing found, nothing to run.</p>
+     * <p>Narrow on purpose: every ten ticks, only value-wired check nodes, only when the
+     * radius is really empty (a body on its own cooldown is still a body - the stock scan
+     * owns that case), only when the node carries no action of its own, and only once per
+     * the node's own cooldown. The node's action and trigger list do not run: nothing found,
+     * nothing to run.</p>
      */
-    public static void tickEmptyChecks(GuideNpc npc, NpcDialogueGraph graph) {
+    public static void tickEmptyChecks(GuideNpc npc) {
         try {
-            if (npc == null || graph == null || graph.nodes == null || graph.nodes.isEmpty()) return;
-            if (npc.isTalking()) return;
+            if (npc == null || !npc.isAlive() || npc.isTalking()) return;
             if (!(npc.level() instanceof ServerLevel serverLevel)) return;
             long now = serverLevel.getGameTime();
-            for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-                if (node == null || node.type != NpcDialogueGraph.CHECK) continue;
-                if (node.next < 0) continue;
-                if (node.action != null && !node.action.isBlank()) continue;
-                if (!feedsValueWire(npc, node)) continue;
-                if (NpcCheckValue289.detected(npc, node.id) != null) continue;
-                if (!emptyReady(npc, node, now)) continue;
-                if (!GuideDialogue.isIncomingIfSatisfied(null, npc, 0, graph, node)) continue;
-                markEmpty(npc, node, now);
-                GuideDialogue.resolveExecutionTarget(null, npc, null, graph, node.next, new HashSet<>());
-                if (npc.isTalking()) return;
+            if (now % 10L != 0L) return;
+            NpcProfile profile = profileOf(npc);
+            if (profile == null) return;
+            for (NpcDialogueGraph graph : graphs(profile)) {
+                if (graph == null || graph.nodes == null || graph.nodes.isEmpty()) continue;
+                for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+                    if (node == null || node.type != NpcDialogueGraph.CHECK) continue;
+                    if (node.next < 0) continue;
+                    if (node.action != null && !node.action.isBlank()) continue;
+                    if (!feedsValueWire(npc, node)) continue;
+                    if (NpcCheckValue289.detected(npc, node.id) != null) continue;
+                    if (!emptyReady(npc, node, now)) continue;
+                    if (!GuideDialogue.isIncomingIfSatisfied(null, npc, 0, graph, node)) continue;
+                    boolean first = lastEmpty(npc, node.id) == null;
+                    markEmpty(npc, node, now);
+                    if (first) {
+                        System.out.println("[settledlands] [graph] empty radius #" + node.id
+                                + ": chain starts at node #" + node.next);
+                    }
+                    GuideDialogue.resolveExecutionTarget(null, npc, null, graph, node.next,
+                            new HashSet<>());
+                    if (npc.isTalking()) return;
+                }
             }
         } catch (Throwable t) {
             // A tick hook must never take the server down: report it once, keep ticking.

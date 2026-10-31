@@ -7,8 +7,8 @@ only when its scan finds a body - "check node #4 target 0 radius 5 scanning..." 
 second and no walk at all. The 294 pass-through was never reached, because the walk that
 reaches the check node was never started, and a chain is started at the node's NEXT node.
 
-Fix, one hook: after the stock scan, `NpcValueSource290#tickEmptyChecks` walks the same
-graph and, for a check node that feeds a value wire and has no action of its own, starts
+Fix, one hook: on the NPC server tick, `NpcValueSource290#tickEmptyChecks` walks the
+graphs and, for a check node that feeds a value wire and has no action of its own, starts
 the chain at its next node with no initiator once the radius is empty and the node's own
 cooldown has elapsed. The IF then reads 0 from the wire and takes the "nobody" branch.
 The node's action and trigger list do not run. A body on its own per-entity cooldown is
@@ -37,12 +37,12 @@ REPLACED = (
     "dev/settledlands/npc/NpcValueSource290.class",
 )
 ADDED = (
-    "dev/settledlands/mixin/GuideDialogueEmptyCheck295.class",
+    "dev/settledlands/mixin/GuideNpcEmptyCheck295.class",
 )
-COMMON_MIXINS = ("GuideDialogueEmptyCheck295",)
+COMMON_MIXINS = ("GuideNpcEmptyCheck295",)
 
 EXPECTED_METHODS = {
-    "dev/settledlands/mixin/GuideDialogueEmptyCheck295.class": ("settledlands$emptyCheck",),
+    "dev/settledlands/mixin/GuideNpcEmptyCheck295.class": ("settledlands$emptyCheck",),
     "dev/settledlands/npc/NpcValueSource290.class": ("passThroughWhenValue", "tickEmptyChecks",
                                                     "triggerBlocked"),
 }

@@ -22,8 +22,9 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 
 ## Что сделано
 
-Новый хук `GuideDialogueEmptyCheck295` — `@Inject(TAIL)` на `tickGraphCheckNodes` — и
-`NpcValueSource290#tickEmptyChecks`. После штатного сканирования, по той же ноде графа:
+Новый хук `GuideNpcEmptyCheck295` — `@Inject(HEAD)` на `GuideNpc#customServerAiStep` (это тот
+самый серверный тик, откуда и вызывается `tickGraphCheckNodes`) — и `NpcValueSource290#tickEmptyChecks`.
+Раз в 10 тиков, по каждой ноде графа:
 
 ```
 радиус пуст (NpcCheckValue289.detected == null)   → цепь стартует с node.next без инициатора
@@ -46,7 +47,10 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 1. Цепь #4 → #5 (`#4 == 0`): **никого** в радиусе → `true`; **кто-то** в радиусе → `false`.
 2. Стоять внутри радиуса: ветка False, без повторов чаще кулдауна.
 3. Выйти из радиуса: через ~5 с печатается `true`.
-4. «В радиусе» без синего провода, как ворота перед триггером: никого — ничего (как раньше).
+4. В `latest.log` при первом пустом проходе появляется одна строка
+   `[settledlands] [graph] empty radius #4: chain starts at node #5` — она доказывает, что хук
+   работает; дальше он молчит.
+5. «В радиусе» без синего провода, как ворота перед триггером: никого — ничего (как раньше).
 
 В списке модов имя должно быть `Settled Lands 0.8.0-build295-empty-radius-chain`.
 
@@ -60,9 +64,9 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 ## Diff по классам
 
 ```
-+ dev/settledlands/mixin/GuideDialogueEmptyCheck295.class
++ dev/settledlands/mixin/GuideNpcEmptyCheck295.class
 ~ dev/settledlands/npc/NpcValueSource290.class   (+tickEmptyChecks, +LAST_EMPTY, +emptyReady/markEmpty/lastEmpty)
-~ settledlands.mixins.json                       (+GuideDialogueEmptyCheck295 в common)
+~ settledlands.mixins.json                       (+GuideNpcEmptyCheck295 в common)
 ~ META-INF/neoforge.mods.toml                    (version, displayName, description)
 ~ settledlands-patch-info.txt
 ```
