@@ -23,6 +23,13 @@ Phase B - target resolution (catches "Critical injection failure" crashes)
   * the callback's last parameter matches the target: CallbackInfo for a void
     target, CallbackInfoReturnable for a non-void one (build 257-258 lesson)
   * callback parameter count = target parameters + callback
+    (@Redirect handlers are matched against the method named in their @At, not
+    against the enclosing one, so they are not size-checked here yet - only
+    their @At target is resolved)
+  * callback parameter types = the target's own parameter types, literally
+    (Build 290 shipped a handler with `Object` where the target declares its
+    package-private Session type; the game died on startup with "Invalid
+    descriptor" and the build never got past mixin application)
   * @ModifyConstant(@Constant(intValue = N)) finds N in the target method's
     bytecode (injectors.defaultRequire=1 turns a miss into a hard crash)
   * @Shadow fields and methods exist in the target with the same descriptor
@@ -477,6 +484,18 @@ def check_callback(cf, m, tm, tname, entry, kind, problems):
         problems.append("%s: %s%s has %d parameters, %s#%s%s + callback needs %d"
                         % (entry, m.name, m.desc, len(margs), tname, tm.name,
                            tm.desc, expected))
+        return
+    # Build 290 lesson: the count was right but one parameter was typed Object
+    # instead of the target's own type, and the game died on startup with
+    # "Invalid descriptor on ... @Inject". Mixin compares the descriptors
+    # literally, so every leading parameter must be the same type the target
+    # declares - a supertype is not good enough.
+    for index, (have, want) in enumerate(zip(margs, targs)):
+        if have != want:
+            problems.append("%s: %s%s parameter %d is %s, %s#%s%s declares %s "
+                            "(mixin apply failure: invalid descriptor)"
+                            % (entry, m.name, m.desc, index + 1, have, tname, tm.name,
+                               tm.desc, want))
     if kind == "inject":
         return
 

@@ -4,7 +4,7 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build290-stock-node-value-ports.jar` — Build 290, все 5 гейтов PASS.
+`settledlands-0.8.0-build291-launch-fix.jar` — Build 291, все 5 гейтов PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -19,7 +19,16 @@
 → 287 (`tools/patch_build287.py`, возвращены `hit`/`visible` в `PursuitGraphNode272` + новый гейт `dangling_refs`)
 → 288 (`tools/patch_build288.py`, средняя кнопка режет синий провод + труп как цель преследования)
 → 289 (`tools/patch_build289.py`, синий выход у ноды «В радиусе» + `NpcCheckValue289` на сервере)
-→ 290 (`tools/patch_build290.py`, синие входы у реплики/триггера/условия/переменной + синий выход у «Урона»).
+→ 290 (`tools/patch_build290.py`, синие входы у реплики/триггера/условия/переменной + синий выход у «Урона»)
+→ 291 (`tools/patch_build291.py`, починка вылета на запуске из 290 + гейт типов параметров).
+
+**Build 290 НЕ ЗАПУСКАЕТСЯ**: `GuideDialogueValue290.settledlands$enterSendGraph` был объявлен с `Object` вместо
+`GuideDialogue$Session` → `InvalidInjectionException: Invalid descriptor` → миксин не применился → фатальный вылет.
+Урок: загрузчик миксинов сравнивает дескрипторы обработчиков БУКВАЛЬНО; `GuideDialogue$Session` package-private, из
+пакета миксина его не назвать → либо хук на методе без package-private типов (в 291 — `@Redirect` на
+`GuideNpc#relationTo(ServerPlayer)` внутри `sendGraph`), либо отдельный mixin-конфиг с пакетом `dev.settledlands.npc`.
+`tools/check_mixin_class.py` теперь сверяет типы параметров каждого `@Inject` (на 290 падает, на 291 проходит);
+`@Redirect` пока сверяется только по цели из `@At`.
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
