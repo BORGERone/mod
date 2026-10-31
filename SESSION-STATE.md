@@ -4,7 +4,7 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build289-check-node-value-output.jar` — Build 289, все 5 гейтов PASS.
+`settledlands-0.8.0-build290-stock-node-value-ports.jar` — Build 290, все 5 гейтов PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -18,7 +18,8 @@
 → 286 (`tools/patch_build286.py`, провода значения штатным `curve` холста + модель профессий 63 текстуры)
 → 287 (`tools/patch_build287.py`, возвращены `hit`/`visible` в `PursuitGraphNode272` + новый гейт `dangling_refs`)
 → 288 (`tools/patch_build288.py`, средняя кнопка режет синий провод + труп как цель преследования)
-→ 289 (`tools/patch_build289.py`, синий выход у ноды «В радиусе» + `NpcCheckValue289` на сервере).
+→ 289 (`tools/patch_build289.py`, синий выход у ноды «В радиусе» + `NpcCheckValue289` на сервере)
+→ 290 (`tools/patch_build290.py`, синие входы у реплики/триггера/условия/переменной + синий выход у «Урона»).
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
@@ -28,6 +29,19 @@ walkAnimation`. Поле объявлено в `LivingEntity`; заглушка 
 поэтому код собрался и гейты прошли. `NpcLocoObserveMixin283` читает через `LivingEntity`,
 заглушка перенесена туда же. **Урок: заглушки MC должны повторять реального владельца поля/метода**,
 иначе ECJ не ловит ошибку.
+
+Build 290: синие входы у штатных нод. Клиент: `PursuitGraphNode272.isValueSourceNode` (CHECK|DAMAGE),
+`isValueInputNode` (LINE|TRIGGER|IF|VARIABLE, кроме ноды преследования — она тоже TRIGGER на диске),
+`inputSource/setInputSource` (поле `Node.varInputNode`, уже сохраняется в NBT), `inputPinScreenX/Y`, `hitInputPin`,
+`drawValuePins`, `hideStockInputWires/restoreStockInputWires` (скрыть штатный провод IF на время `wires()`).
+Миксин `NpcPursuitValuePinMixin290` заменил 289 и обслуживает все ромбы; `NpcPursuitGraphUiMixin272` рисует их в TAIL `drawNode`.
+Сервер: `NpcDamageValue290` (запись нападающего в HEAD `GuideDialogue.handleNpcDamaged`, окно 200 тиков, фильтр и
+`minDamage` ноды) + `NpcValueSource290` (общий `resolve`, `ifValue`, `variablePresence`, `lineText`, `triggerBlocked`).
+Миксин `GuideDialogueValue290`: IF (HEAD `evalIfNode` → `evalCondition(presence, varOp, varCompare)`), переменная
+(HEAD `readVarValue`), реплика (`@Redirect` на `Node.lineFor` внутри `sendGraph` + `enter(npc)` в HEAD), триггер
+(HEAD 7-арг `executeGraphTriggers`, сравнение списка по идентичности), урон (HEAD `handleNpcDamaged`).
+Важно: `GuideDialogue$Session` package-private — в миксине параметр типа Object; `Node.triggers` = List<Integer>,
+сравнение через `(Object)`; `evalCondition`/`matchesDamageFilter` public static.
 
 Build 289: у ноды «В радиусе» (CHECK, type 5) появился синий выход. Клиент: `PursuitGraphNode272.isCheckValueNode/
 checkPinScreenX/Y/hitCheckPin/drawCheckPin/wiredTo/unplugFrom/sourceLabel`; ромб рисуется в `@Inject TAIL drawNode`
