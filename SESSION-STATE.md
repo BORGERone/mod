@@ -4,14 +4,24 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build279-pursuit-distance.jar` — Build 279, все 4 gates PASS.
+`settledlands-0.8.0-build280-pursuit-catchup.jar` — Build 280, все 4 gates PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
-→ 279 (`tools/patch_build279.py`, дистанция/догон преследования).
-Что и почему исправлено — `README-Build273-RU.md` … `README-Build279-RU.md`.
-База 277 — jar 276, база 278 — jar 277, база 279 — jar 278; сборка из исходников: `build27X-src/`
+→ 279 (`tools/patch_build279.py`, дистанция преследования)
+→ 280 (`tools/patch_build280.py`, реальный догон + выход `%pursuit%`).
+Что и почему исправлено — `README-Build273-RU.md` … `README-Build280-RU.md`.
+База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
+
+Build 280: причина «NPC не ускоряется» — в 279 путь пересоздавался каждые 4 тика, а
+каждый `moveTo` стартует путь заново. Теперь дисциплина пересчёта взята у `NpcEscort`
+(`isDone`, снимок цели `CATCH_UP_TARGET_MOVED_SQ`, сторож прогресса, откат
+20/40/80/160). Скорость догона = скорость сопровождения × настройка «Ускорение догона»
+(1.0–3.0, дефолт 1.5), при разрыве >24 блока и без линии видимости NPC переносится в 8
+блоках от цели. Выход ноды: `%pursuit%`, `%pursuit_kind%`, `%pursuit_uuid%` —
+подставляются в `NpcProfile#fill` (миксин `NpcPursuitOutputMixin280`, `RETURN` +
+`getReturnValue`), то есть и в реплики, и в действия/команды.
 
 Build 279 впервые правит **серверный** класс `NpcPursuit269`: он собран из настоящего
 исходника Build 271 (`reference/patch-src-build246-271/src/build271/...`), который
@@ -50,7 +60,9 @@ JDK в песочнице нет: `java` берётся из PyPI-колеса `
 | `build275-src/` | исходники build 275: `PursuitGraphNode272`, 2 mixin-а, `patch_build275.py`, README, stubs |
 | `build278-src/` | исходники build 278: те же 3 класса + `patch_build278.py`, README, stubs, `out/` |
 | `build279-src/` | исходники build 279: `NpcPursuit269` (сервер), `PursuitGraphNode272`, 2 mixin-а, `patch_build279.py`, README, stubs, `api-src`/`api2`, `out/` |
+| `build280-src/` | исходники build 280: то же + 3-й mixin `NpcPursuitOutputMixin280`, `patch_build280.py` |
 | `build277-src/` | исходники build 277: `PursuitGraphNode272` (карточка), `NpcPursuitGraphUiMixin272`, `NpcPursuitInspectorMixin277`, `patch_build277.py`, README, stubs, `out/` |
+| `tools/patch_build280.py` | сборка 280: 6 классов заменено, 2 добавлено (в т.ч. `NpcPursuit269$Published`), mixins.json (+1), lang (+3 ключа), toml, patch-info |
 | `tools/patch_build279.py` | сборка 279: 6 классов заменено (`NpcPursuit269` + 3 внутренних, `PursuitGraphNode272`, `NpcPursuitInspectorMixin277`), lang (+2 ключа), toml, patch-info |
 | `tools/patch_build278.py` | сборка 278: 1 класс заменён (`NpcPursuitGraphUiMixin272`), toml + patch-info |
 | `tools/patch_build277.py` | сборка 277: 3 класса заменены, +1 mixin, −1 mixin, mixins.json, lang, toml, patch-info |
