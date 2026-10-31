@@ -225,3 +225,11 @@ Gate 3 — единственный, который ловит «Critial injecti
 * Home-путь сборки: `build279-src/`.
 * Прямого интернета нет; Google Drive и GitHub — через коннекторы.
 * Скачанные с Drive файлы попадают в `google_drive/` (в git не коммитятся).
+
+## Build 291 (актуально)
+
+- `settledlands-0.8.0-build291-launch-fix.jar` — Drive `1M49OGceKN0eD3TGJsevGG_jVxlT1v6aF` (public).
+- `SettledLands-Build291-LaunchFix-Source.zip` — Drive `1WHFEkfH-ndtoJV1_m8xCiE8JT_vKV3au` (public).
+- `SHA256SUMS-build291.txt`, `README-Build291-RU.md`, патчер `tools/patch_build291.py`.
+- Гейты: validate_jar OK (455 записей / 407 классов), jvm_verify OK, check_mixin_class OK (38 миксинов, типы параметров сверены),
+  verify_jar PASS (0 новых ссылок, 0 висячих),diff с 290: ~`mixin/GuideDialogueValue290.class` + метаданные.
