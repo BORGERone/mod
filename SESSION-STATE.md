@@ -4,7 +4,7 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build288-value-wire-cut-and-corpse-target.jar` — Build 288, все 5 гейтов PASS.
+`settledlands-0.8.0-build289-check-node-value-output.jar` — Build 289, все 5 гейтов PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -17,7 +17,8 @@
 → 285 (`tools/patch_build285.py`, вылет NoSuchFieldError: Entity.walkAnimation → LivingEntity)
 → 286 (`tools/patch_build286.py`, провода значения штатным `curve` холста + модель профессий 63 текстуры)
 → 287 (`tools/patch_build287.py`, возвращены `hit`/`visible` в `PursuitGraphNode272` + новый гейт `dangling_refs`)
-→ 288 (`tools/patch_build288.py`, средняя кнопка режет синий провод + труп как цель преследования).
+→ 288 (`tools/patch_build288.py`, средняя кнопка режет синий провод + труп как цель преследования)
+→ 289 (`tools/patch_build289.py`, синий выход у ноды «В радиусе» + `NpcCheckValue289` на сервере).
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
@@ -27,6 +28,16 @@ walkAnimation`. Поле объявлено в `LivingEntity`; заглушка 
 поэтому код собрался и гейты прошли. `NpcLocoObserveMixin283` читает через `LivingEntity`,
 заглушка перенесена туда же. **Урок: заглушки MC должны повторять реального владельца поля/метода**,
 иначе ECJ не ловит ошибку.
+
+Build 289: у ноды «В радиусе» (CHECK, type 5) появился синий выход. Клиент: `PursuitGraphNode272.isCheckValueNode/
+checkPinScreenX/Y/hitCheckPin/drawCheckPin/wiredTo/unplugFrom/sourceLabel`; ромб рисуется в `@Inject TAIL drawNode`
+(`NpcPursuitGraphUiMixin272`), тяга/бросок/резка — в `NpcPursuitValuePinMixin289` (заменил 288). Бросок ромба на ноду
+преследования пишет `#<id>` через `setSource` — то же поле, что у связи преследование→преследование. Сервер:
+`NpcCheckValue289.isCheckSource/detected` повторяет правила `GuideDialogue#findCheckTarget` (checkTarget, радиус 1..64,
+владелец и наблюдатели исключены, ближайший, без кулдауна, кэш 10 тиков); `NpcPursuit269` читает `#id` из действия,
+при не-check источнике работает по тексту как раньше (важно: связь 275–288 «преследование→преследование» не сломана),
+источник сохраняется в NBT (`PursuitSource289`), `%pursuit%` отдаёт найденное тело. Проверено: все MC/JOML-ссылки новых
+классов уже есть в базовом jar 288 (аналог фиаско 280 с `hasLineOfSight`).
 
 Build 288: (1) синие провода значения теперь режутся средней кнопкой, как штатные кабели, — по одному проводу:
 `PursuitGraphNode272.hitValueWire` сэмплирует ту же кубическую кривую, что и `NpcDialogueGraphScreen#curve`
