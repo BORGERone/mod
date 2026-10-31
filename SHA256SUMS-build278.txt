@@ -1,0 +1,2 @@
+605519844f26e01190b7ec748e53dccc82e5651f049a3be9c515af166eb4ed7d  settledlands-0.8.0-build278-pursuit-card.jar
+4f3917bfe67fc36b837a1f178b71989ac97e9927ab40a3a8012742a75c4a2b34  SettledLands-Build278-Pursuit-Card-Source.zip

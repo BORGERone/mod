@@ -7,6 +7,13 @@ Phase A - configuration
   * no class listed twice / in both the common and client lists
   * bundled mixin annotation stubs keep @Retention(CLASS)
 
+Phase C - dispatcher hooks
+  A class that only exists to be called from a mixin (the pursuit card
+  renderer) is useless when the mixin no longer references it: Build 277 lost
+  the drawNode @Inject and every pursuit node fell back to the stock trigger
+  drawing. If such a class is in the jar, some mixin in the configs must name
+  the hook method.
+
 Phase B - target resolution (catches "Critical injection failure" crashes)
   Targets that live inside the jar (the mod's own classes) are resolved for
   real:
@@ -56,6 +63,11 @@ DESC_SHADOW = PKG + "Shadow;"
 DESC_CONSTANT = PKG + "injection/Constant;"
 DESC_AT = PKG + "injection/At;"
 DESC_RETENTION = "Ljava/lang/annotation/Retention;"
+# class -> method that some mixin must call, else the class is dead code
+DISPATCH_HOOKS = {
+    "dev/settledlands/npc/client/PursuitGraphNode272": ("drawNode", "the pursuit card"),
+}
+
 DESC_CALLBACK_INFO = "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;"
 DESC_CALLBACK_RET = "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;"
 
@@ -565,6 +577,7 @@ def main(argv):
 
     problems = []
     external = []
+    listed_mixins = []
     checked = 0
     try:
         with zipfile.ZipFile(jar) as z:
@@ -612,6 +625,7 @@ def main(argv):
                         if cf is None:
                             problems.append("%s: %s cannot be parsed" % (cfg, entry))
                             continue
+                        listed_mixins.append(entry)
                         if not any(ann_desc(cf, a) == DESC_MIXIN
                                    for a in read_annotations(cf)):
                             problems.append("%s: %s carries no @Mixin annotation "
@@ -620,6 +634,31 @@ def main(argv):
                         checked += 1
                         check_targets(cf, entry, classes, problems, external,
                                       args.verbose)
+
+            for owner, (hook, what) in DISPATCH_HOOKS.items():
+                if owner not in classes:
+                    continue
+                short = owner.rsplit("/", 1)[-1]
+                hooked = False
+                for entry in listed_mixins:
+                    mcf = classes.get(entry[:-6])
+                    if mcf is None:
+                        continue
+                    try:
+                        strings = {mcf.utf8(i) for i in range(1, len(mcf.cp))
+                                   if mcf.tag(i) == 1}
+                    except ClassFormatError:
+                        continue
+                    named = owner in strings or short in strings or any(
+                        v.endswith("/" + short + ";") or v == "L" + owner + ";"
+                        for v in strings)
+                    if named and hook in strings:
+                        hooked = True
+                        break
+                if not hooked:
+                    problems.append("%s#%s is in the jar but no mixin in the "
+                                    "configs calls it - %s would be drawn by "
+                                    "the stock code (dead hook)" % (owner, hook, what))
 
             for entry in sorted(n for n in names
                                 if n.startswith("org/spongepowered/asm")
