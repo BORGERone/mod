@@ -4,11 +4,12 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build276-pursuit-inspector.jar` — Build 276, все 4 gates PASS.
+`settledlands-0.8.0-build277-pursuit-native-inspector.jar` — Build 277, все 4 gates PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
-→ 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`).
-Что и почему исправлено — `README-Build273-RU.md`, `README-Build274-RU.md`, `README-Build275-RU.md`,
-`README-Build276-RU.md`.
+→ 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
+→ 277 (`tools/patch_build277.py`).
+Что и почему исправлено — `README-Build273-RU.md` … `README-Build277-RU.md`.
+База 277 — jar 276; сборка из исходников: `build277-src/` (`src/`, `stubs/`, `out/`), ECJ 3.46.100.
 
 ## Найденные краши (хронология)
 
@@ -17,6 +18,7 @@
 | 272 | старт клиента | CallbackInfoReturnable на void `focus`, @Shadow на несуществующий `selected()`, @Inject в несуществующий `charTyped` | gate 3 (цели mixin-ов) |
 | 273 | создание ноды преследования | `@Inject(TAIL)` без `cancellable = true` вызывает `setReturnValue` → CancellationException | gate 3, фаза `check_cancellable` |
 | 273 (лог 1) | старт клиента | чужой мод `hackersandslashers` (Forge-сигнатура `ModConfigSpec.Builder.define(String,String)`) | не наш код |
+| 276 | «в поле не печатается, текст наслаивается, нода становится триггером» | `@Unique` переименовал `charTyped` (не переопределение), а панель 276 рисовалась поверх штатного редактора триггера; `Screen.mouseClicked` не смотрит на `visible`, поэтому спрятанное поле команды продолжало принимать клики и затирало `node.action` | не ловится гейтами (семантика UI) — лечится тем, что ветка штатного инспектора не выполняется вовсе (277) |
 
 Правило: перед каждой выдачей прогонять `tools/verify_jar.py`; если появляется
 новый класс ошибок — сначала дописать под него фазу в gate, потом чинить.
@@ -33,6 +35,8 @@
 | `tools/patch_build273.py` | патч 272→273 на уровне байткода (удаление методов, retarget shadow) |
 | `build273-src/` | исходники build 273 (2 mixin-а + скрипт + README) |
 | `build275-src/` | исходники build 275: `PursuitGraphNode272`, 2 mixin-а, `patch_build275.py`, README, stubs |
+| `build277-src/` | исходники build 277: `PursuitGraphNode272` (карточка), `NpcPursuitGraphUiMixin272`, `NpcPursuitInspectorMixin277`, `patch_build277.py`, README, stubs, `out/` |
+| `tools/patch_build277.py` | сборка 277: 3 класса заменены, +1 mixin, −1 mixin, mixins.json, lang, toml, patch-info |
 | `tools/patch_build275.py` | сборка 275: подмена 3 классов, +1 новый mixin, mixins.json, toml, patch-info |
 | `AI-GUIDE-SettledLands.md` | гайд из build 228 (актуальные разделы про сборку/ритуал доставки) |
 | `latest.log` | лог от 27.10 — там битый `build236-corpse-tex.jar`, не код |
