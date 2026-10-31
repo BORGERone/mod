@@ -264,7 +264,20 @@ Class-файл не содержит абсолютных смещений, по
 длиной (`tools/patch_build293.py: patch_constant`). Читателей ровно два — `command` и
 `commandForEntity`; сборщик это проверяет, класс дополнительно парсится `java.lang.classfile` (JDK 25).
 
-- `settledlands-0.8.0-build293-tp-target-guard.jar`, `SettledLands-Build293-TpTargetGuard-Source.zip`,
+- `settledlands-0.8.0-build293-tp-target-guard.jar` — Drive `1XN5-9TrTQkLrg6jNq8BGH96jn9k1IXIi` (public);
+  `SettledLands-Build293-TpTargetGuard-Source.zip` — Drive `1DIq9b7owCw2usdsECfOXuHtiPkdqXJ5i` (public);
   `SHA256SUMS-build293.txt`, `README-Build293-RU.md`, `tools/patch_build293.py`.
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
+
+## Урок Build 292 → 293
+
+Лог `latest-5.log` (запуск на 292): `НПС Проводник: выполнена команда триггера: «/tp @s 8efbfa3e-… ~ ~5 ~»`
+→ `@Redirect` на `String.replaceFirst` в `NpcActions.command` **не дал эффекта** (игра не падала, значит
+инъекция формально применилась либо не зарегистрировалась — вопрос открыт; точный ответ даст 293).
+Вывод на будущее: если правку можно выразить заменой строки/константы в СВОЁМ классе — делать так, а не
+инъекцией; инъекция в свой класс у нас уже дважды вела себя не так, как ожидалось (290 — fatal, 292 — молча).
+
+Техника: Utf8-запись пула констант можно переписать с новой длиной (`tools/patch_build293.py`), в class-файле
+нет абсолютных смещений, остальные байты не двигаются. Проверка: `python3 - <<'PY'` парсит класс через
+`java.lang.classfile` (JDK 25) — `parsed ok, methods=20`, строка в пуле `cp#181`.
