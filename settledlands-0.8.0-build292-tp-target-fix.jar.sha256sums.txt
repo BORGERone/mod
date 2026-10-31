@@ -1,1 +1,1 @@
-97e3cbe562e7d4ef792bb204b1ec9ff9b542357a65ec821081f19a0caf95161f  settledlands-0.8.0-build292-tp-target-fix.jar
+2cd60f113dd8d6736e212756d7f4188f696876caa2a67fbc0f6e67711f81ec1b  settledlands-0.8.0-build292-tp-target-fix.jar

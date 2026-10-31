@@ -173,6 +173,8 @@ def main(argv):
     if 'version="%s"' % BASE_VERSION not in toml:
         raise SystemExit("base toml does not declare %s" % BASE_VERSION)
     toml = toml.replace('version="%s"' % BASE_VERSION, 'version="%s"' % NEW_VERSION)
+    toml = toml.replace('displayName="Settled Lands"',
+                        'displayName="Settled Lands %s"' % NEW_VERSION)
     marker = "description='''"
     toml = toml.replace(marker, marker + CHANGELOG_EN + "\n\n", 1)
     blobs["META-INF/neoforge.mods.toml"] = toml.encode("utf-8")
