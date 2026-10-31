@@ -1,0 +1,2 @@
+7e4ae0377519923ec227774cf17e61367ec966a72a3bd410214ba488db46ee56  settledlands-0.8.0-build283-loco-sync-and-target-pin.jar
+249554d80359417b830341d8775dcf7248c3f55f51f447af3dec1f1533cdf681  SettledLands-Build283-Loco-TargetPin-Source.zip

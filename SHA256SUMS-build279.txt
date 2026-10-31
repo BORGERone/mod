@@ -1,0 +1,2 @@
+45155ea76b50a9debfff4ca1036becd4a56bdf7eee527d55421fd06793ad54b7  settledlands-0.8.0-build279-pursuit-distance.jar
+ffc1ef8ebf14c4fa1138591f3b4b7f373a06736634b238c5ad06aa5234712519  SettledLands-Build279-Pursuit-Distance-Source.zip

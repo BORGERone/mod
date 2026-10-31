@@ -1,0 +1,1 @@
+45155ea76b50a9debfff4ca1036becd4a56bdf7eee527d55421fd06793ad54b7  settledlands-0.8.0-build279-pursuit-distance.jar

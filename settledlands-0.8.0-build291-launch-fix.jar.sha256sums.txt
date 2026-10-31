@@ -1,0 +1,1 @@
+7b1eaaf8364b931c84342233b9a764392091eb321bed0b2692558625d40c7ba5  settledlands-0.8.0-build291-launch-fix.jar

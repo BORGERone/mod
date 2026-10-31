@@ -1,0 +1,2 @@
+780e26ca47e2b164328e0d37223ca96c6ca6793e7953b48b1b17983c6444a850  settledlands-0.8.0-build284-value-pins-and-target-input.jar
+87431b032171f73c7a5821ecb90b684037b973dd5c6bdfe6282786ae68330e2a  SettledLands-Build284-ValuePins-Source.zip

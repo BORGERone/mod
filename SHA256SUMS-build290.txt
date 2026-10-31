@@ -1,0 +1,2 @@
+ee092cf822f0c3616e4dc1106c575a683360f1dde29af8e5de314962aa92649c  settledlands-0.8.0-build290-stock-node-value-ports.jar
+50bdff5f6205a88cf9b6bd2bfbe08382e7b1136e281f299de6cd9215d85fa51d  SettledLands-Build290-StockNodeValuePorts-Source.zip

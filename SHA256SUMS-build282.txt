@@ -1,0 +1,2 @@
+68b4bb24b7390306882c8d30955643d3613ba04e08b0ca24ee61d101ddb54a76  settledlands-0.8.0-build282-possessed-body-animation.jar
+8905f1cb3711dd0d1bb7fd46585c7408e075b27ab0712a2e926e9c3fc686b0b3  SettledLands-Build282-Possessed-Animation-Source.zip

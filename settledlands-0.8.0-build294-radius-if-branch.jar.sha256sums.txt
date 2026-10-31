@@ -1,0 +1,1 @@
+07b8971f1485739525e1b9afdc3b62caaca41a6f8c2ee36ea486042e6222141d  settledlands-0.8.0-build294-radius-if-branch.jar
