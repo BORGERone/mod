@@ -1,0 +1,2 @@
+3a84684303e7f42eb1e88aac88dc0d7c714b296b799cdc9245fb6d9bf43d863b  settledlands-0.8.0-build285-loco-field-fix.jar
+98bbc1a363da5e3959d36f940b4e4d3ac34c3308cb39f3dae0a819c05c720626  SettledLands-Build285-LocoFieldFix-Source.zip
