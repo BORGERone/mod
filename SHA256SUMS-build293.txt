@@ -1,0 +1,2 @@
+819a0b70dcd434218e7b1791074b0371bb6eeda13fad1344f465a86189c49d15  settledlands-0.8.0-build293-tp-target-guard.jar
+fe4bccca0f49989d0a9d15b6a07beefb8703194a9825d72e9234463ddf98e407  SettledLands-Build293-TpTargetGuard-Source.zip

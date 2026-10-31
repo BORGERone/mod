@@ -4,7 +4,7 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build292-tp-target-fix.jar` — Build 292, все 5 гейтов PASS.
+`settledlands-0.8.0-build293-tp-target-guard.jar` — Build 293, все 5 гейтов PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -250,3 +250,21 @@ UUID начинается с hex-цифры ⇒ `tp @s <uuid> ~ ~5 ~` ⇒ «Не
   `SettledLands-Build292-TpTarget-Source.zip` — Drive `1rYfuWAN3YqxkVwC2Xz3lTphGRDmzdSzT` (public);
   `SHA256SUMS-build292.txt`, `tools/patch_build292.py`, `build292-src/`.
 - Гейты: 457 записей / 409 классов, 39 миксинов, 0 новых внешних ссылок, 0 висячих.
+
+## Build 293 (актуально)
+
+Лог `latest-5.log` показал: игра запускалась на 292 (`settledlands-0.8.0-build292-tp-target-fix.jar`),
+и всё равно выполнила `/tp @s <uuid> ~ ~5 ~`. То есть `@Redirect` на `String.replaceFirst` в
+`NpcActions.command` в этой сборке **не сработал** (молча, без падения). Вывод: не полагаться на
+инъекцию там, где можно поправить саму строку.
+
+293 (база — 291, без 292) меняет ОДНУ строку в пуле констант `NpcActions.class`:
+`^(tp|teleport)\s+([~^\-0-9].*)` → `^(tp|teleport)\s+[~^\-0-9.]*(\s.*)?` (30 → 35 байт).
+Class-файл не содержит абсолютных смещений, поэтому Utf8-запись просто переписывается с новой
+длиной (`tools/patch_build293.py: patch_constant`). Читателей ровно два — `command` и
+`commandForEntity`; сборщик это проверяет, класс дополнительно парсится `java.lang.classfile` (JDK 25).
+
+- `settledlands-0.8.0-build293-tp-target-guard.jar`, `SettledLands-Build293-TpTargetGuard-Source.zip`,
+  `SHA256SUMS-build293.txt`, `README-Build293-RU.md`, `tools/patch_build293.py`.
+- Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
+- Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
