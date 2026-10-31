@@ -34,7 +34,17 @@ Phase B - target resolution (catches "Critical injection failure" crashes)
   Targets from Minecraft or other mods cannot be resolved here - they are
   listed as "external" instead of being guessed at.
 
-Usage: python3 tools/check_mixin_class.py <jar> [--verbose]
+Phase D - external API references (Build 280 lesson)
+  Minecraft is not in the jar, so nothing here can prove that a Minecraft
+  method exists: the stub the patch was compiled against decides that, and a
+  stub is written by hand. Build 280 called Entity#hasLineOfSight(Entity);
+  the stub was happy, the game was not (NoSuchMethodError, "Ticking entity").
+  Phase D compares every reference our classes make to an external owner with
+  the references of a base jar that is known to run in game (the previous
+  build). A reference the base jar never makes is unverified by definition, so
+  it must be looked up first - or replayed from code that already works.
+
+Usage: python3 tools/check_mixin_class.py <jar> [--base JAR] [--verbose]
 Exit code 0 = pass, 1 = fail.
 """
 
@@ -70,6 +80,15 @@ DISPATCH_HOOKS = {
 
 DESC_CALLBACK_INFO = "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;"
 DESC_CALLBACK_RET = "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;"
+
+
+# owners our patch compiles against but cannot verify: Minecraft, NeoForge,
+# Mojang and the bundled libraries. dev/settledlands is the mod itself.
+EXTERNAL_PREFIXES = (
+    "net/minecraft/", "net/neoforged/", "com/mojang/", "org/spongepowered/",
+    "dev/shadowsoffire/", "software/bernie/", "net/minecraftforge/",
+)
+SKIP_PREFIXES = ("java/", "javax/", "jdk/", "sun/", "dev/settledlands/")
 
 
 class Fail(Exception):
@@ -539,6 +558,91 @@ def check_constant(cf, m, tm, tname, entry, args, problems):
                             "injection failure)" % (entry, m.name, w, tname, tm.name))
 
 
+# ---------------------------------------------------------------- phase D
+def external_refs(classes):
+    """{(owner, name, desc)} for every reference to an owner outside the mod."""
+    refs = set()
+    for cf in classes.values():
+        if cf is None:
+            continue
+        # Long and double constants leave a hole in the pool, so walk the raw
+        # list instead of cf.tag(), which raises on the holes.
+        try:
+            pool = list(cf.cp)
+            for i in range(1, len(pool)):
+                entry = pool[i]
+                if not entry or entry[0] not in (9, 10, 11):
+                    continue
+                if not isinstance(entry[1], tuple):
+                    continue
+                owner_i, nat_i = entry[1]
+                owner = cf.class_name(owner_i) if owner_i else None
+                if not owner or owner.startswith(SKIP_PREFIXES):
+                    continue
+                if not owner.startswith(EXTERNAL_PREFIXES):
+                    continue
+                nat = pool[nat_i] if 0 < nat_i < len(pool) else None
+                if not nat or not isinstance(nat[1], tuple):
+                    continue
+                name = cf.utf8(nat[1][0])
+                desc = cf.utf8(nat[1][1])
+                if name and desc:
+                    refs.add((owner, name, desc))
+        except ClassFormatError:
+            continue
+    return refs
+
+
+def check_external_refs(classes, base_jar, problems):
+    """Every external call must be backed by code that already runs in game.
+
+    Three cases:
+      * the exact owner#name+desc is used by the base jar - proven;
+      * the same name+desc is used by the base jar on another external owner
+        (Minecraft is not in the jar, so a parameter typed Entity may legitimately
+        declare a method the base jar happens to call through a ServerPlayer) -
+        accepted;
+      * the name+desc is unknown to the base jar at all, or is only used by the
+        base jar on one of the mod's own classes while the new code claims an
+        external owner - that is a hand-written stub talking, not the game.
+        Build 280: GuideNpc#hasLineOfSight(...) is real (inherited from
+        LivingEntity), but Entity#hasLineOfSight(...) is not - it crashed the
+        server with NoSuchMethodError the first time a target ran far away.
+    """
+    refs = external_refs(classes)
+    try:
+        with zipfile.ZipFile(base_jar) as z:
+            base_classes = load_classes(z, z.namelist())
+    except (OSError, zipfile.BadZipFile):
+        problems.append("phase D: cannot read base jar %s" % base_jar)
+        return 0, 0
+
+    known = external_refs(base_classes)
+    by_sig = {}
+    for owner, name, desc in known:
+        by_sig.setdefault((name, desc), set()).add(owner)
+
+    new = []
+    for owner, name, desc in sorted(refs):
+        if (owner, name, desc) in known:
+            continue
+        base_owners = by_sig.get((name, desc))
+        if base_owners and any(not o.startswith("dev/settledlands/") for o in base_owners):
+            continue
+        new.append((owner, name, desc, base_owners))
+
+    for owner, name, desc, base_owners in new:
+        where = ("nothing in the base jar" if not base_owners
+                 else "only %s in the base jar" % ", ".join(sorted(base_owners)[:3]))
+        problems.append(
+            "external API %s#%s%s is used by this jar and is known from %s - "
+            "the stub it was compiled against is the only evidence it exists; "
+            "check it against code that runs in game first "
+            "(Build 280: Entity#hasLineOfSight did not exist)"
+            % (owner, name, desc, where))
+    return len(refs), len(new)
+
+
 # ---------------------------------------------------------------- phase A
 def check_stub_retention(cf, entry):
     if not cf.access & ACC_ANNOTATION:
@@ -568,6 +672,8 @@ def check_stub_retention(cf, entry):
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("jar")
+    ap.add_argument("--base", default=None,
+                    help="previous jar known to run in game (phase D)")
     ap.add_argument("--verbose", action="store_true")
     args = ap.parse_args(argv)
     jar = args.jar
@@ -660,6 +766,10 @@ def main(argv):
                                     "configs calls it - %s would be drawn by "
                                     "the stock code (dead hook)" % (owner, hook, what))
 
+            api_refs = api_new = 0
+            if args.base:
+                api_refs, api_new = check_external_refs(classes, args.base, problems)
+
             for entry in sorted(n for n in names
                                 if n.startswith("org/spongepowered/asm")
                                 and n.endswith(".class")):
@@ -687,6 +797,11 @@ def main(argv):
         return 1
     print("check_mixin_class: OK  %s" % os.path.basename(jar))
     print("  mixin classes verified : %d" % checked)
+    if args.base:
+        print("  external API refs      : %d, new versus %s: %d"
+              % (api_refs, os.path.basename(args.base), api_new))
+    else:
+        print("  external API refs      : not checked (no --base jar)")
     return 0
 
 

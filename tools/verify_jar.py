@@ -4,8 +4,12 @@
 Runs validate_jar -> jvm_verify -> check_mixin_class in order, stops at the
 first failure, and on success writes <jar>.sha256sums.txt next to the jar.
 
+Gate 3 additionally gets --base <previous jar> when one is given: every call to
+Minecraft / NeoForge from our classes must already be made by code that runs in
+game (Build 280 shipped Entity#hasLineOfSight, which does not exist).
+
 Usage: python3 tools/verify_jar.py <jar> [--expect-version 0.8.0-buildNNN]
-                                   [--sums-dir DIR]
+                                   [--base PREVIOUS.jar] [--sums-dir DIR]
 Exit code 0 = all gates passed.
 """
 
@@ -38,6 +42,8 @@ def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("jar")
     ap.add_argument("--expect-version", default=None)
+    ap.add_argument("--base", default=None,
+                    help="previous jar known to run in game (gate 3 phase D)")
     ap.add_argument("--sums-dir", default=None)
     args = ap.parse_args(argv)
 
@@ -58,7 +64,8 @@ def main(argv):
         print("verify_jar: FAIL - JVM gate")
         return 1
     print("\n== gate 3/4 check_mixin_class ==")
-    if run("check_mixin_class.py", [args.jar]) != 0:
+    mixin_extra = [args.jar] + (["--base", args.base] if args.base else [])
+    if run("check_mixin_class.py", mixin_extra) != 0:
         print("verify_jar: FAIL - mixin gate")
         return 1
 
