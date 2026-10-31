@@ -4,12 +4,24 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build278-pursuit-card.jar` — Build 278, все 4 gates PASS.
+`settledlands-0.8.0-build279-pursuit-distance.jar` — Build 279, все 4 gates PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
-→ 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук).
-Что и почему исправлено — `README-Build273-RU.md` … `README-Build278-RU.md`.
-База 277 — jar 276, база 278 — jar 277; сборка из исходников: `build27X-src/` (`src/`, `stubs/`, `out/`), ECJ 3.46.100.
+→ 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
+→ 279 (`tools/patch_build279.py`, дистанция/догон преследования).
+Что и почему исправлено — `README-Build273-RU.md` … `README-Build279-RU.md`.
+База 277 — jar 276, база 278 — jar 277, база 279 — jar 278; сборка из исходников: `build27X-src/`
+(`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
+
+Build 279 впервые правит **серверный** класс `NpcPursuit269`: он собран из настоящего
+исходника Build 271 (`reference/patch-src-build246-271/src/build271/...`), который
+перекомпилируется в байткод, совпадающий с 278 по `max_stack/max_locals/code_len` во всех
+17 методах. Для компиляции серверных классов нужны заглушки `build279-src/api-src` →
+`build279-src/api2` (в `tools/api271` их не хватало: `isDone/setSpeedModifier/moveTo(DDDID)`,
+`getDeltaMovement/setDeltaMovement`, `xxa/yya/zza/getMoveControl`, `MoveControl`,
+`getDouble/putDouble`).
+JDK в песочнице нет: `java` берётся из PyPI-колеса `jdk4py` (`pip download jdk4py`,
+распаковать, `chmod +x .../java-runtime/bin/*`) — это только JRE, ECJ запускается им.
 
 ## Найденные краши (хронология)
 
@@ -37,7 +49,9 @@
 | `build273-src/` | исходники build 273 (2 mixin-а + скрипт + README) |
 | `build275-src/` | исходники build 275: `PursuitGraphNode272`, 2 mixin-а, `patch_build275.py`, README, stubs |
 | `build278-src/` | исходники build 278: те же 3 класса + `patch_build278.py`, README, stubs, `out/` |
+| `build279-src/` | исходники build 279: `NpcPursuit269` (сервер), `PursuitGraphNode272`, 2 mixin-а, `patch_build279.py`, README, stubs, `api-src`/`api2`, `out/` |
 | `build277-src/` | исходники build 277: `PursuitGraphNode272` (карточка), `NpcPursuitGraphUiMixin272`, `NpcPursuitInspectorMixin277`, `patch_build277.py`, README, stubs, `out/` |
+| `tools/patch_build279.py` | сборка 279: 6 классов заменено (`NpcPursuit269` + 3 внутренних, `PursuitGraphNode272`, `NpcPursuitInspectorMixin277`), lang (+2 ключа), toml, patch-info |
 | `tools/patch_build278.py` | сборка 278: 1 класс заменён (`NpcPursuitGraphUiMixin272`), toml + patch-info |
 | `tools/patch_build277.py` | сборка 277: 3 класса заменены, +1 mixin, −1 mixin, mixins.json, lang, toml, patch-info |
 | `tools/patch_build275.py` | сборка 275: подмена 3 классов, +1 новый mixin, mixins.json, toml, patch-info |
@@ -56,6 +70,12 @@ Gate 3 — единственный, который ловит «Critial injecti
 
 ## Открытый хвост
 
+* Build 279: ждёт проверки в игре. Изменено: дистанция считается до цели (по умолчанию 1.6,
+  настройка 1.0–8.0), остановка гасит move control и скорость (`NpcEscort#stopMotion`),
+  догон = скорость сопровождения + перестроение каждые 4 тика, выход на 3 блоках,
+  преследователь идёт к кольцу дистанции по своему направлению, две настройки ноды
+  (`|дистанция|догон` в действии + `PursuitKeep279`/`PursuitCatchUp279` в NBT).
+  Действие ноды остаётся типа TRIGGER — это по-прежнему нужно серверному пути триггеров.
 * Build 276: `@Unique` на слитом `charTyped` в 275 приводил к переименованию метода —
   ввода не было; теперь метод реально переопределяет `Screen#charTyped`. Инспектор ноды
   преследования больше не триггерный: новый `NpcPursuitInspectorMixin276` прячет пресеты и
@@ -73,7 +93,10 @@ Gate 3 — единственный, который ловит «Critial injecti
 ## Окружение песочницы
 
 * `python3` есть, JDK/javac в PATH нет; Java-исходники собираются вендорным
-  `tools/vendor/ecj-3.46.100.jar` против заглушек `tools/api271/` (нужен только
-  `java` из временного `/tmp/jdk4`). Home-путь сборки: `build275-src/`.
+  `tools/vendor/ecj-3.46.100.jar` против заглушек `tools/api271/` (+ `build279-src/api-src`).
+* `java` из `/tmp/jdk4` пропадает между сессиями. Восстановление:
+  `pip download jdk4py --no-deps -d /tmp/jdkpkg`, распаковать колесо в `/tmp/jdk4`,
+  `chmod +x /tmp/jdk4/jdk4py/java-runtime/bin/*`; это JRE 25, ECJ 3.46.100 работает.
+* Home-путь сборки: `build279-src/`.
 * Прямого интернета нет; Google Drive и GitHub — через коннекторы.
 * Скачанные с Drive файлы попадают в `google_drive/` (в git не коммитятся).
