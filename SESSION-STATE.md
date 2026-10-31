@@ -4,7 +4,7 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build294-radius-if-branch.jar` — Build 294, все 5 гейтов PASS.
+`settledlands-0.8.0-build295-empty-radius-chain.jar` — Build 295, все 5 гейтов PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -24,6 +24,7 @@
 → 292 (`tools/patch_build292.py`, отозвана) → 293 (`tools/patch_build293.py`, строка-шаблон tp
 в пуле констант `NpcActions`)
 → 294 (`tools/patch_build294.py`, `В радиусе` → `Условие`: обход не обрывается на пустом радиусе).
+→ 295 (`tools/patch_build295.py`, пустой радиус всё равно запускает цепь проверки).
 
 **Build 290 НЕ ЗАПУСКАЕТСЯ**: `GuideDialogueValue290.settledlands$enterSendGraph` был объявлен с `Object` вместо
 `GuideDialogue$Session` → `InvalidInjectionException: Invalid descriptor` → миксин не применился → фатальный вылет.
@@ -273,7 +274,32 @@ Class-файл не содержит абсолютных смещений, по
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
 
-## Build 294 (актуально)
+## Build 295 (актуально)
+
+После 294 пользователь сообщил: в цепи «В радиусе» #4 → «Условие» #5 (`#4 == 0`) при пустом радиусе
+по-прежнему ничего не печатается. Лог `latest-6.log` показал механизм: нода CHECK — не звено обхода,
+а сканер. `tickGraphCheckNodes` каждые 10 тиков печатает `[graph] check node #4 target 0 radius 5
+scanning...`, и **только при найденном теле** — `FIRED on <имя>` и `walk starts at node #5 for <имя>`,
+то есть цепь стартует со СЛЕДУЮЩЕЙ ноды. При пустом радиусе обхода нет вообще, поэтому правка 294
+(внутри `resolveExecutionTarget`) никогда не выполнялась.
+
+295: `GuideDialogueEmptyCheck295` (`@Inject TAIL` на `tickGraphCheckNodes`) → `NpcValueSource290#
+tickEmptyChecks`. После штатного скана по каждому CHECK-узлу: пусто по `NpcCheckValue289#detected`
+(скан 289 без кулдаунов) + нода питает синий вход (`varInputNode == id` у любого узла) + нет своего
+`action` + вышел кулдаун ноды (`checkCooldown*20` тиков, `LAST_EMPTY`) + `isIncomingIfSatisfied(null,…)`
+→ `GuideDialogue.resolveExecutionTarget(null, npc, null, graph, node.next, new HashSet<>())`.
+Действие и триггеры самой ноды на пустом проходе не выполняются; тело «на своём кулдауне» — это
+тело, им владеет штатный путь, двойного срабатывания нет. Поведение прочих графов не меняется.
+
+- `settledlands-0.8.0-build295-empty-radius-chain.jar`, `SettledLands-Build295-EmptyRadius-Source.zip`,
+  `SHA256SUMS-build295.txt`, `README-Build295-RU.md`, `tools/patch_build295.py`.
+- Дифф против 294: `+mixin/GuideDialogueEmptyCheck295.class`, `~npc/NpcValueSource290.class`,
+  `~settledlands.mixins.json`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
+- Гейты: 457 записей / 409 классов, 40 миксинов, 1385 внешних ссылок, 0 новых, 0 висячих.
+- Урок: у CHECK-ноды ДВА пути — сканер (`tickGraphCheckNodes` → `triggerCheckChain`) и ветка type 5
+  внутри `resolveExecutionTarget`. Правки делать в сканере: именно он решает, будет ли цепь вообще.
+
+## Build 294
 
 Цепь «В радиусе» #4 (Цель: Игрок, Радиус 5, Кулдаун 5 с) → «Условие» #5 (`#4 == 0`),
 True → `say true`, False → `say false`. Кто-то в радиусе — печатается `false`; никого — не происходило ничего.

@@ -1,0 +1,2 @@
+f419086c31828767091cf934213fb906873c99a94f39ee093f26e90bf5f07a47  settledlands-0.8.0-build295-empty-radius-chain.jar
+4d57076d7ecdfd3ffdc65491d5a3d023228e3f496ed2e78d2cd34f1b622b89cf  SettledLands-Build295-EmptyRadius-Source.zip
