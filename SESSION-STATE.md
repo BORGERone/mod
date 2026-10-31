@@ -4,7 +4,7 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build291-launch-fix.jar` — Build 291, все 5 гейтов PASS.
+`settledlands-0.8.0-build292-tp-target-fix.jar` — Build 292, все 5 гейтов PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -233,3 +233,19 @@ Gate 3 — единственный, который ловит «Critial injecti
 - `SHA256SUMS-build291.txt`, `README-Build291-RU.md`, патчер `tools/patch_build291.py`.
 - Гейты: validate_jar OK (455 записей / 407 классов), jvm_verify OK, check_mixin_class OK (38 миксинов, типы параметров сверены),
   verify_jar PASS (0 новых ссылок, 0 висячих),diff с 290: ~`mixin/GuideDialogueValue290.class` + метаданные.
+
+## Build 292 (актуально)
+
+Причина вылета пользователя: `tp @npc ~ ~5 ~` в ноде триггера. `NpcActions#fill` подставляет
+`@npc` → uuid НПС, затем `NpcActions#command`/`#commandForEntity` проверяют
+`^(tp|teleport)\s+([~^\-0-9].*)` — «цели нет, только координаты» → вставляют `@s`.
+UUID начинается с hex-цифры ⇒ `tp @s <uuid> ~ ~5 ~` ⇒ «Неверный аргумент для команды».
+
+Фикс: `NpcSelfTarget292.needsSelfTarget` (токен после tp/teleport состоит только из `~ ^ - . 0-9`)
++ `NpcActionsTpFix292` — `@Redirect` на `String.replaceFirst` в `command` и `commandForEntity`
+(по одному вызову в каждом, патчер это проверяет: `check_redirect_sites`).
+`@s` — игрок (источник команды), `@npc` — НПС (uuid), `@p`/ники не трогаются.
+
+- `settledlands-0.8.0-build292-tp-target-fix.jar`, `SettledLands-Build292-TpTarget-Source.zip`,
+  `SHA256SUMS-build292.txt`, `tools/patch_build292.py`, `build292-src/`.
+- Гейты: 457 записей / 409 классов, 39 миксинов, 0 новых внешних ссылок, 0 висячих.
