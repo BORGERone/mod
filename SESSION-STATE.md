@@ -4,7 +4,7 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build293-tp-target-guard.jar` — Build 293, все 5 гейтов PASS.
+`settledlands-0.8.0-build294-radius-if-branch.jar` — Build 294, все 5 гейтов PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -20,7 +20,10 @@
 → 288 (`tools/patch_build288.py`, средняя кнопка режет синий провод + труп как цель преследования)
 → 289 (`tools/patch_build289.py`, синий выход у ноды «В радиусе» + `NpcCheckValue289` на сервере)
 → 290 (`tools/patch_build290.py`, синие входы у реплики/триггера/условия/переменной + синий выход у «Урона»)
-→ 291 (`tools/patch_build291.py`, починка вылета на запуске из 290 + гейт типов параметров).
+→ 291 (`tools/patch_build291.py`, починка вылета на запуске из 290 + гейт типов параметров)
+→ 292 (`tools/patch_build292.py`, отозвана) → 293 (`tools/patch_build293.py`, строка-шаблон tp
+в пуле констант `NpcActions`)
+→ 294 (`tools/patch_build294.py`, `В радиусе` → `Условие`: обход не обрывается на пустом радиусе).
 
 **Build 290 НЕ ЗАПУСКАЕТСЯ**: `GuideDialogueValue290.settledlands$enterSendGraph` был объявлен с `Object` вместо
 `GuideDialogue$Session` → `InvalidInjectionException: Invalid descriptor` → миксин не применился → фатальный вылет.
@@ -269,6 +272,29 @@ Class-файл не содержит абсолютных смещений, по
   `SHA256SUMS-build293.txt`, `README-Build293-RU.md`, `tools/patch_build293.py`.
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
+
+## Build 294 (актуально)
+
+Цепь «В радиусе» #4 (Цель: Игрок, Радиус 5, Кулдаун 5 с) → «Условие» #5 (`#4 == 0`),
+True → `say true`, False → `say false`. Кто-то в радиусе — печатается `false`; никого — не происходило ничего.
+
+Причина (по байткоду 293): в `GuideDialogue#resolveExecutionTarget` нода CHECK (type 5) — ворота.
+`checkProximityCondition` false → `curId = -1` сразу, обход заканчивается на #4, условие #5 не выполняется
+и ни разу не видит 0. Значение ноды для синего провода считается отдельно
+(`NpcValueSource290#ifValue` → `NpcCheckValue289#detected`) и пустой радиус = 0 — ответ просто не доезжал.
+
+294: `GuideDialogueCheckGate294` (`@Redirect` на `checkProximityCondition` в `resolveExecutionTarget`) +
+`NpcValueSource290#passThroughWhenValue`. Правило: непрошедшая проверка пропускает обход дальше по `next`
+только если нода питает синий вход (некто в графе имеет `varInputNode == id`), нода — источник
+(CHECK/DAMAGE) и у неё нет своего действия; своё действие и её список триггеров при этом не выполняются
+(метка `PENDING`/`PENDING_TRIGGERS` гасится в `triggerBlocked`). Всё остальное — как было.
+Нода CHECK со своим действием остаётся воротами (непрошедшая проверка обрывает цепь, как раньше).
+
+- `settledlands-0.8.0-build294-radius-if-branch.jar`, `SettledLands-Build294-RadiusIfBranch-Source.zip`,
+  `SHA256SUMS-build294.txt`, `README-Build294-RU.md`, `tools/patch_build294.py`.
+- Дифф против 293: `+mixin/GuideDialogueCheckGate294.class`, `~npc/NpcValueSource290.class`,
+  `~settledlands.mixins.json`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
+- Гейты: 456 записей / 408 классов, 39 миксинов (20 common + 18 client), 1385 внешних ссылок, 0 новых, 0 висячих.
 
 ## Урок Build 292 → 293
 
