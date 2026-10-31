@@ -1,0 +1,2 @@
+7dc87b0b3378f0ba9779a93b194e93546428c9981de7c9805be45778d71e720c  settledlands-0.8.0-build286-value-wire-cables.jar
+5199c8ec3d0be506de76aaab2cbb5084fd607280889ec11a1f8f80ea4f2cd19f  SettledLands-Build286-ValueWireCables-Source.zip

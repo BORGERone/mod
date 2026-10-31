@@ -4,7 +4,7 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build285-loco-field-fix.jar` — Build 285, все 4 gates PASS.
+`settledlands-0.8.0-build286-value-wire-cables.jar` — Build 286, все 4 gates PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -14,7 +14,8 @@
 → 282 (`tools/patch_build282.py`, тело вселённого снова анимируется)
 → 283 (`tools/patch_build283.py`, анимация NPC по реальной скорости + выход цели у ноды преследования)
 → 284 (`tools/patch_build284.py`, цельный синий провод значения + вход цели у ноды)
-→ 285 (`tools/patch_build285.py`, вылет NoSuchFieldError: Entity.walkAnimation → LivingEntity).
+→ 285 (`tools/patch_build285.py`, вылет NoSuchFieldError: Entity.walkAnimation → LivingEntity)
+→ 286 (`tools/patch_build286.py`, провода значения штатным `curve` холста + модель профессий 63 текстуры).
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
@@ -24,6 +25,20 @@ walkAnimation`. Поле объявлено в `LivingEntity`; заглушка 
 поэтому код собрался и гейты прошли. `NpcLocoObserveMixin283` читает через `LivingEntity`,
 заглушка перенесена туда же. **Урок: заглушки MC должны повторять реального владельца поля/метода**,
 иначе ECJ не ловит ошибку.
+
+Build 286: три пункта. (1) Женский японский рыбак: в старой модели профессий (41 текстура) не было
+`rybak_jp_fem.png`, пара «женщина + японский» молча падала на мужскую текстуру; плюс файлы вариантов
+(`ivy_oleander_prof264_p1_m0_j1.bbmodel`) кэшировались на диске навсегда, поэтому правка текстуры не
+была видна. В jar положен свежий экспорт из Blockbench (63 текстуры, `assets-src/ivy_oleander_professions_286.bbmodel`,
+исходник на Drive `15UKE2OMHu2jbccuku4TZiAM3y7wEsTyX`), таблица `NpcProfessionSkin264` обновлена
+(японские пары для фермера/целителя/шахтёра/лесоруба/охотника/трактирщика, женские маг и кузнец),
+а `NpcProfessionModel264` пересобирает вариант по метке `MODEL_REVISION` + имя текстуры
+(`<variant>.bbmodel.rev` / `.tex`). (2) Провод значения больше не рисуется прямоугольниками по
+пикселям: `NpcPursuitValuePinMixin286` вызывает `NpcDialogueGraphScreen#curve` в том же буфере,
+шейдере и состоянии, что и штатные кабели — при зуме ведёт себя идентично. (3) Бросок синего выхода
+на другую ноду преследования теперь ставит `setSource` (её синий вход), на прочие ноды —
+`toggleConsumer`; бросок в пустоту ничего не чистит, правый клик по ромбу снимает связь. Миксин 284
+удалён из jar и конфига.
 
 Build 284: провод значения рисовался штрихами (26 отсчётов, каждый второй выброшен, точки 2×2) —
 «рвано, мало блоков». Теперь один кубический провод с горизонтальными касательными, шаг ~1 пиксель,
