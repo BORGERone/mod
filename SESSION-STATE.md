@@ -4,15 +4,16 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build281-pursuit-no-los-crash.jar` — Build 281, все 4 gates PASS.
+`settledlands-0.8.0-build282-possessed-body-animation.jar` — Build 282, все 4 gates PASS.
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
 → 279 (`tools/patch_build279.py`, дистанция преследования)
 → 280 (`tools/patch_build280.py`, реальный догон + выход `%pursuit%`)
-→ 281 (`tools/patch_build281.py`, вылет `hasLineOfSight` + фаза D гейта).
+→ 281 (`tools/patch_build281.py`, вылет `hasLineOfSight` + фаза D гейта)
+→ 282 (`tools/patch_build282.py`, тело вселённого снова анимируется).
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build280-RU.md`.
-База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280; сборка из исходников: `build27X-src/`
+База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
 
 Build 280: причина «NPC не ускоряется» — в 279 путь пересоздавался каждые 4 тика, а
@@ -42,6 +43,7 @@ JDK в песочнице нет: `java` берётся из PyPI-колеса `
 | 273 | создание ноды преследования | `@Inject(TAIL)` без `cancellable = true` вызывает `setReturnValue` → CancellationException | gate 3, фаза `check_cancellable` |
 | 273 (лог 1) | старт клиента | чужой мод `hackersandslashers` (Forge-сигнатура `ModConfigSpec.Builder.define(String,String)`) | не наш код |
 | 277 | «создаётся нода-триггер» | при переписывании `NpcPursuitGraphUiMixin272` в 277 потерялся `@Inject` на `drawNode` — карточку рисовал штатный рендер («Триггер #n» + строка действия) | не ловится гейтами (нет хука — нет цели), лечится в 278 |
+| 282 | «пропали анимации у тела, в которое вселился» | `PlayerMotionBridge#setup` по замыслу ставил тело в нейтральную позу, когда Fresh Animations Player Extension не установлен — в инстансе его нет вообще (лог: «is unavailable or disabled for this player»), поэтому вселённое тело стояло замороженным, а NPC жили через откат `NpcMotionBridge256` | переписана 1 инструкция (`iload freshPath` → `iconst_0`), ветка нейтральной позы не выполняется никогда, при неработающем FA тело берёт встроенную актёрскую анимацию; текст предупреждения исправлен на месте |
 | 280 | «Ticking entity», `NoSuchMethodError: Entity#hasLineOfSight` | метод объявлен в **заглушке** `Entity`, в реальном MC он у `LivingEntity`; ветка срабатывала только при разрыве >24 блока | gate 3 фаза D (внешние API против сборки, работающей в игре) — добавлена в 281 |
 | 276 | «в поле не печатается, текст наслаивается, нода становится триггером» | `@Unique` переименовал `charTyped` (не переопределение), а панель 276 рисовалась поверх штатного редактора триггера; `Screen.mouseClicked` не смотрит на `visible`, поэтому спрятанное поле команды продолжало принимать клики и затирало `node.action` | не ловится гейтами (семантика UI) — лечится тем, что ветка штатного инспектора не выполняется вовсе (277) |
 
@@ -63,8 +65,10 @@ JDK в песочнице нет: `java` берётся из PyPI-колеса `
 | `build278-src/` | исходники build 278: те же 3 класса + `patch_build278.py`, README, stubs, `out/` |
 | `build279-src/` | исходники build 279: `NpcPursuit269` (сервер), `PursuitGraphNode272`, 2 mixin-а, `patch_build279.py`, README, stubs, `api-src`/`api2`, `out/` |
 | `build280-src/` | исходники build 280: то же + 3-й mixin `NpcPursuitOutputMixin280`, `patch_build280.py` |
+| `build282-src/` | исходников нет: build 282 правит байткод `PlayerMotionBridge#setup` напрямую (`tools/patch_build282.py`), 1 инструкция |
 | `build281-src/` | исходники build 281: те же исходники с конусом обзора вместо `hasLineOfSight`, `patch_build281.py` |
 | `build277-src/` | исходники build 277: `PursuitGraphNode272` (карточка), `NpcPursuitGraphUiMixin272`, `NpcPursuitInspectorMixin277`, `patch_build277.py`, README, stubs, `out/` |
+| `tools/patch_build282.py` | сборка 282: правка 2 байт в `PlayerMotionBridge#setup` (iload→iconst_0) + текст предупреждения, toml + patch-info; сам проверяет шаблон и результат |
 | `tools/patch_build281.py` | сборка 281: 1 класс заменён (`NpcPursuit269`), toml + patch-info |
 | `tools/patch_build280.py` | сборка 280: 6 классов заменено, 2 добавлено (в т.ч. `NpcPursuit269$Published`), mixins.json (+1), lang (+3 ключа), toml, patch-info |
 | `tools/patch_build279.py` | сборка 279: 6 классов заменено (`NpcPursuit269` + 3 внутренних, `PursuitGraphNode272`, `NpcPursuitInspectorMixin277`), lang (+2 ключа), toml, patch-info |
