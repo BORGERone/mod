@@ -1,0 +1,1 @@
+ff3bd38d1bb84492f44828dca429cdd6069da2ea5a8c3c5eca7006e4baf248b9  settledlands-0.8.0-build275-pursuit-stock-node.jar

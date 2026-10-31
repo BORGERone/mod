@@ -1,0 +1,1 @@
+79b061646ba758bb0ba009aed7b0b1d7f85983e356b9df07795505fc9b794923  settledlands-0.8.0-build277-pursuit-native-inspector.jar

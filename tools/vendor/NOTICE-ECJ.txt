@@ -1,0 +1,14 @@
+Eclipse Compiler for Java (ECJ) 3.46.100.v20260826-1225
+
+Unmodified compiler, SHA-256:
+74c93172475fee0cd4e6eefb44233516dd40525642da35d009146d97ea598229
+Used only to reproduce the build and test fixtures; not included in the mod JAR.
+Its about.html states that the content is made available under the Eclipse
+Public License version 2.0. The license is included as EPL-2.0.txt. The JAR
+retains its original about.html, manifest, and other notices.
+
+Obtained from package/deps/ecj-3.46.100.jar in:
+https://registry.npmjs.org/exoproc-jjit/-/exoproc-jjit-0.6.5.tgz
+Eclipse JDT Core source: https://github.com/eclipse-jdt/eclipse.jdt.core
+License: https://www.eclipse.org/legal/epl-2.0/
+This notice covers ECJ, not the SettledLands mod.

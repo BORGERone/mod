@@ -1,0 +1,1 @@
+f24dc9207ccadc679e9348e90d67dd2f71136eb643332c028db164702aa936cf  settledlands-0.8.0-build273-pursuit-mixinfix.jar
