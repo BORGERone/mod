@@ -1,12 +1,18 @@
 #!/usr/bin/env python3
-"""Gate 4/4 - full verification + SHA256SUMS for one jar.
+"""Gate 5/5 - full verification + SHA256SUMS for one jar.
 
-Runs validate_jar -> jvm_verify -> check_mixin_class in order, stops at the
-first failure, and on success writes <jar>.sha256sums.txt next to the jar.
+Runs validate_jar -> jvm_verify -> check_mixin_class -> dangling_refs in order,
+stops at the first failure, and on success writes <jar>.sha256sums.txt next to
+the jar.
 
 Gate 3 additionally gets --base <previous jar> when one is given: every call to
 Minecraft / NeoForge from our classes must already be made by code that runs in
 game (Build 280 shipped Entity#hasLineOfSight, which does not exist).
+
+Gate 4 uses the same --base: a class that lost a method or a field while another
+class in the jar still calls it is a NoSuchMethodError waiting in game (Build 286
+dropped PursuitGraphNode272.hit, and NpcPursuitCanvasMixin272, compiled against
+285, still called it - the dialogue screen crashed on render).
 
 Usage: python3 tools/verify_jar.py <jar> [--expect-version 0.8.0-buildNNN]
                                    [--base PREVIOUS.jar] [--sums-dir DIR]
@@ -55,18 +61,22 @@ def main(argv):
     if args.expect_version:
         extra += ["--expect-version", args.expect_version]
 
-    print("== gate 1/4 validate_jar ==")
+    print("== gate 1/5 validate_jar ==")
     if run("validate_jar.py", extra) != 0:
         print("verify_jar: FAIL - structure gate")
         return 1
-    print("\n== gate 2/4 jvm_verify ==")
+    print("\n== gate 2/5 jvm_verify ==")
     if run("jvm_verify.py", [args.jar]) != 0:
         print("verify_jar: FAIL - JVM gate")
         return 1
-    print("\n== gate 3/4 check_mixin_class ==")
+    print("\n== gate 3/5 check_mixin_class ==")
     mixin_extra = [args.jar] + (["--base", args.base] if args.base else [])
     if run("check_mixin_class.py", mixin_extra) != 0:
         print("verify_jar: FAIL - mixin gate")
+        return 1
+    print("\n== gate 4/5 dangling_refs ==")
+    if run("dangling_refs.py", [args.jar] + (["--base", args.base] if args.base else [])) != 0:
+        print("verify_jar: FAIL - removed member still referenced")
         return 1
 
     digest = sha256(args.jar)

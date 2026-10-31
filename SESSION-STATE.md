@@ -4,7 +4,7 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build286-value-wire-cables.jar` — Build 286, все 4 gates PASS.
+`settledlands-0.8.0-build287-graph-hit-restore.jar` — Build 287, все гейты PASS (теперь их пять).
 Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -15,7 +15,8 @@
 → 283 (`tools/patch_build283.py`, анимация NPC по реальной скорости + выход цели у ноды преследования)
 → 284 (`tools/patch_build284.py`, цельный синий провод значения + вход цели у ноды)
 → 285 (`tools/patch_build285.py`, вылет NoSuchFieldError: Entity.walkAnimation → LivingEntity)
-→ 286 (`tools/patch_build286.py`, провода значения штатным `curve` холста + модель профессий 63 текстуры).
+→ 286 (`tools/patch_build286.py`, провода значения штатным `curve` холста + модель профессий 63 текстуры)
+→ 287 (`tools/patch_build287.py`, возвращены `hit`/`visible` в `PursuitGraphNode272` + новый гейт `dangling_refs`).
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
@@ -25,6 +26,15 @@ walkAnimation`. Поле объявлено в `LivingEntity`; заглушка 
 поэтому код собрался и гейты прошли. `NpcLocoObserveMixin283` читает через `LivingEntity`,
 заглушка перенесена туда же. **Урок: заглушки MC должны повторять реального владельца поля/метода**,
 иначе ECJ не ловит ошибку.
+
+Build 287: вылет при открытии диалога с правкой — `NoSuchMethodError PursuitGraphNode272.hit(NpcGraphCanvas,
+NpcDialogueGraph, DD)I` из `NpcPursuitCanvasMixin272`. В 286 вместе со старым рисованием по пикселям из класса
+уехали `visible` и `hit`; миксин холста лежит в jar собранным против 285 и не перекомпилируется, поэтому ECJ
+пропустил, `jvm_verify` смотрит форму класса, а `check_mixin_class` — точки внедрения. Оба метода восстановлены
+байт-в-байт по потоку инструкций (та же сигнатура и доступ). Добавлен пятый гейт `tools/dangling_refs.py`:
+сверяет каждый класс с предыдущим jar и падает, если класс потерял метод/поле, на которое внутри jar ещё
+ссылаются; на 286 он воспроизводит ровно этот краш. `focus` и `hitPort` намеренно не восстановлены — ссылок
+на них в jar нет.
 
 Build 286: три пункта. (1) Женский японский рыбак: в старой модели профессий (41 текстура) не было
 `rybak_jp_fem.png`, пара «женщина + японский» молча падала на мужскую текстуру; плюс файлы вариантов
