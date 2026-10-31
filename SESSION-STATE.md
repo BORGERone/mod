@@ -290,7 +290,8 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 (метка `PENDING`/`PENDING_TRIGGERS` гасится в `triggerBlocked`). Всё остальное — как было.
 Нода CHECK со своим действием остаётся воротами (непрошедшая проверка обрывает цепь, как раньше).
 
-- `settledlands-0.8.0-build294-radius-if-branch.jar`, `SettledLands-Build294-RadiusIfBranch-Source.zip`,
+- `settledlands-0.8.0-build294-radius-if-branch.jar` — Drive `1nyhbbinE4s-xFSxCKJx3vFS3aC3fBtAu` (public);
+  `SettledLands-Build294-RadiusIfBranch-Source.zip` — Drive `1APfyH5hc0V4oKN6hr_XICYi57xt1bTjF` (public);
   `SHA256SUMS-build294.txt`, `README-Build294-RU.md`, `tools/patch_build294.py`.
 - Дифф против 293: `+mixin/GuideDialogueCheckGate294.class`, `~npc/NpcValueSource290.class`,
   `~settledlands.mixins.json`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
