@@ -246,6 +246,7 @@ UUID начинается с hex-цифры ⇒ `tp @s <uuid> ~ ~5 ~` ⇒ «Не
 (по одному вызову в каждом, патчер это проверяет: `check_redirect_sites`).
 `@s` — игрок (источник команды), `@npc` — НПС (uuid), `@p`/ники не трогаются.
 
-- `settledlands-0.8.0-build292-tp-target-fix.jar`, `SettledLands-Build292-TpTarget-Source.zip`,
+- `settledlands-0.8.0-build292-tp-target-fix.jar` — Drive `18jBFhFrrfDyziqp-oM_5o1SORPWaf1bz` (public);
+  `SettledLands-Build292-TpTarget-Source.zip` — Drive `1rYfuWAN3YqxkVwC2Xz3lTphGRDmzdSzT` (public);
   `SHA256SUMS-build292.txt`, `tools/patch_build292.py`, `build292-src/`.
 - Гейты: 457 записей / 409 классов, 39 миксинов, 0 новых внешних ссылок, 0 висячих.
