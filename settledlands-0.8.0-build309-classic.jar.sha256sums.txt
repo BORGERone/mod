@@ -1,0 +1,1 @@
+40f3b43748c17201d8d543b26470512284420b724c7ec81c7fbe0651db94daf3  settledlands-0.8.0-build309-classic.jar

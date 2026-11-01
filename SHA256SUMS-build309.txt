@@ -1,0 +1,2 @@
+40f3b43748c17201d8d543b26470512284420b724c7ec81c7fbe0651db94daf3  settledlands-0.8.0-build309-classic.jar
+fc796af8cc814066312db008db1e1d8f616c175578234224b5251f2ae581efd6  SettledLands-Build309-Classic-Source.zip
