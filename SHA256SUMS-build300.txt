@@ -1,0 +1,2 @@
+262ae2b2b175138c0671e46ccb0125cad778b8cfb527e80bd76c9c3cc2f24aea  settledlands-0.8.0-build300-wire-and-pin.jar
+6280e3cb87095e3b7df8eed4d6f27daa109756157fd082235a92c17834f66049  SettledLands-Build300-WireAndPin-Source.zip
