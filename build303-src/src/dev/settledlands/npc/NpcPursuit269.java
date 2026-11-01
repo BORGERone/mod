@@ -225,7 +225,7 @@ public final class NpcPursuit269 {
             double catchUpDistance, double catchUpBoost, int sourceNode, ServerPlayer player) {
         Published published = publish(player, kind, target);
         State state = new State(kind, target, keepDistance, catchUpDistance, catchUpBoost,
-                sourceNode, published);
+                sourceNode, NpcDamageValue290.isDamageSource(npc, sourceNode), published);
         synchronized (ACTIVE) {
             ACTIVE.put(npc, state);
         }
@@ -302,6 +302,14 @@ public final class NpcPursuit269 {
         }
 
         Entity target = resolveTarget(npc, state);
+        if (target != null) {
+            // A fresh answer from the source wins and becomes the one to keep.
+            if (state.damageSource) state.latched = target;
+        } else if (state.damageSource) {
+            // The damage node has already forgotten its attacker: keep chasing the body it
+            // named, as long as that body is still here.
+            target = latchedBody(npc, state);
+        }
         if (target == null || !target.isAlive() || target.isRemoved()
                 || target.level() != npc.level()) {
             state.arrived = false;
@@ -366,7 +374,13 @@ public final class NpcPursuit269 {
             double ramp = clamp((gap - state.catchUpDistance) / span, 0.0D, 1.0D);
             boost = CATCH_UP_EXTRA + (state.catchUpBoost - 1.0D) * ramp;
         }
-        double speed = npc.walkingNavigationSpeed(true) * boost;
+        // Build 311: GuideNpc#walkingNavigationSpeed carries the auto-AI peace-time damping
+        // (x0.55 when the NPC is not fighting), which made a pursuit slower than ordinary
+        // walking. Divide it back out: a pursuit walks at the catch-up base (0.16 against the
+        // ordinary 0.10, so 1.6x the walk), and the catch-up adds its push on top of that.
+        double damping = NpcAutoAiEngine255.navigationSpeedFactor(npc);
+        if (!(damping > 0.05D) || damping > 1.0D) damping = 1.0D;
+        double speed = npc.walkingNavigationSpeed(true) / damping * boost;
         navigation.setSpeedModifier(speed);
 
         // Escort progress watchdog: a path that does not move the body is a failure.
@@ -506,6 +520,20 @@ public final class NpcPursuit269 {
         if (motion != null && (motion.x != 0.0D || motion.z != 0.0D)) {
             npc.setDeltaMovement(0.0D, motion.y, 0.0D);
         }
+    }
+
+    /**
+     * Build 311: the body a damage-driven pursuit keeps after the damage window closed.
+     * Cleared as soon as the body is gone, so the retry path is not kept alive by a corpse.
+     */
+    private static Entity latchedBody(GuideNpc npc, State state) {
+        Entity latched = state.latched;
+        if (latched == null) return null;
+        if (!latched.isAlive() || latched.isRemoved() || latched.level() != npc.level()) {
+            state.latched = null;
+            return null;
+        }
+        return latched;
     }
 
     private static Entity resolveTarget(GuideNpc npc, State state) {
@@ -674,7 +702,7 @@ public final class NpcPursuit269 {
                 : DEFAULT_CATCH_UP_BOOST;
         synchronized (ACTIVE) {
             ACTIVE.put(npc, new State(kind, target, keepDistance, catchUpDistance, catchUpBoost,
-                    sourceNode, null));
+                    sourceNode, NpcDamageValue290.isDamageSource(npc, sourceNode), null));
         }
         synchronized (TARGET_CACHE) {
             TARGET_CACHE.remove(groupKey(kind, target));
@@ -703,7 +731,15 @@ public final class NpcPursuit269 {
         final double catchUpBoost;
         /** Build 289: node whose blue output supplies the target, or -1 when the text does. */
         final int sourceNode;
+        /** Build 311: true when that node is the "Урон" node - its body is latched. */
+        final boolean damageSource;
         final Published published;
+        /**
+         * Build 311: the body this pursuit is after. The damage node only names its attacker
+         * for ten seconds; a pursuit outlives that window, so the body found once is kept
+         * until it dies or leaves, and the chase no longer freezes mid-way.
+         */
+        Entity latched;
         boolean catchingUp;
         boolean arrived;
         int failures;
@@ -721,13 +757,14 @@ public final class NpcPursuit269 {
         int lastRelocateTick;
 
         State(int kind, String target, double keepDistance, double catchUpDistance,
-                double catchUpBoost, int sourceNode, Published published) {
+                double catchUpBoost, int sourceNode, boolean damageSource, Published published) {
             this.kind = kind;
             this.target = target;
             this.keepDistance = keepDistance;
             this.catchUpDistance = catchUpDistance;
             this.catchUpBoost = catchUpBoost;
             this.sourceNode = sourceNode;
+            this.damageSource = damageSource;
             this.published = published;
         }
 

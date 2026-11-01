@@ -1,0 +1,1 @@
+e20b8cb647b95633069ff9d610b24d1f80d00f468419eea04100dcd81d9c274a  settledlands-0.8.0-build311-pursuit-fix.jar

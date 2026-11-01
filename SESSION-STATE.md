@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build310-blue-wire.jar` — Build 310 (фикс синего провода), 5 гейтов + `blue_wire_check` PASS.
-База — 309 (`settledlands-0.8.0-build309-classic.jar`), патч `tools/patch_build310.py`.
+`settledlands-0.8.0-build311-pursuit-fix.jar` — Build 311 (преследование), 5 гейтов + `pursuit_check` + `blue_wire_check` PASS.
+База — 310 (`settledlands-0.8.0-build310-blue-wire.jar`), патч `tools/patch_build311.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -276,7 +276,22 @@ Class-файл не содержит абсолютных смещений, по
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
 
-## Build 310 (актуально) — синий провод от ноды «Урон»
+## Build 311 (актуально) — преследование: 10 секунд и скорость
+
+Две жалобы с одной связки «Урон → преследование»:
+1) NPC преследует ровно 10 секунд и встаёт; 2) скорость ходьбы при преследовании не поднята.
+
+- **10 секунд** — `NpcDamageValue290.WINDOW_TICKS = 200`. Нода преследования читала источник каждый
+  тик, после окна получала «никого» → `stopMotion`. Фикс: `State.latched` + `latchedBody(npc, state)`
+  — тело защёлкивается до смерти/ухода; свежий ответ источника перекрывает защёлку.
+- **Скорость** — `walkingNavigationSpeed(true)` внутри умножается на мирный множитель
+  `NpcAutoAiEngine255.navigationSpeedFactor` (×0.55), из-за чего преследование = 0.088 против 0.10
+  обычной ходьбы. Фикс: делим на множитель → 0.16 (1.6× обычной), догон ×1.4…×1.9 сверху.
+
+Изменены 5 классов `NpcPursuit269` (+`$State/$Published/$TargetCache/$SlotCache`). Гейт
+`tools/pursuit_check.py` проверяет наличие защёлки и отмену множителя; на 310 падает.
+
+## Build 310 — синий провод от ноды «Урон»
 
 Жалоба: «вытянул синий кабель из выходного узла урона и подключил во входной узел преследования,
 но синий провод не отображается».
