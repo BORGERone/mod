@@ -148,6 +148,15 @@ public abstract class NpcWirePointsMixin321 {
             boolean dashed) {
         List<int[]> points = NpcWirePoints321.bends(from, fromPort, to.id);
         if (points.isEmpty()) {
+            // The drawing and the store may number the same link differently. Looking the route up
+            // by its two ends keeps a point attached to its cable whatever the numbering says.
+            points = NpcWirePoints321.routed(settledlands$graph(), from.id, to.id);
+            if (!points.isEmpty()) {
+                NpcWirePoints321.note("cable", "cable #" + from.id + " p" + fromPort + " -> #"
+                        + to.id + ": found by ends, " + points.size() + " point(s)");
+            }
+        }
+        if (points.isEmpty()) {
             return cable(buffer, matrix, from, fromPort, to, toPort, color, dashed);
         }
         NpcGraphCanvas canvas = settledlands$canvas();
@@ -178,6 +187,7 @@ public abstract class NpcWirePointsMixin321 {
         NpcGraphCanvas canvas = settledlands$canvas();
         if (graph == null || canvas == null) return;
         settledlands$drawWires(graphics, graph, canvas, mouseX, mouseY);
+        NpcWirePoints321.note("store", "store: " + NpcWirePoints321.dump(graph));
         NpcWirePointsUi321.drawPoints(screen, graphics, graph, mouseX, mouseY,
                 settledlands$pointDrag || settledlands$pull, settledlands$aimNode);
     }

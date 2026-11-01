@@ -1,0 +1,2 @@
+8162d9406fbd4d2a0cb6a1ef91e54a2f86688095d78366fd3728bd1ec74d24ff  settledlands-0.8.0-build328-wire-finds-point.jar
+7f64095f41c4ded2fd9a722843515d65e094a988002e4bbe4dd958cda9051cc6  SettledLands-Build328-WireFindsPoint-Source.zip

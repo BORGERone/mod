@@ -146,6 +146,39 @@ public final class WireKeyTest {
             fail("a click on the first segment resolved to segment " + again.index);
         }
 
+
+        // -- a route is found by its two ends, whatever port number it was stored with --------
+        NpcDialogueGraph odd = new NpcDialogueGraph();
+        Node oddFrom = odd.add(NpcDialogueGraph.LINE, 0, 0);
+        Node oddTo = odd.add(NpcDialogueGraph.TRIGGER, 400, 0);
+        oddFrom.triggers.add(oddTo.id);
+        if (!NpcWirePoints321.routed(odd, oddFrom.id, oddTo.id).isEmpty()) {
+            fail("a route was found where no point was made yet");
+        }
+        NpcWirePoints321.addBend(oddFrom, 0, oddTo.id, 96, 32);
+        if (NpcWirePoints321.routed(odd, oddFrom.id, oddTo.id).size() != 1) {
+            fail("a route keyed exactly is not found by its ends");
+        }
+        if (NpcWirePoints321.routed(odd, oddTo.id, oddFrom.id).size() != 1) {
+            fail("a route is not found from the other end of the same cable");
+        }
+        // A point saved with a port number the drawing does not use - the case that used to leave a
+        // dot with no cable through it - must still be found by its ends.
+        NpcDialogueGraph oddPort = new NpcDialogueGraph();
+        Node portFrom = oddPort.add(NpcDialogueGraph.LINE, 0, 0);
+        Node portTo = oddPort.add(NpcDialogueGraph.TRIGGER, 400, 0);
+        portFrom.triggers.add(portTo.id);
+        NpcWirePoints321.addBend(portFrom, 7, portTo.id, 168, 48);
+        if (NpcWirePoints321.bends(portFrom, 0, portTo.id).size() != 0) {
+            fail("the exact key should be empty here");
+        }
+        if (NpcWirePoints321.routed(oddPort, portFrom.id, portTo.id).size() != 1) {
+            fail("a point saved under another port number is orphaned from its cable");
+        }
+        if (!NpcWirePoints321.routed(oddPort, 12345, portTo.id).isEmpty()) {
+            fail("a route was found between two unrelated nodes");
+        }
+
         // -- a click far from every cable makes nothing at all -------------------------------
         if (NpcWirePointsUi321.wireAt(canvas, clean, 1400, 1100) != null) {
             fail("a click far from every cable found a wire");

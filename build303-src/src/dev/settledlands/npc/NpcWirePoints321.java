@@ -2,6 +2,7 @@ package dev.settledlands.npc;
 
 import dev.settledlands.npc.NpcDialogueGraph.Node;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -305,6 +306,69 @@ public final class NpcWirePoints321 {
         if (fromPort == 1) return node.falseNext == toId;
         return node.next == toId || node.choices.contains(toId) || node.triggers.contains(toId);
     }
+
+    /**
+     * The route of a cable, found by its two ends rather than by one exact key.
+     *
+     * <p>The drawing asks for a route with the port number it happens to use, and the store keeps
+     * whichever port the point was made with. When the two disagree - a port the screen numbers
+     * differently, a point made before a link was renumbered, a record saved on the other end of
+     * the same link - the cable is drawn straight while the point is drawn on the canvas: a dot
+     * with no wire through it. This lookup takes any record between the same two nodes, in either
+     * direction, on any port, so a point can no longer be orphaned by a numbering difference. Only
+     * called when the exact key is empty, so an ordinary frame never pays for it.</p>
+     */
+    public static List<int[]> routed(NpcDialogueGraph graph, int fromId, int toId) {
+        if (graph == null || graph.nodes == null || fromId < 0 || toId < 0) return List.of();
+        for (Node node : graph.nodes.values()) {
+            Data data = read(node);
+            for (Map.Entry<String, List<int[]>> entry : data.bends.entrySet()) {
+                int target = keyTarget(entry.getKey());
+                boolean forward = node.id == fromId && target == toId;
+                boolean backward = node.id == toId && target == fromId;
+                if ((forward || backward) && !entry.getValue().isEmpty()) {
+                    return entry.getValue();
+                }
+            }
+        }
+        return List.of();
+    }
+
+    /** What the store holds, in one line - for the diagnostic line in the log. */
+    public static String dump(NpcDialogueGraph graph) {
+        if (graph == null || graph.nodes == null) return "no graph";
+        StringBuilder out = new StringBuilder();
+        for (Node node : graph.nodes.values()) {
+            Data data = read(node);
+            if (data.empty()) continue;
+            out.append(" #").append(node.id).append('{');
+            for (Map.Entry<String, List<int[]>> entry : data.bends.entrySet()) {
+                out.append(entry.getKey()).append('=').append(entry.getValue().size()).append(' ');
+            }
+            for (int[] hang : data.hangs) {
+                out.append("h").append(hang[0]).append('=').append(routeSize(hang)).append(' ');
+            }
+            out.append('}');
+        }
+        return out.length() == 0 ? "empty" : out.toString().trim();
+    }
+
+    /**
+     * Writes one diagnostic line, at most twice a second and only when it changes.
+     *
+     * <p>Points live in a field of a node and are read back every frame; when they do not reach the
+     * cable there is nothing on screen to tell why. This is the only way to see, from a log, which
+     * key the drawing asks for and which keys the store holds.</p>
+     */
+    public static void note(String channel, String text) {
+        long now = System.currentTimeMillis();
+        Object[] state = NOTES.get(channel);
+        if (state != null && text.equals(state[1]) && now - (Long) state[0] < 2000L) return;
+        NOTES.put(channel, new Object[] { now, text });
+        System.out.println("[settledlands/wires] " + text);
+    }
+
+    private static final Map<String, Object[]> NOTES = new HashMap<>();
 
     // -- reading what is drawn ----------------------------------------------
 
