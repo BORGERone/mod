@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build313-follow.jar` — Build 313 (непрерывное следование), 5 гейтов + `pursuit_check` + `blue_wire_check` PASS.
-База — 312 (`settledlands-0.8.0-build312-pursuit-pacing.jar`), патч `tools/patch_build313.py`.
+`settledlands-0.8.0-build314-smooth.jar` — Build 314 (медленнее + плавная анимация), 5 гейтов + `pursuit_check` + `blue_wire_check` PASS.
+База — 313 (`settledlands-0.8.0-build313-follow.jar`), патч `tools/patch_build314.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -276,7 +276,24 @@ Class-файл не содержит абсолютных смещений, по
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
 
-## Build 313 (актуально) — преследование не встаёт, пока идёт цель
+## Build 314 (актуально) — ещё медленнее и плавная анимация
+
+Жалоба: «ещё немного замедли, анимации всё ещё рваные, переходов нет, в TnM всё плавно».
+
+- **Скорость:** `PURSUIT_WALK` 1.15 → 1.05, `CATCH_UP_EXTRA` 1.25 → 1.15, share 0.6 → 0.5
+  (догон при boost 1.5: ×1.40).
+- **Рваность:** `NpcLocoDriver283` мерил скорость по позиции раз в кадр, а позиция моба на клиенте
+  меняется раз в тик → ступенька шла в фазу шага и в вес бленда. Теперь скорость сглаживается
+  (`SPEED_SECONDS = 0.06`), фаза идёт по сглаженной скорости, переходы 120/300 мс.
+- **До TnM:** новый `NpcLocoInputsMixin314` (`@Mixin(targets="net.minecraft.world.entity.WalkAnimationState", remap=false)`)
+  перехватывает `position(F)F`, `speed(F)F`, `speed()F` и отдаёт сглаженные значения для
+  зарегистрированных состояний; для остальных `NaN` → ваниль.
+- Патчер `patch_build314.py` первым умеет и замену, и **добавление** класса + запись в
+  `settledlands.mixins.json` (client).
+
+`pursuit_check.py` дополнительно требует `SPEED_SECONDS`, наличие миксина и его запись в конфиге.
+
+## Build 313 — преследование не встаёт, пока идёт цель
 
 Жалоба: «останавливается, хотя всё ещё должен идти за игроком, вёл себя как спутник в Скайриме».
 

@@ -15,10 +15,16 @@ Build 312 added the pacing and the path policy, checked numerically here because
 that stopped, turned and set off again because the path was rebuilt every couple of blocks
 (REPATH_SUCCESS_TICKS / RETRY_MAX_SHIFT / RESUME_MARGIN).
 
+Build 314 added the animation half: the locomotion input is smoothed (SPEED_SECONDS) instead of
+measured per frame, and the smoothed numbers reach every reader through NpcLocoInputsMixin314,
+which has to be in the jar and in the client mixin list or Touch'n Motion goes back to stepped
+blends.
+
     python3 tools/pursuit_check.py settledlands-0.8.0-build311-pursuit-fix.jar
 
 Exit 0 = both fixes are in the shipped class.
 """
+import json
 import pathlib
 import struct
 import sys
@@ -28,6 +34,9 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import disasm
 
 TARGET = "dev/settledlands/npc/NpcPursuit269.class"
+DRIVER = "dev/settledlands/model/NpcLocoDriver283.class"
+LOCO_MIXIN = "dev/settledlands/mixin/NpcLocoInputsMixin314.class"
+MIXIN_CONFIG = "settledlands.mixins.json"
 STATE = "dev/settledlands/npc/NpcPursuit269$State.class"
 INVOKES = (0xb6, 0xb7, 0xb8, 0xb9)
 
@@ -118,6 +127,8 @@ def main(argv):
             return 0
         main_info = disasm.parse_class(z.read(TARGET))
         state_info = disasm.parse_class(z.read(STATE)) if STATE in names else None
+        driver_info = disasm.parse_class(z.read(DRIVER)) if DRIVER in names else None
+        config = json.loads(z.read(MIXIN_CONFIG)) if MIXIN_CONFIG in names else None
 
     refs = method_refs(main_info["cp"], main_info)
     problems = []
@@ -129,6 +140,16 @@ def main(argv):
     if "navigationSpeedFactor" not in refs:
         problems.append("the speed path does not cancel the auto-AI damping - a pursuit walks "
                         "slower than ordinary walking")
+    if driver_info is None:
+        problems.append("the locomotion driver is gone (%s)" % DRIVER)
+    elif "SPEED_SECONDS" not in field_values(driver_info["cp"], driver_info):
+        problems.append("the locomotion speed is no longer smoothed (SPEED_SECONDS)")
+
+    if LOCO_MIXIN not in names:
+        problems.append("the smoothed locomotion never reaches Touch'n Motion (%s)" % LOCO_MIXIN)
+    elif config is None or "NpcLocoInputsMixin314" not in config.get("client", []):
+        problems.append("NpcLocoInputsMixin314 is not in the client mixin list")
+
     values = field_values(main_info["cp"], main_info)
     for name, message in MISSING.items():
         if name not in values:

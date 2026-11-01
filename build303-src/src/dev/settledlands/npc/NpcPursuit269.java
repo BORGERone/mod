@@ -70,22 +70,22 @@ public final class NpcPursuit269 {
     public static final double MAX_CATCH_UP_BOOST = 3.0D;
 
     /**
-     * Build 312: the pursuit walks a little faster than the NPC's ordinary walk - 1.15x
-     * against the 0.10 walking constant, so 0.115 blocks a tick. Build 311 had it at the
-     * catch-up base (1.6x) and that read as a sprint; this is a purposeful walk.
+     * Build 312: the pursuit walks a little faster than the NPC's ordinary walk. Build 311 had
+     * it at the catch-up base (1.6x) and that read as a sprint; Build 314 brought it down again,
+     * to 1.05x of the 0.10 walking constant - a follower that stays with you, not a runner.
      */
-    public static final double PURSUIT_WALK = 1.15D;
+    public static final double PURSUIT_WALK = 1.05D;
 
     /**
      * Build 312: the catch-up floor, relative to the same walk. The node's own catch-up boost
-     * adds {@link #CATCH_UP_BOOST_SHARE} of its excess on top, so the default 1.5 boost gives
-     * 1.55x and the maximum 3.0 gives 2.45x. Build 311 reached 3.04x, which is what made the
-     * chase look like a teleport between frames.
+     * adds {@link #CATCH_UP_BOOST_SHARE} of its excess on top: the default 1.5 boost gives 1.40x
+     * and the maximum 3.0 gives 2.15x. Build 311 reached 3.04x, which is what made the chase
+     * look like a teleport between frames.
      */
-    public static final double CATCH_UP_EXTRA = 1.25D;
+    public static final double CATCH_UP_EXTRA = 1.15D;
 
     /** Share of the node's excess catch-up boost that is turned into speed. */
-    private static final double CATCH_UP_BOOST_SHARE = 0.6D;
+    private static final double CATCH_UP_BOOST_SHARE = 0.5D;
 
     /** Output of the node, available to the nodes that run after it. */
     public static final String TOKEN_TARGET = "%pursuit%";

@@ -50,8 +50,17 @@ public final class NpcLocoDriver283 {
     private static final double UNITS_PER_BLOCK = 20.0D / FULL_SPEED;
 
     /** Time constants of the blend weight: quick to start walking, slower to settle. */
-    private static final double RISE_SECONDS = 0.08D;
-    private static final double FALL_SECONDS = 0.18D;
+    private static final double RISE_SECONDS = 0.12D;
+    private static final double FALL_SECONDS = 0.30D;
+
+    /**
+     * Build 314: time constant of the measured speed. The client position of a mob only moves
+     * once a tick, so a per-frame measurement is a staircase - two frames of nothing, then a
+     * jump of a fifth of a block. Feeding that into the limb phase moved the legs in twenty
+     * steps a second, which is what the jerky walk was. The speed is smoothed instead, and the
+     * phase is advanced by the smoothed value.
+     */
+    private static final double SPEED_SECONDS = 0.06D;
 
     /** Frames are never longer than this; a stall must not turn into a stride. */
     private static final double MAX_STEP_SECONDS = 0.25D;
@@ -79,6 +88,8 @@ public final class NpcLocoDriver283 {
         double lastZ;
         long nanos;
         boolean primed;
+        /** Smoothed walking speed in blocks per second, Build 314. */
+        double speed;
     }
 
     /**
@@ -159,19 +170,16 @@ public final class NpcLocoDriver283 {
         if (!Double.isFinite(distance) || distance > TELEPORT_DISTANCE) distance = 0.0D;
 
         double window = Math.min(dt, MAX_STEP_SECONDS);
-        double speed = window <= 0.0D ? 0.0D : distance / window;
-        double ratio = speed / FULL_SPEED;
+        if (!npc.isAlive() || npc.isPassenger() || npc.isRemoved()) distance = 0.0D;
+        double instant = window <= 0.0D ? 0.0D : distance / window;
 
-        float target = 0.0f;
-        if (ratio > 0.0D) {
-            if (!npc.isAlive() || npc.isPassenger() || npc.isRemoved()) {
-                ratio = 0.0D;
-            } else if (ratio > 1.0D) {
-                target = 1.0f;
-            } else {
-                target = (float) ratio;
-            }
-        }
+        // Smooth the staircase away before anything uses it.
+        double follow = 1.0D - Math.exp(-window / SPEED_SECONDS);
+        s.speed += (instant - s.speed) * follow;
+        if (!Double.isFinite(s.speed) || s.speed < 0.0D) s.speed = 0.0D;
+
+        double ratio = s.speed / FULL_SPEED;
+        float target = ratio <= 0.0D ? 0.0f : (float) Math.min(1.0D, ratio);
 
         double tau = target > s.amount ? RISE_SECONDS : FALL_SECONDS;
         double alpha = 1.0D - Math.exp(-window / tau);
@@ -179,8 +187,9 @@ public final class NpcLocoDriver283 {
         if (s.amount < 0.0f) s.amount = 0.0f;
         if (s.amount > 1.0f) s.amount = 1.0f;
 
-        if (ratio <= 0.0D) return;
-        s.phase += (float) (distance * UNITS_PER_BLOCK);
+        // The stride follows the smoothed speed, so it keeps its rate through the tick steps
+        // and eases out over a couple of tenths of a second instead of freezing mid-step.
+        s.phase += (float) (s.speed * window * UNITS_PER_BLOCK);
         if (s.phase > WRAP || s.phase < 0.0f || !Float.isFinite(s.phase)) {
             s.phase = s.phase % WRAP;
             if (s.phase < 0.0f) s.phase += WRAP;
