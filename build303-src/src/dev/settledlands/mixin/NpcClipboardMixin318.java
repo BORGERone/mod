@@ -4,6 +4,7 @@ import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcGraphClipboard318;
 import dev.settledlands.npc.client.NpcClipboard318;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
+import dev.settledlands.npc.client.NpcGraphCanvas;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
@@ -111,8 +112,9 @@ public abstract class NpcClipboardMixin318 {
                     + NpcGraphClipboard318.lastError();
             return true;
         }
+        NpcGraphCanvas canvas = ((NpcDialogueGraphScreen) (Object) this).settledlands$canvas();
         settledlands$remember();
-        List<Integer> added = NpcGraphClipboard318.paste(graph, text);
+        List<Integer> added = settledlands$pasteInto(graph, canvas, text);
         if (added == null || added.isEmpty()) {
             status = tr("gui.settledlands.graph.clip_fail") + " "
                     + NpcGraphClipboard318.lastError();
@@ -124,5 +126,20 @@ public abstract class NpcClipboardMixin318 {
         settledlands$changed();
         status = tr("gui.settledlands.graph.clip_paste") + " " + added.size();
         return true;
+    }
+
+    /**
+     * The block lands in the middle of the view the editor is showing, not where it was copied
+     * from: a copy taken in another graph, or pasted from another world, would otherwise appear
+     * off screen. When the canvas has no geometry yet, the plain offset is used instead.
+     */
+    private List<Integer> settledlands$pasteInto(NpcDialogueGraph graph, NpcGraphCanvas canvas,
+            String text) {
+        if (canvas != null && canvas.right > canvas.left && canvas.bottom > canvas.top) {
+            double centerX = canvas.worldX((canvas.left + canvas.right) / 2.0D);
+            double centerY = canvas.worldY((canvas.top + canvas.bottom) / 2.0D);
+            return NpcGraphClipboard318.pasteCentered(graph, text, centerX, centerY);
+        }
+        return NpcGraphClipboard318.paste(graph, text);
     }
 }

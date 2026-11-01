@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build318-clipboard.jar` — Build 318 (копирование/вставка нод, Ctrl+C/Ctrl+V), 5 гейтов + `clipboard_check` PASS.
-База — 317 (`settledlands-0.8.0-build317-water.jar`), патч `tools/patch_build318.py`.
+`settledlands-0.8.0-build319-clipboard-center.jar` — Build 319 (вставка в центр холста), 5 гейтов + `clipboard_check` PASS.
+База — 318 (`settledlands-0.8.0-build318-clipboard.jar`), патч `tools/patch_build319.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -28,7 +28,8 @@
 → 295 (`tools/patch_build295.py`, пустой радиус всё равно запускает цепь проверки)
 → 296…304 → 305 (`tools/patch_build305.py`, воркспейс нод + библиотека с поиском)
 → 306…316 → 317 (`tools/patch_build317.py`, вода и падение: `NpcWater317` + `NpcWaterMixin317`)
-→ 318 (`tools/patch_build318.py`, копирование/вставка нод: `NpcGraphClipboard318` + `NpcClipboard318` + `NpcClipboardMixin318`).
+→ 318 (`tools/patch_build318.py`, копирование/вставка нод: `NpcGraphClipboard318` + `NpcClipboard318` + `NpcClipboardMixin318`)
+→ 319 (`tools/patch_build319.py`, вставка в центр видимого холста: `bounds` + `pasteCentered`).
 
 **Build 290 НЕ ЗАПУСКАЕТСЯ**: `GuideDialogueValue290.settledlands$enterSendGraph` был объявлен с `Object` вместо
 `GuideDialogue$Session` → `InvalidInjectionException: Invalid descriptor` → миксин не применился → фатальный вылет.
@@ -40,6 +41,14 @@
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
+
+Build 319: вставка в центр. Было `x+24, y+24` — при переносе в другой граф блок появлялся за
+пределами вида и выглядел как «ничего не вставилось». `pasteCentered` считает рамку блока (`bounds`) и
+сдвигает весь блок так, чтобы его середина попала в середину **холста**
+(`canvas.worldX((left+right)/2)`, `canvas.worldY((top+bottom)/2)` — вьюпорт холста, а не окна, чтобы
+панель инспектора не влияла). Сдвиг кратен 8: `NpcGraphCanvas.move` двигает ноды по сетке 8, иначе блок
+стоял бы на полклетки. Нет геометрии у холста — старый сдвиг +24. `parseRows` вынесен общим для
+`preview`/`bounds`/`paste`. Тест `ClipboardRoundTrip` сверяет и центрирование.
 
 Build 318: копирование и вставка нод. Буфер — системный, текст свой (`SLGRAPH318 1`), поэтому блок
 переносится между графами, NPC, мирами и через блокнот. `NpcGraphClipboard318` пишет все поля ноды и все

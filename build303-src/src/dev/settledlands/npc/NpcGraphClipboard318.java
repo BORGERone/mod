@@ -45,6 +45,9 @@ public final class NpcGraphClipboard318 {
     /** How far the pasted copy is moved from the original, in graph units. */
     public static final int PASTE_OFFSET = 24;
 
+    /** The canvas moves a node in steps of eight units; a pasted block follows the same grid. */
+    public static final double GRID = 8.0D;
+
     private static String lastError = "";
 
     private NpcGraphClipboard318() {
@@ -82,20 +85,54 @@ public final class NpcGraphClipboard318 {
      * @return the count, or -1 when the text is not a node block.
      */
     public static int preview(String text) {
-        if (text == null || text.isBlank()) return -1;
-        String[] lines = text.replace("\r\n", "\n").replace('\r', '\n').split("\n");
-        int start = 0;
-        while (start < lines.length && lines[start].isBlank()) start++;
-        if (start >= lines.length || !lines[start].trim().equals(HEADER)) return -1;
-        int count = 0;
-        for (int i = start + 1; i < lines.length; i++) {
-            String line = lines[i].trim();
-            if (line.isEmpty()) continue;
-            Map<String, String> row = parseLine(line);
-            if (row == null || !row.containsKey("type")) return -1;
-            count++;
+        List<Map<String, String>> rows = parseRows(text);
+        return rows == null ? -1 : rows.size();
+    }
+
+    /**
+     * The box the block would occupy at its original coordinates.
+     *
+     * @return {minX, minY, maxX, maxY}, or null when the text is not a node block.
+     */
+    public static int[] bounds(String text) {
+        List<Map<String, String>> rows = parseRows(text);
+        if (rows == null || rows.isEmpty()) return null;
+        int minX = Integer.MAX_VALUE;
+        int minY = Integer.MAX_VALUE;
+        int maxX = Integer.MIN_VALUE;
+        int maxY = Integer.MIN_VALUE;
+        for (Map<String, String> row : rows) {
+            int x = number(row, "x", 0);
+            int y = number(row, "y", 0);
+            if (x < minX) minX = x;
+            if (y < minY) minY = y;
+            if (x > maxX) maxX = x;
+            if (y > maxY) maxY = y;
         }
-        return count;
+        return new int[] { minX, minY, maxX, maxY };
+    }
+
+    /**
+     * Pastes a block so that the middle of it lands on the given point of the graph.
+     *
+     * <p>This is what Ctrl+V uses: the block is put where the editor is looking, not where it was
+     * copied from, so a copy taken in another graph - or from another world through the clipboard -
+     * does not end up off screen behind the current view.</p>
+     */
+    public static List<Integer> pasteCentered(NpcDialogueGraph graph, String text, double centerX,
+            double centerY) {
+        lastError = "";
+        int[] box = bounds(text);
+        if (box == null) {
+            if (lastError.isEmpty()) lastError = text == null || text.isBlank()
+                    ? "empty" : "not a node block";
+            return null;
+        }
+        // The canvas snaps a dragged node to a grid of eight units; a pasted block is kept on the
+        // same grid, or it would sit off it by a few units after the first drag of any node in it.
+        int dx = (int) Math.round((centerX - (box[0] + box[2]) / 2.0D) / GRID) * (int) GRID;
+        int dy = (int) Math.round((centerY - (box[1] + box[3]) / 2.0D) / GRID) * (int) GRID;
+        return paste(graph, text, dx, dy);
     }
 
     /**
@@ -114,29 +151,8 @@ public final class NpcGraphClipboard318 {
             lastError = "no graph";
             return null;
         }
-        if (text == null || text.isBlank()) {
-            lastError = "empty";
-            return null;
-        }
-        String[] lines = text.replace("\r\n", "\n").replace('\r', '\n').split("\n");
-        int start = 0;
-        while (start < lines.length && lines[start].isBlank()) start++;
-        if (start >= lines.length || !lines[start].trim().equals(HEADER)) {
-            lastError = "not a node block";
-            return null;
-        }
-
-        List<Map<String, String>> rows = new ArrayList<>();
-        for (int i = start + 1; i < lines.length; i++) {
-            String line = lines[i].trim();
-            if (line.isEmpty()) continue;
-            Map<String, String> row = parseLine(line);
-            if (row == null || !row.containsKey("type")) {
-                lastError = "line " + (i + 1);
-                return null;
-            }
-            rows.add(row);
-        }
+        List<Map<String, String>> rows = parseRows(text);
+        if (rows == null) return null;
         if (rows.isEmpty()) {
             lastError = "empty";
             return null;
@@ -175,6 +191,33 @@ public final class NpcGraphClipboard318 {
             applyLinks(node, row, moved);
         }
         return added;
+    }
+
+    /** Header check and one map per node line, or null with {@link #lastError} set. */
+    private static List<Map<String, String>> parseRows(String text) {
+        if (text == null || text.isBlank()) {
+            lastError = "empty";
+            return null;
+        }
+        String[] lines = text.replace("\r\n", "\n").replace('\r', '\n').split("\n");
+        int start = 0;
+        while (start < lines.length && lines[start].isBlank()) start++;
+        if (start >= lines.length || !lines[start].trim().equals(HEADER)) {
+            lastError = "not a node block";
+            return null;
+        }
+        List<Map<String, String>> rows = new ArrayList<>();
+        for (int i = start + 1; i < lines.length; i++) {
+            String line = lines[i].trim();
+            if (line.isEmpty()) continue;
+            Map<String, String> row = parseLine(line);
+            if (row == null || !row.containsKey("type")) {
+                lastError = "line " + (i + 1);
+                return null;
+            }
+            rows.add(row);
+        }
+        return rows;
     }
 
     private static void rollback(NpcDialogueGraph graph, List<Integer> added) {

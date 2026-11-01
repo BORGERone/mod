@@ -1,0 +1,1 @@
+6b56fdf40078193b221654015161bc478ef41abce441f0d656cf33d5e62a507d  settledlands-0.8.0-build319-clipboard-center.jar

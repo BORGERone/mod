@@ -91,6 +91,25 @@ public final class ClipboardRoundTrip {
                 && copyCheck.variants.get(0).text.equals("второй: текст"),
                 "variants did not survive");
 
+        int[] box = NpcGraphClipboard318.bounds(text);
+        check$(box != null && box[0] == Math.min(line.x, button.x) - 0,
+                "bounds are wrong: " + java.util.Arrays.toString(box));
+        NpcDialogueGraph centered = new NpcDialogueGraph();
+        centered.add(NpcDialogueGraph.LINE, 0, 0);
+        List<Integer> placed = NpcGraphClipboard318.pasteCentered(centered, text, 1000.0D, 500.0D);
+        check$(placed != null && placed.size() == 3, "centered paste failed");
+        if (placed != null && placed.size() == 3 && box != null) {
+            int wantDx = (int) (Math.round((1000.0D - (box[0] + box[2]) / 2.0D) / 8.0D) * 8);
+            int wantDy = (int) (Math.round((500.0D - (box[1] + box[3]) / 2.0D) / 8.0D) * 8);
+            Node placedLine = centered.get(placed.get(0));
+            check$(placedLine.x == line.x + wantDx, "centered x is " + placedLine.x
+                    + ", want " + (line.x + wantDx));
+            check$(placedLine.y == line.y + wantDy, "centered y is " + placedLine.y
+                    + ", want " + (line.y + wantDy));
+            int midX = (box[0] + box[2]) / 2 + wantDx;
+            check$(Math.abs(midX - 1000) <= 8, "the block is not centred: " + midX);
+        }
+
         check$(NpcGraphClipboard318.copy(source, List.of(entry.id)).isEmpty(),
                 "the entry node alone was copied");
         check$(NpcGraphClipboard318.paste(target, "hello") == null, "garbage was accepted");
