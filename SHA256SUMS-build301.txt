@@ -1,0 +1,2 @@
+197ab052c003dc409704dfd143c085aebc76ba0941167c57aa7110b7f43f7fcf  settledlands-0.8.0-build301-pins-and-white-wiring.jar
+db6eb04197eeec9d502ddc12be8520ae6fac5585364ee595144d6f8bbf22894a  SettledLands-Build301-PinsWhite-Source.zip
