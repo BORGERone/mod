@@ -1,0 +1,1 @@
+31c85837065cecc631df0a86badca3cfe950393144de21c3b715097192af2062  settledlands-0.8.0-build322-join-points.jar

@@ -3,6 +3,7 @@ package dev.settledlands.mixin;
 import com.mojang.blaze3d.vertex.BufferBuilder;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.npc.NpcWireJoin322;
 import dev.settledlands.npc.NpcWirePoints321;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphCanvas;
@@ -67,6 +68,26 @@ public abstract class NpcWirePointsMixin321 {
     }
 
     @Shadow
+    private void remember() {
+        throw new AssertionError();
+    }
+
+    @Shadow
+    private String status;
+
+    @Shadow
+    private String tr(String key) {
+        throw new AssertionError();
+    }
+
+    /** Node a wire is being dragged from, or -1. Written by the stock screen. */
+    @Shadow
+    private int linkFrom;
+
+    @Shadow
+    private int linkFromPort;
+
+    @Shadow
     public abstract NpcDialogueGraph settledlands$graph();
 
     @Shadow
@@ -110,7 +131,7 @@ public abstract class NpcWirePointsMixin321 {
     private void settledlands$drawHandles(GuiGraphics graphics, int mouseX, int mouseY,
             CallbackInfo ci) {
         NpcWirePointsUi321.drawHandles((NpcDialogueGraphScreen) (Object) this, graphics,
-                settledlands$graph(), mouseX, mouseY);
+                settledlands$graph(), mouseX, mouseY, linkFrom >= 0);
     }
 
     @Inject(method = "mouseClicked(DDI)Z", at = @At("HEAD"), cancellable = true, remap = false)
@@ -156,12 +177,33 @@ public abstract class NpcWirePointsMixin321 {
         cir.setReturnValue(true);
     }
 
+    /**
+     * The end of a gesture. Two cases: a bend that was being dragged is put down, and a wire that was
+     * being dragged and is released on a bend is joined there.
+     *
+     * <p>Without the second case the release fell through to the stock path, which only knows about
+     * ports and nodes - a release over the canvas, a bend included, opened the "make a node out of
+     * this wire" menu. A bend is a place a wire can end, so it is taken here before that.</p>
+     */
     @Inject(method = "mouseReleased(DDI)Z", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$releasePoint(double mouseX, double mouseY, int button,
             CallbackInfoReturnable<Boolean> cir) {
-        if (settledlands$drag == null) return;
-        settledlands$drag = null;
+        if (settledlands$drag != null) {
+            settledlands$drag = null;
+            changed();
+            cir.setReturnValue(true);
+            return;
+        }
+        if (button != 0 || linkFrom < 0) return;
+        NpcDialogueGraphScreen screen = (NpcDialogueGraphScreen) (Object) this;
+        NpcDialogueGraph graph = settledlands$graph();
+        NpcWirePoints321.Handle point = NpcWirePointsUi321.handleAt(screen, graph, mouseX, mouseY);
+        if (!NpcWireJoin322.canJoin(graph, linkFrom, linkFromPort, point)) return;
+        remember();
+        if (!NpcWireJoin322.join(graph, linkFrom, linkFromPort, point)) return;
+        linkFrom = -1;
         changed();
+        status = tr("gui.settledlands.graph.connected");
         cir.setReturnValue(true);
     }
 

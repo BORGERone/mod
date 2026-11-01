@@ -41,6 +41,7 @@ STUBS = [str(ROOT / "build303-src" / "api3"), str(ROOT / "build303-src" / "api2"
 MODEL = "dev/settledlands/npc/NpcWirePoints321.class"
 UI = "dev/settledlands/npc/client/NpcWirePointsUi321.class"
 MIXIN = "dev/settledlands/mixin/NpcWirePointsMixin321.class"
+JOIN = "dev/settledlands/npc/NpcWireJoin322.class"
 MIXIN_NAME = "NpcWirePointsMixin321"
 
 # Reading a link is how a bend knows which wire it belongs to; assigning one would make the point an
@@ -92,11 +93,24 @@ def node_field_reads(info):
     return _scan(info, {0xB4, 0xB5})
 
 
+def _all_refs(info):
+    cp = info["cp"]
+    out = set()
+    for i in range(1, len(cp)):
+        entry = cp[i]
+        if entry and entry[0] in (9, 10, 11):
+            try:
+                out.add(disasm.ref(cp, i))
+            except (KeyError, IndexError):
+                continue
+    return out
+
+
 def run(jar):
     problems = []
     with zipfile.ZipFile(jar) as z:
         names = set(z.namelist())
-        for needed in (MODEL, UI, MIXIN):
+        for needed in (MODEL, UI, MIXIN, JOIN):
             if needed not in names:
                 problems.append("missing %s" % needed)
         if problems:
@@ -114,6 +128,17 @@ def run(jar):
         for extra in sorted(writes - set(ALLOWED)):
             problems.append("the point store writes Node#%s, which is not a field it may use"
                             % extra)
+        # Build 322: a dropped wire joins the point through the graph's own connect, so the join
+        # class is the only place that may change a connection - and it must go through connect,
+        # never by writing a link field itself.
+        join = disasm.parse_class(z.read(JOIN))
+        join_writes = node_field_writes(join)
+        if join_writes:
+            problems.append("the join writes Node#%s directly - it must use graph.connect"
+                            % ", ".join(sorted(join_writes)))
+        if not any("NpcDialogueGraph.connect" in r for r in _all_refs(join)):
+            problems.append("the join never calls graph.connect")
+
         reads = node_field_reads(model)
         if "animBone" not in reads or "mobilityGroupId" not in reads:
             problems.append("the stored text is not read back from both fields")

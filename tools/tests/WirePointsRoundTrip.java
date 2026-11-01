@@ -1,5 +1,6 @@
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.npc.NpcWireJoin322;
 import dev.settledlands.npc.NpcWirePoints321;
 
 /**
@@ -74,6 +75,28 @@ public final class WirePointsRoundTrip {
         check$("somebody else".equals(busy.animBone), "foreign text in the field was overwritten");
         check$(NpcWirePoints321.has(busy, 0, b.id),
                 "the point was lost even though it could not be saved");
+
+        // -- joining a dragged wire to a point --------------------------------------
+        NpcDialogueGraph join = new NpcDialogueGraph();
+        Node source = join.add(NpcDialogueGraph.LINE, 0, 0);
+        Node middle = join.add(NpcDialogueGraph.LINE, 200, 0);
+        Node drain = join.add(NpcDialogueGraph.LINE, 400, 0);
+        Node other = join.add(NpcDialogueGraph.LINE, 0, 200);
+        source.next = drain.id;
+        NpcWirePoints321.add(source, 0, drain.id, 176, 40);
+        var point = NpcWirePoints321.handles(join).get(0);
+
+        check$(!NpcWireJoin322.canJoin(join, drain.id, 0, point), "a loop was offered");
+        check$(!NpcWireJoin322.canJoin(join, 9999, 0, point), "a missing node was offered");
+        check$(NpcWireJoin322.canJoin(join, other.id, 0, point), "a plain drop was refused");
+
+        check$(NpcWireJoin322.join(join, other.id, 0, point), "the join failed");
+        check$(other.next == drain.id, "the dragged wire did not take the point's target");
+        check$(source.next == drain.id, "the wire the point sits on was changed");
+        check$(NpcWirePoints321.has(other, 0, drain.id), "the new wire does not bend through it");
+        int[] bend = NpcWirePoints321.points(other, 0, drain.id).get(0);
+        check$(bend[0] == point.x && bend[1] == point.y, "the bend is not at the point");
+        check$(!NpcWireJoin322.join(join, drain.id, 0, point), "the loop was joined after all");
 
         // -- handles ---------------------------------------------------------------
         // The twin was given the text of the two bends, so it has two of its own; plus one on the

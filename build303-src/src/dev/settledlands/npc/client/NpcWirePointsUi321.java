@@ -53,6 +53,15 @@ public final class NpcWirePointsUi321 {
 
     public static void drawHandles(NpcDialogueGraphScreen screen, GuiGraphics graphics,
             NpcDialogueGraph graph, double mouseX, double mouseY) {
+        drawHandles(screen, graphics, graph, mouseX, mouseY, false);
+    }
+
+    /**
+     * @param dropping true while a wire is being dragged: the point under the cursor is highlighted
+     *                 as a place the wire can be released onto
+     */
+    public static void drawHandles(NpcDialogueGraphScreen screen, GuiGraphics graphics,
+            NpcDialogueGraph graph, double mouseX, double mouseY, boolean dropping) {
         NpcGraphCanvas canvas = screen.settledlands$canvas();
         if (canvas == null || graph == null) return;
         int half = handleHalf(canvas);
@@ -61,13 +70,14 @@ public final class NpcWirePointsUi321 {
             double y = canvas.screenY(handle.y);
             if (x < canvas.left - 16 || x > canvas.right + 16) continue;
             if (y < canvas.top - 16 || y > canvas.bottom + 16) continue;
-            boolean hot = Math.abs(mouseX - x) <= half + 2 && Math.abs(mouseY - y) <= half + 2;
+            boolean near = Math.abs(mouseX - x) <= half + 2 && Math.abs(mouseY - y) <= half + 2;
+            int grow = near && dropping ? half : 0;
             int left = (int) Math.round(x) - half;
             int top = (int) Math.round(y) - half;
             graphics.fill(left - 1, top - 1, left + half * 2 + 1, top + half * 2 + 1,
                     COL_HANDLE_EDGE);
-            graphics.fill(left, top, left + half * 2, top + half * 2,
-                    hot ? COL_HANDLE_HOT : COL_HANDLE);
+            graphics.fill(left - grow, top - grow, left + half * 2 + grow, top + half * 2 + grow,
+                    near ? COL_HANDLE_HOT : COL_HANDLE);
         }
     }
 

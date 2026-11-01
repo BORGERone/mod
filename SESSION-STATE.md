@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build321-wire-points.jar` — Build 321 (точки перегиба на проводах), 5 гейтов + `wire_points_check` + `radius_zone_check` + `clipboard_check` PASS.
-База — 320 (`settledlands-0.8.0-build320-radius-zone.jar`), патч `tools/patch_build321.py`.
+`settledlands-0.8.0-build322-join-points.jar` — Build 322 (провод подключается к точке перегиба), 5 гейтов + `wire_points_check` + `radius_zone_check` + `clipboard_check` PASS.
+База — 321 (`settledlands-0.8.0-build321-wire-points.jar`), патч `tools/patch_build322.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -31,7 +31,8 @@
 → 318 (`tools/patch_build318.py`, копирование/вставка нод: `NpcGraphClipboard318` + `NpcClipboard318` + `NpcClipboardMixin318`)
 → 319 (`tools/patch_build319.py`, вставка в центр видимого холста: `bounds` + `pasteCentered`)
 → 320 (`tools/patch_build320.py`, зона «В радиусе» частицами: `NpcRadiusZone320` + `NpcRadiusZoneUi320` + 2 миксина)
-→ 321 (`tools/patch_build321.py`, точки перегиба на проводах: `NpcWirePoints321` + `NpcWirePointsUi321` + `NpcWirePointsMixin321`).
+→ 321 (`tools/patch_build321.py`, точки перегиба на проводах: `NpcWirePoints321` + `NpcWirePointsUi321` + `NpcWirePointsMixin321`)
+→ 322 (`tools/patch_build322.py`, отпускание провода на точке: `NpcWireJoin322`).
 
 **Build 290 НЕ ЗАПУСКАЕТСЯ**: `GuideDialogueValue290.settledlands$enterSendGraph` был объявлен с `Object` вместо
 `GuideDialogue$Session` → `InvalidInjectionException: Invalid descriptor` → миксин не применился → фатальный вылет.
@@ -43,6 +44,17 @@
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
+
+Build 322: **провод можно отпустить на точке**. В 321 отпускание над точкой уходило в штатный путь
+(`settledlands$mouseReleasedOriginal`): `hitPort` → `hit` (нода) → иначе `contextMenu.showForWire`, то
+есть меню «вытянуть из провода ноду». Теперь HEAD `mouseReleased` в `NpcWirePointsMixin321` сначала
+отдаёт конец перетаскивания точки, затем, если `linkFrom >= 0` и под курсором точка, делает
+`remember()` + `NpcWireJoin322.join` (штатный `graph.connect(from, to, port)` + изгиб в точке) +
+`changed()` + статус `gui.settledlands.graph.connected`, и съедает событие. Точка становится узлом
+схода: несколько проводов входят (у каждого свой изгиб), выходят к её цели. Петли (цель = источник) и
+несуществующие ноды отклоняются, тогда отпускание идёт штатным путём. Гейт `wire_points_check`
+дополнен: `NpcWireJoin322` не имеет права присваивать поля связей (только `graph.connect`), тест
+`WirePointsRoundTrip` проверяет join, изгиб, сохранность исходного провода и отказ на петле.
 
 Build 321: точки перегиба. **`@Redirect` на `cable(...)` внутри `wires(...)`** — единственное место, где
 рисуются все штатные провода (сигнатура уже была известна из `NpcWhiteWiring302`); при наличии точек

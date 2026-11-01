@@ -1,0 +1,2 @@
+31c85837065cecc631df0a86badca3cfe950393144de21c3b715097192af2062  settledlands-0.8.0-build322-join-points.jar
+a3b34c99efc27d3f9ee2dc08c8afc697c32fd4ceaa46ba052531761a60c01d4e  SettledLands-Build322-JoinPoints-Source.zip
