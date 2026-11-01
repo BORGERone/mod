@@ -18,7 +18,8 @@ that stopped, turned and set off again because the path was rebuilt every couple
 Build 314 added the animation half: the locomotion input is smoothed (SPEED_SECONDS) instead of
 measured per frame, and the smoothed numbers reach every reader through NpcLocoInputsMixin314,
 which has to be in the jar and in the client mixin list or Touch'n Motion goes back to stepped
-blends.
+blends. Build 315 added the clip cross-fade (NpcPoseBlend315 + NpcPoseBlendMixin315) - without it a
+clip switch writes a whole new pose in one frame, which is the teleport between animations.
 
     python3 tools/pursuit_check.py settledlands-0.8.0-build311-pursuit-fix.jar
 
@@ -34,6 +35,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import disasm
 
 TARGET = "dev/settledlands/npc/NpcPursuit269.class"
+POSE_BLEND = "dev/settledlands/model/NpcPoseBlend315.class"
+POSE_MIXIN = "NpcPoseBlendMixin315"
 DRIVER = "dev/settledlands/model/NpcLocoDriver283.class"
 LOCO_MIXIN = "dev/settledlands/mixin/NpcLocoInputsMixin314.class"
 MIXIN_CONFIG = "settledlands.mixins.json"
@@ -144,6 +147,11 @@ def main(argv):
         problems.append("the locomotion driver is gone (%s)" % DRIVER)
     elif "SPEED_SECONDS" not in field_values(driver_info["cp"], driver_info):
         problems.append("the locomotion speed is no longer smoothed (SPEED_SECONDS)")
+
+    if POSE_BLEND not in names:
+        problems.append("animation clips are not cross-faded (%s)" % POSE_BLEND)
+    elif config is None or POSE_MIXIN not in config.get("client", []):
+        problems.append("%s is not in the client mixin list" % POSE_MIXIN)
 
     if LOCO_MIXIN not in names:
         problems.append("the smoothed locomotion never reaches Touch'n Motion (%s)" % LOCO_MIXIN)

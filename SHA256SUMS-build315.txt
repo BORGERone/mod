@@ -1,0 +1,2 @@
+3c0a54b6a9985fcbacf4b7a674fb6fccd51cbd74a1eb7ee49a8d5abbdf7e6295  settledlands-0.8.0-build315-pose-fade.jar
+c27ca88c6756994b32d4f97b39694c26b36709106899a9e9a82b8a02a295b71a  SettledLands-Build315-PoseFade-Source.zip

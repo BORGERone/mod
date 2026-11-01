@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build314-smooth.jar` — Build 314 (медленнее + плавная анимация), 5 гейтов + `pursuit_check` + `blue_wire_check` PASS.
-База — 313 (`settledlands-0.8.0-build313-follow.jar`), патч `tools/patch_build314.py`.
+`settledlands-0.8.0-build315-pose-fade.jar` — Build 315 (кросс-фейд анимаций), 5 гейтов + `pursuit_check` + `blue_wire_check` PASS.
+База — 314 (`settledlands-0.8.0-build314-smooth.jar`), патч `tools/patch_build315.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -276,7 +276,21 @@ Class-файл не содержит абсолютных смещений, по
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
 
-## Build 314 (актуально) — ещё медленнее и плавная анимация
+## Build 315 (актуально) — кросс-фейд между анимациями
+
+Жалоба: «всё ещё рваные телепорты между анимациями».
+
+Причина: клип записывал всю позу в модель за один кадр (рука 80° → −20°). Единая точка записи —
+`NpcMotionBridge256.Pose#set(ModelPart)` (через неё идут и полная анимация, и маска). За ней теперь
+стоит `NpcPoseBlend315`: 9 чисел на часть тела смешиваются с прошлым кадром, τ = 90 мс, сброс на
+первом кадре части и при паузе > 250 мс. Миксин — `NpcPoseBlendMixin315` (client).
+
+Для компиляции добавлен стаб `build303-src/stubs/net/minecraft/client/model/geom/ModelPart.java`
+(только 9 публичных float-полей; имена подтверждены байткодом `Pose.set`, новых внешних ссылок 0).
+
+`pursuit_check.py` требует `NpcPoseBlend315` + запись миксина в конфиге; на 314 падает.
+
+## Build 314 — ещё медленнее и плавная анимация
 
 Жалоба: «ещё немного замедли, анимации всё ещё рваные, переходов нет, в TnM всё плавно».
 
