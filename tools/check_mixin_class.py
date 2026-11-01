@@ -6,6 +6,9 @@ Phase A - configuration
   * every listed class exists in the jar and carries @Mixin
   * no class listed twice / in both the common and client lists
   * bundled mixin annotation stubs keep @Retention(CLASS)
+  * a mixin class declares no static field that is not private - Mixin drops
+    the whole class for that, and the game dies on the first load of the
+    target (Build 302 lesson: two colours declared in a mixin)
 
 Phase C - dispatcher hooks
   A class that only exists to be called from a mixin (the pursuit card
@@ -663,6 +666,21 @@ def check_external_refs(classes, base_jar, problems):
 
 
 # ---------------------------------------------------------------- phase A
+def check_mixin_fields(cf, entry):
+    """A mixin class may not declare a static field that is not private.
+
+    Mixin refuses the whole class with ``contains non-private static field X`` and the game
+    dies the moment the target class is loaded - Build 302 declared its colours in the two
+    white-wiring mixins and opening a dialogue crashed the client.
+    """
+    for f in cf.fields:
+        if f.access & 0x0008 and not f.access & 0x0002:
+            return ("%s: field %s is static and not private - a mixin may only declare "
+                    "private fields, Mixin rejects the whole class with 'contains "
+                    "non-private static field' (build 302 lesson)" % (entry, f.name))
+    return None
+
+
 def check_stub_retention(cf, entry):
     if not cf.access & ACC_ANNOTATION:
         return None
@@ -757,6 +775,10 @@ def main(argv):
                                             "in the class file" % (cfg, entry))
                             continue
                         checked += 1
+                        msg = check_mixin_fields(cf, entry)
+                        if msg:
+                            problems.append(msg)
+                            continue
                         check_targets(cf, entry, classes, problems, external,
                                       args.verbose)
 
