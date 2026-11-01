@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build307-workspace-render.jar` — Build 307, 5 гейтов + `screen_smoke` PASS.
-База — 306 (`settledlands-0.8.0-build306-workspace.jar`), патч `tools/patch_build307.py`.
+`settledlands-0.8.0-build308-nodes.jar` — Build 308 (откат), 5 гейтов PASS.
+База — 304 (`settledlands-0.8.0-build304-workspace-skin.jar`), патч `tools/patch_build308.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -276,7 +276,22 @@ Class-файл не содержит абсолютных смещений, по
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
 
-## Build 307 (актуально) — воркспейс открывается + новый гейт
+## Build 308 (актуально) — откат к нашему виду нод
+
+Пользователь: «откатим все эти изменения, вернёмся к нашему виду нод». Сборка сделана **от jar 304**,
+а не патчем 307: воркспейс 306/307, его миксин и библиотека 305 в неё не входят вообще.
+
+- убрано: `NpcWorkspace306` (+`$Link`), `NpcWorkspaceEntry306Mixin`, `NpcLibrary305Mixin`,
+  `WorkspaceTheme305`, `NpcNodeLibrary305`, ключи `gui.settledlands.workspace.*`;
+- mixins.json — список 304 (21 client), версия/displayName подняты до `0.8.0-build308-nodes`;
+- в jar остаётся скин 304: холст в точку, карточки с рамкой, круглые порты, тёплые кабели,
+  белая проводка 301/302 и синие провода значения; все инспекторы на месте.
+
+`tools/screen_smoke.py` остаётся в репозитории: на jar без экрана воркспейса он пишет `SKIP`.
+Исходники 306/307 остаются в истории git и в `build305-src/src`, в архив 308 не входят.
+Гейты: 460 записей / 412 классов, 42 миксина, 1385 внешних ссылок / 0 новых vs 304, verify_jar PASS.
+
+## Build 307 — воркспейс открывается + новый гейт
 
 306 вылетала на первом кадре воркспейса:
 `ArrayIndexOutOfBoundsException: Index 6 out of bounds for length 6` в

@@ -28,6 +28,7 @@ import pathlib
 import shutil
 import subprocess
 import sys
+import zipfile
 
 HERE = pathlib.Path(__file__).resolve().parent
 ROOT = HERE.parent
@@ -62,6 +63,10 @@ def main(argv):
     if not jar.is_file():
         print("screen_smoke: no such jar %s" % jar)
         return 2
+    with zipfile.ZipFile(jar) as z:
+        if "dev/settledlands/npc/client/NpcWorkspace306.class" not in z.namelist():
+            print("screen_smoke: SKIP - this jar has no workspace screen to drive")
+            return 0
     if not pathlib.Path(JAVA).is_file():
         print("screen_smoke: SKIP - jdk4py java is not on this machine")
         return 0
