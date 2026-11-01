@@ -1,0 +1,2 @@
+73e5a0e41b1536904e4b585e3bffcb9600c3ba6aebec659701876261206e4a1e  settledlands-0.8.0-build320-radius-zone.jar
+be08e3bc4c1ba23008f533a1794065995123c8c55c12e3f3b140be81ac4f82aa  SettledLands-Build320-RadiusZone-Source.zip
