@@ -43,6 +43,7 @@ ECJ = ROOT / "tools" / "vendor" / "ecj-3.46.100.jar"
 TEST = ROOT / "tools" / "tests" / "WirePointsRoundTrip.java"
 HIT_TEST = ROOT / "tools" / "tests" / "PointHitTest.java"
 CLICK_TEST = ROOT / "tools" / "tests" / "ClickOrder.java"
+KEY_TEST = ROOT / "tools" / "tests" / "WireKeyTest.java"
 STUBS = [str(ROOT / "build303-src" / "api3"), str(ROOT / "build303-src" / "api2"),
          str(ROOT / "build303-src" / "api"), str(ROOT / "build303-src" / "stubs-out")]
 
@@ -200,6 +201,11 @@ def run(jar):
         # Build 326: the press is read in one place, and only the dot itself removes a point.
         if b"onDot" not in ui_bytes or b"decide" not in ui_bytes:
             problems.append("the press has no single, testable decision")
+        # Build 327: a point is put where the cable is, and only on a cable that is drawn.
+        if b"pointOn" not in ui_bytes:
+            problems.append("a point is put where the cursor is, not on the cable")
+        if b"drawn" not in z.read(MODEL):
+            problems.append("a point keyed to a port no cable is drawn with would survive")
         if not any("NpcWirePointsUi321.decide" in r for r in mixin_refs):
             problems.append("the screen does not read its clicks through the decision")
 
@@ -253,6 +259,21 @@ def run(jar):
         output = (result.stdout + result.stderr).strip()
         if result.returncode != 0 or "click order: OK" not in output:
             problems.append("the wrong gesture wins:\n%s" % output[-800:])
+
+        compiled = subprocess.run(
+            [JAVA, "-jar", str(ECJ), "-21", "-nowarn", "-cp",
+             ":".join([str(jar)] + STUBS), "-d", str(tmpdir), str(KEY_TEST)],
+            capture_output=True, text=True)
+        if compiled.returncode != 0 or not (tmpdir / "WireKeyTest.class").is_file():
+            problems.append("the wire key test did not compile: %s"
+                            % (compiled.stdout + compiled.stderr).strip()[-400:])
+            return problems
+        result = subprocess.run(
+            [JAVA, "-cp", ":".join([str(tmpdir), str(jar)] + STUBS), "WireKeyTest"],
+            capture_output=True, text=True)
+        output = (result.stdout + result.stderr).strip()
+        if result.returncode != 0 or "wire keys: OK" not in output:
+            problems.append("a point can end up beside its cable:\n%s" % output[-800:])
     return problems
 
 

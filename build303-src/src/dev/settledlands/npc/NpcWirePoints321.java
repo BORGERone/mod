@@ -280,6 +280,32 @@ public final class NpcWirePoints321 {
                 || node.randomBranches.contains(toId);
     }
 
+    /**
+     * True when the screen really draws a cable for this exact record.
+     *
+     * <p>The screen does not draw "a link"; it walks the node's fields with fixed port numbers:
+     * {@code next}, {@code choices} and {@code triggers} with port 0, the false branch of a
+     * condition with port 1, and the branches of a random node with the index of the branch. A
+     * record keyed with a port the screen never uses is stored, drawn as a point, and then no cable
+     * ever passes through it - a dot floating on an empty canvas. That is why the key has to be
+     * checked against the drawing, not just against the link.</p>
+     */
+    public static boolean drawn(Node node, int fromPort, int toId) {
+        if (node == null || toId < 0) return false;
+        // A random node uses the port numbers for its branches, so its port 1 is branch 1, not the
+        // false branch of a condition.
+        if (node.type == NpcDialogueGraph.RANDOM) {
+            if (fromPort < node.randomBranches.size()
+                    && node.randomBranches.get(fromPort) == toId) {
+                return true;
+            }
+            // The screen also draws `next` at port 0, on every node type, so that key is drawn too.
+            return fromPort == 0 && node.next == toId;
+        }
+        if (fromPort == 1) return node.falseNext == toId;
+        return node.next == toId || node.choices.contains(toId) || node.triggers.contains(toId);
+    }
+
     // -- reading what is drawn ----------------------------------------------
 
     /** Points of one carrying wire, in order. Read only - this is the drawing path. */
@@ -380,7 +406,7 @@ public final class NpcWirePoints321 {
             for (Map.Entry<String, List<int[]>> entry : data.bends.entrySet()) {
                 int port = keyPort(entry.getKey());
                 int to = keyTarget(entry.getKey());
-                if (prune && !linkExists(node, port, to)) {
+                if (prune && !drawn(node, port, to)) {
                     dead.add(entry.getKey());
                     continue;
                 }
@@ -423,8 +449,10 @@ public final class NpcWirePoints321 {
         Data data = read(from);
         List<int[]> points = data.bends.computeIfAbsent(key(fromPort, toId),
                 unused -> new ArrayList<>());
-        int sx = snap(x);
-        int sy = snap(y);
+        // Not snapped again: the canvas already chose a spot, and snapping it here is what pulled
+        // a freshly made point off the cable it was put on.
+        int sx = x;
+        int sy = y;
         // Two dots on the same wire a few pixels apart look like one dot and cannot be told apart
         // by a click, so a second point is never made next to an existing one.
         for (int[] point : points) {
@@ -443,8 +471,8 @@ public final class NpcWirePoints321 {
     public static boolean addRoutePoint(Node from, int fromPort, int endX, int endY, int x, int y,
             int index) {
         if (from == null) return false;
-        int sx = snap(x);
-        int sy = snap(y);
+        int sx = x;
+        int sy = y;
         Data data = read(from);
         for (int i = data.hangs.size() - 1; i >= 0; i--) {
             int[] hang = data.hangs.get(i);
@@ -478,8 +506,8 @@ public final class NpcWirePoints321 {
     public static void attach(Node from, int fromPort, int x, int y) {
         if (from == null) return;
         Data data = read(from);
-        int sx = snap(x);
-        int sy = snap(y);
+        int sx = x;
+        int sy = y;
         for (int[] hang : data.hangs) {
             int size = routeSize(hang);
             if (hang[0] == fromPort && size > 0
@@ -503,8 +531,8 @@ public final class NpcWirePoints321 {
     /** Moves every record of the point: all carrying and all waiting wires follow it. */
     public static boolean movePoint(NpcDialogueGraph graph, int x, int y, int nx, int ny) {
         if (graph == null || graph.nodes == null) return false;
-        int tx = snap(nx);
-        int ty = snap(ny);
+        int tx = nx;
+        int ty = ny;
         if (tx == x && ty == y) return false;
         boolean any = false;
         for (Node node : graph.nodes.values()) {

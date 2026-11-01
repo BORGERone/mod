@@ -1,0 +1,2 @@
+1d3dd02799bbbc909d89f4e3492d538624e5b6561238ae1f55ed44a304fd65d8  settledlands-0.8.0-build327-point-on-cable.jar
+16bd5b438abfabdefe01587579c2eef5800976d070996e29909a16f74b8852d9  SettledLands-Build327-PointOnCable-Source.zip

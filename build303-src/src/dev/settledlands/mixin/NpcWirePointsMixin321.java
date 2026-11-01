@@ -298,9 +298,13 @@ public abstract class NpcWirePointsMixin321 {
             case NpcWirePointsUi321.ACT_ADD -> {
                 settledlands$pointDrag = false;
                 settledlands$pointMoved = false;
+                // The point goes where the cable is, not where the cursor is: a dot beside the
+                // wire is exactly what this build removes.
+                int[] at = NpcWirePointsUi321.pointOn(canvas, wire, mouseX, mouseY);
+                if (at == null) return;
                 remember();
-                int px = NpcWirePointsUi321.graphX(canvas, mouseX);
-                int py = NpcWirePointsUi321.graphY(canvas, mouseY);
+                int px = at[0];
+                int py = at[1];
                 if (wire.waiting()) {
                     // One more point in the run this wire visits, where it was clicked, so
                     // node - point - point - point is possible.
