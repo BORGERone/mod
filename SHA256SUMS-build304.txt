@@ -1,0 +1,2 @@
+ecae6fed58fedc2ba4fc1703b8ad1ec44ec8ba963be3712f59b164402a57b5f3  settledlands-0.8.0-build304-workspace-skin.jar
+0e17dc04340c813f5e65fa7df72b4492a09e4272642fb6dec7e1f52d8589f29f  SettledLands-Build304-WorkspaceSkin-Source.zip
