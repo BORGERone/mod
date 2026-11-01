@@ -1,0 +1,2 @@
+01ede97a46de8027ae1ca89d83e3c240cc0b61c944cfbde6538c647eb7b38c47  settledlands-0.8.0-build313-follow.jar
+cd3bbf01e1e75ee159a59ce4a4c84942ad28ed99840960bac76d06239a9032e3  SettledLands-Build313-Follow-Source.zip

@@ -87,8 +87,14 @@ LIMITS = {
     "RETRY_MAX_SHIFT": (1.0, "the retry backoff can freeze the body for longer than two seconds"),
     "REPATH_SUCCESS_TICKS": (14.0, "a walking path is rebuilt too eagerly - that is the stutter"),
     "RESUME_MARGIN": (2.0, "a target on the standoff edge switches the body on and off"),
+    "TARGET_MOVING_SQ": (0.05, "a walking target no longer counts as moving - the follower will "
+                               "brake at the standoff while you walk away"),
+    "FOLLOW_STEP_SQ": (1.0, "a finished path waits for the target to slide too far - that is the "
+                            "stop between two paths"),
 }
 MISSING = {
+    "TARGET_MOVING_SQ": "the target-motion threshold is gone",
+    "FOLLOW_STEP_SQ": "the follow-up step threshold is gone",
     "PURSUIT_WALK": "the pursuit walk factor is gone",
     "CATCH_UP_EXTRA": "the catch-up floor is gone",
     "RETRY_MAX_SHIFT": "the retry backoff cap is gone",
@@ -118,6 +124,8 @@ def main(argv):
     if "latchedBody" not in refs:
         problems.append("the pursuit never falls back to a latched body - the damage window "
                         "will still cut the chase after ten seconds")
+    if "movedBy" not in refs:
+        problems.append("nothing asks whether the target moved past a finished path")
     if "navigationSpeedFactor" not in refs:
         problems.append("the speed path does not cancel the auto-AI damping - a pursuit walks "
                         "slower than ordinary walking")

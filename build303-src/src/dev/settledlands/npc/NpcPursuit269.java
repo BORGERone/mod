@@ -131,12 +131,23 @@ public final class NpcPursuit269 {
 
     /** Minimum ticks between two rebuilds of a path that is still being walked. */
     private static final int REPATH_SUCCESS_TICKS = 10;
+    /** How far the target has to move before a stopped pursuer starts again. */
+    private static final double RESUME_MARGIN = 0.75D;
+
     /**
-     * How far the target has to move before a stopped pursuer starts again. Build 312 raised
-     * it from 0.75: a target standing on the standoff edge used to switch the body on and off
-     * every few ticks, which looked like a twitch.
+     * Build 313: per-tick movement of the target, squared, that counts as walking. A player on
+     * foot moves about 0.21 blocks a tick, so this is well below a walk and well above the
+     * jitter of a body standing still. While the target walks, the pursuer never counts itself
+     * as "arrived" - that was the stop-and-wait look of an escort.
      */
-    private static final double RESUME_MARGIN = 1.0D;
+    private static final double TARGET_MOVING_SQ = 0.01D;
+
+    /**
+     * Build 313: how far the target has to move after a path ran out before the next one is
+     * built. Short, because a follower whose path ended at a stale spot has to set off again
+     * at once; the long threshold above is only for paths that are still being walked.
+     */
+    private static final double FOLLOW_STEP_SQ = 0.25D;
     /** Catch-up relocation: gap, cooldown and the distance the NPC lands at. */
     private static final double RELOCATE_GAP = 24.0D;
     private static final int RELOCATE_COOLDOWN_TICKS = 20;
@@ -363,14 +374,24 @@ public final class NpcPursuit269 {
             state.resetPath();
         }
 
+        // Build 313: is the target walking right now? A follower must not stop while it is.
+        double seenSqr = state.hasSeen
+                ? target.distanceToSqr(state.seenX, state.seenY, state.seenZ)
+                : 0.0D;
+        state.seenX = target.getX();
+        state.seenY = target.getY();
+        state.seenZ = target.getZ();
+        state.hasSeen = true;
+        boolean targetMoving = seenSqr > TARGET_MOVING_SQ;
+
         double keepSqr = state.keepDistance * state.keepDistance;
         double resumeSqr = (state.keepDistance + RESUME_MARGIN) * (state.keepDistance + RESUME_MARGIN);
-        if (state.arrived && distanceSqr < resumeSqr) {
+        if (state.arrived && distanceSqr < resumeSqr && !targetMoving) {
             stopMotion(npc);
             return true;
         }
         state.arrived = false;
-        if (distanceSqr <= keepSqr) {
+        if (distanceSqr <= keepSqr && !targetMoving) {
             state.arrived = true;
             state.resetPath();
             stopMotion(npc);
@@ -430,16 +451,20 @@ public final class NpcPursuit269 {
         }
         if (state.repathTicks > 0) state.repathTicks--;
 
-        // Build 312: keep the path that is being walked. It is rebuilt when it runs out, or
-        // while catching up once the target left the point it leads to and the cooldown has
-        // passed. Rebuilding it on every two blocks of target movement restarted the walk from
-        // a standstill, which is what the repeated stop-turn-go stutter was.
+        // Build 312: keep the path that is being walked. It is rebuilt while catching up, once
+        // the target left the point it leads to and the cooldown has passed. Rebuilding it on
+        // every two blocks of target movement restarted the walk from a standstill, which is
+        // what the repeated stop-turn-go stutter was.
         if (!navigation.isDone()) {
             if (!state.catchingUp || state.repathTicks > 0 || !targetMoved(target, state)) {
                 return true;
             }
-        } else if (state.repathTicks > 0) {
-            // Path finished, still in the retry backoff: stand, but only for those few ticks.
+        } else if (state.repathTicks > 0
+                || (distanceSqr <= resumeSqr && !movedBy(target, state, FOLLOW_STEP_SQ))) {
+            // Build 313: the path ran out. Close to the target and the target has not moved:
+            // nothing left to do, stand. Otherwise the next path is built right away - waiting
+            // here is what turned a follower into somebody who walks, stops and sets off again,
+            // and a body stuck far from a target that stands still now keeps trying.
             return true;
         }
 
@@ -460,6 +485,12 @@ public final class NpcPursuit269 {
 
     private static int retryTicks(int failures) {
         return RETRY_BASE_TICKS << Math.min(Math.max(failures, 0), RETRY_MAX_SHIFT);
+    }
+
+    /** True when the target has moved at least {@code sq} from the point the path leads to. */
+    private static boolean movedBy(Entity target, State state, double sq) {
+        if (!state.hasTargetSnapshot) return true;
+        return target.distanceToSqr(state.targetX, state.targetY, state.targetZ) > sq;
     }
 
     private static boolean targetMoved(Entity target, State state) {
@@ -788,6 +819,11 @@ public final class NpcPursuit269 {
         double targetY;
         double targetZ;
         int lastRelocateTick;
+        /** Build 313: the target's position one tick ago, to tell a walk from a standstill. */
+        double seenX;
+        double seenY;
+        double seenZ;
+        boolean hasSeen;
 
         State(int kind, String target, double keepDistance, double catchUpDistance,
                 double catchUpBoost, int sourceNode, boolean damageSource, Published published) {

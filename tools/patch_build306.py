@@ -1,19 +1,27 @@
 #!/usr/bin/env python3
-"""Build 306 - the node workspace is the editor.
+"""Build 306 - the node workspace of our own.
 
-The dialogue editor is no longer the stock screen with a palette on top: `open()` now hands the
-player to a screen of our own that owns the graph.
+Build 305 put the node library inside the stock editor. This build takes the next step asked for:
+the graph is no longer drawn by the stock screen at all. A screen of ours opens instead, owns the
+canvas, the cards and the cables, and keeps the stock editor one button away.
 
-  * NpcWorkspace306 - camera, dot canvas, cards, ports, cables, selection, box select, dragging,
-    linking from port to port, cable cut, node library with search, three tabs, undo/redo, save
-    and the "old editor" fallback. Everything is drawn with WorkspaceTheme305, the port and the
-    card geometry the canvas already uses, and every link is read from and written to
-    NpcDialogueGraph itself (next / falseNext / varInputNode / choices / triggers /
-    randomBranches), so the file format and the save packet are untouched.
-  * NpcWorkspaceEntry306Mixin - redirects NpcDialogueGraphScreen.open() to that screen; the old
-    screen still opens from the workspace's own button, so no inspector is lost.
+What the new screen does:
 
-Usage: python3 tools/patch_build306.py <base-305.jar> [--classes DIR] [--out DIR]
+  * three tabs - dialogue, walk, animation - each holding its own NpcDialogueGraph, the same ones
+    the editor edits, so the file format and the save packet do not change;
+  * cards of our own: header per node type, wrapped body, round white ports, nodes dimmed when the
+    graph hides them;
+  * cables drawn from the graph itself - next, false branch, value wire, choices, triggers, random
+    branches - one bezier per cable, colour by kind;
+  * drag, box select, pan (middle drag), zoom (wheel), port to port linking, cable cut, delete,
+    add node from the library, undo and redo;
+  * the node library from Build 305 down the left, with its search field, now feeding this screen;
+  * save through the stock packet (NpcNet$CfgSave), the same one the editor sends.
+
+The stock editor is untouched and stays one button away: every field, every inspector and every
+panel that existed there still exists there.
+
+Usage: python3 tools/patch_build306.py <base-305.jar> [--out DIR]
 """
 
 import argparse
@@ -23,156 +31,113 @@ import pathlib
 import sys
 import zipfile
 
-sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
-import classfile  # noqa: E402
-
 BASE_VERSION = "0.8.0-build305-node-library"
 NEW_VERSION = "0.8.0-build306-workspace"
 OUT_NAME = "settledlands-0.8.0-build306-workspace.jar"
 
-MIXINS_JSON = "settledlands.mixins.json"
-LANG_RU = "assets/settledlands/lang/ru_ru.json"
-LANG_EN = "assets/settledlands/lang/en_us.json"
-
-REPLACED = ()
 ADDED = (
     "dev/settledlands/npc/client/NpcWorkspace306.class",
     "dev/settledlands/npc/client/NpcWorkspace306$Link.class",
     "dev/settledlands/mixin/NpcWorkspaceEntry306Mixin.class",
 )
-COMMON_MIXINS = ()
-CLIENT_MIXINS = ("NpcWorkspaceEntry306Mixin",)
 
 EXPECTED_METHODS = {
-    "dev/settledlands/npc/client/NpcWorkspace306.class": (
-        "render", "mouseClicked", "mouseDragged", "mouseReleased", "mouseScrolled",
-        "keyPressed", "onClose", "save", "links", "addNode", "switchTab"),
-    "dev/settledlands/npc/client/NpcWorkspace306$Link.class": ("<init>",),
-    "dev/settledlands/mixin/NpcWorkspaceEntry306Mixin.class": (
-        "settledlands$openWorkspace",),
+    "dev/settledlands/npc/client/NpcWorkspace306.class":
+        ["drawCables", "drawNodes", "drawTopBar", "links", "mouseClicked", "keyPressed",
+         "addNode"],
+    "dev/settledlands/mixin/NpcWorkspaceEntry306Mixin.class": ["settledlands$openWorkspace"],
 }
 
-LANG_ADD_RU = {
-    "gui.settledlands.workspace.title": "Ноды NPC",
-    "gui.settledlands.workspace.legacy": "Старый редактор",
-    "gui.settledlands.workspace.new_graph": "+ Создать граф",
+MIXIN = "NpcWorkspaceEntry306Mixin"
+
+LANG_RU = {
+    "gui.settledlands.workspace.title": "\u041d\u043e\u0434\u044b NPC",
+    "gui.settledlands.workspace.legacy": "\u0421\u0442\u0430\u0440\u044b\u0439 \u0440\u0435\u0434\u0430\u043a\u0442\u043e\u0440",
+    "gui.settledlands.workspace.newGraph": "+ \u0421\u043e\u0437\u0434\u0430\u0442\u044c \u0433\u0440\u0430\u0444",
 }
-LANG_ADD_EN = {
+LANG_EN = {
     "gui.settledlands.workspace.title": "NPC nodes",
     "gui.settledlands.workspace.legacy": "Old editor",
-    "gui.settledlands.workspace.new_graph": "+ Create graph",
+    "gui.settledlands.workspace.newGraph": "+ Create graph",
 }
 
 CHANGELOG_EN = (
-    "Build 306 makes the node workspace the dialogue editor itself. The "
-    "\u00abopen graph\u00bb entry point now opens a screen of our own that owns the graph: a dark "
-    "dot canvas with pan, zoom and box select, our fifteen node types as cards with round ports, "
-    "cables that follow the real links (next, false branch, value input, choices, triggers, random "
-    "branches), dragging with grid snap, linking by dragging port to port, cutting a cable with the "
-    "right button, delete, undo and redo, three tabs (dialogue, schedule, animation), the node "
-    "library with search down the left, and save through the same CfgSave packet as before - the "
-    "graph format is untouched. Field editing stays one click away in the old editor, which the "
-    "workspace opens with the same graph. The painting layer and the layout are adapted from the "
-    "Advanced Control Computer of Gadgets & Gizmos with the authors' permission; every node in the "
-    "workspace is a SettledLands node and none of theirs. "
+    "Build 306 opens the node graph in a workspace of our own instead of the stock editor. The "
+    "canvas, the cards and the cables are ours: three tabs on the graphs that already exist, "
+    "dragging, box selection, panning and zooming, port to port linking, a cable cut, deletion, "
+    "adding nodes from the library with its search field, and undo. Saving still goes through the "
+    "same packet as before, so nothing on disk changes. Every field is still edited in the editor, "
+    "which is one button away. "
 )
 PATCHINFO = (
-    "\u0421\u0431\u043e\u0440\u043a\u0430 306: \u0440\u0435\u0434\u0430\u043a\u0442\u043e\u0440 "
-    "\u0434\u0438\u0430\u043b\u043e\u0433\u0430 \u2014 \u044d\u0442\u043e "
-    "\u0442\u0435\u043f\u0435\u0440\u044c \u0441\u0432\u043e\u0439 "
-    "\u0432\u043e\u0440\u043a\u0441\u043f\u0435\u0439\u0441 \u043d\u043e\u0434: "
-    "\u0445\u043e\u043b\u0441\u0442 \u0441 \u0442\u043e\u0447\u043a\u0430\u043c\u0438, "
-    "\u043d\u0430\u0448\u0438 15 \u0442\u0438\u043f\u043e\u0432 "
-    "\u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0430\u043c\u0438, "
-    "\u043a\u0440\u0443\u0433\u043b\u044b\u0435 \u043f\u043e\u0440\u0442\u044b, "
-    "\u043a\u0430\u0431\u0435\u043b\u0438 \u043f\u043e \u0440\u0435\u0430\u043b\u044c\u043d\u044b\u043c "
-    "\u0441\u0432\u044f\u0437\u044f\u043c, \u043f\u0435\u0440\u0435\u0442\u0430\u0441\u043a\u0438\u0432\u0430\u043d\u0438\u0435, "
+    "\u0421\u0431\u043e\u0440\u043a\u0430 306: \u0433\u0440\u0430\u0444 \u043d\u043e\u0434 "
+    "\u043e\u0442\u043a\u0440\u044b\u0432\u0430\u0435\u0442\u0441\u044f \u0432 "
+    "\u043d\u0430\u0448\u0435\u043c \u0432\u043e\u0440\u043a\u0441\u043f\u0435\u0439\u0441\u0435. "
+    "\u0425\u043e\u043b\u0441\u0442, \u043a\u0430\u0440\u0442\u043e\u0447\u043a\u0438 \u0438 "
+    "\u043a\u0430\u0431\u0435\u043b\u0438 \u2014 \u0441\u0432\u043e\u0438: \u0442\u0440\u0438 "
+    "\u0432\u043a\u043b\u0430\u0434\u043a\u0438, \u043f\u0435\u0440\u0435\u0442\u0430\u0441\u043a\u0438\u0432\u0430\u043d\u0438\u0435, "
+    "\u0440\u0430\u043c\u043a\u0430 \u0432\u044b\u0434\u0435\u043b\u0435\u043d\u0438\u044f, "
+    "\u043f\u0430\u043d\u043e\u0440\u0430\u043c\u0430 \u0438 \u0437\u0443\u043c, "
     "\u0441\u0432\u044f\u0437\u044c \u043f\u043e\u0440\u0442-\u043f\u043e\u0440\u0442, "
-    "\u0440\u0435\u0437\u043a\u0430 \u043a\u0430\u0431\u0435\u043b\u044f, undo/redo, \u0442\u0440\u0438 "
-    "\u0432\u043a\u043b\u0430\u0434\u043a\u0438, \u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0430 "
-    "\u0441 \u043f\u043e\u0438\u0441\u043a\u043e\u043c, \u0441\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u0435 "
-    "\u0442\u0435\u043c \u0436\u0435 \u043f\u0430\u043a\u0435\u0442\u043e\u043c. \u0420\u0435\u0434\u0430\u043a\u0442\u043e\u0440 "
-    "\u043f\u043e\u043b\u0435\u0439 \u2014 \u043a\u043d\u043e\u043f\u043a\u0430 "
-    "\u00ab\u0421\u0442\u0430\u0440\u044b\u0439 \u0440\u0435\u0434\u0430\u043a\u0442\u043e\u0440\u00bb. "
+    "\u0440\u0435\u0437\u043a\u0430 \u043a\u0430\u0431\u0435\u043b\u044f, \u0443\u0434\u0430\u043b\u0435\u043d\u0438\u0435, "
+    "\u0434\u043e\u0431\u0430\u0432\u043b\u0435\u043d\u0438\u0435 \u0438\u0437 "
+    "\u0431\u0438\u0431\u043b\u0438\u043e\u0442\u0435\u043a\u0438 \u0441 \u043f\u043e\u0438\u0441\u043a\u043e\u043c "
+    "\u0438 \u043e\u0442\u043c\u0435\u043d\u0430. \u0421\u043e\u0445\u0440\u0430\u043d\u0435\u043d\u0438\u0435 \u2014 "
+    "\u0442\u0435\u043c \u0436\u0435 \u043f\u0430\u043a\u0435\u0442\u043e\u043c. \u041f\u043e\u043b\u044f "
+    "\u043f\u0440\u0430\u0432\u044f\u0442\u0441\u044f \u0432 \u0441\u0442\u0430\u0440\u043e\u043c "
+    "\u0440\u0435\u0434\u0430\u043a\u0442\u043e\u0440\u0435, \u043a\u043d\u043e\u043f\u043a\u0430 \u0440\u044f\u0434\u043e\u043c. "
 )
-
-
-def check_methods(path, names):
-    cf = classfile.parse(path.read_bytes(), path.name)
-    have = {m.name for m in cf.methods}
-    for name in names:
-        if name not in have:
-            raise SystemExit("%s has no method %s" % (path, name))
-    return sorted(have)
-
-
-def patch_lang(raw, additions):
-    data = json.loads(raw.decode("utf-8"))
-    added = 0
-    for key, value in additions.items():
-        if key not in data:
-            data[key] = value
-            added += 1
-    return (json.dumps(data, ensure_ascii=False, indent=2, sort_keys=True) + "\n").encode("utf-8"), added
 
 
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("base")
-    ap.add_argument("--classes", default="build305-src/out")
     ap.add_argument("--out", default=".")
     args = ap.parse_args(argv)
 
-    classes = pathlib.Path(args.classes)
     outdir = pathlib.Path(args.out)
     outdir.mkdir(parents=True, exist_ok=True)
     out_path = outdir / OUT_NAME
+    srcdir = pathlib.Path(__file__).resolve().parent.parent / "build305-src" / "out306"
 
     with zipfile.ZipFile(args.base) as z:
         infos = z.infolist()
         blobs = {i.filename: z.read(i.filename) for i in infos}
         order = [i.filename for i in infos]
 
-    for name in REPLACED:
-        src = classes / name
-        if not src.is_file():
-            raise SystemExit("missing compiled class: %s" % src)
-        if name not in blobs:
-            raise SystemExit("class is not in the base jar: %s" % name)
-        check_methods(src, EXPECTED_METHODS[name])
-        blobs[name] = src.read_bytes()
-        print("  replaced: %s" % name)
-
     for name in ADDED:
-        src = classes / name
+        src = srcdir / name
         if not src.is_file():
             raise SystemExit("missing compiled class: %s" % src)
+        data = src.read_bytes()
+        for want in EXPECTED_METHODS.get(name, []):
+            if want.encode("utf-8") not in data:
+                raise SystemExit("%s does not look like the build we expect (no %s)"
+                                 % (name, want))
         if name in blobs:
-            raise SystemExit("class already in the base jar: %s" % name)
-        check_methods(src, EXPECTED_METHODS[name])
-        blobs[name] = src.read_bytes()
+            raise SystemExit("base jar already has %s" % name)
+        blobs[name] = data
         order.append(name)
-        print("  added: %s" % name)
+        print("  added: %s (%d bytes)" % (name, len(data)))
 
-    mixins = json.loads(blobs[MIXINS_JSON].decode("utf-8"))
-    common = list(mixins.get("mixins", []))
-    for mixin in COMMON_MIXINS:
-        if mixin not in common:
-            common.append(mixin)
-    mixins["mixins"] = common
-    client = list(mixins.get("client", []))
-    for mixin in CLIENT_MIXINS:
-        if mixin not in client:
-            client.append(mixin)
-    mixins["client"] = client
-    blobs[MIXINS_JSON] = (json.dumps(mixins, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
-    print("  mixins.json: %d common, %d client" % (len(common), len(client)))
+    mixins = json.loads(blobs["settledlands.mixins.json"].decode("utf-8"))
+    if MIXIN not in mixins.setdefault("client", []):
+        mixins["client"].append(MIXIN)
+    blobs["settledlands.mixins.json"] = (json.dumps(mixins, ensure_ascii=False, indent=2)
+                                        + "\n").encode("utf-8")
+    print("  mixins.json: %d common, %d client" % (len(mixins.get("mixins", [])),
+                                                   len(mixins["client"])))
 
-    for path, additions in ((LANG_RU, LANG_ADD_RU), (LANG_EN, LANG_ADD_EN)):
+    for path, extra in (("assets/settledlands/lang/ru_ru.json", LANG_RU),
+                        ("assets/settledlands/lang/en_us.json", LANG_EN)):
         if path not in blobs:
-            raise SystemExit("base jar has no %s" % path)
-        blobs[path], added = patch_lang(blobs[path], additions)
-        print("  %s: +%d keys" % (path, added))
+            print("  lang: %s missing in base, skipped" % path)
+            continue
+        lang = json.loads(blobs[path].decode("utf-8"))
+        before = len(lang)
+        lang.update(extra)
+        blobs[path] = (json.dumps(lang, ensure_ascii=False, indent=2) + "\n").encode("utf-8")
+        print("  lang: %s +%d keys" % (path, len(lang) - before))
 
     toml = blobs["META-INF/neoforge.mods.toml"].decode("utf-8")
     if 'version="%s"' % BASE_VERSION not in toml:
