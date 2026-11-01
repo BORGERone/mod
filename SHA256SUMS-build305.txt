@@ -1,0 +1,2 @@
+2c1b8aae405dcee7f7197ce8eebb3eca2528a700cc4feac1499a4e54dbb66b42  settledlands-0.8.0-build305-node-library.jar
+20804ba1464dd556718a73363000907fc4029a2564e082ec6ec784577ef79a42  SettledLands-Build305-NodeLibrary-Source.zip

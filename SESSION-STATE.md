@@ -1,11 +1,12 @@
 # SESSION-STATE — SettledLands
 
-Обновлено: 2026-10-31. Ветка: `arena/b98b1cb0-mod` (имя ветки задаётся платформой, переименовать нельзя).
+Обновлено: 2026-11-01. Ветка: `arena/99d7691a-mod` (имя ветки задаётся платформой, переименовать нельзя).
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build295-empty-radius-chain.jar` — Build 295, все 5 гейтов PASS.
-Цепочка: 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
+`settledlands-0.8.0-build305-node-library.jar` — Build 305, все 5 гейтов PASS.
+База — 304 (`settledlands-0.8.0-build304-workspace-skin.jar`), патч `tools/patch_build305.py`.
+Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
 → 279 (`tools/patch_build279.py`, дистанция преследования)
@@ -24,7 +25,8 @@
 → 292 (`tools/patch_build292.py`, отозвана) → 293 (`tools/patch_build293.py`, строка-шаблон tp
 в пуле констант `NpcActions`)
 → 294 (`tools/patch_build294.py`, `В радиусе` → `Условие`: обход не обрывается на пустом радиусе).
-→ 295 (`tools/patch_build295.py`, пустой радиус всё равно запускает цепь проверки).
+→ 295 (`tools/patch_build295.py`, пустой радиус всё равно запускает цепь проверки)
+→ 296…304 → 305 (`tools/patch_build305.py`, воркспейс нод + библиотека с поиском).
 
 **Build 290 НЕ ЗАПУСКАЕТСЯ**: `GuideDialogueValue290.settledlands$enterSendGraph` был объявлен с `Object` вместо
 `GuideDialogue$Session` → `InvalidInjectionException: Invalid descriptor` → миксин не применился → фатальный вылет.
@@ -274,7 +276,34 @@ Class-файл не содержит абсолютных смещений, по
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
 
-## Build 304 (актуально) — рабочая область нод как в G&G
+## Build 305 (актуально) — воркспейс нод + библиотека с поиском
+
+Пользователь: 304 — «ты просто перерисовал внешний вид», нужен **код системы нод**. LICENCE G&G
+(`Riieno/Gadgets-And-Gizmos`) — All Rights Reserved; пользователь заявил, что разрешение авторов
+получено, поэтому работа продолжена, но своими классами: перенесён только слой рисования, наши
+ноды остаются нашими.
+
+Новое:
+- `npc/client/WorkspaceTheme305` — слой рисования воркспейса: `drawNodeFrame` (рамка, шапка с
+  тоном акцента, точка-индикатор), `drawPort` (тёмный ободок + тело + светлое ядро),
+  `drawExecPort` (ромб), `drawRow`, `drawPanel`, `drawTitleBar`, `drawRoundedRect`,
+  `drawTopRoundedRect`, `drawCircle`, `drawDiamond`, `mix`/`withAlpha`. Палитра — дефолт темы.
+- `npc/client/NpcNodeLibrary305` — панель 132 px слева: заголовок «Ноды» + счётчик, строки по
+  14 px, прокрутка, `L` — скрыть. Поиск по RU-названию и латинскому алиасу.
+- `mixin/NpcLibrary305Mixin` — на **своих** методах экрана: `widgets()` TAIL (невидимый
+  `EditBox` в `children()` — не `addRenderableWidget`, гейт ругался на неизвестный внешний API),
+  `render` TAIL (панель поверх холста), `mouseClicked` HEAD-cancellable (панель не отдаёт клик
+  холсту), `mouseScrolled`, `keyPressed`. Нода создаётся штатным `add(int)` (`@Shadow public
+  abstract`).
+- `WorkspaceSkin304` переписан на `WorkspaceTheme305`: холст/точки/карточки/порты рисует
+  перенесённый слой, палитра — алиасы на `WorkspaceTheme305`.
+- lang: `gui.settledlands.workspace.{library,search,empty}` в ru_ru/en_us.
+
+Ещё нет: меню «добавить ноду» с поиском на холсте (этап 2), перетаскивание/связи/инспектор кодом
+воркспейса (этап 3).
+Гейты: 463 записи / 415 классов, 43 миксина, 1389 внешних ссылок / 0 новых vs 304, verify_jar PASS.
+
+## Build 304 — рабочая область нод как в G&G
 
 Взята палитра/геометрия Advanced Contraption Controller из «Create Aeronautics: Gadgets &
 Gizmos» (публичные исходники, `AdvancedControllerV2Theme` + `GraphV2ThemeData.DEFAULT`):
