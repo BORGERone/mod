@@ -1,0 +1,1 @@
+f9f675ac817810d21cd6e243848c55d8186115d02126d7ab6baa82f60ef7849e  settledlands-0.8.0-build298-if-card-keeps-variable.jar
