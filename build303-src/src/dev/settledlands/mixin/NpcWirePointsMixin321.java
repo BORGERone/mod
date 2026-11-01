@@ -20,18 +20,29 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Build 321: reroute points on a cable - add, drag, delete.
+ * Build 323: the point as a hub - made, grabbed, moved, aimed and removed.
  *
  * <p>Drawing. The stock cable is one call to {@code cable} per wire, which computes both port
  * positions and hands them to {@code curve}. The redirect takes that call and, when the wire has
  * bends, replaces it with one {@code curve} per segment: output port, each bend in order, input
  * port. Same routine, same colour, same dashes, so the result is a stock cable that goes where it is
- * told. Wires without bends fall through to the original call untouched.</p>
+ * told. Wires without bends fall through to the original call untouched. Wires that wait at a point
+ * have no target, so no stock cable exists for them; they are drawn as a plain line from the port to
+ * the point, in the same white as the rest of the wiring.</p>
  *
- * <p>Mouse. A double click on a cable adds a bend there; dragging a bend moves it; a double click on
- * a bend deletes it. All three are taken before the screen's own click handling, so a bend never
- * starts a node drag, and every finished gesture calls the screen's {@code changed()} - the edit is
- * saved the same way every other edit is.</p>
+ * <p>Mouse. Every gesture here is finished inside this class, before the screen's own handling, and
+ * every finished gesture calls {@code remember()} before it changes anything and {@code changed()}
+ * after - so one Ctrl+Z takes back one gesture, whether that was making a point, moving it, aiming
+ * it or removing it.</p>
+ *
+ * <ul>
+ *   <li>double click on a cable - put a point on it;</li>
+ *   <li>press on a point - grab it; drag it anywhere to move it, drag it onto a node to aim it,
+ *       drop it back and nothing happens;</li>
+ *   <li>double click or right click on a point - remove it;</li>
+ *   <li>release a dragged wire on a point - the wire stops there and waits, it does not connect
+ *       anywhere behind the author's back.</li>
+ * </ul>
  */
 @Mixin(targets = "dev.settledlands.npc.client.NpcDialogueGraphScreen", remap = false)
 public abstract class NpcWirePointsMixin321 {
@@ -41,8 +52,22 @@ public abstract class NpcWirePointsMixin321 {
 
     private static final double DOUBLE_SLOP = 4.0D;
 
-    /** The bend being dragged, or null. */
-    private NpcWirePoints321.Handle settledlands$drag;
+    /** True while a point is held, and where it is now / where it was picked up. */
+    private boolean settledlands$pointDrag;
+
+    private int settledlands$pointX;
+
+    private int settledlands$pointY;
+
+    private int settledlands$pointStartX;
+
+    private int settledlands$pointStartY;
+
+    /** True once the held point has actually moved; a press alone changes nothing. */
+    private boolean settledlands$pointMoved;
+
+    /** Node the held point would be aimed at, or -1. */
+    private int settledlands$aimNode = -1;
 
     private long settledlands$lastClick;
 
@@ -96,6 +121,8 @@ public abstract class NpcWirePointsMixin321 {
     @Shadow
     public abstract boolean settledlands$contextOpen();
 
+    // -- drawing ------------------------------------------------------------
+
     @Redirect(method = "wires(Lnet/minecraft/client/gui/GuiGraphics;II)V",
             at = @At(value = "INVOKE",
                     target = "Ldev/settledlands/npc/client/NpcDialogueGraphScreen;cable(Lcom/mojang/blaze3d/vertex/BufferBuilder;Lorg/joml/Matrix4f;Ldev/settledlands/npc/NpcDialogueGraph$Node;ILdev/settledlands/npc/NpcDialogueGraph$Node;IIZ)I"),
@@ -103,7 +130,7 @@ public abstract class NpcWirePointsMixin321 {
     private int settledlands$cableThroughPoints(NpcDialogueGraphScreen self, BufferBuilder buffer,
             Matrix4f matrix, Node from, int fromPort, Node to, int toPort, int color,
             boolean dashed) {
-        List<int[]> points = NpcWirePoints321.points(from, fromPort, to.id);
+        List<int[]> points = NpcWirePoints321.bends(from, fromPort, to.id);
         if (points.isEmpty()) {
             return cable(buffer, matrix, from, fromPort, to, toPort, color, dashed);
         }
@@ -128,39 +155,70 @@ public abstract class NpcWirePointsMixin321 {
 
     @Inject(method = "wires(Lnet/minecraft/client/gui/GuiGraphics;II)V", at = @At("TAIL"),
             remap = false)
-    private void settledlands$drawHandles(GuiGraphics graphics, int mouseX, int mouseY,
+    private void settledlands$drawPoints(GuiGraphics graphics, int mouseX, int mouseY,
             CallbackInfo ci) {
-        NpcWirePointsUi321.drawHandles((NpcDialogueGraphScreen) (Object) this, graphics,
-                settledlands$graph(), mouseX, mouseY, linkFrom >= 0);
+        NpcDialogueGraphScreen screen = (NpcDialogueGraphScreen) (Object) this;
+        NpcDialogueGraph graph = settledlands$graph();
+        if (graph == null) return;
+        NpcWirePointsUi321.drawWaiting(screen, graphics, graph);
+        if (settledlands$pointDrag) {
+            NpcWirePointsUi321.drawAimBand(screen, graphics, settledlands$pointX,
+                    settledlands$pointY, mouseX, mouseY);
+        }
+        NpcWirePointsUi321.drawPoints(screen, graphics, graph, mouseX, mouseY,
+                settledlands$pointDrag, settledlands$aimNode);
     }
+
+    // -- mouse --------------------------------------------------------------
 
     @Inject(method = "mouseClicked(DDI)Z", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$pointClick(double mouseX, double mouseY, int button,
             CallbackInfoReturnable<Boolean> cir) {
-        if (button != 0) return;
-        NpcDialogueGraphScreen screen = (NpcDialogueGraphScreen) (Object) this;
         if (settledlands$contextOpen()) return;
+        NpcDialogueGraphScreen screen = (NpcDialogueGraphScreen) (Object) this;
         NpcDialogueGraph graph = settledlands$graph();
         NpcGraphCanvas canvas = settledlands$canvas();
         if (graph == null || canvas == null) return;
+        if (linkFrom >= 0) return;                 // a wire is being dragged, not a point
 
         boolean again = settledlands$doubleClick(mouseX, mouseY);
-        NpcWirePoints321.Handle handle = NpcWirePointsUi321.handleAt(screen, graph, mouseX, mouseY);
-        if (handle != null) {
+        int[] point = NpcWirePointsUi321.pointAt(screen, graph, mouseX, mouseY);
+
+        if (button == 1) {                         // right click removes a point outright
+            if (point == null) return;
+            settledlands$remove(graph, point);
+            cir.setReturnValue(true);
+            return;
+        }
+        if (button != 0) return;
+        if (point != null) {
             if (again) {
-                NpcWirePoints321.removeAt(handle.from, handle.fromPort, handle.toId, handle.index);
+                settledlands$remove(graph, point);
             } else {
-                settledlands$drag = handle;
+                settledlands$pointDrag = true;
+                settledlands$pointMoved = false;
+                settledlands$pointX = point[0];
+                settledlands$pointY = point[1];
+                settledlands$pointStartX = point[0];
+                settledlands$pointStartY = point[1];
+                settledlands$aimNode = -1;
             }
-            changed();
             cir.setReturnValue(true);
             return;
         }
 
         NpcWirePointsUi321.Wire wire = NpcWirePointsUi321.wireAt(screen, graph, mouseX, mouseY);
         if (wire == null || !again) return;
-        NpcWirePoints321.add(wire.from, wire.fromPort, wire.toId,
-                NpcWirePointsUi321.graphX(canvas, mouseX), NpcWirePointsUi321.graphY(canvas, mouseY));
+        int px = NpcWirePointsUi321.graphX(canvas, mouseX);
+        int py = NpcWirePointsUi321.graphY(canvas, mouseY);
+        // A second dot next to the first is what a missed grab looks like, so a point is never
+        // made on top of an existing one.
+        if (NpcWirePoints321.pointWithin(graph, px, py, NpcWirePoints321.GRID * 2)) {
+            cir.setReturnValue(true);
+            return;
+        }
+        remember();
+        NpcWirePoints321.addBend(wire.from, wire.fromPort, wire.toId, px, py);
         changed();
         cir.setReturnValue(true);
     }
@@ -168,43 +226,84 @@ public abstract class NpcWirePointsMixin321 {
     @Inject(method = "mouseDragged(DDIDD)Z", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$dragPoint(double mouseX, double mouseY, int button, double dragX,
             double dragY, CallbackInfoReturnable<Boolean> cir) {
-        if (settledlands$drag == null) return;
+        if (!settledlands$pointDrag) return;
+        NpcDialogueGraph graph = settledlands$graph();
         NpcGraphCanvas canvas = settledlands$canvas();
-        if (canvas == null) return;
-        NpcWirePoints321.moveTo(settledlands$drag.from, settledlands$drag.fromPort,
-                settledlands$drag.toId, settledlands$drag.index,
-                NpcWirePointsUi321.graphX(canvas, mouseX), NpcWirePointsUi321.graphY(canvas, mouseY));
+        if (graph == null || canvas == null) return;
+        settledlands$aimNode = canvas.hit(graph, mouseX, mouseY);
+        int nx = NpcWirePointsUi321.graphX(canvas, mouseX);
+        int ny = NpcWirePointsUi321.graphY(canvas, mouseY);
+        if (nx != settledlands$pointX || ny != settledlands$pointY) {
+            if (!settledlands$pointMoved) {
+                remember();
+                settledlands$pointMoved = true;
+            }
+            NpcWirePoints321.movePoint(graph, settledlands$pointX, settledlands$pointY, nx, ny);
+            settledlands$pointX = nx;
+            settledlands$pointY = ny;
+            changed();
+        }
         cir.setReturnValue(true);
     }
 
     /**
-     * The end of a gesture. Two cases: a bend that was being dragged is put down, and a wire that was
-     * being dragged and is released on a bend is joined there.
-     *
-     * <p>Without the second case the release fell through to the stock path, which only knows about
-     * ports and nodes - a release over the canvas, a bend included, opened the "make a node out of
-     * this wire" menu. A bend is a place a wire can end, so it is taken here before that.</p>
+     * The end of a gesture. A held point is put down: on a node it is aimed there, anywhere else it
+     * simply stays where it was moved. A wire that was being dragged and is released on a point stops
+     * at the point and waits - it is never connected to something the author did not pick, and the
+     * stock "make a node out of this wire" menu never opens over a point.
      */
     @Inject(method = "mouseReleased(DDI)Z", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$releasePoint(double mouseX, double mouseY, int button,
             CallbackInfoReturnable<Boolean> cir) {
-        if (settledlands$drag != null) {
-            settledlands$drag = null;
-            changed();
+        if (settledlands$pointDrag) {
+            boolean moved = settledlands$pointMoved;
+            int x = settledlands$pointX;
+            int y = settledlands$pointY;
+            int startX = settledlands$pointStartX;
+            int startY = settledlands$pointStartY;
+            settledlands$pointDrag = false;
+            settledlands$pointMoved = false;
+            settledlands$aimNode = -1;
+            NpcDialogueGraph graph = settledlands$graph();
+            NpcGraphCanvas canvas = settledlands$canvas();
+            if (moved && button == 0 && graph != null && canvas != null) {
+                int target = canvas.hit(graph, mouseX, mouseY);
+                if (target >= 0) {
+                    // Aiming is not moving: the point goes back where it was picked up and the
+                    // wires at it are sent to the node it was dropped on.
+                    NpcWirePoints321.movePoint(graph, x, y, startX, startY);
+                    remember();
+                    if (NpcWireJoin322.aim(graph, startX, startY, target) > 0) {
+                        changed();
+                        status = tr("gui.settledlands.graph.connected");
+                    }
+                }
+            }
             cir.setReturnValue(true);
             return;
         }
         if (button != 0 || linkFrom < 0) return;
         NpcDialogueGraphScreen screen = (NpcDialogueGraphScreen) (Object) this;
         NpcDialogueGraph graph = settledlands$graph();
-        NpcWirePoints321.Handle point = NpcWirePointsUi321.handleAt(screen, graph, mouseX, mouseY);
-        if (!NpcWireJoin322.canJoin(graph, linkFrom, linkFromPort, point)) return;
+        if (graph == null) return;
+        int[] point = NpcWirePointsUi321.pointAt(screen, graph, mouseX, mouseY);
+        if (point == null) return;
         remember();
-        if (!NpcWireJoin322.join(graph, linkFrom, linkFromPort, point)) return;
+        boolean attached = NpcWireJoin322.attach(graph, linkFrom, linkFromPort, point[0],
+                point[1]);
         linkFrom = -1;
-        changed();
-        status = tr("gui.settledlands.graph.connected");
+        if (attached) changed();
         cir.setReturnValue(true);
+    }
+
+    // -- helpers ------------------------------------------------------------
+
+    private void settledlands$remove(NpcDialogueGraph graph, int[] point) {
+        remember();
+        if (NpcWirePoints321.removePoint(graph, point[0], point[1])) {
+            changed();
+            status = tr("gui.settledlands.graph.deleted");
+        }
     }
 
     /** True when this click lands where the previous one did, soon enough to be a double click. */

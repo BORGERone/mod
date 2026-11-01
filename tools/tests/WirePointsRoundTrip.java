@@ -4,12 +4,13 @@ import dev.settledlands.npc.NpcWireJoin322;
 import dev.settledlands.npc.NpcWirePoints321;
 
 /**
- * Headless test for Build 321: a reroute point must bend a cable and nothing else.
+ * Headless test for Build 323: a point holds wires, and only an aim connects them.
  *
  * <p>The graph model and the point store are plain Java, so this runs without the game. It checks
- * the stored text, the round trip through a second node built from that text, the grid, the field
- * choice for an animation node, and - most importantly - that a point never touches the connection:
- * after adding, moving and deleting bends the wire is still the same wire.</p>
+ * the stored text and the round trip through it, the grid, the field choice for an animation node,
+ * the refusal to overwrite foreign text, the old {@code SLP1} text still being read - and, above
+ * all, the two halves of the new behaviour: a wire dropped on a point waits there and connects to
+ * nothing, and the point only sends its wires somewhere when it is aimed at a node.</p>
  */
 public final class WirePointsRoundTrip {
 
@@ -19,90 +20,133 @@ public final class WirePointsRoundTrip {
         NpcDialogueGraph graph = new NpcDialogueGraph();
         Node a = graph.add(NpcDialogueGraph.LINE, 0, 0);
         Node b = graph.add(NpcDialogueGraph.LINE, 200, 0);
+        Node c = graph.add(NpcDialogueGraph.LINE, 400, 0);
+        Node d = graph.add(NpcDialogueGraph.LINE, 0, 200);
         a.next = b.id;
 
-        // -- add, and the text that is stored --------------------------------------
-        NpcWirePoints321.add(a, 0, b.id, 112, 48);
+        // -- a point on a wire is a bend, and the wire is untouched -------------------
+        NpcWirePoints321.addBend(a, 0, b.id, 112, 48);
         check$(a.animBone != null && a.animBone.startsWith(NpcWirePoints321.MARK),
                 "the field does not hold the marker: " + a.animBone);
-        check$(a.animBone.equals("SLP1|p0t" + b.id + ":112,48"),
+        check$(a.animBone.equals("SLP2|p0t" + b.id + ":112,48"),
                 "unexpected text: " + a.animBone);
-        check$(NpcWirePoints321.has(a, 0, b.id), "the point is not found");
         check$(a.next == b.id, "adding a point changed the connection");
+        check$(NpcWirePoints321.points(graph).size() == 1, "the point is not on the canvas");
+        check$(NpcWirePoints321.hasPoint(graph, 112, 48), "the point is not found by position");
+        NpcWirePoints321.addBend(a, 0, b.id, 113, 49);
+        check$(NpcWirePoints321.bends(a, 0, b.id).size() == 1,
+                "a point was added again on top of itself");
+        check$(NpcWirePoints321.pointWithin(graph, 116, 52, 16),
+                "a point four units away is not treated as the same point");
+        check$(!NpcWirePoints321.pointWithin(graph, 400, 400, 16),
+                "a point was seen where there is none");
 
-        // -- a second bend, then the round trip through a node built from the text --
-        NpcWirePoints321.add(a, 0, b.id, 208, 96);
-        check$(NpcWirePoints321.points(a, 0, b.id).size() == 2, "the second point is missing");
-        String stored = a.animBone;
+        // -- a wire dropped on the point waits, it does not connect anywhere ---------
+        check$(NpcWireJoin322.canAttach(graph, d.id, 0, 112, 48), "the drop was refused");
+        check$(NpcWireJoin322.attach(graph, d.id, 0, 112, 48), "the attach failed");
+        check$(d.next == -1, "the dropped wire was connected to a node behind our back");
+        check$(NpcWirePoints321.hangs(d).size() == 1, "the wire is not waiting at the point");
+        check$(d.animBone != null && d.animBone.equals("SLP2|h0@112,48"),
+                "unexpected waiting text: " + d.animBone);
+        check$(NpcWirePoints321.points(graph).size() == 1,
+                "the waiting wire created a second point");
+        check$(a.next == b.id, "attaching a wire changed the wire under the point");
+        check$(!NpcWireJoin322.canAttach(graph, d.id, 0, 400, 400),
+                "a wire was attached to a place with no point");
 
-        Node twin = graph.add(NpcDialogueGraph.LINE, 400, 0);
-        twin.animBone = stored;
-        var again = NpcWirePoints321.points(twin, 0, b.id);
-        check$(again.size() == 2, "the text did not parse back to two points");
-        if (again.size() == 2) {
-            check$(again.get(0)[0] == 112 && again.get(0)[1] == 48, "first point changed");
-            check$(again.get(1)[0] == 208 && again.get(1)[1] == 96, "second point changed");
-        }
+        // -- aiming the point connects everything at it ------------------------------
+        int aimed = NpcWireJoin322.aim(graph, 112, 48, c.id);
+        check$(aimed == 2, "aiming did not reach both wires: " + aimed);
+        check$(a.next == c.id, "the wire through the point was not rerouted");
+        check$(d.next == c.id, "the waiting wire was not connected by the aim");
+        check$(NpcWirePoints321.hangs(d).isEmpty(), "the wire is still waiting after the aim");
+        check$(NpcWirePoints321.bends(a, 0, c.id).size() == 1
+                        && NpcWirePoints321.bends(a, 0, c.id).get(0)[0] == 112,
+                "the carrying wire lost its bend");
+        check$(NpcWirePoints321.bends(d, 0, c.id).size() == 1,
+                "the aimed wire does not bend through the point");
+        check$(c.next == -1, "aiming changed the target node");
 
-        // -- the grid ---------------------------------------------------------------
-        NpcWirePoints321.moveTo(a, 0, b.id, 0, 113, 51);
-        int[] moved = NpcWirePoints321.points(a, 0, b.id).get(0);
-        check$(moved[0] % NpcWirePoints321.GRID == 0 && moved[1] % NpcWirePoints321.GRID == 0,
-                "the point is off the grid: " + moved[0] + "," + moved[1]);
-        check$(moved[0] == 112 && moved[1] == 48, "113,51 should snap to 112,48");
+        // -- moving the point moves every wire of it --------------------------------
+        check$(NpcWirePoints321.movePoint(graph, 112, 48, 200, 96), "the point did not move");
+        check$(NpcWirePoints321.bends(a, 0, c.id).get(0)[0] == 200
+                        && NpcWirePoints321.bends(a, 0, c.id).get(0)[1] == 96,
+                "the carrying wire stayed behind");
+        check$(NpcWirePoints321.bends(d, 0, c.id).get(0)[0] == 200,
+                "the aimed wire stayed behind");
+        check$(NpcWirePoints321.points(graph).size() == 1,
+                "moving the point left a copy behind");
 
-        // -- delete, and the field is given back ------------------------------------
-        NpcWirePoints321.removeAt(a, 0, b.id, 1);
-        check$(NpcWirePoints321.points(a, 0, b.id).size() == 1, "delete left the point");
-        NpcWirePoints321.removeAt(a, 0, b.id, 0);
-        check$(!NpcWirePoints321.has(a, 0, b.id), "the last point survived");
-        check$(a.animBone == null || a.animBone.isEmpty(),
-                "the field was not given back: " + a.animBone);
-        check$(a.next == b.id, "deleting points changed the connection");
+        // -- removing the point leaves the connections alone ------------------------
+        check$(NpcWirePoints321.removePoint(graph, 200, 96), "the point was not removed");
+        check$(a.next == c.id && d.next == c.id, "removing the point changed a connection");
+        check$(NpcWirePoints321.bends(a, 0, c.id).isEmpty(), "the bend survived the removal");
+        check$(NpcWirePoints321.points(graph).isEmpty(), "the point survived the removal");
+
+        // -- the end a wire was carrying is released when it stops at a point --------
+        Node e = graph.add(NpcDialogueGraph.LINE, 200, 200);
+        Node f = graph.add(NpcDialogueGraph.LINE, 400, 200);
+        e.next = f.id;
+        NpcWirePoints321.addBend(f, 0, b.id, 64, 64);
+        f.next = b.id;
+        check$(NpcWireJoin322.attach(graph, e.id, 0, 64, 64), "the wire did not stop at the point");
+        check$(e.next == -1, "the wire kept its old target as well as the point");
+        check$(NpcWirePoints321.hangs(e).size() == 1, "the wire does not wait at the point");
+        check$(NpcWireJoin322.aim(graph, 64, 64, b.id) == 2,
+                "aiming did not reach the wire that was already there");
+
+        // -- a bend whose wire is gone is dropped, not drawn -------------------------
+        Node lone = graph.add(NpcDialogueGraph.LINE, -400, 0);
+        Node gone = graph.add(NpcDialogueGraph.LINE, -200, 0);
+        lone.next = gone.id;
+        NpcWirePoints321.addBend(lone, 0, gone.id, 32, 32);
+        check$(NpcWirePoints321.hasPoint(graph, 32, 32), "the point was not made");
+        lone.next = -1;
+        check$(!NpcWirePoints321.hasPoint(graph, 32, 32),
+                "a bend outlived the wire it was made on");
+        check$(NpcWirePoints321.bends(lone, 0, gone.id).isEmpty(),
+                "the stale bend is still in the text: " + lone.animBone);
+
+        // -- old text from Build 321 is still read, and is rewritten on the next edit -
+        Node legacy = graph.add(NpcDialogueGraph.LINE, 0, 400);
+        Node legacyTo = graph.add(NpcDialogueGraph.LINE, 200, 400);
+        legacy.next = legacyTo.id;
+        legacy.animBone = "SLP1|p0t" + legacyTo.id + ":152,64";
+        check$(NpcWirePoints321.hasPoint(graph, 152, 64),
+                "the text written by Build 321 is not read any more");
+        NpcWirePoints321.movePoint(graph, 152, 64, 160, 64);
+        check$(legacy.animBone != null && legacy.animBone.startsWith(NpcWirePoints321.MARK),
+                "the old text was not rewritten in the new format: " + legacy.animBone);
 
         // -- an animation node keeps its bones and uses the other field -------------
-        Node anim = graph.add(NpcDialogueGraph.ANIMATION, 0, 200);
+        Node anim = graph.add(NpcDialogueGraph.ANIMATION, 0, 600);
         anim.animBone = "right_arm";
-        NpcWirePoints321.add(anim, 0, b.id, 64, 64);
+        NpcWirePoints321.addBend(anim, 0, b.id, 64, 96);
         check$("right_arm".equals(anim.animBone), "the bone of an animation node was overwritten");
-        check$(anim.mobilityGroupId != null && anim.mobilityGroupId.startsWith("SLP1"),
+        check$(anim.mobilityGroupId != null && anim.mobilityGroupId.startsWith(NpcWirePoints321.MARK),
                 "an animation node did not fall back to the other field");
 
         // -- foreign text is never destroyed ---------------------------------------
-        Node busy = graph.add(NpcDialogueGraph.LINE, 0, 400);
+        Node busy = graph.add(NpcDialogueGraph.LINE, 0, 800);
         busy.animBone = "somebody else";
-        NpcWirePoints321.add(busy, 0, b.id, 32, 32);
+        busy.next = b.id;
+        NpcWirePoints321.addBend(busy, 0, b.id, 40, 40);
         check$("somebody else".equals(busy.animBone), "foreign text in the field was overwritten");
-        check$(NpcWirePoints321.has(busy, 0, b.id),
+        check$(NpcWirePoints321.hasPoint(graph, 40, 40),
                 "the point was lost even though it could not be saved");
 
-        // -- joining a dragged wire to a point --------------------------------------
-        NpcDialogueGraph join = new NpcDialogueGraph();
-        Node source = join.add(NpcDialogueGraph.LINE, 0, 0);
-        Node middle = join.add(NpcDialogueGraph.LINE, 200, 0);
-        Node drain = join.add(NpcDialogueGraph.LINE, 400, 0);
-        Node other = join.add(NpcDialogueGraph.LINE, 0, 200);
-        source.next = drain.id;
-        NpcWirePoints321.add(source, 0, drain.id, 176, 40);
-        var point = NpcWirePoints321.handles(join).get(0);
-
-        check$(!NpcWireJoin322.canJoin(join, drain.id, 0, point), "a loop was offered");
-        check$(!NpcWireJoin322.canJoin(join, 9999, 0, point), "a missing node was offered");
-        check$(NpcWireJoin322.canJoin(join, other.id, 0, point), "a plain drop was refused");
-
-        check$(NpcWireJoin322.join(join, other.id, 0, point), "the join failed");
-        check$(other.next == drain.id, "the dragged wire did not take the point's target");
-        check$(source.next == drain.id, "the wire the point sits on was changed");
-        check$(NpcWirePoints321.has(other, 0, drain.id), "the new wire does not bend through it");
-        int[] bend = NpcWirePoints321.points(other, 0, drain.id).get(0);
-        check$(bend[0] == point.x && bend[1] == point.y, "the bend is not at the point");
-        check$(!NpcWireJoin322.join(join, drain.id, 0, point), "the loop was joined after all");
-
-        // -- handles ---------------------------------------------------------------
-        // The twin was given the text of the two bends, so it has two of its own; plus one on the
-        // animation node and one on the node whose field was busy.
-        check$(NpcWirePoints321.handles(graph).size() == 4,
-                "expected four handles, got " + NpcWirePoints321.handles(graph).size());
+        // -- a point with one wire, aimed at its own node: only the wire is skipped --
+        NpcDialogueGraph loop = new NpcDialogueGraph();
+        Node one = loop.add(NpcDialogueGraph.LINE, 0, 0);
+        Node two = loop.add(NpcDialogueGraph.LINE, 200, 0);
+        Node three = loop.add(NpcDialogueGraph.LINE, 400, 0);
+        one.next = two.id;
+        NpcWirePoints321.addBend(one, 0, two.id, 96, 32);
+        NpcWireJoin322.attach(loop, three.id, 0, 96, 32);
+        check$(NpcWireJoin322.aim(loop, 96, 32, three.id) == 1,
+                "aiming a point at one of its own wires should leave that wire alone");
+        check$(one.next == three.id, "the carrying wire was not sent to the target");
+        check$(three.next == -1, "a node was wired to itself");
 
         finish();
     }

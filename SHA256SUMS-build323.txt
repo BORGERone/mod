@@ -1,0 +1,2 @@
+37f779e89fae4354e57d7869254bd9a5b93fb1bdfa94f53fbc3c5a91e4a3204e  settledlands-0.8.0-build323-wire-hub.jar
+e2e5e348c8455e09d84f3b8879fb7d75136c58d2c50992a254b3d80966f92924  SettledLands-Build323-WireHub-Source.zip

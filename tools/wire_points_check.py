@@ -1,24 +1,27 @@
 #!/usr/bin/env python3
-"""Gate: a reroute point must bend the cable and change nothing else.
+"""Gate: a point holds wires, and only an aim connects them.
 
-Build 321 adds points to a wire. The feature is meant to be purely visual, and that is exactly the
-kind of claim that quietly stops being true: one write to a link field and the point becomes an
-edit, one extra field read and the bend appears inside an unrelated setting.
+A point is a place wires meet. Two things about it are easy to break and impossible to see in a
+screenshot: the store must never write a connection of its own accord, and the store must never
+lose the text it does not own. The join is the only class allowed to change a connection, and it
+must go through the graph's own connect and disconnect rather than through a link field.
 
-So the shipped jar is asked two things:
+So the shipped jar is asked these things:
 
   * no link field is touched - the model may read the saved text field and the node type, and it may
     read a link to know which wire a bend belongs to, but a point store that assigns `next`,
     `falseNext`, `choices`, `triggers`, `randomBranches` or `varInputNode` is a bug whatever it looks
     like;
-  * the round trip in tools/tests/WirePointsRoundTrip.java passes: the text format, the grid, the
-    fallback field of an animation node, the refusal to overwrite foreign text, and the connection
-    staying intact through add, move and delete. That test is compiled against this jar and run
-    headlessly.
+  * a wire dropped on a point waits, and a point only connects its wires when it is aimed - the
+    round trip in tools/tests/WirePointsRoundTrip.java proves both, and is compiled against this
+    jar and run headlessly;
+  * a point can always be grabbed: its hit area is wider than the dot it draws, at every zoom
+    (tools/tests/PointHitTest.java), because a dot that is hard to hit turns "move the point" into
+    "make another point next to it".
 
-    python3 tools/wire_points_check.py settledlands-0.8.0-build321-wire-points.jar
+    python3 tools/wire_points_check.py settledlands-0.8.0-build323-wire-hub.jar
 
-Exit 0 = points survive a round trip and cannot change a connection.
+Exit 0 = points wait, aim, move, delete and cannot change a connection by themselves.
 """
 import json
 import pathlib
@@ -35,6 +38,7 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 JAVA = "/tmp/venv/lib/python3.11/site-packages/jdk4py/java-runtime/bin/java"
 ECJ = ROOT / "tools" / "vendor" / "ecj-3.46.100.jar"
 TEST = ROOT / "tools" / "tests" / "WirePointsRoundTrip.java"
+HIT_TEST = ROOT / "tools" / "tests" / "PointHitTest.java"
 STUBS = [str(ROOT / "build303-src" / "api3"), str(ROOT / "build303-src" / "api2"),
          str(ROOT / "build303-src" / "api"), str(ROOT / "build303-src" / "stubs-out")]
 
@@ -136,8 +140,28 @@ def run(jar):
         if join_writes:
             problems.append("the join writes Node#%s directly - it must use graph.connect"
                             % ", ".join(sorted(join_writes)))
-        if not any("NpcDialogueGraph.connect" in r for r in _all_refs(join)):
+        join_refs = _all_refs(join)
+        if not any("NpcDialogueGraph.connect" in r for r in join_refs):
             problems.append("the join never calls graph.connect")
+        if not any("NpcDialogueGraph.disconnect" in r for r in join_refs):
+            problems.append("the join never calls graph.disconnect - a rerouted wire would keep "
+                            "its old target")
+        # Build 323: the drop must only attach, and the aim is what connects.
+        if not any("NpcWirePoints321.attach" in r for r in join_refs):
+            problems.append("the join never attaches a wire to the point")
+        if not any("NpcWirePoints321.promote" in r for r in join_refs):
+            problems.append("the aim never promotes a waiting wire")
+
+        ui = disasm.parse_class(z.read(UI))
+        ui_refs = _all_refs(ui)
+        if not any("NpcWirePoints321.points" in r for r in ui_refs):
+            problems.append("the ui does not read the points of the graph")
+        mixin = disasm.parse_class(z.read(MIXIN))
+        mixin_refs = _all_refs(mixin)
+        for needed in ("NpcWireJoin322.attach", "NpcWireJoin322.aim", "NpcWirePoints321.removePoint",
+                       "NpcWirePoints321.movePoint", "NpcWirePoints321.addBend"):
+            if not any(needed in r for r in mixin_refs):
+                problems.append("the screen hook never calls %s" % needed)
 
         reads = node_field_reads(model)
         if "animBone" not in reads or "mobilityGroupId" not in reads:
@@ -159,6 +183,21 @@ def run(jar):
         output = (result.stdout + result.stderr).strip()
         if result.returncode != 0 or "wire points: OK" not in output:
             problems.append("the round trip failed:\n%s" % output[-800:])
+
+        compiled = subprocess.run(
+            [JAVA, "-jar", str(ECJ), "-21", "-nowarn", "-cp",
+             ":".join([str(jar)] + STUBS), "-d", str(tmpdir), str(HIT_TEST)],
+            capture_output=True, text=True)
+        if compiled.returncode != 0 or not (tmpdir / "PointHitTest.class").is_file():
+            problems.append("the hit test did not compile: %s"
+                            % (compiled.stdout + compiled.stderr).strip()[-400:])
+            return problems
+        result = subprocess.run(
+            [JAVA, "-cp", ":".join([str(tmpdir), str(jar)] + STUBS), "PointHitTest"],
+            capture_output=True, text=True)
+        output = (result.stdout + result.stderr).strip()
+        if result.returncode != 0 or "point hit: OK" not in output:
+            problems.append("a point cannot be grabbed reliably:\n%s" % output[-800:])
     return problems
 
 
@@ -176,7 +215,8 @@ def main(argv):
         for line in problems:
             print("  - " + line)
         return 1
-    print("wire_points_check: OK  %s  (bends round trip, connections untouched)" % jar.name)
+    print("wire_points_check: OK  %s  (wires wait at a point, aim connects, points can be grabbed)"
+          % jar.name)
     return 0
 
 

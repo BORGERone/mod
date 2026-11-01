@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build322-join-points.jar` — Build 322 (провод подключается к точке перегиба), 5 гейтов + `wire_points_check` + `radius_zone_check` + `clipboard_check` PASS.
-База — 321 (`settledlands-0.8.0-build321-wire-points.jar`), патч `tools/patch_build322.py`.
+`settledlands-0.8.0-build323-wire-hub.jar` — Build 323 (точка-узел: держит провода, ждёт, прицеливается, двигается, удаляется), все 7 гейтов PASS.
+База — 322 (`settledlands-0.8.0-build322-join-points.jar`), патч `tools/patch_build323.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -32,7 +32,8 @@
 → 319 (`tools/patch_build319.py`, вставка в центр видимого холста: `bounds` + `pasteCentered`)
 → 320 (`tools/patch_build320.py`, зона «В радиусе» частицами: `NpcRadiusZone320` + `NpcRadiusZoneUi320` + 2 миксина)
 → 321 (`tools/patch_build321.py`, точки перегиба на проводах: `NpcWirePoints321` + `NpcWirePointsUi321` + `NpcWirePointsMixin321`)
-→ 322 (`tools/patch_build322.py`, отпускание провода на точке: `NpcWireJoin322`).
+→ 322 (`tools/patch_build322.py`, отпускание провода на точке: `NpcWireJoin322`)
+→ 323 (`tools/patch_build323.py`, точка-узел: `attach`/`aim` в `NpcWireJoin322`, новый формат `SLP2`).
 
 **Build 290 НЕ ЗАПУСКАЕТСЯ**: `GuideDialogueValue290.settledlands$enterSendGraph` был объявлен с `Object` вместо
 `GuideDialogue$Session` → `InvalidInjectionException: Invalid descriptor` → миксин не применился → фатальный вылет.
@@ -44,6 +45,23 @@
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
+
+Build 323: **точка стала узлом**. Пользователь: «провод должен подключаться к точке, и уже от точки
+вытягиваться куда я захочу» + «провод цепляется за точку и ждёт, теперь его концовка — эта точка».
+Поэтому 322 (молчаливое подключение к ноде под точкой) разрезано на два шага: `attach` кладёт провод
+в точку и **ничего не подключает** (в графе выход просто пуст, провод рисуется пунктиром), `aim`
+(точку тянут на ноду) отправляет туда все провода точки через `graph.connect`/`disconnect`.
+Заодно вылечены жалобы «при перемещении создаётся копия» и «точку нельзя удалить»: радиус попадания
+по точке `max(11, 7*zoom)` px (было `max(3,3*zoom)+2` — точка рисуется 6–12 px, поэтому промах
+попадал в провод и второй клик ставил новую точку), точка двигается целиком (`movePoint` по
+координатам, а не по одному изгибу), удаление — двойной клик **или ПКМ**, и каждый жест теперь
+вызывает `remember()` (раньше не вызывал вообще — поэтому Ctrl+Z не отменял ни создание, ни удаление).
+Новый формат текста `SLP2` (`p<port>t<to>:x,y` изгибы, `h<port>@x,y` ожидающие провода), `SLP1`
+читается. Битые изгибы (провод переподключён/разрезан) отбрасываются в `points()`. Новая точка
+ближе `GRID*2` (16 ед.) к существующей не создаётся. Гейт `wire_points_check` дополнен: `attach` без
+`graph.connect`, `aim` через `connect`+`disconnect`, тесты `WirePointsRoundTrip` (ожидание,
+прицеливание, сдвиг, удаление, петли, `SLP1`, чужой текст) и `PointHitTest` (радиус попадания
+больше точек на любом зуме).
 
 Build 322: **провод можно отпустить на точке**. В 321 отпускание над точкой уходило в штатный путь
 (`settledlands$mouseReleasedOriginal`): `hitPort` → `hit` (нода) → иначе `contextMenu.showForWire`, то
