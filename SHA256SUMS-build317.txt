@@ -1,0 +1,2 @@
+81e8c18d76d4ea9b9aa9a25752bac645ad2a25fbd668f60544012273e6060844  settledlands-0.8.0-build317-water.jar
+cbd3973885db0a284f4390f407d069449e415c8d0a647496b9bee9731f7d4175  SettledLands-Build317-Water-Source.zip

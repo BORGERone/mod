@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build316-stride.jar` — Build 316 (шаг по скорости + без сброса в idle), 5 гейтов + `pursuit_check` + `blue_wire_check` PASS.
-База — 315 (`settledlands-0.8.0-build315-pose-fade.jar`), патч `tools/patch_build316.py`.
+`settledlands-0.8.0-build317-water.jar` — Build 317 (без урона от падения, без утопления, всплывает), 5 гейтов + `pursuit_check` + `blue_wire_check` PASS.
+База — 316 (`settledlands-0.8.0-build316-stride.jar`), патч `tools/patch_build317.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -26,7 +26,8 @@
 в пуле констант `NpcActions`)
 → 294 (`tools/patch_build294.py`, `В радиусе` → `Условие`: обход не обрывается на пустом радиусе).
 → 295 (`tools/patch_build295.py`, пустой радиус всё равно запускает цепь проверки)
-→ 296…304 → 305 (`tools/patch_build305.py`, воркспейс нод + библиотека с поиском).
+→ 296…304 → 305 (`tools/patch_build305.py`, воркспейс нод + библиотека с поиском)
+→ 306…316 → 317 (`tools/patch_build317.py`, вода и падение: `NpcWater317` + `NpcWaterMixin317`).
 
 **Build 290 НЕ ЗАПУСКАЕТСЯ**: `GuideDialogueValue290.settledlands$enterSendGraph` был объявлен с `Object` вместо
 `GuideDialogue$Session` → `InvalidInjectionException: Invalid descriptor` → миксин не применился → фатальный вылет.
@@ -38,6 +39,20 @@
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
+
+Build 317: падение и вода. Два новых класса, база не менялась.
+`NpcWater317.tick(GuideNpc)` — `fallDistance = FALL_GUARD (-8.0f)` каждый тик (ниже нуля специально:
+тик приземления успевает добавить не больше шага терминальной скорости, ~3.9 блока, поэтому порог
+`>3.0` не достигается никогда; держать на нуле недостаточно), затем `setAirSupply(getMaxAirSupply())`
+в воде (тик утопления не запускается вовсе) и подъём `BUOYANCY 0.06`, но не быстрее `RISE_CAP 0.06`
+блока за тик — тело всплывает и покачивается на поверхности, а не лежит на дне.
+`NpcWaterMixin317` — `@Inject HEAD customServerAiStep()V` (через него идёт каждый серверный тик, и
+эскорт, и скриптовое движение, и обычный AI; у метода несколько ранних `return`), миксин в **общем**
+списке `settledlands.mixins.json`. Внешних ссылок не добавилось: все вызовы записаны с владельцем
+`GuideNpc`, а `DamageTypes.FALL/DROWN` из первой версии убраны — гейт фазы D не пропускает внешнюю
+константу, которой нет в базовом jar. Заглушки для компиляции: `build303-src/api3-src` (в `Entity`
+добавлен `public float fallDistance`, в `LivingEntity` — `isInWater`, `getAirSupply`, `setAirSupply`,
+`getMaxAirSupply`), собираются в `build303-src/api3` и кладутся в classpath перед `api2`.
 
 Build 285: вылет при отрисовке любого NPC — `NoSuchFieldError: Entity does not have member field
 walkAnimation`. Поле объявлено в `LivingEntity`; заглушка для компиляции держала его в `Entity`,

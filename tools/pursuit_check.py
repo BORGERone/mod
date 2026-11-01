@@ -20,6 +20,10 @@ measured per frame, and the smoothed numbers reach every reader through NpcLocoI
 which has to be in the jar and in the client mixin list or Touch'n Motion goes back to stepped
 blends. Build 315 added the clip cross-fade (NpcPoseBlend315 + NpcPoseBlendMixin315) - without it a
 clip switch writes a whole new pose in one frame, which is the teleport between animations.
+Build 317 added the water and fall behaviour (NpcWater317 + NpcWaterMixin317): the fall distance is
+held below zero so a landing cannot become damage, the air supply stays full in water, and the body
+is pushed up to the surface. The gate checks the class is there, the guard really is negative, the
+push is small, and the mixin is in the common mixin list - a mixin that is not listed does nothing.
 
     python3 tools/pursuit_check.py settledlands-0.8.0-build311-pursuit-fix.jar
 
@@ -41,6 +45,8 @@ DRIVER = "dev/settledlands/model/NpcLocoDriver283.class"
 LOCO_MIXIN = "dev/settledlands/mixin/NpcLocoInputsMixin314.class"
 MIXIN_CONFIG = "settledlands.mixins.json"
 STATE = "dev/settledlands/npc/NpcPursuit269$State.class"
+WATER = "dev/settledlands/npc/NpcWater317.class"
+WATER_MIXIN = "NpcWaterMixin317"
 INVOKES = (0xb6, 0xb7, 0xb8, 0xb9)
 
 
@@ -143,6 +149,9 @@ def main(argv):
         pose_mixin = POSE_BLEND.replace("model/NpcPoseBlend315", "mixin/NpcPoseBlendMixin315")
         pose_mixin_info = (disasm.parse_class(z.read(pose_mixin))
                            if pose_mixin in names else None)
+        water_info = disasm.parse_class(z.read(WATER)) if WATER in names else None
+        water_mixin = "dev/settledlands/mixin/NpcWaterMixin317.class"
+        water_mixin_info = disasm.parse_class(z.read(water_mixin)) if water_mixin in names else None
         config = json.loads(z.read(MIXIN_CONFIG)) if MIXIN_CONFIG in names else None
 
     refs = method_refs(main_info["cp"], main_info)
@@ -197,12 +206,39 @@ def main(argv):
     elif "latched" not in field_names(state_info["cp"], state_info):
         problems.append("the pursuit state has no latched field")
 
+    if water_info is None:
+        problems.append("the fall and water behaviour is gone (%s)" % WATER)
+    else:
+        water_values = field_values(water_info["cp"], water_info)
+        guard = water_values.get("FALL_GUARD")
+        if guard is None or guard >= -3.0:
+            problems.append("FALL_GUARD: the fall distance is not held below the damage "
+                            "threshold - a long fall still hurts (value %s)" % guard)
+        rise = water_values.get("RISE_CAP")
+        if rise is None or rise <= 0.0 or rise > 0.2:
+            problems.append("RISE_CAP: the water push is %s blocks per tick - it must lift the "
+                            "body without launching it" % rise)
+        if water_values.get("BUOYANCY") is None:
+            problems.append("the water push is gone (BUOYANCY)")
+        water_methods = {water_info["cp"][ni][1] for _a, ni, _d, _x in water_info["methods"]}
+        if "tick" not in water_methods:
+            problems.append("NpcWater317 has no tick entry point")
+        if water_mixin_info is None:
+            problems.append("the water tick is not attached to the NPC (%s)" % WATER_MIXIN)
+        else:
+            if "settledlands$waterTick" not in {
+                    water_mixin_info["cp"][ni][1]
+                    for _a, ni, _d, _x in water_mixin_info["methods"]}:
+                problems.append("the water mixin does not call the water tick")
+        if config is None or WATER_MIXIN not in config.get("mixins", []):
+            problems.append("%s is not in the common mixin list" % WATER_MIXIN)
+
     if problems:
         print("pursuit_check: FAIL  %s" % jar.name)
         for line in problems:
             print("  - " + line)
         return 1
-    print("pursuit_check: OK  %s  (body latched, speed undamped, pacing and repath sane)" % jar.name)
+    print("pursuit_check: OK  %s  (body latched, speed undamped, pacing and repath sane, water and fall guarded)" % jar.name)
     return 0
 
 
