@@ -1,0 +1,2 @@
+d28545c6966d9f103c6214610f162fcebdba90ec31ab6be03899cb0c9dbb2b10  settledlands-0.8.0-build326-point-waits.jar
+af7aa5223a95c02d1a54fe21377d4203fec1cc8545002a99a232a697d0f008bd  SettledLands-Build326-PointWaits-Source.zip

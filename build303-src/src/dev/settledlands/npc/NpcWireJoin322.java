@@ -9,8 +9,8 @@ import java.util.List;
  * Build 323: what a point does with the wires that meet it - it holds them, and it is given a
  * target once, deliberately.
  *
- * <p>Build 322 connected a wire dropped on a point straight to the node the point happened to sit
- * on, which meant a wire could travel to a node nobody picked. Now two separate steps:</p>
+ * <p>A wire dropped on a point is never connected to anything behind the author's back. Two
+ * separate steps, and only the second one writes a connection:</p>
  *
  * <ul>
  *   <li>{@link #attach} - a wire whose end was dropped on the point stops there. No connection is
@@ -53,11 +53,13 @@ public final class NpcWireJoin322 {
     public static boolean attach(NpcDialogueGraph graph, int fromId, int fromPort, int x, int y) {
         if (!canAttach(graph, fromId, fromPort, x, y)) return false;
         Node from = graph.get(fromId);
-        if (detachable(from, fromPort)) {
-            int old = oldTarget(from, fromPort);
-            // The bends of that wire belong to a wire that no longer goes there; they are dropped
-            // by the store's own prune once the link is gone.
-            if (old >= 0) graph.disconnect(fromId, old);
+        int old = oldTarget(from, fromPort);
+        if (old >= 0) {
+            // The wire moves to the point, so its old end is let go. Leaving it connected while the
+            // canvas shows the wire waiting at the point is how a wire ends up reaching a node
+            // nobody picked - the author sees a wire that stops, the dialogue sees a link.
+            if (alsoLinks(from, fromPort, old)) return false;
+            graph.disconnect(fromId, old);
         }
         NpcWirePoints321.attach(from, fromPort, x, y);
         return true;
@@ -122,12 +124,18 @@ public final class NpcWireJoin322 {
     }
 
     /**
-     * True when the old end may be released without touching a second wire: a node that also has
-     * choices, random branches or trigger links could have had any of them grabbed by the same port.
+     * True when the same node reaches {@code target} through another output as well: releasing this
+     * one would silently cut the other, so the drop is refused instead.
      */
-    private static boolean detachable(Node from, int fromPort) {
-        if (fromPort == 1) return from.falseNext >= 0;
-        if (from.type == NpcDialogueGraph.RANDOM) return true;
-        return from.next >= 0 && from.choices.isEmpty() && from.triggers.isEmpty();
+    private static boolean alsoLinks(Node from, int fromPort, int target) {
+        if (fromPort != 0 && from.next == target) return true;
+        if (fromPort != 1 && from.falseNext == target) return true;
+        if (from.varInputNode == target) return true;
+        if (from.choices.contains(target)) return true;
+        if (from.triggers.contains(target)) return true;
+        for (int i = 0; i < from.randomBranches.size(); i++) {
+            if (i != fromPort && from.randomBranches.get(i) == target) return true;
+        }
+        return false;
     }
 }

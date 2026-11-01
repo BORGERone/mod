@@ -425,8 +425,10 @@ public final class NpcWirePoints321 {
                 unused -> new ArrayList<>());
         int sx = snap(x);
         int sy = snap(y);
+        // Two dots on the same wire a few pixels apart look like one dot and cannot be told apart
+        // by a click, so a second point is never made next to an existing one.
         for (int[] point : points) {
-            if (point[0] == sx && point[1] == sy) return;
+            if (Math.abs(point[0] - sx) <= GRID && Math.abs(point[1] - sy) <= GRID) return;
         }
         points.add(Math.max(0, Math.min(index, points.size())), new int[] { sx, sy });
         write(from, data);
@@ -451,7 +453,10 @@ public final class NpcWirePoints321 {
             if (size == 0) continue;
             if (hang[1 + (size - 1) * 2] != endX || hang[2 + (size - 1) * 2] != endY) continue;
             for (int k = 0; k < size; k++) {
-                if (hang[1 + k * 2] == sx && hang[2 + k * 2] == sy) return false;
+                if (Math.abs(hang[1 + k * 2] - sx) <= GRID
+                        && Math.abs(hang[2 + k * 2] - sy) <= GRID) {
+                    return false;
+                }
             }
             int at = Math.max(0, Math.min(index, size));
             int[] grown = new int[hang.length + 2];
@@ -482,6 +487,15 @@ public final class NpcWirePoints321 {
                 return;
             }
         }
+        // The wire cannot also be routed through that very spot: it ends here now.
+        List<String> emptied = new ArrayList<>();
+        for (Map.Entry<String, List<int[]>> entry : data.bends.entrySet()) {
+            if (keyPort(entry.getKey()) != fromPort) continue;
+            List<int[]> points = entry.getValue();
+            points.removeIf(point -> point[0] == sx && point[1] == sy);
+            if (points.isEmpty()) emptied.add(entry.getKey());
+        }
+        for (String key : emptied) data.bends.remove(key);
         data.hangs.add(new int[] { fromPort, sx, sy });
         write(from, data);
     }

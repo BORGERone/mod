@@ -291,6 +291,88 @@ public final class NpcWirePointsUi321 {
         return best;
     }
 
+    /**
+     * True when the cursor is really on the dot: the radius here is the dot plus a couple of
+     * pixels, not the forgiving grab radius. Everything outside it is wire, not point, so a click
+     * next to a point makes another point instead of deleting the one that is there.
+     */
+    public static boolean onDot(NpcDialogueGraphScreen screen, NpcDialogueGraph graph, int[] point,
+            double mouseX, double mouseY) {
+        NpcGraphCanvas canvas = screen.settledlands$canvas();
+        if (canvas == null || point == null) return false;
+        double radius = Math.max(6.0, 3.5 * canvas.zoom + 3.0);
+        double dx = mouseX - canvas.screenX(point[0]);
+        double dy = mouseY - canvas.screenY(point[1]);
+        return dx * dx + dy * dy <= radius * radius;
+    }
+
+    /** How soon a second press counts as a double click. */
+    public static final long DOUBLE_MS = 350L;
+
+    /** How far the second press may land from the first. */
+    public static final double DOUBLE_SLOP = 6.0;
+
+    /**
+     * True when this press is the second one of a double click.
+     *
+     * <p>{@code dragged} is what makes it honest: if the press before this one turned into a drag -
+     * the author moved a point or pulled a wire - then the gesture was over, and the next press is
+     * a new gesture. Without that, moving a point and pressing it again a moment later landed as
+     * "double click", which made a copy of the point instead of picking it up.</p>
+     */
+    public static boolean doubleClick(long lastClick, long now, double dx, double dy,
+            boolean dragged) {
+        if (dragged || lastClick <= 0L) return false;
+        return now - lastClick <= DOUBLE_MS && Math.abs(dx) <= DOUBLE_SLOP
+                && Math.abs(dy) <= DOUBLE_SLOP;
+    }
+
+    // -- gesture decision ----------------------------------------------------
+
+    /** Nothing happens here; the click goes on to the screen's own handler. */
+    public static final int ACT_NONE = 0;
+    /** A wire starts being pulled out of the point's port. */
+    public static final int ACT_PULL = 1;
+    /** The point under the cursor goes away. */
+    public static final int ACT_REMOVE = 2;
+    /** A new point is put on the wire under the cursor. */
+    public static final int ACT_ADD = 3;
+    /** The point under the cursor starts being dragged. */
+    public static final int ACT_GRAB = 4;
+
+    /**
+     * What a press on the graph means. All of the precedence lives here, in one place, so the
+     * order can be checked without a game: the screen's mixin only carries the answer out.
+     *
+     * <p>The order is the whole point of build 326. A double click removes a point only when the
+     * cursor is on the dot itself ({@code onDot}); anywhere else on a wire it makes a new point,
+     * even when another point stands a few pixels away. Reading "near a point" as "on the point"
+     * is what made the segment that leads into a point refuse to take one.
+     *
+     * @param again     second press of a double click
+     * @param button    0 left, 1 right
+     * @param hasPoint  a point inside the forgiving grab radius
+     * @param onDot     the cursor is on that point's dot, not merely near it
+     * @param hasPort   a point port under the cursor
+     * @param portFree  that port belongs to the point itself, not being the dot's inner circle
+     * @param hasWire   a wire (carrying or waiting) runs under the cursor
+     */
+    public static int decide(boolean again, int button, boolean hasPoint, boolean onDot,
+            boolean hasPort, boolean portFree, boolean hasWire) {
+        if (button == 1) return hasPoint || hasPort ? ACT_REMOVE : ACT_NONE;   // right click
+        if (button != 0) return ACT_NONE;
+
+        if (!again) {
+            if (hasPort && portFree) return ACT_PULL;   // pull needs a deliberate single press
+            if (hasPoint) return ACT_GRAB;
+            return ACT_NONE;
+        }
+        if (onDot) return ACT_REMOVE;                   // only the dot itself means "remove"
+        if (hasWire) return ACT_ADD;                    // the wire wins over a nearby point
+        if (hasPoint) return ACT_REMOVE;
+        return ACT_NONE;
+    }
+
     /** True when the cursor is on the port of this point rather than on the dot itself. */
     public static boolean overPort(NpcDialogueGraphScreen screen, NpcDialogueGraph graph,
             int[] point, double mouseX, double mouseY) {

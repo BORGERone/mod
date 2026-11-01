@@ -212,6 +212,51 @@ public final class WirePointsRoundTrip {
         NpcWirePoints321.removePoint(cut, 40, 40);
         check$(NpcWirePoints321.hangs(tail).isEmpty(), "the waiting wire outlived its last point");
 
+
+        // -- a second point is never made on top of the first one --------------------
+        NpcDialogueGraph snug = new NpcDialogueGraph();
+        Node snugFrom = snug.add(NpcDialogueGraph.LINE, 0, 0);
+        Node snugTo = snug.add(NpcDialogueGraph.LINE, 400, 0);
+        snugFrom.next = snugTo.id;
+        NpcWirePoints321.addBend(snugFrom, 0, snugTo.id, 112, 48);
+        NpcWirePoints321.addBend(snugFrom, 0, snugTo.id, 116, 52);
+        check$(NpcWirePoints321.bends(snugFrom, 0, snugTo.id).size() == 1,
+                "a second point was made on top of the first one");
+        NpcWirePoints321.addBend(snugFrom, 0, snugTo.id, 160, 48);
+        check$(NpcWirePoints321.bends(snugFrom, 0, snugTo.id).size() == 2,
+                "a point well clear of the first one was refused");
+
+        // -- a wire that stops at a point stops being routed through it --------------
+        NpcDialogueGraph both = new NpcDialogueGraph();
+        Node bothFrom = both.add(NpcDialogueGraph.LINE, 0, 0);
+        Node bothTo = both.add(NpcDialogueGraph.LINE, 400, 0);
+        Node bothOther = both.add(NpcDialogueGraph.LINE, 0, 200);
+        bothFrom.next = bothTo.id;
+        bothOther.next = bothTo.id;
+        NpcWirePoints321.addBend(bothFrom, 0, bothTo.id, 96, 96);
+        NpcWirePoints321.addBend(bothOther, 0, bothTo.id, 96, 96);
+        check$(NpcWireJoin322.attach(both, bothOther.id, 0, 96, 96),
+                "a wire was not stopped at the point");
+        check$(bothOther.next == -1, "the stopped wire kept its old target");
+        check$(NpcWirePoints321.bends(bothOther, 0, bothTo.id).isEmpty(),
+                "a wire is both routed through the point and stopped at it");
+        check$(NpcWirePoints321.hangs(bothOther).size() == 1,
+                "the stopped wire does not wait at the point");
+
+        // -- a link another output of the same node also uses is left alone ----------
+        NpcDialogueGraph shared = new NpcDialogueGraph();
+        Node sharedFrom = shared.add(NpcDialogueGraph.LINE, 0, 0);
+        Node sharedTo = shared.add(NpcDialogueGraph.LINE, 400, 0);
+        sharedFrom.next = sharedTo.id;
+        sharedFrom.choices.add(sharedTo.id);
+        NpcWirePoints321.addBend(sharedFrom, 0, sharedTo.id, 200, 100);
+        check$(!NpcWireJoin322.attach(shared, sharedFrom.id, 0, 200, 100),
+                "a link shared by two outputs was cut anyway");
+        check$(sharedFrom.next == sharedTo.id && sharedFrom.choices.contains(sharedTo.id),
+                "the link shared by two outputs was damaged");
+        check$(NpcWirePoints321.hangs(sharedFrom).isEmpty(),
+                "a refused drop still left the wire waiting");
+
         finish();
     }
 
