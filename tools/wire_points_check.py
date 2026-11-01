@@ -189,6 +189,13 @@ def run(jar):
                                 % needle)
         if b"settledlands$pull" not in mixin_bytes:
             problems.append("the screen hook has no pull state")
+        # Build 325: a run of points, and a point made on a waiting wire.
+        if not any("NpcWirePoints321.addRoutePoint" in r for r in mixin_refs):
+            problems.append("a point cannot be made on a wire that waits at a point")
+        if b"addRoutePoint" not in z.read(MODEL):
+            problems.append("the store cannot grow the run of a waiting wire")
+        if b"linkDistance" not in ui_bytes:
+            problems.append("the wire hit test does not follow the drawn route")
 
         reads = node_field_reads(model)
         if "animBone" not in reads or "mobilityGroupId" not in reads:

@@ -2,6 +2,7 @@ import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
 import dev.settledlands.npc.NpcWireJoin322;
 import dev.settledlands.npc.NpcWirePoints321;
+import java.util.List;
 
 /**
  * Headless test for Build 323: a point holds wires, and only an aim connects them.
@@ -147,6 +148,69 @@ public final class WirePointsRoundTrip {
                 "aiming a point at one of its own wires should leave that wire alone");
         check$(one.next == three.id, "the carrying wire was not sent to the target");
         check$(three.next == -1, "a node was wired to itself");
+
+        // -- a run of points: node - point - point - point - node -------------------
+        NpcDialogueGraph chain = new NpcDialogueGraph();
+        Node from = chain.add(NpcDialogueGraph.LINE, 0, 0);
+        Node into = chain.add(NpcDialogueGraph.LINE, 400, 0);
+        from.next = into.id;
+        NpcWirePoints321.addBend(from, 0, into.id, 96, 40, 0);
+        NpcWirePoints321.addBend(from, 0, into.id, 296, 40, 1);
+        List<int[]> run = NpcWirePoints321.bends(from, 0, into.id);
+        check$(run.size() == 2, "two points on one wire did not land");
+        check$(run.get(0)[0] == 96 && run.get(1)[0] == 296, "the points lost their order");
+        // Clicking the first segment puts the new point before the second one.
+        NpcWirePoints321.addBend(from, 0, into.id, 200, 40, 1);
+        run = NpcWirePoints321.bends(from, 0, into.id);
+        check$(run.size() == 3 && run.get(1)[0] == 200 && run.get(2)[0] == 296,
+                "a point was not inserted where the wire was clicked");
+        check$(from.next == into.id, "a run of points changed the connection");
+
+        // -- a run of points on a waiting wire -------------------------------------
+        NpcDialogueGraph waits = new NpcDialogueGraph();
+        Node source = waits.add(NpcDialogueGraph.LINE, 0, 0);
+        waits.add(NpcDialogueGraph.LINE, 400, 0);
+        NpcWirePoints321.attach(source, 0, 0, 64);
+        check$(NpcWirePoints321.hangsAt(waits, 0, 64).size() == 1,
+                "the waiting wire is not found at its point");
+        check$(NpcWirePoints321.addRoutePoint(source, 0, 0, 64, -64, 64, 0),
+                "a point on a waiting wire was refused");
+        int[] raw = NpcWirePoints321.hangs(source).get(0);
+        check$(NpcWirePoints321.routeSize(raw) == 2, "the run of the waiting wire is wrong");
+        check$(NpcWirePoints321.routeX(raw, 0) == -64 && NpcWirePoints321.routeY(raw, 0) == 64,
+                "the new point is not where it was clicked");
+        check$(NpcWirePoints321.routeX(raw, 1) == 0 && NpcWirePoints321.routeY(raw, 1) == 64,
+                "the point the wire stops at moved");
+        check$(source.animBone != null && source.animBone.equals("SLP2|h0@-64,64 0,64"),
+                "unexpected text for a run of waiting points: " + source.animBone);
+        // Both points of the run are points on the canvas.
+        check$(NpcWirePoints321.hasPoint(waits, -64, 64) && NpcWirePoints321.hasPoint(waits, 0, 64),
+                "the points of a waiting run are not on the canvas");
+        // Moving the inner one moves only it.
+        NpcWirePoints321.movePoint(waits, -64, 64, -72, 56);
+        raw = NpcWirePoints321.hangs(source).get(0);
+        check$(NpcWirePoints321.routeX(raw, 0) == -72
+                        && NpcWirePoints321.routeX(raw, 1) == 0,
+                "moving one point of a run moved the wrong one");
+
+        // Aiming the point the wire stops at turns the whole run into a real wire.
+        Node destination = waits.add(NpcDialogueGraph.LINE, 800, 0);
+        check$(NpcWireJoin322.aim(waits, 0, 64, destination.id) == 1, "the waiting wire was not aimed");
+        check$(source.next == destination.id, "aiming did not connect the waiting wire");
+        List<int[]> promoted = NpcWirePoints321.bends(source, 0, destination.id);
+        check$(promoted.size() == 2, "the run was lost when the wire became real: " + promoted.size());
+        check$(NpcWirePoints321.hangs(source).isEmpty(), "the waiting wire is still waiting");
+
+        // Removing one point of a run keeps the others; removing the last one lets the wire go.
+        NpcDialogueGraph cut = new NpcDialogueGraph();
+        Node tail = cut.add(NpcDialogueGraph.LINE, 0, 0);
+        NpcWirePoints321.attach(tail, 0, 40, 40);
+        NpcWirePoints321.addRoutePoint(tail, 0, 40, 40, -40, 40, 0);
+        NpcWirePoints321.removePoint(cut, -40, 40);
+        raw = NpcWirePoints321.hangs(tail).get(0);
+        check$(NpcWirePoints321.routeSize(raw) == 1, "an inner point was not removed from the run");
+        NpcWirePoints321.removePoint(cut, 40, 40);
+        check$(NpcWirePoints321.hangs(tail).isEmpty(), "the waiting wire outlived its last point");
 
         finish();
     }

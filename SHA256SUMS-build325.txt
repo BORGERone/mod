@@ -1,0 +1,2 @@
+1c8728514564804f88603feb1be6bffd6961255e27f6a90bf2cd388732c0912c  settledlands-0.8.0-build325-point-chains.jar
+b2e6f7c3cd2d7b4846cff3e337815a0b523915e29f4394391d067eb3561fdf4f  SettledLands-Build325-PointChains-Source.zip

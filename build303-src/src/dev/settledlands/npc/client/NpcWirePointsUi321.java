@@ -45,16 +45,31 @@ public final class NpcWirePointsUi321 {
 
     private static final int COL_AIM = 0xFFFFFFFF;
 
-    /** The wire a point sits on or the wire under the cursor. */
+    /**
+     * A wire under the cursor: either a real one (it has a target) or one that waits at a point
+     * (it has none). {@code index} is where a new point goes in that wire's run, so the points of a
+     * wire stay in the order they are clicked.
+     */
     public static final class Wire {
         public final Node from;
         public final int fromPort;
         public final int toId;
+        public final int endX;
+        public final int endY;
+        public final int index;
 
-        public Wire(Node from, int fromPort, int toId) {
+        public Wire(Node from, int fromPort, int toId, int endX, int endY, int index) {
             this.from = from;
             this.fromPort = fromPort;
             this.toId = toId;
+            this.endX = endX;
+            this.endY = endY;
+            this.index = index;
+        }
+
+        /** A wire that stops at a point and carries no connection. */
+        public boolean waiting() {
+            return toId < 0;
         }
     }
 
@@ -93,7 +108,14 @@ public final class NpcWirePointsUi321 {
         return best;
     }
 
-    /** The wire nearest the cursor, or null. Nearest, not first: wires cross. */
+    /**
+     * The wire nearest the cursor, or null.
+     *
+     * <p>Nearest, not first, and along the route the cable is actually drawn on: a wire that runs
+     * through points is nowhere near the straight line between its ports, so hit-testing the stock
+     * curve would make the segments that lead to a point impossible to click - which is exactly
+     * where the author wants to put the next point.</p>
+     */
     public static Wire wireAt(NpcDialogueGraphScreen screen, NpcDialogueGraph graph,
             double mouseX, double mouseY) {
         NpcGraphCanvas canvas = screen.settledlands$canvas();
@@ -104,58 +126,111 @@ public final class NpcWirePointsUi321 {
         if (canvas.hitPort(graph, mouseX, mouseY, false) >= 0) return null;
 
         double limit = Math.max(3.0, Math.min(6.5, 4.0 * canvas.zoom + 1.5));
-        double bestSq = limit * limit;
-        Wire best = null;
+        double best = limit * limit;
+        Wire found = null;
+        int[] segment = new int[1];
         for (Node node : graph.nodes.values()) {
             if (node.type == NpcDialogueGraph.IF && node.falseNext >= 0) {
-                double d = distance(canvas, graph, node, 1, node.falseNext, mouseX, mouseY);
-                if (d <= bestSq) {
-                    bestSq = d;
-                    best = new Wire(node, 1, node.falseNext);
+                double dist = linkDistance(canvas, graph, node, 1, node.falseNext, mouseX, mouseY,
+                        segment);
+                if (dist <= best) {
+                    best = dist;
+                    found = new Wire(node, 1, node.falseNext, 0, 0, segment[0]);
                 }
             }
             if (node.next >= 0) {
-                double d = distance(canvas, graph, node, 0, node.next, mouseX, mouseY);
-                if (d <= bestSq) {
-                    bestSq = d;
-                    best = new Wire(node, 0, node.next);
+                double dist = linkDistance(canvas, graph, node, 0, node.next, mouseX, mouseY,
+                        segment);
+                if (dist <= best) {
+                    best = dist;
+                    found = new Wire(node, 0, node.next, 0, 0, segment[0]);
                 }
             }
             for (int to : node.choices) {
-                double d = distance(canvas, graph, node, 0, to, mouseX, mouseY);
-                if (d <= bestSq) {
-                    bestSq = d;
-                    best = new Wire(node, 0, to);
+                double dist = linkDistance(canvas, graph, node, 0, to, mouseX, mouseY, segment);
+                if (dist <= best) {
+                    best = dist;
+                    found = new Wire(node, 0, to, 0, 0, segment[0]);
                 }
             }
             for (int to : node.randomBranches) {
                 if (to < 0) continue;
-                double d = distance(canvas, graph, node, 0, to, mouseX, mouseY);
-                if (d <= bestSq) {
-                    bestSq = d;
-                    best = new Wire(node, 0, to);
+                double dist = linkDistance(canvas, graph, node, 0, to, mouseX, mouseY, segment);
+                if (dist <= best) {
+                    best = dist;
+                    found = new Wire(node, 0, to, 0, 0, segment[0]);
                 }
             }
             for (int to : node.triggers) {
-                double d = distance(canvas, graph, node, 0, to, mouseX, mouseY);
-                if (d <= bestSq) {
-                    bestSq = d;
-                    best = new Wire(node, 0, to);
+                double dist = linkDistance(canvas, graph, node, 0, to, mouseX, mouseY, segment);
+                if (dist <= best) {
+                    best = dist;
+                    found = new Wire(node, 0, to, 0, 0, segment[0]);
                 }
             }
+            // Wires that wait at a point have no link at all, so they are tested here.
+            for (int[] hang : NpcWirePoints321.hangs(node)) {
+                int size = NpcWirePoints321.routeSize(hang);
+                double px = canvas.portScreenX(node, true);
+                double py = canvas.portScreenY(node, true, hang[0]);
+                for (int i = 0; i < size; i++) {
+                    double qx = canvas.screenX(NpcWirePoints321.routeX(hang, i));
+                    double qy = canvas.screenY(NpcWirePoints321.routeY(hang, i));
+                    double dist = segmentDistance(canvas, px, py, qx, qy, mouseX, mouseY);
+                    if (dist <= best) {
+                        best = dist;
+                        found = new Wire(node, hang[0], -1,
+                                NpcWirePoints321.routeX(hang, size - 1),
+                                NpcWirePoints321.routeY(hang, size - 1), i);
+                    }
+                    px = qx;
+                    py = qy;
+                }
+            }
+        }
+        return found;
+    }
+
+    /**
+     * Distance from the cursor to one link, measured along its own points, and the segment it was
+     * nearest to (which is where a new point would be inserted).
+     */
+    public static double linkDistance(NpcGraphCanvas canvas, NpcDialogueGraph graph, Node from,
+            int fromPort, int toId, double mouseX, double mouseY, int[] segment) {
+        Node to = graph.get(toId);
+        if (to == null || to == from) return Double.MAX_VALUE;
+        double x = canvas.portScreenX(from, true);
+        double y = canvas.portScreenY(from, true, fromPort);
+        double best = Double.MAX_VALUE;
+        int index = 0;
+        for (int[] point : NpcWirePoints321.bends(from, fromPort, toId)) {
+            double qx = canvas.screenX(point[0]);
+            double qy = canvas.screenY(point[1]);
+            double dist = segmentDistance(canvas, x, y, qx, qy, mouseX, mouseY);
+            if (dist < best) {
+                best = dist;
+                segment[0] = index;
+            }
+            index++;
+            x = qx;
+            y = qy;
+        }
+        double dist = segmentDistance(canvas, x, y, canvas.portScreenX(to, false),
+                canvas.portScreenY(to, false, 0), mouseX, mouseY);
+        if (dist < best) {
+            best = dist;
+            segment[0] = index;
         }
         return best;
     }
 
-    /** Squared distance from the cursor to the curve the screen would draw for this wire. */
-    private static double distance(NpcGraphCanvas canvas, NpcDialogueGraph graph, Node from,
-            int fromPort, int toId, double mx, double my) {
-        Node to = graph.get(toId);
-        if (to == null || to == from) return Double.MAX_VALUE;
-        double x1 = canvas.portScreenX(from, true);
-        double y1 = canvas.portScreenY(from, true, fromPort);
-        double x2 = canvas.portScreenX(to, false);
-        double y2 = canvas.portScreenY(to, false, 0);
+    /**
+     * Squared distance from the cursor to one segment of a cable, along the curve the screen draws:
+     * the same cubic {@code curve} uses, sampled in the same way, so what is clicked is what is
+     * seen.
+     */
+    public static double segmentDistance(NpcGraphCanvas canvas, double x1, double y1, double x2,
+            double y2, double mx, double my) {
         double bend = Math.max(25.0 * canvas.zoom, Math.abs(x2 - x1) * 0.45);
         double px = x1;
         double py = y1;

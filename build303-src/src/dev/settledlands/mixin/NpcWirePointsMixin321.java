@@ -219,14 +219,23 @@ public abstract class NpcWirePointsMixin321 {
         for (Node node : graph.nodes.values()) {
             List<int[]> hangs = NpcWirePoints321.hangs(node);
             if (hangs.isEmpty()) continue;
-            double x1 = canvas.portScreenX(node, true);
+            double x = canvas.portScreenX(node, true);
             for (int[] hang : hangs) {
-                double y1 = canvas.portScreenY(node, true, hang[0]);
-                double x2 = canvas.screenX(hang[1]);
-                double y2 = canvas.screenY(hang[2]);
-                if (Math.max(x1, x2) < canvas.left || Math.min(x1, x2) > canvas.right) continue;
-                if (Math.max(y1, y2) < canvas.top || Math.min(y1, y2) > canvas.bottom) continue;
-                quads += curve(buffer, matrix, x1, y1, x2, y2, color, false);
+                int size = NpcWirePoints321.routeSize(hang);
+                double y = canvas.portScreenY(node, true, hang[0]);
+                for (int i = 0; i < size; i++) {
+                    double qx = canvas.screenX(NpcWirePoints321.routeX(hang, i));
+                    double qy = canvas.screenY(NpcWirePoints321.routeY(hang, i));
+                    if (Math.max(x, qx) >= canvas.left && Math.min(x, qx) <= canvas.right
+                            && Math.max(y, qy) >= canvas.top && Math.min(y, qy) <= canvas.bottom) {
+                        // One curve per segment, exactly as a carrying wire is drawn through its
+                        // points, so a run of points looks the same either way.
+                        quads += curve(buffer, matrix, x, y, qx, qy, color, false);
+                    }
+                    x = qx;
+                    y = qy;
+                }
+                x = canvas.portScreenX(node, true);
             }
         }
 
@@ -309,7 +318,14 @@ public abstract class NpcWirePointsMixin321 {
             return;
         }
         remember();
-        NpcWirePoints321.addBend(wire.from, wire.fromPort, wire.toId, px, py);
+        if (wire.waiting()) {
+            // A wire that stops at a point: one more point in the run it visits, in the place it
+            // was clicked, so node - point - point - point is possible.
+            NpcWirePoints321.addRoutePoint(wire.from, wire.fromPort, wire.endX, wire.endY, px, py,
+                    wire.index);
+        } else {
+            NpcWirePoints321.addBend(wire.from, wire.fromPort, wire.toId, px, py, wire.index);
+        }
         changed();
         cir.setReturnValue(true);
     }

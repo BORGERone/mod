@@ -102,7 +102,8 @@ public final class NpcWireJoin322 {
         for (Hang hang : hangs) {
             if (hang.from == null || hang.from.id == targetId) continue;
             if (!graph.connect(hang.from.id, targetId, hang.fromPort)) continue;
-            if (NpcWirePoints321.promote(hang.from, hang.fromPort, hang.x, hang.y, targetId)) {
+            if (NpcWirePoints321.promote(hang.from, hang.fromPort, hang.endX(), hang.endY(),
+                    targetId)) {
                 done++;
             }
         }
