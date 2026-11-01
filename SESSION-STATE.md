@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build306-workspace.jar` — Build 306, все 5 гейтов PASS.
-База — 305 (`settledlands-0.8.0-build305-node-library.jar`), патч `tools/patch_build306.py`.
+`settledlands-0.8.0-build307-workspace-render.jar` — Build 307, 5 гейтов + `screen_smoke` PASS.
+База — 306 (`settledlands-0.8.0-build306-workspace.jar`), патч `tools/patch_build307.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -276,7 +276,25 @@ Class-файл не содержит абсолютных смещений, по
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
 
-## Build 306 (актуально) — воркспейс нод = сам редактор
+## Build 307 (актуально) — воркспейс открывается + новый гейт
+
+306 вылетала на первом кадре воркспейса:
+`ArrayIndexOutOfBoundsException: Index 6 out of bounds for length 6` в
+`NpcWorkspace306.drawTopBar` — подпись кнопки читалась как `LABELS[action + 1]`, а в таблице 6
+записей; кнопка «Назад» (action 5) просила седьмую. Исправлено: `LABELS[action]` с зажимом в
+границы. Рядом: `addNode` зажимает координаты в `MAX_COORD`, `graph.connect(...)` в
+`mouseReleased` обёрнут в try/catch, `restore()` игнорирует битый снимок.
+
+**Новый гейт 6 — `tools/screen_smoke.py`**: прогон экрана в обычной JVM без игры.
+`build305-src/stubs` компилируются и грузятся как настоящие классы, четыре из них
+(`Minecraft`, `Font`, `Screen`, `CompoundTag`) заменяются версиями из `tools/harness`, драйвер
+`tools/harness/WorkspaceSmokeTest.java` строит граф со всеми 15 типами + все виды связей и
+дёргает экран: construct / init / resize / render ×5 / save-tag / клики / драг / рамка / пан /
+колесо / библиотека / поиск / ввод / undo / redo / delete / вкладки / создание графа / ПКМ.
+На 306 гейт падает (`FAILURES: 7`) — ровно там, где падала игра; на 307 — 37 шагов, 0 падений.
+Гейты: 466 записей / 418 классов, 44 миксина, 1389 внешних ссылок / 0 новых vs 306, verify_jar PASS.
+
+## Build 306 — воркспейс нод = сам редактор
 
 Пользователь: «взять код графа из нод, сделать его копию, скрыть там все существующие графы и
 добавить мои». Реализовано своим экраном, G&G — только слой рисования и раскладка (разрешение

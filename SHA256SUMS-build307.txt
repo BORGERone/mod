@@ -1,0 +1,2 @@
+ff0e6730442474a6c279661d73260edecd8eb9c7ab33aa918e5a0a7af99807e4  settledlands-0.8.0-build307-workspace-render.jar
+ea824297894c6d34efe9c8c52fc4fc79eed7887385832c868d5a6b82d7c4073a  SettledLands-Build307-WorkspaceRender-Source.zip

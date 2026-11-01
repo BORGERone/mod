@@ -211,7 +211,12 @@ public class NpcWorkspace306 extends Screen {
     }
 
     private void restore(CompoundTag tag) {
-        NpcDialogueGraph loaded = NpcDialogueGraph.load(tag);
+        NpcDialogueGraph loaded;
+        try {
+            loaded = NpcDialogueGraph.load(tag);
+        } catch (RuntimeException broken) {
+            return;
+        }
         if (loaded == null) return;
         graphs[tab] = loaded;
         graph = loaded;
@@ -367,7 +372,7 @@ public class NpcWorkspace306 extends Screen {
                     rect[3] - rect[1], rect[4] == 0 ? WorkspaceTheme305.ACCENT
                             : WorkspaceTheme305.ACCENT_LIGHT,
                     hover, rect[4] >= 0 && rect[4] == tab);
-            graphics.drawString(font, tr(LABELS[rect[4] + 1]), rect[0] + 5, rect[1] + 3,
+            graphics.drawString(font, tr(LABELS[Math.max(0, Math.min(LABELS.length - 1, rect[4]))]), rect[0] + 5, rect[1] + 3,
                     hover ? WorkspaceTheme305.PRIMARY_ACTION_TEXT : WorkspaceTheme305.SECONDARY,
                     false);
         }
@@ -802,7 +807,13 @@ public class NpcWorkspace306 extends Screen {
             int target = canvas.hitPort(graph, mouseX, mouseY, false);
             if (target >= 0 && target != linkFrom) {
                 remember();
-                if (graph.connect(linkFrom, target, linkPort)) {
+                boolean connected = false;
+                try {
+                    connected = graph.connect(linkFrom, target, linkPort);
+                } catch (RuntimeException refused) {
+                    connected = false;
+                }
+                if (connected) {
                     status = tr("gui.settledlands.graph.connected");
                     changed();
                 } else {
@@ -955,7 +966,9 @@ public class NpcWorkspace306 extends Screen {
         }
         remember();
         double[] at = viewCentre();
-        Node node = graph.add(type, (int) Math.round(at[0]), (int) Math.round(at[1]));
+        int x = clampCoord(at[0]);
+        int y = clampCoord(at[1]);
+        Node node = graph.add(type, x, y);
         if (node == null) {
             undo.poll();
             status = tr("gui.settledlands.graph.limit");
@@ -964,6 +977,16 @@ public class NpcWorkspace306 extends Screen {
         selected = node.id;
         multi.clear();
         changed();
+    }
+
+    /** The model only accepts coordinates inside its own limit. */
+    private static int clampCoord(double value) {
+        if (!Double.isFinite(value)) return 0;
+        long rounded = Math.round(value);
+        long limit = NpcDialogueGraph.MAX_COORD;
+        if (rounded > limit) rounded = limit;
+        if (rounded < -limit) rounded = -limit;
+        return (int) rounded;
     }
 
     private double[] viewCentre() {
