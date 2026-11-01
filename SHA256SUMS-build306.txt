@@ -1,0 +1,2 @@
+656a403480c67dc8c6861fc79e7f62986c30e7db394226af9c4b563865d27131  settledlands-0.8.0-build306-workspace.jar
+3cd3aed1eff980f35f46e11f5be4daeaafe1a71c49a2ea11be819e5eac5e0498  SettledLands-Build306-Workspace-Source.zip

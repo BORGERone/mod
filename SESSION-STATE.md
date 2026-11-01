@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build305-node-library.jar` — Build 305, все 5 гейтов PASS.
-База — 304 (`settledlands-0.8.0-build304-workspace-skin.jar`), патч `tools/patch_build305.py`.
+`settledlands-0.8.0-build306-workspace.jar` — Build 306, все 5 гейтов PASS.
+База — 305 (`settledlands-0.8.0-build305-node-library.jar`), патч `tools/patch_build306.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -276,7 +276,30 @@ Class-файл не содержит абсолютных смещений, по
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
 
-## Build 305 (актуально) — воркспейс нод + библиотека с поиском
+## Build 306 (актуально) — воркспейс нод = сам редактор
+
+Пользователь: «взять код графа из нод, сделать его копию, скрыть там все существующие графы и
+добавить мои». Реализовано своим экраном, G&G — только слой рисования и раскладка (разрешение
+авторов заявлено пользователем).
+
+- `npc/client/NpcWorkspace306 extends Screen` — владеет графом: `NpcGraphCanvas` (пан/зум/хиты),
+  карточки `WorkspaceTheme305.drawNodeFrame`, порты по `portScreenX/Y`, кабели-безье по связям
+  `next / falseNext / varInputNode / choices / triggers / randomBranches`, выбор, рамка,
+  перетаскивание (шаг 8), связь порт→порт через `graph.connect(from,to,port)`, резка
+  `graph.disconnect`, удаление, undo/redo через `graph.save()`/`NpcDialogueGraph.load`,
+  три вкладки, библиотека `NpcNodeLibrary305`, сохранение тем же `NpcNet$CfgSave`.
+- `mixin/NpcWorkspaceEntry306Mixin` — `NpcDialogueGraphScreen.open(...)` HEAD-cancellable →
+  `new NpcWorkspace306(...)`. Старый экран доступен кнопкой «Старый редактор» (поля редактируются
+  там), поэтому ни один инспектор не потерян.
+- lang: `gui.settledlands.workspace.{title,legacy,new_graph}`.
+- Новые стабы (только для компиляции): `Minecraft`, `CustomPacketPayload`, расширенный `Screen`,
+  `CompoundTag` с настоящей сигнатурой `Tag put(String,Tag)` (гейт фазы D поймал рукописный
+  `put(String,Object)` — такой сигнатуры в игре нет).
+
+Ещё нет: инспектор полей внутри воркспейса, меню добавления по ПКМ на холсте.
+Гейты: 466 записей / 418 классов, 44 миксина, 1389 внешних ссылок / 0 новых vs 305, verify_jar PASS.
+
+## Build 305 — воркспейс нод + библиотека с поиском
 
 Пользователь: 304 — «ты просто перерисовал внешний вид», нужен **код системы нод**. LICENCE G&G
 (`Riieno/Gadgets-And-Gizmos`) — All Rights Reserved; пользователь заявил, что разрешение авторов
