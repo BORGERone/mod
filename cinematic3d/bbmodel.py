@@ -107,7 +107,12 @@ class Model:
             if src.startswith("data:image"):
                 raw = base64.b64decode(src.split(",", 1)[1])
                 img = Image.open(io.BytesIO(raw)).convert("RGBA")
-                self.textures.append(np.asarray(img, np.float32) / 255.0)
+                arr = np.asarray(img, np.float32) / 255.0
+                # Blockbench textures are authored dark; lift them so the
+                # sunlit sand does not swallow the model.
+                rgb = np.clip(arr[..., :3] * 1.30, 0, 1) ** 0.98
+                arr = np.dstack([rgb, arr[..., 3]])
+                self.textures.append(arr.astype(np.float32))
             else:
                 self.textures.append(np.ones((64, 64, 4), np.float32))
         self.roots = []

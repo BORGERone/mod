@@ -178,8 +178,8 @@ class Stage:
         quads = []
         for placed, tex in items:
             tex = tex[0] if isinstance(tex, (list, tuple)) else tex
-            if tex.ndim == 2:
-                tex = np.dstack([tex, np.ones(tex.shape[:2], np.float32)])
+            if tex.ndim == 2 or tex.shape[2] == 3:
+                tex = np.dstack([tex[..., :3], np.ones(tex.shape[:2], np.float32)])
             for cube, M in placed:
                 R, Tr = M[:3, :3], M[:3, 3]
                 for name, quad, uvs, nrm in _faces(cube):
@@ -212,9 +212,13 @@ class Stage:
             th, tw = tex.shape[:2]
             if a1 < 0 or b1 < 0 or a2 > tw or b2 > th:
                 continue
-            patch = tex[b1:b2, a1:a2].astype(np.float32)
-            a = patch[..., 3:4]
-            patch = patch[..., :3] * a + np.array([0.80, 0.74, 0.60], np.float32) * (1 - a)
+            region = tex[b1:b2, a1:a2].astype(np.float32)
+            a = region[..., 3:4]
+            # a fully transparent UV region means the face is not textured at
+            # all (hidden geometry) - do not draw it
+            if float((a > 0.5).mean()) < 0.06:
+                continue
+            patch = region[..., :3]
             if u2 < u1:
                 patch = patch[:, ::-1]
             if v2 < v1:
@@ -228,16 +232,18 @@ class Stage:
             Mtex = cv2.getPerspectiveTransform(src, dst)
             warp = cv2.warpPerspective(patch, Mtex, (W, H), flags=cv2.INTER_LINEAR,
                                        borderMode=cv2.BORDER_REPLICATE)
-            alpha = cv2.warpPerspective(np.ascontiguousarray(tex[b1:b2, a1:a2, 3]),
-                                        Mtex, (W, H), flags=cv2.INTER_LINEAR,
-                                        borderMode=cv2.BORDER_REPLICATE)
-            if u2 < u1:
-                alpha = alpha[:, ::-1]
-            if v2 < v1:
-                alpha = alpha[::-1, :]
             m = np.zeros((H, W), np.float32)
             cv2.fillConvexPoly(m, dst.astype(np.int32), 1.0, lineType=cv2.LINE_AA)
-            m *= (alpha > 0.5)
+            if float((a > 0.5).mean()) < 0.995:   # partially transparent overlay
+                alpha = cv2.warpPerspective(np.ascontiguousarray(a), Mtex, (W, H),
+                                            flags=cv2.INTER_LINEAR,
+                                            borderMode=cv2.BORDER_REPLICATE)
+                if u2 < u1:
+                    alpha = alpha[:, ::-1]
+                if v2 < v1:
+                    alpha = alpha[::-1, :]
+                m *= (alpha > 0.45)
+
 
             # lighting
             n = wn / (np.linalg.norm(wn) + 1e-9)

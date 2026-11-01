@@ -95,31 +95,28 @@ def placed(cubes, pos, yaw=0.0):
 
 # ------------------------------------------------------------------ pieces --
 def house(w=3.4, h=2.6, d=3.0, seed=0):
-    """A beach house with a gable roof and a door/window hint."""
+    """A small beach house: plaster walls, timber band, stepped pitched roof."""
     rnd = np.random.RandomState(seed)
     W, H, D = w * 16, h * 16, d * 16
+    body_h = H * 0.70
     out = [
-        cube((-W / 2, 0, -D / 2), (W / 2, H * 0.72, D / 2), "wall"),
-        cube((-W / 2 - 2, H * 0.72 - 6, -D / 2 - 2), (W / 2 + 2, H * 0.72, D / 2 + 2), "wood_d"),
+        cube((-W / 2, 0, -D / 2), (W / 2, body_h, D / 2), "wall"),
+        cube((-W / 2 - 1.5, body_h - 3, -D / 2 - 1.5), (W / 2 + 1.5, body_h, D / 2 + 1.5), "wood_d"),
     ]
-    # gable ends as stacked shrinking slabs
+    # roof as a stack of shrinking slabs -> reads as a pitched roof far away
     steps = 5
     for i in range(steps):
-        f = (i + 1) / steps
-        y = H * 0.72 + f * H * 0.30
-        out.append(cube((-W / 2 + f * W * 0.5, y, -D / 2 - 1),
-                        (W / 2 - f * W * 0.35, y + H * 0.07, D / 2 + 1), "plaster"))
-    # roof slopes
-    pitch = 34.0
-    lift = H * 0.72 + 3
-    for sign in (-1, 1):
-        out.append(cube((-W / 2 - 4, lift - 2, sign * D * 0.02), (W / 2 + 4, lift + 3, sign * (D / 2 + 8)),
-                        "roof", origin=(0, lift + 2, 0), rot=(sign * pitch, 0, 0)))
-    # door + two windows on the front face
-    out.append(cube((-7, 0, D / 2), (7, 22, D / 2 + 1), "wood"))
+        f = i / steps
+        y0 = body_h + f * H * 0.30
+        y1 = y0 + H * 0.30 / steps + 0.5
+        inset = f * W * 0.34
+        out.append(cube((-W / 2 - 5 + inset, y0, -D / 2 - 5 + inset * D / W),
+                        (W / 2 + 5 - inset, y1, D / 2 + 5 - inset * D / W), "roof"))
+    # door + windows on the front face
+    out.append(cube((-7, 0, D / 2 - 0.6), (7, body_h * 0.86, D / 2 + 0.6), "wood"))
     for sx in (-W / 3.4, W / 3.4):
-        out.append(cube((sx - 5, H * 0.34, D / 2), (sx + 5, H * 0.34 + 11, D / 2 + 1), "grey"))
-        out.append(cube((sx - 1, H * 0.34 - 1, D / 2 + 1), (sx + 1, H * 0.34 + 12, D / 2 + 1.4), "wood_d"))
+        out.append(cube((sx - 5, body_h * 0.40, D / 2 - 0.6),
+                        (sx + 5, body_h * 0.40 + body_h * 0.44, D / 2 + 0.6), "grey"))
     return out
 
 
@@ -128,18 +125,23 @@ def palm(height=3.4, seed=0):
     H = height * 16
     out = []
     seg = 6
-    lean = rnd.uniform(-1, 1) * 24
+    lean = rnd.uniform(-1, 1) * 20
     for i in range(seg):
         y0, y1 = H * i / seg, H * (i + 1) / seg
         x0 = lean * (i / seg) ** 2
         x1 = lean * ((i + 1) / seg) ** 2
-        out.append(cube((x0 - 2.2, y0, -2.2), (x1 + 2.2, y1, 2.2), "wood_d"))
+        out.append(cube((x0 - 2.0, y0, -2.0), (x1 + 2.0, y1, 2.0), "wood_d"))
     top_x, top_y = lean, H
+    out.append(cube((top_x - 2.5, top_y - 3, -2.5), (top_x + 2.5, top_y, 2.5), "leaf_d"))
     for k in range(7):
-        a = k * (360 / 7)
-        out.append(cube((top_x - 1.5, top_y - 1.5, -1.5), (top_x + 1.5, top_y + 1.5, 1.5), "leaf_d"))
-        out.append(cube((top_x - 20, top_y - 1, -5), (top_x + 20, top_y + 1, 5), "leaf",
-                        origin=(top_x, top_y, 0), rot=(0, a, 12)))
+        a = np.deg2rad(k * (360 / 7) + rnd.uniform(-12, 12))
+        dx, dz = np.cos(a), np.sin(a)
+        for j in range(1, 5):
+            r = j * 4.2
+            drop = 0.8 + 2.6 * (j ** 1.5)
+            cx, cz = top_x + dx * r, dz * r
+            out.append(cube((cx - 2.6, top_y - drop - 1.4, cz - 2.6),
+                            (cx + 2.6, top_y - drop + 1.4, cz + 2.6), "leaf" if j % 2 else "leaf_d"))
     return out
 
 
@@ -176,36 +178,37 @@ def ridge(seed=0):
     rnd = np.random.RandomState(seed)
     out = []
     for i in range(10):
-        x = -24 + i * 5.4
-        h = rnd.uniform(1.6, 3.6)
-        z = -34 + 2.4 * np.sin(i * 0.7)
-        out.append(cube((x, 0, z), (x + 7.0, h * 0.7, z + 8.0), "leaf_d"))
-        out.append(cube((x + 1.0, 0, z + 1.4), (x + 6.0, h, z + 6.8), "leaf"))
+        x = (-30 + i * 6.0) * 16
+        h = rnd.uniform(1.6, 3.6) * 16
+        z = (-44 + 2.4 * np.sin(i * 0.7)) * 16
+        out.append(cube((x, 0, z), (x + 7.0 * 16, h * 0.7, z + 8.0 * 16), "leaf_d"))
+        out.append(cube((x + 1.0 * 16, 0, z + 1.4 * 16),
+                        (x + 6.0 * 16, h, z + 6.8 * 16), "leaf"))
     return out
 
 
 def jetty(seed=0):
     rnd = np.random.RandomState(seed)
     out = []
-    for i in range(12):
-        x = -8.0 + i * 1.6
-        if rnd.rand() < 0.25:
+    for i in range(14):
+        x = (-9.0 + i * 1.5) * 16
+        if rnd.rand() < 0.2:
             continue
-        h = rnd.uniform(0.35, 0.7)
-        out.append(cube((x, 0, 0), (x + 3.2, h * 16, 3.2), "wood_d"))
+        h = rnd.uniform(0.4, 0.8) * 16
+        out.append(cube((x, 0, 0), (x + 3.0, h, 3.0), "wood_d"))
     return out
 
 
 def build_scene():
     S = 1 / 16.0
     items = []
-    layout = [(-9.6, -16.5, 3.4, 2.7, 3.0), (-4.4, -19.6, 4.2, 3.1, 3.4),
-              (0.8, -17.2, 3.0, 2.4, 2.8), (6.0, -20.4, 3.8, 2.9, 3.2),
-              (10.9, -16.8, 3.2, 2.5, 3.0), (15.6, -19.8, 4.0, 3.0, 3.3),
-              (-15.2, -22.4, 4.6, 3.2, 3.6)]
+    layout = [(-14.5, -30.0, 3.2, 2.5, 2.9), (-9.0, -33.5, 3.8, 2.8, 3.2),
+              (-4.0, -31.0, 2.9, 2.3, 2.7), (1.0, -34.5, 3.4, 2.6, 3.0),
+              (6.2, -30.5, 3.0, 2.4, 2.8), (11.6, -33.0, 3.6, 2.7, 3.1),
+              (-20.0, -35.0, 4.2, 3.0, 3.4), (17.5, -29.0, 3.4, 2.6, 3.0)]
     for i, (x, z, sx, sy, sz) in enumerate(layout):
         items += placed(house(sx, sy, sz, seed=i), (x, 0, z), yaw=np.random.RandomState(i).uniform(-16, 16))
-    for i, (x, z) in enumerate([(-7.6, -13.6), (9.0, -14.8), (-1.2, -24.0)]):
+    for i, (x, z) in enumerate([(-11.5, -26.5), (8.2, -26.0), (-2.0, -36.0), (14.0, -34.0)]):
         items += placed(palm(3.2 + 0.4 * i, seed=10 + i), (x, 0, z))
     items += placed(ridge(), (0, 0, 0))
     for i, (x, z, s) in enumerate([(-3.8, 2.6, 0.45), (3.2, -2.0, 0.35), (-2.6, 5.6, 0.28),
