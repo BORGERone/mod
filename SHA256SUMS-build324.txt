@@ -1,0 +1,2 @@
+21bcca705db733edf2efdba46e1558f29cf4b58fda22cfe6892b2a68ecdb5e74  settledlands-0.8.0-build324-pull-wire.jar
+15f004190797a7066b1961d0fa66c7b7f3c56750323a779d4b441bbfccc9d473  SettledLands-Build324-PullWire-Source.zip

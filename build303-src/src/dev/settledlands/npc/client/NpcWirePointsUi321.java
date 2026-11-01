@@ -15,6 +15,11 @@ import net.minecraft.client.gui.GuiGraphics;
  * same dashes, same behaviour at any zoom. Here live the point handles, the hit tests, the stubs of
  * wires that are waiting at a point, and the band that shows where a dragged point will be aimed.</p>
  *
+ * <p>Every point has a small white port on its right, like the port on a card. A wire is pulled
+ * out of that port: the point itself is grabbed to move it, the port is grabbed to aim it. Both
+ * are drawn with the screen's own curve routine, so a waiting wire and the band that follows the
+ * cursor look exactly like every other wire on the canvas.</p>
+ *
  * <p>Hit tests are deliberately forgiving. A point is drawn six pixels across at zoom one and the
  * canvas snaps it to the eight-unit grid, so the drawn dot is rarely exactly under the cursor; a
  * small tolerance turns "tried to grab the point" into "made another point next to it", which is
@@ -35,8 +40,8 @@ public final class NpcWirePointsUi321 {
 
     private static final int COL_HANDLE_EDGE = 0xFF2A2A2A;
 
-    /** A waiting wire is an ordinary cable that has not found its end yet. */
-    private static final int COL_WAITING = PursuitGraphNode272.COL_CABLE_WHITE;
+    /** The port of a point, in the same white as the ports on the cards. */
+    private static final int COL_PORT = 0xFFE8E8E8;
 
     private static final int COL_AIM = 0xFFFFFFFF;
 
@@ -175,36 +180,64 @@ public final class NpcWirePointsUi321 {
         return best;
     }
 
+    // -- the port a wire is pulled out of -----------------------------------
+
+    /** Half of the port square in pixels: the same shape as the ports on the cards, smaller. */
+    public static int portHalf(NpcGraphCanvas canvas) {
+        return Math.max(2, (int) Math.round(2.5 * canvas.zoom));
+    }
+
+    /** Screen x of the port of a point - just right of the dot, clear of the wire. */
+    public static double portX(NpcGraphCanvas canvas, int pointX) {
+        return canvas.screenX(pointX) + handleHalf(canvas) * 2 + portHalf(canvas) + 3;
+    }
+
+    public static double portY(NpcGraphCanvas canvas, int pointY) {
+        return canvas.screenY(pointY);
+    }
+
+    /** The point whose port is under the cursor, or null. */
+    public static int[] portAt(NpcDialogueGraphScreen screen, NpcDialogueGraph graph,
+            double mouseX, double mouseY) {
+        NpcGraphCanvas canvas = screen.settledlands$canvas();
+        if (canvas == null || graph == null) return null;
+        double radius = Math.max(9.0, 6.0 * canvas.zoom);
+        int[] best = null;
+        double bestSq = radius * radius;
+        for (int[] point : NpcWirePoints321.points(graph)) {
+            double dx = mouseX - portX(canvas, point[0]);
+            double dy = mouseY - portY(canvas, point[1]);
+            double distSq = dx * dx + dy * dy;
+            if (distSq <= bestSq) {
+                bestSq = distSq;
+                best = point;
+            }
+        }
+        return best;
+    }
+
+    /** True when the cursor is on the port of this point rather than on the dot itself. */
+    public static boolean overPort(NpcDialogueGraphScreen screen, NpcDialogueGraph graph,
+            int[] point, double mouseX, double mouseY) {
+        NpcGraphCanvas canvas = screen.settledlands$canvas();
+        if (canvas == null || point == null) return false;
+        double px = portX(canvas, point[0]);
+        double py = portY(canvas, point[1]);
+        double dotX = canvas.screenX(point[0]);
+        double dotY = canvas.screenY(point[1]);
+        double toPort = (mouseX - px) * (mouseX - px) + (mouseY - py) * (mouseY - py);
+        double toDot = (mouseX - dotX) * (mouseX - dotX) + (mouseY - dotY) * (mouseY - dotY);
+        double radius = Math.max(9.0, 6.0 * canvas.zoom);
+        return toPort <= radius * radius && toPort < toDot;
+    }
+
     // -- drawing ------------------------------------------------------------
 
     /**
-     * The wires that wait at a point: they have no target, so no stock cable is drawn for them and
-     * they are drawn here, from the port they left to the point they stop at.
-     */
-    public static void drawWaiting(NpcDialogueGraphScreen screen, GuiGraphics graphics,
-            NpcDialogueGraph graph) {
-        NpcGraphCanvas canvas = screen.settledlands$canvas();
-        if (canvas == null || graph == null || graph.nodes == null) return;
-        for (Node node : graph.nodes.values()) {
-            List<int[]> hangs = NpcWirePoints321.hangs(node);
-            if (hangs.isEmpty()) continue;
-            double x1 = canvas.portScreenX(node, true);
-            for (int[] hang : hangs) {
-                double y1 = canvas.portScreenY(node, true, hang[0]);
-                double x2 = canvas.screenX(hang[1]);
-                double y2 = canvas.screenY(hang[2]);
-                if (Math.max(x1, x2) < canvas.left || Math.min(x1, x2) > canvas.right) continue;
-                if (Math.max(y1, y2) < canvas.top || Math.min(y1, y2) > canvas.bottom) continue;
-                dashed(graphics, x1, y1, x2, y2, COL_WAITING);
-            }
-        }
-    }
-
-    /**
-     * The points themselves.
+     * The points themselves, with the port a wire is pulled out of.
      *
      * @param mouseX    cursor, for the hover highlight
-     * @param aimTarget node the point being dragged would be aimed at, or -1
+     * @param aimTarget node the point being aimed at would go to, or -1
      */
     public static void drawPoints(NpcDialogueGraphScreen screen, GuiGraphics graphics,
             NpcDialogueGraph graph, double mouseX, double mouseY, boolean dragging,
@@ -212,12 +245,14 @@ public final class NpcWirePointsUi321 {
         NpcGraphCanvas canvas = screen.settledlands$canvas();
         if (canvas == null || graph == null) return;
         int half = handleHalf(canvas);
+        int port = portHalf(canvas);
         double radius = hitRadius(canvas);
+        double portRadius = Math.max(9.0, 6.0 * canvas.zoom);
         for (int[] point : NpcWirePoints321.points(graph)) {
             double x = canvas.screenX(point[0]);
             double y = canvas.screenY(point[1]);
-            if (x < canvas.left - 16 || x > canvas.right + 16) continue;
-            if (y < canvas.top - 16 || y > canvas.bottom + 16) continue;
+            if (x < canvas.left - 24 || x > canvas.right + 24) continue;
+            if (y < canvas.top - 24 || y > canvas.bottom + 24) continue;
             double dx = mouseX - x;
             double dy = mouseY - y;
             boolean near = dx * dx + dy * dy <= radius * radius;
@@ -228,19 +263,24 @@ public final class NpcWirePointsUi321 {
                     top + half * 2 + 1 + grow, COL_HANDLE_EDGE);
             graphics.fill(left - grow, top - grow, left + half * 2 + grow, top + half * 2 + grow,
                     near || dragging ? COL_HANDLE_HOT : COL_HANDLE);
+
+            // The port: a small white square, the same shape the cards use for theirs.
+            double px = portX(canvas, point[0]);
+            double py = portY(canvas, point[1]);
+            double pdx = mouseX - px;
+            double pdy = mouseY - py;
+            boolean hot = pdx * pdx + pdy * pdy <= portRadius * portRadius;
+            int px0 = (int) Math.round(px) - port;
+            int py0 = (int) Math.round(py) - port;
+            graphics.fill(px0 - 1, py0 - 1, px0 + port * 2 + 1, py0 + port * 2 + 1,
+                    COL_HANDLE_EDGE);
+            graphics.fill(px0, py0, px0 + port * 2, py0 + port * 2,
+                    hot ? COL_HANDLE_HOT : COL_PORT);
         }
-        if (dragging && aimTarget >= 0) {
+        if (aimTarget >= 0) {
             Node target = graph.get(aimTarget);
             if (target != null) frame(canvas, graphics, target);
         }
-    }
-
-    /** While a point is dragged towards a node: the band, so it is clear what the drop will do. */
-    public static void drawAimBand(NpcDialogueGraphScreen screen, GuiGraphics graphics,
-            int pointX, int pointY, double mouseX, double mouseY) {
-        NpcGraphCanvas canvas = screen.settledlands$canvas();
-        if (canvas == null) return;
-        dashed(graphics, canvas.screenX(pointX), canvas.screenY(pointY), mouseX, mouseY, COL_AIM);
     }
 
     private static void frame(NpcGraphCanvas canvas, GuiGraphics graphics, Node node) {
@@ -252,27 +292,6 @@ public final class NpcWirePointsUi321 {
         graphics.fill(x1, y2 - 1, x2, y2, COL_AIM);
         graphics.fill(x1, y1, x1 + 1, y2, COL_AIM);
         graphics.fill(x2 - 1, y1, x2, y2, COL_AIM);
-    }
-
-    /**
-     * A dashed straight line, drawn with plain fills.
-     *
-     * <p>A waiting wire has no end, so the screen's own cable routine cannot draw it - that routine
-     * needs two ports. Two pixels every five keeps it clearly a wire without a quad per pixel.</p>
-     */
-    private static void dashed(GuiGraphics graphics, double x1, double y1, double x2, double y2,
-            int color) {
-        double dx = x2 - x1;
-        double dy = y2 - y1;
-        double length = Math.sqrt(dx * dx + dy * dy);
-        if (length < 0.5) return;
-        int steps = (int) Math.ceil(length / 5.0);
-        for (int i = 0; i <= steps; i += 2) {
-            double t = Math.min(1.0, i * 5.0 / length);
-            int x = (int) Math.round(x1 + dx * t);
-            int y = (int) Math.round(y1 + dy * t);
-            graphics.fill(x, y, x + 2, y + 2, color);
-        }
     }
 
     // -- coordinates --------------------------------------------------------

@@ -1,6 +1,11 @@
 package dev.settledlands.mixin;
 
+import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
+import com.mojang.blaze3d.vertex.BufferUploader;
+import com.mojang.blaze3d.vertex.DefaultVertexFormat;
+import com.mojang.blaze3d.vertex.Tesselator;
+import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
 import dev.settledlands.npc.NpcWireJoin322;
@@ -8,8 +13,10 @@ import dev.settledlands.npc.NpcWirePoints321;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphCanvas;
 import dev.settledlands.npc.client.NpcWirePointsUi321;
+import dev.settledlands.npc.client.PursuitGraphNode272;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.renderer.GameRenderer;
 import org.joml.Matrix4f;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -26,9 +33,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * positions and hands them to {@code curve}. The redirect takes that call and, when the wire has
  * bends, replaces it with one {@code curve} per segment: output port, each bend in order, input
  * port. Same routine, same colour, same dashes, so the result is a stock cable that goes where it is
- * told. Wires without bends fall through to the original call untouched. Wires that wait at a point
- * have no target, so no stock cable exists for them; they are drawn as a plain line from the port to
- * the point, in the same white as the rest of the wiring.</p>
+ * told. Wires without bends fall through to the original call untouched.</p>
+ *
+ * <p>Wires that wait at a point have no target, so no stock cable exists for them: the screen only
+ * draws links. They are drawn here with the same {@code curve} the screen uses, into a buffer of
+ * their own, in the same white - the same call, the same width, the same dashes, so a waiting wire
+ * and the band that follows the cursor while a wire is pulled out of a point look exactly like the
+ * rest of the wiring. Nothing here re-implements the look of a cable.</p>
  *
  * <p>Mouse. Every gesture here is finished inside this class, before the screen's own handling, and
  * every finished gesture calls {@code remember()} before it changes anything and {@code changed()}
@@ -68,6 +79,13 @@ public abstract class NpcWirePointsMixin321 {
 
     /** Node the held point would be aimed at, or -1. */
     private int settledlands$aimNode = -1;
+
+    /** True while a wire is being pulled out of a point's port, and where that point is. */
+    private boolean settledlands$pull;
+
+    private int settledlands$pullX;
+
+    private int settledlands$pullY;
 
     private long settledlands$lastClick;
 
@@ -159,14 +177,74 @@ public abstract class NpcWirePointsMixin321 {
             CallbackInfo ci) {
         NpcDialogueGraphScreen screen = (NpcDialogueGraphScreen) (Object) this;
         NpcDialogueGraph graph = settledlands$graph();
-        if (graph == null) return;
-        NpcWirePointsUi321.drawWaiting(screen, graphics, graph);
-        if (settledlands$pointDrag) {
-            NpcWirePointsUi321.drawAimBand(screen, graphics, settledlands$pointX,
-                    settledlands$pointY, mouseX, mouseY);
-        }
+        NpcGraphCanvas canvas = settledlands$canvas();
+        if (graph == null || canvas == null) return;
+        settledlands$drawWires(graphics, graph, canvas, mouseX, mouseY);
         NpcWirePointsUi321.drawPoints(screen, graphics, graph, mouseX, mouseY,
-                settledlands$pointDrag, settledlands$aimNode);
+                settledlands$pointDrag || settledlands$pull, settledlands$aimNode);
+    }
+
+    /**
+     * The wires the screen cannot draw: a waiting wire has no target, so no link exists to draw.
+     * Each one goes through {@code curve} - the screen's own routine - into a buffer of its own, so
+     * the result is indistinguishable from a stock cable. While a wire is being pulled out of a
+     * point, the band from that point's port to the cursor is drawn here too, in the same way.
+     */
+    private void settledlands$drawWires(GuiGraphics graphics, NpcDialogueGraph graph,
+            NpcGraphCanvas canvas, double mouseX, double mouseY) {
+        if (graph.nodes == null) return;
+        boolean any = settledlands$pull;
+        if (!any) {
+            for (Node node : graph.nodes.values()) {
+                if (!NpcWirePoints321.hangs(node).isEmpty()) {
+                    any = true;
+                    break;
+                }
+            }
+        }
+        if (!any) return;
+
+        graphics.flush();
+        RenderSystem.enableBlend();
+        RenderSystem.defaultBlendFunc();
+        RenderSystem.disableDepthTest();
+        RenderSystem.disableCull();
+        RenderSystem.setShader(GameRenderer::getPositionColorShader);
+        BufferBuilder buffer = Tesselator.getInstance()
+                .begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+        Matrix4f matrix = graphics.pose().last().pose();
+        int color = PursuitGraphNode272.COL_CABLE_WHITE;
+        int quads = 0;
+
+        for (Node node : graph.nodes.values()) {
+            List<int[]> hangs = NpcWirePoints321.hangs(node);
+            if (hangs.isEmpty()) continue;
+            double x1 = canvas.portScreenX(node, true);
+            for (int[] hang : hangs) {
+                double y1 = canvas.portScreenY(node, true, hang[0]);
+                double x2 = canvas.screenX(hang[1]);
+                double y2 = canvas.screenY(hang[2]);
+                if (Math.max(x1, x2) < canvas.left || Math.min(x1, x2) > canvas.right) continue;
+                if (Math.max(y1, y2) < canvas.top || Math.min(y1, y2) > canvas.bottom) continue;
+                quads += curve(buffer, matrix, x1, y1, x2, y2, color, false);
+            }
+        }
+
+        if (settledlands$pull) {
+            quads += curve(buffer, matrix,
+                    NpcWirePointsUi321.portX(canvas, settledlands$pullX),
+                    NpcWirePointsUi321.portY(canvas, settledlands$pullY),
+                    mouseX, mouseY, color, false);
+        }
+
+        if (quads > 0) {
+            BufferUploader.drawWithShader(buffer.buildOrThrow());
+        } else {
+            buffer.build();
+        }
+        RenderSystem.enableDepthTest();
+        RenderSystem.enableCull();
+        RenderSystem.disableBlend();
     }
 
     // -- mouse --------------------------------------------------------------
@@ -183,14 +261,27 @@ public abstract class NpcWirePointsMixin321 {
 
         boolean again = settledlands$doubleClick(mouseX, mouseY);
         int[] point = NpcWirePointsUi321.pointAt(screen, graph, mouseX, mouseY);
+        int[] port = NpcWirePointsUi321.portAt(screen, graph, mouseX, mouseY);
 
         if (button == 1) {                         // right click removes a point outright
-            if (point == null) return;
-            settledlands$remove(graph, point);
+            int[] hit = point != null ? point : port;
+            if (hit == null) return;
+            settledlands$remove(graph, hit);
             cir.setReturnValue(true);
             return;
         }
         if (button != 0) return;
+        boolean pulling = port != null
+                && (point == null || (point[0] == port[0] && point[1] == port[1]
+                        && NpcWirePointsUi321.overPort(screen, graph, port, mouseX, mouseY)));
+        if (pulling) {                             // a wire is pulled out of the point's port
+            settledlands$pull = true;
+            settledlands$pullX = port[0];
+            settledlands$pullY = port[1];
+            settledlands$aimNode = -1;
+            cir.setReturnValue(true);
+            return;
+        }
         if (point != null) {
             if (again) {
                 settledlands$remove(graph, point);
@@ -226,6 +317,14 @@ public abstract class NpcWirePointsMixin321 {
     @Inject(method = "mouseDragged(DDIDD)Z", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$dragPoint(double mouseX, double mouseY, int button, double dragX,
             double dragY, CallbackInfoReturnable<Boolean> cir) {
+        if (settledlands$pull) {
+            NpcDialogueGraph graph = settledlands$graph();
+            NpcGraphCanvas canvas = settledlands$canvas();
+            settledlands$aimNode = graph == null || canvas == null ? -1
+                    : canvas.hit(graph, mouseX, mouseY);
+            cir.setReturnValue(true);
+            return;
+        }
         if (!settledlands$pointDrag) return;
         NpcDialogueGraph graph = settledlands$graph();
         NpcGraphCanvas canvas = settledlands$canvas();
@@ -255,6 +354,26 @@ public abstract class NpcWirePointsMixin321 {
     @Inject(method = "mouseReleased(DDI)Z", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$releasePoint(double mouseX, double mouseY, int button,
             CallbackInfoReturnable<Boolean> cir) {
+        if (settledlands$pull) {
+            int x = settledlands$pullX;
+            int y = settledlands$pullY;
+            settledlands$pull = false;
+            settledlands$aimNode = -1;
+            NpcDialogueGraph graph = settledlands$graph();
+            NpcGraphCanvas canvas = settledlands$canvas();
+            if (button == 0 && graph != null && canvas != null) {
+                int target = canvas.hit(graph, mouseX, mouseY);
+                if (target >= 0) {
+                    remember();
+                    if (NpcWireJoin322.aim(graph, x, y, target) > 0) {
+                        changed();
+                        status = tr("gui.settledlands.graph.connected");
+                    }
+                }
+            }
+            cir.setReturnValue(true);
+            return;
+        }
         if (settledlands$pointDrag) {
             boolean moved = settledlands$pointMoved;
             int x = settledlands$pointX;

@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build323-wire-hub.jar` — Build 323 (точка-узел: держит провода, ждёт, прицеливается, двигается, удаляется), все 7 гейтов PASS.
-База — 322 (`settledlands-0.8.0-build322-join-points.jar`), патч `tools/patch_build323.py`.
+`settledlands-0.8.0-build324-pull-wire.jar` — Build 324 (провод у точки рисуется штатным `curve`, порт точки для вытягивания провода), все 7 гейтов PASS.
+База — 323 (`settledlands-0.8.0-build323-wire-hub.jar`), патч `tools/patch_build324.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -33,7 +33,8 @@
 → 320 (`tools/patch_build320.py`, зона «В радиусе» частицами: `NpcRadiusZone320` + `NpcRadiusZoneUi320` + 2 миксина)
 → 321 (`tools/patch_build321.py`, точки перегиба на проводах: `NpcWirePoints321` + `NpcWirePointsUi321` + `NpcWirePointsMixin321`)
 → 322 (`tools/patch_build322.py`, отпускание провода на точке: `NpcWireJoin322`)
-→ 323 (`tools/patch_build323.py`, точка-узел: `attach`/`aim` в `NpcWireJoin322`, новый формат `SLP2`).
+→ 323 (`tools/patch_build323.py`, точка-узел: `attach`/`aim` в `NpcWireJoin322`, новый формат `SLP2`)
+→ 324 (`tools/patch_build324.py`, штатная отрисовка ожидающего провода + порт точки).
 
 **Build 290 НЕ ЗАПУСКАЕТСЯ**: `GuideDialogueValue290.settledlands$enterSendGraph` был объявлен с `Object` вместо
 `GuideDialogue$Session` → `InvalidInjectionException: Invalid descriptor` → миксин не применился → фатальный вылет.
@@ -45,6 +46,20 @@
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
+
+Build 324: **провод у точки рисуется штатно и из точки его можно вытянуть**. Пользователь: «провод до
+точки визуально выглядит плохо, просто скопируй код уже существующего провода; сейчас из точки нельзя
+вытягивать провод». Ожидающий провод (у него нет цели, поэтому штатный `wires(...)` его не рисует)
+раньше шёл через `graphics.fill` лесенкой — теперь `NpcWirePointsMixin321.settledlands$drawWires`
+повторяет паттерн `NpcPursuitValuePinMixin290`: `graphics.flush()`, `RenderSystem` blend/no-depth,
+`Tesselator.getInstance().begin(QUADS, POSITION_COLOR)`, `curve(...)` (тот же `@Shadow`, что у изгибов)
+со цветом `PursuitGraphNode272.COL_CABLE_WHITE`, `BufferUploader.drawWithShader(buffer.buildOrThrow())`,
+возврат состояния. У точки появился **порт** (`NpcWirePointsUi321.portX/portY/portAt/overPort`,
+белый квадрат справа): жест «взять порт и потянуть» = `settledlands$pull`, резинка рисуется тем же
+`curve`, отпускание на ноде = `NpcWireJoin322.aim`. Точка (●) по-прежнему двигается и удаляется.
+Гейт `wire_points_check` дополнен: должен быть свой буфер (`Tesselator`/`BufferUploader`/
+`DefaultVertexFormat`), `@Shadow` на `curve(BufferBuilder;Matrix4f;DDDDIZ)I`, методы `portAt`/`overPort`/
+`portX`/`portY`, состояние `settledlands$pull`. На 323 гейт падает (проверено).
 
 Build 323: **точка стала узлом**. Пользователь: «провод должен подключаться к точке, и уже от точки
 вытягиваться куда я захочу» + «провод цепляется за точку и ждёт, теперь его концовка — эта точка».

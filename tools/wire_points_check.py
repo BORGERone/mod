@@ -17,7 +17,10 @@ So the shipped jar is asked these things:
     jar and run headlessly;
   * a point can always be grabbed: its hit area is wider than the dot it draws, at every zoom
     (tools/tests/PointHitTest.java), because a dot that is hard to hit turns "move the point" into
-    "make another point next to it".
+    "make another point next to it";
+  * a waiting wire is drawn by the screen's own curve routine, not approximated with rectangles:
+    the class that draws it must build the same buffer the screen builds and call the same
+    {@code curve}, and a wire must be pullable out of a point's port.
 
     python3 tools/wire_points_check.py settledlands-0.8.0-build323-wire-hub.jar
 
@@ -162,6 +165,30 @@ def run(jar):
                        "NpcWirePoints321.movePoint", "NpcWirePoints321.addBend"):
             if not any(needed in r for r in mixin_refs):
                 problems.append("the screen hook never calls %s" % needed)
+        # Build 324: the wire that waits at a point, and the band that follows the cursor while a
+        # wire is pulled out of it, are drawn with the screen's own cable routine.
+        for needed in ("blaze3d/vertex/Tesselator", "blaze3d/vertex/BufferUploader",
+                       "blaze3d/vertex/DefaultVertexFormat"):
+            if not any(needed in r for r in mixin_refs):
+                problems.append("the hook never builds a buffer of its own (%s) - a waiting wire "
+                                "must be drawn like every other cable" % needed)
+        mixin_bytes = z.read(MIXIN)
+        # A shadowed method is called on the mixin class itself, so the reference that proves the
+        # screen's own curve routine is used is the shadow of it with this signature.
+        curve_sig = b"Lcom/mojang/blaze3d/vertex/BufferBuilder;Lorg/joml/Matrix4f;DDDDIZ)I"
+        if curve_sig not in mixin_bytes:
+            problems.append("the hook has no shadow of the screen's curve routine")
+        if b"Lorg/spongepowered/asm/mixin/Shadow;" not in mixin_bytes:
+            problems.append("the hook declares no shadows at all")
+        if not any("curve" in r for r in mixin_refs):
+            problems.append("the hook never draws a cable with the screen's own curve routine")
+        ui_bytes = z.read(UI)
+        for needle in ("portAt", "overPort", "portX", "portY"):
+            if needle.encode("utf-8") not in ui_bytes:
+                problems.append("the ui has no %s - a wire cannot be pulled out of a point"
+                                % needle)
+        if b"settledlands$pull" not in mixin_bytes:
+            problems.append("the screen hook has no pull state")
 
         reads = node_field_reads(model)
         if "animBone" not in reads or "mobilityGroupId" not in reads:
