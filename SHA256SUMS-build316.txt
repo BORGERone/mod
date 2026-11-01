@@ -1,0 +1,2 @@
+7ada2fc3785d9f98ba9c6860e5e1a2507d6679605d772f1c6b40ced372f561fe  settledlands-0.8.0-build316-stride.jar
+4eedfe63364a5ff4710e1b2ed3e79bfffc306066678b788163b66df084663ca0  SettledLands-Build316-Stride-Source.zip

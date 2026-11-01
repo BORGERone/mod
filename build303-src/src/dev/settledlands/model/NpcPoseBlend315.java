@@ -27,10 +27,16 @@ public final class NpcPoseBlend315 {
     /** How long a part takes to reach a new pose. Short enough to stay snappy, long enough to see. */
     public static final double FADE_SECONDS = 0.09D;
 
+    /** Step assumed when nothing is known yet - one frame at 60 fps. */
+    private static final double FIRST_STEP_SECONDS = 1.0D / 60.0D;
+
     /** A frame longer than this is a stall or a teleport, not a pose to fade from. */
     private static final double MAX_STEP_SECONDS = 0.25D;
 
     private static final int SLOTS = 9;
+
+    /** Part identity to its values just before the clip wrote this frame. */
+    private static final Map<ModelPart, float[]> BEFORE = new WeakHashMap<>();
 
     /** Part identity to its values on the previous frame. */
     private static final Map<ModelPart, float[]> PREVIOUS = new WeakHashMap<>();
@@ -41,6 +47,22 @@ public final class NpcPoseBlend315 {
     private NpcPoseBlend315() {}
 
     /**
+     * Build 316: remembers the pose the part has right now, before a clip overwrites it.
+     *
+     * <p>The fade used to start from the values of the previous fade, and to step aside when that
+     * sample was older than a quarter of a second. So the first write after the animation had been
+     * quiet for a moment was applied whole and showed up as a one frame jump - exactly the break
+     * that appears when a walk turns into idle. The pose before the write is always the right thing
+     * to fade from, so it is captured here.</p>
+     */
+    public static void capture(ModelPart part) {
+        if (part == null) return;
+        synchronized (PREVIOUS) {
+            BEFORE.put(part, read(part));
+        }
+    }
+
+    /**
      * Blends the values a clip has just written into {@code part} with the ones it had before.
      * Called right after every pose write of the bridge.
      */
@@ -49,18 +71,16 @@ public final class NpcPoseBlend315 {
         long now = System.nanoTime();
         float[] current = read(part);
         synchronized (PREVIOUS) {
-            float[] previous = PREVIOUS.get(part);
+            float[] before = BEFORE.remove(part);
+            if (before == null) before = PREVIOUS.get(part);
             Long stamp = WHEN.get(part);
-            double dt = stamp == null ? 0.0D : (now - stamp.longValue()) / 1.0e9D;
-            if (previous == null || !(dt > 0.0D) || dt > MAX_STEP_SECONDS) {
-                PREVIOUS.put(part, current);
-                WHEN.put(part, now);
-                return;
-            }
+            double dt = stamp == null ? FIRST_STEP_SECONDS : (now - stamp.longValue()) / 1.0e9D;
+            if (!(dt > 0.0D) || dt > MAX_STEP_SECONDS) dt = FIRST_STEP_SECONDS;
+            if (before == null) before = current;
             double alpha = 1.0D - Math.exp(-dt / FADE_SECONDS);
             float[] blended = new float[SLOTS];
             for (int i = 0; i < SLOTS; i++) {
-                blended[i] = (float) (previous[i] + (current[i] - previous[i]) * alpha);
+                blended[i] = (float) (before[i] + (current[i] - before[i]) * alpha);
             }
             write(part, blended);
             PREVIOUS.put(part, blended);

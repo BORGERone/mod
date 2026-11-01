@@ -104,6 +104,14 @@ LIMITS = {
     "FOLLOW_STEP_SQ": (1.0, "a finished path waits for the target to slide too far - that is the "
                             "stop between two paths"),
 }
+# The locomotion reference is a speed in blocks per SECOND. Builds up to 315 had it 20x too small,
+# which pinned the blend weight and ran the limbs eight times the real stride.
+FLOORS = {
+    "FULL_SPEED": (3.5, "the locomotion reference is back in blocks per tick - the legs will move "
+                         "at their own rate again"),
+    "UNITS_PER_BLOCK": (3.0, "the limb phase no longer matches a player's stride"),
+}
+
 MISSING = {
     "TARGET_MOVING_SQ": "the target-motion threshold is gone",
     "FOLLOW_STEP_SQ": "the follow-up step threshold is gone",
@@ -131,6 +139,10 @@ def main(argv):
         main_info = disasm.parse_class(z.read(TARGET))
         state_info = disasm.parse_class(z.read(STATE)) if STATE in names else None
         driver_info = disasm.parse_class(z.read(DRIVER)) if DRIVER in names else None
+        pose_info = disasm.parse_class(z.read(POSE_BLEND)) if POSE_BLEND in names else None
+        pose_mixin = POSE_BLEND.replace("model/NpcPoseBlend315", "mixin/NpcPoseBlendMixin315")
+        pose_mixin_info = (disasm.parse_class(z.read(pose_mixin))
+                           if pose_mixin in names else None)
         config = json.loads(z.read(MIXIN_CONFIG)) if MIXIN_CONFIG in names else None
 
     refs = method_refs(main_info["cp"], main_info)
@@ -145,13 +157,27 @@ def main(argv):
                         "slower than ordinary walking")
     if driver_info is None:
         problems.append("the locomotion driver is gone (%s)" % DRIVER)
-    elif "SPEED_SECONDS" not in field_values(driver_info["cp"], driver_info):
-        problems.append("the locomotion speed is no longer smoothed (SPEED_SECONDS)")
+    else:
+        driver_values = field_values(driver_info["cp"], driver_info)
+        if "SPEED_SECONDS" not in driver_values:
+            problems.append("the locomotion speed is no longer smoothed (SPEED_SECONDS)")
+        for name, (floor, message) in FLOORS.items():
+            value = driver_values.get(name)
+            if value is None or value < floor:
+                problems.append("%s: %s = %s, floor %s" % (message, name, value, floor))
 
-    if POSE_BLEND not in names:
+    if pose_info is None:
         problems.append("animation clips are not cross-faded (%s)" % POSE_BLEND)
-    elif config is None or POSE_MIXIN not in config.get("client", []):
-        problems.append("%s is not in the client mixin list" % POSE_MIXIN)
+    else:
+        pose_methods = {pose_info["cp"][ni][1] for _a, ni, _d, _x in pose_info["methods"]}
+        if "capture" not in pose_methods or "blend" not in pose_methods:
+            problems.append("the pose fade has no before-write capture - the first frame after "
+                            "idle will snap again")
+        if pose_mixin_info is None or "capture" not in method_refs(pose_mixin_info["cp"],
+                                                                  pose_mixin_info):
+            problems.append("the pose mixin does not capture the pose before the write")
+        if config is None or POSE_MIXIN not in config.get("client", []):
+            problems.append("%s is not in the client mixin list" % POSE_MIXIN)
 
     if LOCO_MIXIN not in names:
         problems.append("the smoothed locomotion never reaches Touch'n Motion (%s)" % LOCO_MIXIN)

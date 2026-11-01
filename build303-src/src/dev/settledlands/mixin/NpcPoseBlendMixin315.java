@@ -15,11 +15,21 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * The hook runs at the end of that write and hands the part to {@link NpcPoseBlend315}, which
  * blends the new pose with the one the part had a frame ago.</p>
  *
+ * <p>The pose before the write is captured first, so the fade always starts from what the part
+ * really had, even when nothing has written to it for a while - that case used to be applied whole
+ * and showed as a one frame jump when a walk turned into idle.</p>
+ *
  * <p>Only the values already written are touched, so a part that no clip drives is never changed
  * and nothing else in the model is affected.</p>
  */
 @Mixin(targets = "dev.settledlands.model.NpcMotionBridge256$Pose", remap = false)
 public abstract class NpcPoseBlendMixin315 {
+
+    @Inject(method = "set(Lnet/minecraft/client/model/geom/ModelPart;)V",
+            at = @At("HEAD"), remap = false)
+    private void settledlands$capturePose(ModelPart part, CallbackInfo ci) {
+        NpcPoseBlend315.capture(part);
+    }
 
     @Inject(method = "set(Lnet/minecraft/client/model/geom/ModelPart;)V",
             at = @At("RETURN"), remap = false)

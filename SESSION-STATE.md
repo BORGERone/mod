@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build315-pose-fade.jar` — Build 315 (кросс-фейд анимаций), 5 гейтов + `pursuit_check` + `blue_wire_check` PASS.
-База — 314 (`settledlands-0.8.0-build314-smooth.jar`), патч `tools/patch_build315.py`.
+`settledlands-0.8.0-build316-stride.jar` — Build 316 (шаг по скорости + без сброса в idle), 5 гейтов + `pursuit_check` + `blue_wire_check` PASS.
+База — 315 (`settledlands-0.8.0-build315-pose-fade.jar`), патч `tools/patch_build316.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -276,7 +276,21 @@ Class-файл не содержит абсолютных смещений, по
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
 
-## Build 315 (актуально) — кросс-фейд между анимациями
+## Build 316 (актуально) — шаг по скорости и без однокадрового сброса
+
+Жалоба: «при остановке на 1 кадр сбрасывается анимация при переходе в idle» + «двигает ногами
+независимо от скорости».
+
+- **Ноги:** `FULL_SPEED` был 0.24, а измерение — в блоках/с. Разница ×20: вес бленда всегда 1.0,
+  фаза 8.3 юнита/тик вместо 0.46. Исправлено: `FULL_SPEED = 4.317` (скорость игрока, блоки/с),
+  `UNITS_PER_BLOCK = 20/4.317 = 4.633`.
+- **Один кадр:** `NpcPoseBlend315.blend` стартовал от своего прошлого сэмпла и отключался при
+  паузе > 250 мс. Теперь `capture(part)` на HEAD `Pose#set` снимает позу **до** записи, blend идёт
+  от неё всегда.
+- Гейт `pursuit_check.py` проверяет единицы (`FULL_SPEED >= 3.5`, `UNITS_PER_BLOCK >= 3.0`) и
+  наличие `capture` + хука. На 315 падает тремя пунктами.
+
+## Build 315 — кросс-фейд между анимациями
 
 Жалоба: «всё ещё рваные телепорты между анимациями».
 

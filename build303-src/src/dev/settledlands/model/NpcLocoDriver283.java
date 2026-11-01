@@ -40,14 +40,24 @@ import net.minecraft.world.entity.WalkAnimationState;
  */
 public final class NpcLocoDriver283 {
 
-    /** Blocks per tick that count as a full walk for a player-shaped rig. */
-    public static final double FULL_SPEED = 0.24D;
+    /**
+     * Blocks per <b>second</b> that count as a full walk for a player-shaped rig: a player on foot
+     * covers 4.317 blocks a second. Build 316: this used to be 0.24, which is blocks per tick -
+     * the measured speed is blocks per second, so every NPC was 20x over the full walk. The blend
+     * weight was pinned at 1 and the limbs cycled eight times too fast, which is why the legs
+     * moved on their own regardless of how fast the body went.
+     */
+    public static final double FULL_SPEED = 4.317D;
 
     /**
-     * Limb units per block travelled. At {@link #FULL_SPEED} this is the vanilla
-     * one unit per tick, so an ordinary walk looks like it always did.
+     * Limb units per block travelled. At {@link #FULL_SPEED} the phase advances one vanilla unit
+     * per tick (20 a second), so an ordinary walk looks like it always did and a slow walk swings
+     * the legs slowly instead of at the same rate as a run.
      */
     private static final double UNITS_PER_BLOCK = 20.0D / FULL_SPEED;
+
+    /** Step assumed for the very first frame of a part, before any timing is known. */
+    private static final double FIRST_STEP_SECONDS = 1.0D / 60.0D;
 
     /** Time constants of the blend weight: quick to start walking, slower to settle. */
     private static final double RISE_SECONDS = 0.12D;
@@ -171,6 +181,8 @@ public final class NpcLocoDriver283 {
 
         double window = Math.min(dt, MAX_STEP_SECONDS);
         if (!npc.isAlive() || npc.isPassenger() || npc.isRemoved()) distance = 0.0D;
+        // distance is blocks per frame, window is seconds: instant is blocks per second, the
+        // same unit FULL_SPEED is in.
         double instant = window <= 0.0D ? 0.0D : distance / window;
 
         // Smooth the staircase away before anything uses it.
