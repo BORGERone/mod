@@ -1,0 +1,8 @@
+t_*.jpg
+t_*.png
+ref*.jpg
+stills/
+chk_*.jpg
+qc_*.jpg
+*.mp4
+__pycache__/
