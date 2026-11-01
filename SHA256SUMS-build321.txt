@@ -1,0 +1,2 @@
+1e6402760f6d476dcf9eeafe4841390aba6640433d74f3dc7fc251fd1a49662c  settledlands-0.8.0-build321-wire-points.jar
+d6f3a674fdcae00bf318656c98afa0e933e101fac15bca5c73d851ba48fbb228  SettledLands-Build321-WirePoints-Source.zip

@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build320-radius-zone.jar` — Build 320 (тумблер «Зона» у ноды «В радиусе»), 5 гейтов + `radius_zone_check` + `clipboard_check` PASS.
-База — 319 (`settledlands-0.8.0-build319-clipboard-center.jar`), патч `tools/patch_build320.py`.
+`settledlands-0.8.0-build321-wire-points.jar` — Build 321 (точки перегиба на проводах), 5 гейтов + `wire_points_check` + `radius_zone_check` + `clipboard_check` PASS.
+База — 320 (`settledlands-0.8.0-build320-radius-zone.jar`), патч `tools/patch_build321.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -30,7 +30,8 @@
 → 306…316 → 317 (`tools/patch_build317.py`, вода и падение: `NpcWater317` + `NpcWaterMixin317`)
 → 318 (`tools/patch_build318.py`, копирование/вставка нод: `NpcGraphClipboard318` + `NpcClipboard318` + `NpcClipboardMixin318`)
 → 319 (`tools/patch_build319.py`, вставка в центр видимого холста: `bounds` + `pasteCentered`)
-→ 320 (`tools/patch_build320.py`, зона «В радиусе» частицами: `NpcRadiusZone320` + `NpcRadiusZoneUi320` + 2 миксина).
+→ 320 (`tools/patch_build320.py`, зона «В радиусе» частицами: `NpcRadiusZone320` + `NpcRadiusZoneUi320` + 2 миксина)
+→ 321 (`tools/patch_build321.py`, точки перегиба на проводах: `NpcWirePoints321` + `NpcWirePointsUi321` + `NpcWirePointsMixin321`).
 
 **Build 290 НЕ ЗАПУСКАЕТСЯ**: `GuideDialogueValue290.settledlands$enterSendGraph` был объявлен с `Object` вместо
 `GuideDialogue$Session` → `InvalidInjectionException: Invalid descriptor` → миксин не применился → фатальный вылет.
@@ -42,6 +43,16 @@
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
+
+Build 321: точки перегиба. **`@Redirect` на `cable(...)` внутри `wires(...)`** — единственное место, где
+рисуются все штатные провода (сигнатура уже была известна из `NpcWhiteWiring302`); при наличии точек
+вызов заменяется на цепочку `curve(...)` от порта к точке и к цели, поэтому провод выглядит штатным.
+Порты: 0 — обычный выход, 1 — «false» у условия; цель ищется через `canvas.hitCable(from, fromPort, to, 0, x, y)`.
+Хранилище: `SLP1|p<порт>t<цель>:x,y x,y|…` в `Node#animBone`, а для нод типа ANIMATION — в
+`Node#mobilityGroupId` (единственное поле, которое этот тип не читает); чужой текст без маркера не
+перезаписывается. Мышь: HEAD `mouseClicked` (двойной клик по проводу добавляет, по точке удаляет;
+обычный клик по точке начинает перетаскивание), HEAD `mouseDragged`, HEAD `mouseReleased`; всё зовёт
+штатный `changed()`. Гейт `tools/wire_points_check.py` + тест `tools/tests/WirePointsRoundTrip.java`.
 
 Build 320: тумблер «Зона» у ноды «В радиусе». Флаг хранится в `Node#timerRepeat` — сохраняемый
 boolean, который читает только ветка «Таймер»; переживает save/load/copy/undo/буфер обмена, формат графа
