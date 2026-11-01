@@ -48,7 +48,7 @@ class Atlas:
             ("leaf_d", (60, 96, 56), dict(speckle=0.7)),
             ("rock",   (150, 148, 142), dict(speckle=0.5)),
             ("rock_d", (112, 110, 106), dict(speckle=0.4)),
-            ("grass",  (118, 132, 86), dict(rough=0.3)),
+            ("grass",  (128, 140, 96), dict(rough=0.3)),
             ("sand_d", (188, 172, 140), dict(speckle=0.3)),
             ("grey",   (170, 172, 176), dict(rough=0.1)),
             ("dark",   (60, 56, 54), dict(rough=0.2)),
@@ -167,9 +167,9 @@ def grass_tuft(n=3, seed=3):
     out = []
     for _ in range(n):
         x, z = rnd.uniform(-0.28, 0.28), rnd.uniform(-0.28, 0.28)
-        h = rnd.uniform(1.6, 3.4)
-        out.append(cube((x * 16 - 0.4, 0, z * 16 - 0.4), (x * 16 + 0.4, h, z * 16 + 0.4), "grass",
-                        origin=(x * 16, 0, z * 16), rot=(rnd.uniform(-9, 9), 0, rnd.uniform(-9, 9))))
+        h = rnd.uniform(1.4, 3.0)
+        out.append(cube((x * 16 - 0.30, 0, z * 16 - 0.30), (x * 16 + 0.30, h, z * 16 + 0.30), "grass",
+                        origin=(x * 16, 0, z * 16), rot=(rnd.uniform(-22, 22), 0, rnd.uniform(-22, 22))))
     return out
 
 
@@ -177,10 +177,10 @@ def ridge(seed=0):
     """Rolling green hills far behind the village."""
     rnd = np.random.RandomState(seed)
     out = []
-    for i in range(10):
-        x = (-30 + i * 6.0) * 16
-        h = rnd.uniform(1.6, 3.6) * 16
-        z = (-44 + 2.4 * np.sin(i * 0.7)) * 16
+    for i in range(8):
+        x = (-40 + i * 6.0) * 16
+        h = rnd.uniform(1.3, 2.6) * 16
+        z = (-27 + 2.0 * np.sin(i * 0.7)) * 16
         out.append(cube((x, 0, z), (x + 7.0 * 16, h * 0.7, z + 8.0 * 16), "leaf_d"))
         out.append(cube((x + 1.0 * 16, 0, z + 1.4 * 16),
                         (x + 6.0 * 16, h, z + 6.8 * 16), "leaf"))
@@ -202,13 +202,13 @@ def jetty(seed=0):
 def build_scene():
     S = 1 / 16.0
     items = []
-    layout = [(-14.5, -30.0, 3.2, 2.5, 2.9), (-9.0, -33.5, 3.8, 2.8, 3.2),
-              (-4.0, -31.0, 2.9, 2.3, 2.7), (1.0, -34.5, 3.4, 2.6, 3.0),
-              (6.2, -30.5, 3.0, 2.4, 2.8), (11.6, -33.0, 3.6, 2.7, 3.1),
-              (-20.0, -35.0, 4.2, 3.0, 3.4), (17.5, -29.0, 3.4, 2.6, 3.0)]
+    layout = [(-16.0, -15.5, 3.2, 2.5, 2.9), (-11.0, -19.0, 3.8, 2.8, 3.2),
+              (-6.2, -16.5, 2.9, 2.3, 2.7), (-1.4, -20.0, 3.4, 2.6, 3.0),
+              (-21.0, -22.0, 4.2, 3.0, 3.4), (-24.0, -17.0, 3.0, 2.4, 2.8),
+              (3.4, -22.5, 3.6, 2.7, 3.1)]
     for i, (x, z, sx, sy, sz) in enumerate(layout):
         items += placed(house(sx, sy, sz, seed=i), (x, 0, z), yaw=np.random.RandomState(i).uniform(-16, 16))
-    for i, (x, z) in enumerate([(-11.5, -26.5), (8.2, -26.0), (-2.0, -36.0), (14.0, -34.0)]):
+    for i, (x, z) in enumerate([(-14.0, -12.5), (-3.5, -13.5), (-9.0, -21.5), (5.5, -18.0)]):
         items += placed(palm(3.2 + 0.4 * i, seed=10 + i), (x, 0, z))
     items += placed(ridge(), (0, 0, 0))
     for i, (x, z, s) in enumerate([(-3.8, 2.6, 0.45), (3.2, -2.0, 0.35), (-2.6, 5.6, 0.28),

@@ -66,10 +66,14 @@ class Backdrop:
     def _noise(self, x, z, freq, seed):
         n = 0.0
         a = 1.0
-        for i in range(4):
-            n = n + a * np.sin(x * freq * (2 ** i) + np.sin(z * freq * (2 ** i) * 1.7 + seed) * 2.0 + seed * 1.3)
-            a *= 0.5
-        return n / 1.9
+        tot = 0.0
+        for i in range(5):
+            f = freq * (2.03 ** i)
+            n = n + a * (np.sin(x * f + seed * 1.7) * np.sin(z * f * 1.21 - seed * 0.9)
+                         + 0.5 * np.sin((x + z) * f * 0.7 + seed))
+            tot += a
+            a *= 0.52
+        return n / tot
 
     def render(self, t, scale=2):
         w, h = max(self.w // scale, 2), max(self.h // scale, 2)
@@ -83,16 +87,25 @@ class Backdrop:
         glow = np.exp(-(1 - ang) * 9.0) * 0.55 + np.exp(-(1 - ang) * 1.6) * 0.22
         col = col + glow[..., None] * np.array([0.60, 0.70, 0.94], np.float32)
 
-        # clouds: project the sky ray onto a virtual plane
-        with np.errstate(divide="ignore", invalid="ignore"):
-            px = np.where(d[..., 1] > 0.03, d[..., 0] / np.maximum(d[..., 1], 0.03), 0)
-            pz = np.where(d[..., 1] > 0.03, d[..., 2] / np.maximum(d[..., 1], 0.03), 0)
-        cl = self._noise(px * 0.8 + t * 0.012, pz * 0.8 + t * 0.005, 1.6, 5.0)
-        cl = np.clip((cl - 0.30) * 2.6, 0, 1) ** 1.3
-        cl = cl * np.clip(d[..., 1] * 7.0, 0, 1)
-        lit = np.clip(0.55 + 0.45 * (d @ self.sun), 0, 1)
-        cl_col = np.array([0.99, 0.97, 0.95], np.float32) * (0.55 + 0.45 * lit[..., None])
-        col = col * (1 - 0.55 * cl[..., None]) + cl_col * (0.55 * cl[..., None])
+        # clouds: noise sampled on a squashed sky plane (no seam, no streaks)
+        den = np.maximum(d[..., 1], 0.02)
+        px, pz = d[..., 0] / den, d[..., 2] / den
+        r = np.sqrt(px * px + pz * pz)
+        sq = 1.0 / (1.0 + r * 0.06)
+        cx, cz = px * sq * 0.95, pz * sq * 0.95
+        n1 = self._noise(cx + t * 0.03, cz + t * 0.014, 1.15, 4.0)
+        n2 = self._noise(cx * 2.1 - t * 0.02, cz * 2.1, 1.9, 9.0)
+        cl = n1 * 0.95 + n2 * 0.30
+        cl = np.clip((cl - 0.30) * 4.2, 0, 1) ** 0.62
+        el = np.clip(d[..., 1], 0, 1)
+        cl = cl * np.clip((el - 0.01) * 26.0, 0, 1) ** 0.5
+        lit = np.clip(0.62 + 0.38 * (d @ self.sun), 0, 1)
+        thick = np.clip(cl * 1.15, 0, 1)[..., None]
+        sunlit = np.array([1.00, 0.99, 0.96], np.float32)
+        shadow = np.array([0.60, 0.66, 0.76], np.float32)
+        cl_col = shadow * (1 - thick) + sunlit * thick
+        cl_col = cl_col * (0.80 + 0.20 * lit[..., None])
+        col = col * (1 - 0.95 * cl[..., None]) + cl_col * (0.95 * cl[..., None])
 
         eps = 1e-4
         ground = d[..., 1] < -eps
@@ -102,7 +115,7 @@ class Backdrop:
 
         n1 = self._noise(gx * 0.5, gz * 0.5, 1.0, 3.0)
         n2 = self._noise(gx * 3.2, gz * 3.2, 1.0, 11.0)
-        sand_col = self.sand * (0.90 + 0.10 * n1[..., None] + 0.06 * n2[..., None])
+        sand_col = self.sand * (0.95 + 0.055 * n1[..., None] + 0.030 * n2[..., None])
 
         shore = self.shore_z + 1.6 * np.sin(gx * 0.33) + 0.7 * np.sin(gx * 1.02)
         sea_m = np.clip((shore - gz) / 1.6, 0, 1)
@@ -134,7 +147,7 @@ class Stage:
         self.cam = None
 
     def new_frame(self, backdrop, t):
-        self.img, self.dist = backdrop.render(t)
+        self.img, self.dist = backdrop.render(t, scale=2)
         self.zbuf = np.full((self.h, self.w), 1e9, np.float32)
 
     # -------------------------------------------------------------- shadows --
@@ -183,8 +196,12 @@ class Stage:
             for cube, M in placed:
                 R, Tr = M[:3, :3], M[:3, 3]
                 for name, quad, uvs, nrm in _faces(cube):
-                    wq = (R @ quad.T).T + Tr
                     wn = R @ nrm
+                    center = R @ ((quad[0] + quad[2]) * 0.5) + Tr
+                    # backface cull: a hidden face costs the same as a visible one
+                    if float(wn @ (center - self.cam.pos)) > 0:
+                        continue
+                    wq = (R @ quad.T).T + Tr
                     cam_d = wq - self.cam.pos
                     depth = cam_d @ self.cam.forward
                     if (depth <= 0.12).any():
@@ -227,7 +244,8 @@ class Stage:
 
             src = np.array([[0, 0], [pw, 0], [pw, ph], [0, ph]], np.float32)
             dst = (sp - np.array([x0, y0], np.float32)).astype(np.float32)
-            if abs(cv2.contourArea(dst.reshape(-1, 1, 2))) < 0.6:
+            area = abs(cv2.contourArea(dst.reshape(-1, 1, 2)))
+            if area < 1.2:
                 continue
             Mtex = cv2.getPerspectiveTransform(src, dst)
             warp = cv2.warpPerspective(patch, Mtex, (W, H), flags=cv2.INTER_LINEAR,
@@ -266,14 +284,23 @@ class Stage:
     # -------------------------------------------------------------- finish --
     def finish(self, focus=4.0, aperture=1.0, fog=0.30, bloom=0.32,
                exposure=1.0, grain=0.010, vignette=0.30, seed=0, warm=1.0):
-        img = self._dof(focus, aperture)
+        # downscale first: every pass below is far cheaper at delivery size
+        if self.ssaa != 1.0:
+            img = cv2.resize(np.clip(self.img, 0, 1), (self.out_w, self.out_h),
+                             interpolation=cv2.INTER_AREA)
+            dist = cv2.resize(self.dist, (self.out_w, self.out_h),
+                              interpolation=cv2.INTER_NEAREST)
+        else:
+            img, dist = self.img, self.dist
+        H, W = self.out_h, self.out_w
+        img = self._dof(img, dist, focus, aperture, H)
         if fog > 0:
-            haze = np.clip(self.dist / 95.0, 0, 1)[..., None] ** 1.2
+            haze = np.clip(dist / 95.0, 0, 1)[..., None] ** 1.2
             img = img * (1 - fog * haze) + np.array([0.74, 0.82, 0.92], np.float32) * fog * haze
 
         x = np.clip(img * exposure, 0, None)
         hi = np.clip(x - 0.78, 0, None) ** 1.15
-        x = x + cv2.GaussianBlur(hi, (0, 0), self.h / 110.0) * bloom
+        x = x + cv2.GaussianBlur(hi, (0, 0), H / 110.0) * bloom
 
         lum = (0.2126 * x[..., 0] + 0.7152 * x[..., 1] + 0.0722 * x[..., 2])[..., None]
         x = (x - 0.42) * 1.09 + 0.42
@@ -286,29 +313,28 @@ class Stage:
         sat = (0.2126 * x[..., 0] + 0.7152 * x[..., 1] + 0.0722 * x[..., 2])[..., None]
         x = sat + (x - sat) * 1.06
 
-        yy, xx = np.mgrid[0:self.h, 0:self.w].astype(np.float32)
-        nx = (xx - self.w / 2) / (self.w / 2)
-        ny = (yy - self.h / 2) / (self.h / 2)
+        yy, xx = np.mgrid[0:H, 0:W].astype(np.float32)
+        nx = (xx - W / 2) / (W / 2)
+        ny = (yy - H / 2) / (H / 2)
         vig = 1 - vignette * np.clip(np.sqrt(nx ** 2 + ny ** 2 * 0.85) - 0.42, 0, 1) ** 1.5
         x = x * vig[..., None]
 
         rng = np.random.default_rng(seed)
-        x = x + rng.normal(0, grain, (self.h, self.w, 1)).astype(np.float32)
-        if self.ssaa != 1.0:
-            x = cv2.resize(np.clip(x, 0, 1), (self.out_w, self.out_h), interpolation=cv2.INTER_AREA)
+        x = x + rng.normal(0, grain, (H, W, 1)).astype(np.float32)
         return np.clip(x, 0, 1)
 
-    def _dof(self, focus, aperture):
+    @staticmethod
+    def _dof(img, dist, focus, aperture, H):
         if aperture <= 0.001:
-            return self.img
-        coc = np.clip(np.abs(self.dist - focus) / max(focus, 0.5) * aperture, 0, 1) ** 1.2
+            return img
+        coc = np.clip(np.abs(dist - focus) / max(focus, 0.5) * aperture, 0, 1) ** 1.2
         if coc.max() < 0.02:
-            return self.img
-        b1 = cv2.GaussianBlur(self.img, (0, 0), max(self.h / 300.0, 0.8))
-        b2 = cv2.GaussianBlur(self.img, (0, 0), max(self.h / 120.0, 2.0))
+            return img
+        b1 = cv2.GaussianBlur(img, (0, 0), max(H / 300.0, 0.8))
+        b2 = cv2.GaussianBlur(img, (0, 0), max(H / 120.0, 2.0))
         w1 = np.clip(coc * 2.0, 0, 1)[..., None]
         w2 = np.clip(coc * 2.0 - 1.0, 0, 1)[..., None] * 0.85
-        out = self.img * (1 - w1) + b1 * w1
+        out = img * (1 - w1) + b1 * w1
         out = out * (1 - w2) + b2 * w2
         return out
 

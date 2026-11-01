@@ -23,7 +23,7 @@ import stage
 HERE = os.path.dirname(os.path.abspath(__file__))
 FPS = 24
 W, H = 1920, 1080
-SSAA = 2.0
+SSAA = 1.5
 SUN = np.array([0.30, 0.55, 0.78], np.float64)   # afternoon, sea behind camera
 UNIT = 1.0 / 16.0
 
@@ -97,7 +97,7 @@ def shot1(t, lt):
     cam = camera((lerp(-0.6, 0.9, a), lerp(1.62, 1.44, a), z + lerp(5.8, 4.9, a)),
                  (-0.30, lerp(0.92, 0.80, a), z - 1.3), fov=lerp(42, 37, a),
                  shake=0.5, t=t, seed=3)
-    return items, cam, dict(focus=5.6, aperture=0.85, fog=0.26, warm=1.05)
+    return items, cam, dict(focus=5.6, aperture=0.5, fog=0.26, warm=1.05)
 
 
 def shot2(t, lt):
@@ -109,18 +109,18 @@ def shot2(t, lt):
              (coffin_at((1.05, 0, 0.45), yaw=-26.0), coffin.textures)]
     cam = camera((lerp(-0.15, 0.45, ease(lt / 4.0)), 1.24, 4.8), (0.10, 0.92, 0.1),
                  fov=33, shake=0.4, t=t, seed=7)
-    return items, cam, dict(focus=4.6, aperture=1.0, fog=0.26, warm=1.05)
+    return items, cam, dict(focus=4.6, aperture=0.7, fog=0.26, warm=1.05)
 
 
 def shot3(t, lt):
     """Low detail: the coffin, red trim, Ivy standing behind."""
     items = [(bg_items(), props.ATLAS.textures),
              (coffin_at((0.0, 0, 0.0), yaw=-20.0), coffin.textures),
-             (ivy_at(t, "idle", lt, yaw=196.0, pos=(2.35, 0, -0.5)), ivy.textures)]
+             (ivy_at(t, "idle", lt, yaw=204.0, pos=(1.85, 0, -1.45)), ivy.textures)]
     a = ease(lt / 4.2)
-    cam = camera((lerp(-1.6, -1.25, a), 0.42, lerp(5.2, 4.4, a)),
-                 (0.05, 0.60, 0.1), fov=lerp(44, 40, a), roll=-1.5, shake=0.4, t=t, seed=11)
-    return items, cam, dict(focus=3.4, aperture=1.2, fog=0.22, warm=1.10, exposure=1.10)
+    cam = camera((lerp(-1.05, -0.8, a), 0.42, lerp(4.2, 3.5, a)),
+                 (0.35, 0.62, -0.3), fov=lerp(44, 39, a), roll=-1.4, shake=0.4, t=t, seed=11)
+    return items, cam, dict(focus=3.4, aperture=0.9, fog=0.22, warm=1.10, exposure=1.06)
 
 
 def shot4(t, lt):
@@ -151,13 +151,13 @@ def shot5(t, lt):
             vals[uuid]["rot"] = vals[uuid]["rot"] + np.array([0, 0, -55.0]) * reach * bone
     if _bone_uuid("head") in vals:
         vals[_bone_uuid("head")]["rot"] = vals[_bone_uuid("head")]["rot"] + np.array([8.0, 0, 0]) * reach
-    M = _mtx((-0.62, 0, 0.55), 172.0)
+    M = _mtx((-0.75, 0, 0.35), 168.0)
     body = [(e, M @ Mw) for e, Mw in ivy.walk(vals)]
     items = [(bg_items(), props.ATLAS.textures), (body, ivy.textures),
-             (coffin_at((1.15, 0, 1.05), yaw=-26.0), coffin.textures)]
+             (coffin_at((1.35, 0, 1.25), yaw=-26.0), coffin.textures)]
     a = ease(lt / 5.0)
-    cam = camera((lerp(1.75, 1.05, a), lerp(1.35, 1.05, a), lerp(4.6, 3.8, a)),
-                 (-0.15, 0.80, 0.85), fov=lerp(36, 32, a), roll=lerp(1.0, -0.7, a),
+    cam = camera((lerp(3.6, 3.0, a), lerp(2.05, 1.75, a), lerp(6.2, 5.5, a)),
+                 (0.15, 0.62, 0.85), fov=lerp(34, 31, a), roll=lerp(1.0, -0.7, a),
                  shake=0.45, t=t, seed=17)
     return items, cam, dict(focus=3.9, aperture=1.25, fog=0.24, warm=1.02)
 
@@ -176,8 +176,8 @@ def shot6(t, lt):
     items = [(bg_items(), props.ATLAS.textures), (body, ivy.textures),
              (coffin_at((1.15, 0, 1.15), yaw=-26.0), coffin.textures)]
     a = ease(lt / 5.6)
-    cam = camera((lerp(1.5, 0.1, a), lerp(1.5, 2.0, a), lerp(5.4, 8.6, a)),
-                 (-0.5, lerp(1.0, 0.75, a), 0.2), fov=lerp(35, 42, a),
+    cam = camera((lerp(2.4, 0.4, a), lerp(1.55, 2.05, a), lerp(5.8, 9.0, a)),
+                 (-0.45, lerp(0.95, 0.72, a), 0.3), fov=lerp(35, 42, a),
                  shake=0.5, t=t, seed=19)
     return items, cam, dict(focus=6.8, aperture=0.7, fog=0.30, warm=1.0)
 
@@ -209,8 +209,8 @@ def render(t, ssaa=SSAA, w=W, h=H):
             break
     st = stage.Stage(w, h, ssaa=ssaa)
     st.cam = cam
-    bd = stage.Backdrop(st.w, st.h, cam, SUN, shore_z=-26.0)
-    st.new_frame(bd, t)
+    bd = stage.Backdrop(st.w, st.h, cam, SUN, shore_z=-30.0)
+    st.new_frame(bd, t)  # backdrop is rendered at 1/scale and upsampled
     st.shadow(items, SUN, strength=0.46)
     st.draw(items, SUN, ambient=0.86)
     img = st.finish(focus=look["focus"], aperture=look["aperture"], fog=look["fog"],
