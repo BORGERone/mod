@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build309-classic.jar` — Build 309 (откат до 303), 5 гейтов PASS.
-База — 303 (`settledlands-0.8.0-build303-wires-stop-speed.jar`), патч `tools/patch_build309.py`.
+`settledlands-0.8.0-build310-blue-wire.jar` — Build 310 (фикс синего провода), 5 гейтов + `blue_wire_check` PASS.
+База — 309 (`settledlands-0.8.0-build309-classic.jar`), патч `tools/patch_build310.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -276,7 +276,22 @@ Class-файл не содержит абсолютных смещений, по
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
 
-## Build 309 (актуально) — откат до 303
+## Build 310 (актуально) — синий провод от ноды «Урон»
+
+Жалоба: «вытянул синий кабель из выходного узла урона и подключил во входной узел преследования,
+но синий провод не отображается».
+
+Причина: в `NpcPursuitValuePinMixin290` и рисование (`settledlands$paintValueWires`), и резка
+(`settledlands$cutValueWire`) проверяли `isCheckValueNode(from)` — только «В радиусе». Ссылка
+при этом сохранялась в графе и работала на сервере, поэтому NPC преследовал цель, а провода не было.
+
+Фикс — два условия: `isCheckValueNode(from)` → `isValueSourceNode(from)` (В радиусе **или** Урон).
+Тронут один класс, `dev/settledlands/mixin/NpcPursuitValuePinMixin290.class`.
+
+Новый гейт `tools/blue_wire_check.py` читает класс из jar и падает, если рисование или резка
+снова сузят проверку: 303/309 — FAIL (воспроизводит баг), 310 — OK.
+
+## Build 309 — откат до 303
 
 Пользователь: «откатить ещё до того момента как мы начали менять граф под граф из другого мода».
 308 откатывал только до 304, а 304 — уже скин под G&G, поэтому сборка сделана **от jar 303**.

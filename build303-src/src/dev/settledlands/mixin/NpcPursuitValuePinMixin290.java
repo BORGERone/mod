@@ -58,6 +58,11 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * <p>Both links live in the node action (consumers {@code @ids}, source {@code #id}), so
  * they are saved with the graph and need no new field.</p>
  *
+ * <p>Build 310: the two places that drew and cut a wire into a pursuit node's blue input
+ * tested for the "В радиусе" node alone, so a wire pulled out of an "Урон" node into that
+ * input was stored in the node, was read by the server pass, and was never drawn. They now
+ * accept either producer, which is what {@code isValueSourceNode} means.</p>
+ *
  * <p>Build 290 adds the second blue producer and the four stock consumers:</p>
  *
  * <ul>
@@ -275,12 +280,15 @@ public abstract class NpcPursuitValuePinMixin290 {
             return true;
         }
 
-        // Then a wire from a check node into a pursuit node's blue input.
+        // Then a wire from a blue output - "В радиусе" or "Урон" - into a pursuit node's
+        // blue input. Build 310: both producers have the pin on the same edge, so the cut
+        // tests the whole value-source family; testing only the check node left the wire
+        // from an "Урон" node uncuttable.
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
             if (!PursuitGraphNode272.isPursuitNode(node)) continue;
             int source = PursuitGraphNode272.sourceId(node);
             Node from = source < 0 ? null : graph.get(source);
-            if (from == null || !PursuitGraphNode272.isCheckValueNode(from)) continue;
+            if (from == null || !PursuitGraphNode272.isValueSourceNode(from)) continue;
             boolean hit = PursuitGraphNode272.hitValueWire(canvas,
                     PursuitGraphNode272.checkPinScreenX(canvas, from),
                     PursuitGraphNode272.checkPinScreenY(canvas, from),
@@ -465,8 +473,12 @@ public abstract class NpcPursuitValuePinMixin290 {
                             PursuitGraphNode272.targetPinScreenX(canvas, from),
                             PursuitGraphNode272.targetPinScreenY(canvas, from), inX, outY, color,
                             false);
-                } else if (from != null && PursuitGraphNode272.isCheckValueNode(from)) {
-                    // The body comes from an "In Radius" node: same cable, blue.
+                } else if (from != null && PursuitGraphNode272.isValueSourceNode(from)) {
+                    // The body comes from a blue output - "В радиусе" or "Урон": the pin sits
+                    // on the right edge of either card, so one cable, blue, from that pin.
+                    // Build 310: this branch used to accept only the check node, so a wire
+                    // pulled out of an "Урон" node was stored in the graph, took part in the
+                    // server pass, and was simply never drawn.
                     quads += curve(buffer, matrix,
                             PursuitGraphNode272.checkPinScreenX(canvas, from),
                             PursuitGraphNode272.checkPinScreenY(canvas, from), inX, outY, color,

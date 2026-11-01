@@ -1,0 +1,2 @@
+11b8e14b0314c4fba9a329dd118e2e5a30e610655c618738e5c022024a0f20f0  settledlands-0.8.0-build310-blue-wire.jar
+3f2930a56ed54d7d66982b71e15c027e4fa17228c5128f6ee024941046996a54  SettledLands-Build310-BlueWire-Source.zip
