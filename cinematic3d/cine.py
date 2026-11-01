@@ -264,9 +264,14 @@ def build_audio(path, total):
     L = np.zeros(n)
     R = np.zeros(n)
 
-    def add(sig, pan=0.0, gain=1.0):
-        L[:] += sig * gain * (0.5 - pan * 0.4)
-        R[:] += sig * gain * (0.5 + pan * 0.4)
+    def add(sig, pan=0.0, gain=1.0, at=0):
+        """Add a mono signal into the stereo bed at sample offset `at`."""
+        n_end = min(len(sig) + at, n)
+        if n_end <= at:
+            return
+        seg = sig[:n_end - at]
+        L[at:n_end] += seg * gain * (0.5 - pan * 0.4)
+        R[at:n_end] += seg * gain * (0.5 + pan * 0.4)
 
     # surf: filtered noise, slow swell
     noise = rng.normal(0, 1, n)
@@ -295,9 +300,9 @@ def build_audio(path, total):
                 out[i:i + ln] += cr * 0.5
             tt += rate
         return out
-    add(steps(0.4, 5.6, 0.52) * 0.35, -0.2)
-    add(steps(14.4, 18.6, 0.5) * 0.30, -0.2)
-    add(steps(26.6, 30.2, 0.5) * 0.30, 0.25)
+    add(steps(0.4, 5.6, 0.52), -0.2, gain=0.35)
+    add(steps(14.4, 18.6, 0.5), -0.2, gain=0.30)
+    add(steps(26.6, 30.2, 0.5), 0.25, gain=0.30)
 
     # low drone pad
     pad = (np.sin(2 * np.pi * 55 * t) * 0.5 + np.sin(2 * np.pi * 82.5 * t) * 0.25
@@ -314,7 +319,7 @@ def build_audio(path, total):
             tt = np.linspace(0, 0.6, ln)
             g = np.sin(2 * np.pi * (f0 + 300 * np.sin(2 * np.pi * 6 * tt)) * tt)
             g *= np.hanning(ln) * 0.05
-            add(g, 0.5)
+            add(g, 0.5, at=i)
 
     # whoosh on the cuts
     for tc in (6.0, 10.0, 14.2, 20.2, 25.2):
@@ -323,7 +328,7 @@ def build_audio(path, total):
         if 0 <= i and i + ln < n:
             tt = np.linspace(0, 1, ln)
             w = rng.normal(0, 1, ln) * np.sin(np.pi * tt) ** 2 * 0.10
-            add(w, 0.0)
+            add(w, 0.0, at=i)
 
     st = np.stack([L, R], axis=1)
     st /= max(np.abs(st).max(), 1e-6) / 0.72
