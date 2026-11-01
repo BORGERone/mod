@@ -10,6 +10,11 @@ Two things went wrong in Build 310 and are checked here on the shipped class:
     a pursuit slower than plain walking. The fix divides that factor out, so the speed path
     must reference {@code navigationSpeedFactor}.
 
+Build 312 added the pacing and the path policy, checked numerically here because both were
+"it works but it looks wrong" bugs: a sprint (PURSUIT_WALK / CATCH_UP_EXTRA too high), and a walk
+that stopped, turned and set off again because the path was rebuilt every couple of blocks
+(REPATH_SUCCESS_TICKS / RETRY_MAX_SHIFT / RESUME_MARGIN).
+
     python3 tools/pursuit_check.py settledlands-0.8.0-build311-pursuit-fix.jar
 
 Exit 0 = both fixes are in the shipped class.
@@ -55,6 +60,43 @@ def field_names(cp, info):
     return {cp[ni][1] for _acc, ni, _di, _attrs in info["fields"]}
 
 
+def field_values(cp, info):
+    """ConstantValue fields as numbers - the pacing policy is readable in the class file."""
+    out = {}
+    for _acc, ni, _di, attrs in info["fields"]:
+        for an, ab in attrs:
+            if cp[an][1] != "ConstantValue":
+                continue
+            idx = struct.unpack(">H", ab[:2])[0]
+            tag, raw = cp[idx]
+            if tag == 3:
+                out[cp[ni][1]] = float(struct.unpack(">i", raw)[0])
+            elif tag == 4:
+                out[cp[ni][1]] = struct.unpack(">f", raw)[0]
+            elif tag == 5:
+                out[cp[ni][1]] = float(struct.unpack(">q", raw)[0])
+            elif tag == 6:
+                out[cp[ni][1]] = struct.unpack(">d", raw)[0]
+    return out
+
+
+# name: (ceiling, message)
+LIMITS = {
+    "PURSUIT_WALK": (1.3, "the pursuit walk is faster than a purposeful walk"),
+    "CATCH_UP_EXTRA": (1.4, "the catch-up floor is back at the sprint of Build 311"),
+    "RETRY_MAX_SHIFT": (1.0, "the retry backoff can freeze the body for longer than two seconds"),
+    "REPATH_SUCCESS_TICKS": (14.0, "a walking path is rebuilt too eagerly - that is the stutter"),
+    "RESUME_MARGIN": (2.0, "a target on the standoff edge switches the body on and off"),
+}
+MISSING = {
+    "PURSUIT_WALK": "the pursuit walk factor is gone",
+    "CATCH_UP_EXTRA": "the catch-up floor is gone",
+    "RETRY_MAX_SHIFT": "the retry backoff cap is gone",
+    "REPATH_SUCCESS_TICKS": "the repath cooldown is gone",
+    "RESUME_MARGIN": "the resume margin is gone",
+}
+
+
 def main(argv):
     if len(argv) != 1:
         print(__doc__)
@@ -79,6 +121,14 @@ def main(argv):
     if "navigationSpeedFactor" not in refs:
         problems.append("the speed path does not cancel the auto-AI damping - a pursuit walks "
                         "slower than ordinary walking")
+    values = field_values(main_info["cp"], main_info)
+    for name, message in MISSING.items():
+        if name not in values:
+            problems.append("%s (%s)" % (message, name))
+    for name, (ceiling, message) in LIMITS.items():
+        value = values.get(name)
+        if value is not None and value > ceiling:
+            problems.append("%s: %s = %s, limit %s" % (message, name, value, ceiling))
     if state_info is None:
         problems.append("%s is gone" % STATE)
     elif "latched" not in field_names(state_info["cp"], state_info):
@@ -89,7 +139,7 @@ def main(argv):
         for line in problems:
             print("  - " + line)
         return 1
-    print("pursuit_check: OK  %s  (body is latched, speed is undamped)" % jar.name)
+    print("pursuit_check: OK  %s  (body latched, speed undamped, pacing and repath sane)" % jar.name)
     return 0
 
 

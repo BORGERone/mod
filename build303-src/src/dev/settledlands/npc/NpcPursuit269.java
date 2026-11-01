@@ -70,12 +70,22 @@ public final class NpcPursuit269 {
     public static final double MAX_CATCH_UP_BOOST = 3.0D;
 
     /**
-     * Build 302: how much faster than the walking escort the catch-up is. The walking escort
-     * keeps the catch-up base speed ({@code GuideNpc#walkingNavigationSpeed(true)}), so the
-     * pursuit itself is 1.26x faster than it used to be, and the catch-up starts at this
-     * factor on top of that and ramps up to the node's own catch-up boost.
+     * Build 312: the pursuit walks a little faster than the NPC's ordinary walk - 1.15x
+     * against the 0.10 walking constant, so 0.115 blocks a tick. Build 311 had it at the
+     * catch-up base (1.6x) and that read as a sprint; this is a purposeful walk.
      */
-    public static final double CATCH_UP_EXTRA = 1.4D;
+    public static final double PURSUIT_WALK = 1.15D;
+
+    /**
+     * Build 312: the catch-up floor, relative to the same walk. The node's own catch-up boost
+     * adds {@link #CATCH_UP_BOOST_SHARE} of its excess on top, so the default 1.5 boost gives
+     * 1.55x and the maximum 3.0 gives 2.45x. Build 311 reached 3.04x, which is what made the
+     * chase look like a teleport between frames.
+     */
+    public static final double CATCH_UP_EXTRA = 1.25D;
+
+    /** Share of the node's excess catch-up boost that is turned into speed. */
+    private static final double CATCH_UP_BOOST_SHARE = 0.6D;
 
     /** Output of the node, available to the nodes that run after it. */
     public static final String TOKEN_TARGET = "%pursuit%";
@@ -107,11 +117,26 @@ public final class NpcPursuit269 {
     /** Escort progress watchdog: no movement of half a block in five seconds is a failure. */
     private static final int PROGRESS_WINDOW_TICKS = 100;
     private static final double PROGRESS_MIN_SQ = 0.25D;
-    /** Escort retry backoff: 20, 40, 80, then 160 ticks. */
+    /** Escort retry backoff: 20, then 40 ticks - never long enough to look like standing. */
     private static final int RETRY_BASE_TICKS = 20;
-    private static final int RETRY_MAX_SHIFT = 3;
-    /** How far the target has to move before a stopped pursuer starts again. */
-    private static final double RESUME_MARGIN = 0.75D;
+    private static final int RETRY_MAX_SHIFT = 1;
+
+    /**
+     * Build 312: a walking path is rebuilt only once the target has moved this far from the
+     * point the path leads to, and never more often than {@link #REPATH_SUCCESS_TICKS}. Every
+     * rebuild throws the current path away, and the mob has to stop, turn and set off again -
+     * which is exactly the stutter this constant exists to remove.
+     */
+    private static final double REPATH_DISTANCE_SQ = 9.0D;
+
+    /** Minimum ticks between two rebuilds of a path that is still being walked. */
+    private static final int REPATH_SUCCESS_TICKS = 10;
+    /**
+     * How far the target has to move before a stopped pursuer starts again. Build 312 raised
+     * it from 0.75: a target standing on the standoff edge used to switch the body on and off
+     * every few ticks, which looked like a twitch.
+     */
+    private static final double RESUME_MARGIN = 1.0D;
     /** Catch-up relocation: gap, cooldown and the distance the NPC lands at. */
     private static final double RELOCATE_GAP = 24.0D;
     private static final int RELOCATE_COOLDOWN_TICKS = 20;
@@ -333,8 +358,9 @@ public final class NpcPursuit269 {
                 ? distanceSqr > CATCH_UP_END_DISTANCE_SQ
                 : distanceSqr > state.catchUpDistance * state.catchUpDistance;
         if (state.catchingUp != wasCatchingUp) {
+            // Build 312: the mode change alone must not brake the body - zeroing the motion
+            // here is the other half of the stutter. The speed is re-applied below.
             state.resetPath();
-            stopMotion(npc);
         }
 
         double keepSqr = state.keepDistance * state.keepDistance;
@@ -365,22 +391,23 @@ public final class NpcPursuit269 {
             return true;
         }
 
-        // Build 302: the pursuit itself now moves at what used to be the catch-up speed, and
-        // the catch-up gets an extra push on top of that.
-        double boost = 1.0D;
-        if (state.catchingUp) {
-            // Ramp the extra push in over the distance above the catch-up threshold.
-            double span = Math.max(state.catchUpDistance, 1.0D);
-            double ramp = clamp((gap - state.catchUpDistance) / span, 0.0D, 1.0D);
-            boost = CATCH_UP_EXTRA + (state.catchUpBoost - 1.0D) * ramp;
-        }
         // Build 311: GuideNpc#walkingNavigationSpeed carries the auto-AI peace-time damping
         // (x0.55 when the NPC is not fighting), which made a pursuit slower than ordinary
-        // walking. Divide it back out: a pursuit walks at the catch-up base (0.16 against the
-        // ordinary 0.10, so 1.6x the walk), and the catch-up adds its push on top of that.
+        // walking. Divide it back out to get the NPC's real walking speed.
         double damping = NpcAutoAiEngine255.navigationSpeedFactor(npc);
         if (!(damping > 0.05D) || damping > 1.0D) damping = 1.0D;
-        double speed = npc.walkingNavigationSpeed(true) / damping * boost;
+        double walk = npc.walkingNavigationSpeed(false) / damping;
+
+        // Build 312: a purposeful walk while closing in (1.15x the ordinary walk) and a clear
+        // push while catching up (1.25x plus part of the node's own boost). Build 311 ran at
+        // 1.6x to 3.04x, which is what made the movement look too fast.
+        double factor = PURSUIT_WALK;
+        if (state.catchingUp) {
+            double span = Math.max(state.catchUpDistance, 1.0D);
+            double ramp = clamp((gap - state.catchUpDistance) / span, 0.0D, 1.0D);
+            factor = CATCH_UP_EXTRA + (state.catchUpBoost - 1.0D) * CATCH_UP_BOOST_SHARE * ramp;
+        }
+        double speed = walk * factor;
         navigation.setSpeedModifier(speed);
 
         // Escort progress watchdog: a path that does not move the body is a failure.
@@ -396,18 +423,24 @@ public final class NpcPursuit269 {
                     && npc.distanceToSqr(state.progressX, state.progressY, state.progressZ) < PROGRESS_MIN_SQ) {
                 state.failures = Math.min(state.failures + 1, 10);
                 state.repathTicks = retryTicks(state.failures);
-                stopMotion(npc);
+                // Build 312: no stopMotion here. A body that could not move is already still;
+                // zeroing the motion as well only added a visible jolt once the path came back.
             }
             state.rememberProgress(npc);
         }
-        if (state.repathTicks > 0) {
-            state.repathTicks--;
-            return true;
-        }
-        // Keep the current path: only rebuild it when it is finished, or - while
-        // catching up - when the target walked away from the last snapshot.
+        if (state.repathTicks > 0) state.repathTicks--;
+
+        // Build 312: keep the path that is being walked. It is rebuilt when it runs out, or
+        // while catching up once the target left the point it leads to and the cooldown has
+        // passed. Rebuilding it on every two blocks of target movement restarted the walk from
+        // a standstill, which is what the repeated stop-turn-go stutter was.
         if (!navigation.isDone()) {
-            if (!state.catchingUp || !targetMoved(target, state)) return true;
+            if (!state.catchingUp || state.repathTicks > 0 || !targetMoved(target, state)) {
+                return true;
+            }
+        } else if (state.repathTicks > 0) {
+            // Path finished, still in the retry backoff: stand, but only for those few ticks.
+            return true;
         }
 
         Vec3 destination = chasePoint(npc, target, state);
@@ -416,7 +449,7 @@ public final class NpcPursuit269 {
             if (npc.distanceToSqr(state.progressX, state.progressY, state.progressZ) >= 1.0D) {
                 state.failures = 0;
             }
-            state.repathTicks = retryTicks(state.failures);
+            state.repathTicks = REPATH_SUCCESS_TICKS;
             state.snapshotTarget(target);
         } else {
             state.failures = Math.min(state.failures + 1, 10);
@@ -431,7 +464,7 @@ public final class NpcPursuit269 {
 
     private static boolean targetMoved(Entity target, State state) {
         if (!state.hasTargetSnapshot) return true;
-        return target.distanceToSqr(state.targetX, state.targetY, state.targetZ) > CATCH_UP_TARGET_MOVED_SQ;
+        return target.distanceToSqr(state.targetX, state.targetY, state.targetZ) > REPATH_DISTANCE_SQ;
     }
 
     /**

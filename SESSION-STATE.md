@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build311-pursuit-fix.jar` — Build 311 (преследование), 5 гейтов + `pursuit_check` + `blue_wire_check` PASS.
-База — 310 (`settledlands-0.8.0-build310-blue-wire.jar`), патч `tools/patch_build311.py`.
+`settledlands-0.8.0-build312-pursuit-pacing.jar` — Build 312 (темп + рваность), 5 гейтов + `pursuit_check` (с числовой проверкой констант) + `blue_wire_check` PASS.
+База — 311 (`settledlands-0.8.0-build311-pursuit-fix.jar`), патч `tools/patch_build312.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -276,7 +276,23 @@ Class-файл не содержит абсолютных смещений, по
 - Дифф против 291: `~npc/NpcActions.class`, `~neoforge.mods.toml`, `~settledlands-patch-info.txt`.
 - Гейты: 455 записей / 407 классов, 38 миксинов, 0 новых внешних ссылок, 0 висячих.
 
-## Build 311 (актуально) — преследование: 10 секунд и скорость
+## Build 312 (актуально) — темп преследования и рваное движение
+
+Жалоба после 311: «слишком быстрые» + «рваные, останавливается перед тем как повернуться».
+
+- **Скорость.** 311 гнал 1.6×…3.04× обычной ходьбы. Теперь `PURSUIT_WALK = 1.15` (0.115) и
+  догон `CATCH_UP_EXTRA = 1.25 + 0.6 × (boost − 1) × ramp` → ×1.55 при boost 1.5, максимум ×2.45.
+  База берётся как `walkingNavigationSpeed(false) / damping`, то есть настоящая ходьба (0.10).
+- **Рваность.** Причины: (1) путь пересобирался при смещении цели на 2 блока — теперь держится до
+  конца, пересборка только в догоне после 3 блоков и не чаще 10 тиков (`REPATH_SUCCESS_TICKS`);
+  (2) смена режима догона вызывала `stopMotion` — убрано; (3) откат после провала 20/40/80/160
+  тиков (`RETRY_MAX_SHIFT = 3`) — теперь 20/40; (4) сторож прогресса больше не обнуляет движение;
+  (5) `RESUME_MARGIN` 0.75 → 1.0, чтобы цель на границе не включала/выключала тело.
+
+`pursuit_check.py` теперь читает ConstantValue из класса и проверяет числа (PURSUIT_WALK ≤ 1.3,
+CATCH_UP_EXTRA ≤ 1.4, RETRY_MAX_SHIFT ≤ 1, REPATH_SUCCESS_TICKS ≤ 14, RESUME_MARGIN ≤ 2.0).
+
+## Build 311 — преследование: 10 секунд и скорость
 
 Две жалобы с одной связки «Урон → преследование»:
 1) NPC преследует ровно 10 секунд и встаёт; 2) скорость ходьбы при преследовании не поднята.

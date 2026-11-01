@@ -1,0 +1,2 @@
+164525f047808a636b687bf4c2529c653b7cc3b4a8c41b2701b09b5044217f81  settledlands-0.8.0-build312-pursuit-pacing.jar
+4d00e772591f22f21061d9e0fab4d7950f88fe7287caa9a1420472f71ac25eb7  SettledLands-Build312-Pacing-Source.zip
