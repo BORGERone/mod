@@ -4,8 +4,8 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build317-water.jar` — Build 317 (без урона от падения, без утопления, всплывает), 5 гейтов + `pursuit_check` + `blue_wire_check` PASS.
-База — 316 (`settledlands-0.8.0-build316-stride.jar`), патч `tools/patch_build317.py`.
+`settledlands-0.8.0-build318-clipboard.jar` — Build 318 (копирование/вставка нод, Ctrl+C/Ctrl+V), 5 гейтов + `clipboard_check` PASS.
+База — 317 (`settledlands-0.8.0-build317-water.jar`), патч `tools/patch_build318.py`.
 Цепочка (историческая): 272 (база с Drive) → 273 (`tools/patch_build273.py`) → 274 (`tools/patch_build274.py`)
 → 275 (`tools/patch_build275.py`, первая сборка из исходников через ECJ) → 276 (`tools/patch_build276.py`)
 → 277 (`tools/patch_build277.py`) → 278 (`tools/patch_build278.py`, возвращён `drawNode`-хук)
@@ -27,7 +27,8 @@
 → 294 (`tools/patch_build294.py`, `В радиусе` → `Условие`: обход не обрывается на пустом радиусе).
 → 295 (`tools/patch_build295.py`, пустой радиус всё равно запускает цепь проверки)
 → 296…304 → 305 (`tools/patch_build305.py`, воркспейс нод + библиотека с поиском)
-→ 306…316 → 317 (`tools/patch_build317.py`, вода и падение: `NpcWater317` + `NpcWaterMixin317`).
+→ 306…316 → 317 (`tools/patch_build317.py`, вода и падение: `NpcWater317` + `NpcWaterMixin317`)
+→ 318 (`tools/patch_build318.py`, копирование/вставка нод: `NpcGraphClipboard318` + `NpcClipboard318` + `NpcClipboardMixin318`).
 
 **Build 290 НЕ ЗАПУСКАЕТСЯ**: `GuideDialogueValue290.settledlands$enterSendGraph` был объявлен с `Object` вместо
 `GuideDialogue$Session` → `InvalidInjectionException: Invalid descriptor` → миксин не применился → фатальный вылет.
@@ -39,6 +40,20 @@
 Что и почему исправлено — `README-Build273-RU.md` … `README-Build285-RU.md`.
 База 277 — jar 276, база 278 — jar 277, база 279 — jar 278, база 280 — jar 279, база 281 — jar 280, база 282 — jar 281; сборка из исходников: `build27X-src/`
 (`src/`, `stubs/`, `out/`, для 279 ещё `api-src/`+`api2/`), ECJ 3.46.100.
+
+Build 318: копирование и вставка нод. Буфер — системный, текст свой (`SLGRAPH318 1`), поэтому блок
+переносится между графами, NPC, мирами и через блокнот. `NpcGraphClipboard318` пишет все поля ноды и все
+шесть связей (`next`, `falseNext`, `varInputNode`, `choices`, `randomBranches`, `triggers`), при вставке
+id перенумеровываются, связь живёт только если оба конца были в наборе, входная нода не копируется,
+лимит `MAX_NODES` проверяется до создания нод, при сбое — откат. Списки на `Node` **final** — заполнять
+только `clear()/addAll()`. `NpcClipboard318` — единственное место с буферными вызовами
+(`Minecraft#keyboardHandler.get/setClipboard`); они внесены в `CONFIRMED_EXTERNAL` в
+`tools/check_mixin_class.py` с обоснованием, иначе фаза D валит сборку. Миксин `NpcClipboardMixin318` —
+HEAD `keyPressed(III)Z`, работает только при `isControlDownSafe()` и не в текстовом поле; фокус читается
+через приведение к `NpcDialogueGraphScreen`, а не к `Screen`, иначе гейт видит внешний `Screen#getFocused`.
+Гейт `tools/clipboard_check.py` компилирует `tools/tests/ClipboardRoundTrip.java` против самого jar и
+гоняет круговую проверку без игры. Пункты правого клика в штатной палитре отложены: там фиксированная
+таблица строк (`TOTAL_ROWS` + своя отрисовка/скролл/попадание), это отдельная правка.
 
 Build 317: падение и вода. Два новых класса, база не менялась.
 `NpcWater317.tick(GuideNpc)` — `fallDistance = FALL_GUARD (-8.0f)` каждый тик (ниже нуля специально:

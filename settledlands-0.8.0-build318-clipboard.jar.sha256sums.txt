@@ -1,0 +1,1 @@
+eebfc0a2af78c29dafa3909cc0bdd9ee7c9e918e7fc402ae0e3b24e2bfa838e4  settledlands-0.8.0-build318-clipboard.jar

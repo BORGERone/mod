@@ -615,6 +615,24 @@ def external_refs(classes):
     return refs
 
 
+# External members that the base jar does not call, with the evidence that they exist. Every entry
+# here is a promise made by a person, not by the stub; add one only with something that can be
+# rechecked later, and keep the list short.
+#   Build 318: the clipboard. Minecraft#keyboardHandler is the public field holding the client
+#   KeyboardHandler, and KeyboardHandler#getClipboard / #setClipboard are exactly the pair vanilla
+#   EditBox calls for Ctrl+C and Ctrl+V in 1.21.1; every mod that puts text on the system clipboard
+#   calls them this way (checked against 1.21 mod sources: Jade, ProjectRed, RebornCore).
+CONFIRMED_EXTERNAL = {
+    ("net/minecraft/client/Minecraft", "keyboardHandler",
+     "Lnet/minecraft/client/KeyboardHandler;"):
+        "Build 318 clipboard: public field on Minecraft, the client keyboard handler",
+    ("net/minecraft/client/KeyboardHandler", "getClipboard", "()Ljava/lang/String;"):
+        "Build 318 clipboard: what vanilla EditBox does for Ctrl+V",
+    ("net/minecraft/client/KeyboardHandler", "setClipboard", "(Ljava/lang/String;)V"):
+        "Build 318 clipboard: what vanilla EditBox does for Ctrl+C",
+}
+
+
 def check_external_refs(classes, base_jar, problems):
     """Every external call must be backed by code that already runs in game.
 
@@ -645,8 +663,12 @@ def check_external_refs(classes, base_jar, problems):
         by_sig.setdefault((name, desc), set()).add(owner)
 
     new = []
+    confirmed = 0
     for owner, name, desc in sorted(refs):
         if (owner, name, desc) in known:
+            continue
+        if (owner, name, desc) in CONFIRMED_EXTERNAL:
+            confirmed += 1
             continue
         base_owners = by_sig.get((name, desc))
         if base_owners and any(not o.startswith("dev/settledlands/") for o in base_owners):
@@ -662,6 +684,9 @@ def check_external_refs(classes, base_jar, problems):
             "check it against code that runs in game first "
             "(Build 280: Entity#hasLineOfSight did not exist)"
             % (owner, name, desc, where))
+    if confirmed:
+        print("  confirmed by hand      : %d external member(s) from CONFIRMED_EXTERNAL"
+              % confirmed)
     return len(refs), len(new)
 
 
