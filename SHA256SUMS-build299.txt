@@ -1,0 +1,2 @@
+b0c6da1149872113fe17ff145da5caed8009436527fc5807d6d4f2890e055023  settledlands-0.8.0-build299-if-card-scoped.jar
+c02b499e67e7bf6ae457457d7176b07021ded438d3b95427885f996743ab8773  SettledLands-Build299-IfCardScoped-Source.zip
