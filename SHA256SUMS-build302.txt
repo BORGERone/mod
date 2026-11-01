@@ -1,0 +1,2 @@
+5658b074765b5d0789676ddf86ed072220d11937e76c57912bbaba49f01c3952  settledlands-0.8.0-build302-wires-stop-speed.jar
+8dbfdd3857f763ae87e2139d9eb1ba72c9c561b7d4710028eb28d2d3b4ed32a1  SettledLands-Build302-WiresStopSpeed-Source.zip
