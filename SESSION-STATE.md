@@ -7,23 +7,28 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build346-damage-trace.jar` — **сборка-прибор**: поведение не меняется, пишет в лог,
-где теряется нода «Урон» (кап 80 строк, потом сам выключается). База — 345. Два общих хука:
-`GuideNpc.hurt` HEAD (удар дошёл) и `GuideDialogue.handleNpcDamaged` HEAD (какой граф и что решает каждая
-нода: min / filter / cooldown / if-in). Классы `NpcDamageTrace346`, `NpcDamageTraceHurtMixin346`,
-`NpcDamageTraceChainMixin346`; патч `tools/patch_build346.py`; гейт `tools/damage_trace_check.py`;
-512 записей, 65 миксинов. В игре **не подтверждено**.
+`settledlands-0.8.0-build347-common-damage.jar` — **нода урона снова работает в личной вкладке**.
+Причина (найдена трассировкой 346 по логу пользователя, `latest-5.log`): все три вызова
+`GuideDialogue.handleNpcDamaged` несли **общий** граф (`nodes=2 enabled=false entry=-1 damage=0`), а
+личная вкладка (`nodes=5 damage=1`, нода #4, все условия проходят) не читалась вовсе. Виноват хук 334:
+он вешался на этот **единственный** метод, через который проходят все три штатные цепочки (личная,
+прогулка, анимация), и отменял его — один недописанный общий граф выключал ноды урона везде и у всех.
+Фикс: `NpcCommonGraphDamageMixin334` удалён из джарника и из `mixins`, вместо него
+`NpcCommonGraphDamageMixin347` на `GuideNpc.hurt` (HEAD): цепочка общего графа **добавляется** к трём
+штатным один раз за удар, ничего не отменяется. Трасса 346 осталась (кап 80 строк). Патч
+`tools/patch_build347.py`; `tools/common_graph_check.py` обновлён (хук урона обязан быть на `hurt` и НЕ
+может вешать `handleNpcDamaged`/cancel). 512 записей, 65 миксинов. В игре **не подтверждено**.
 
-**Факты из лога 345-й сессии (`latest-4.log`):**
+**Важно про порядок:** общий граф прогоняется на HEAD `hurt`, т.е. до штатных цепочек. Если одна и та
+же нода с одним id есть и в «Общем», и в личной вкладке, первая займёт слот отката в общей карте
+`damageCooldowns` и вторая в течение откатa не сработает. Порядок выбран осознанно: при падении чужого
+мода внутри `LivingEntity.hurt` (см. HackersAndSlashers) RETURN-хук не выполнился бы вообще.
 
-1. Оба удара (`02:00:28`, `02:01:16`) дошли до `GuideNpc.hurt` — цепочка вызывается. Строк
-   `NpcActions` (`выполнена команда триггера` / `не выполнена`) нет **ни одной** → нода не совпала:
-   её нет в серверном графе либо её отсекло условие. `effect give` при этом в чат ничего не пишет.
-2. **Урон по НПС не наносится вообще** — и это чужой баг: HackersAndSlashers 2.0-beta2.5 бросает NPE
-   `PlayerHelper.lastComboStep(Player) == null` в `LivingIncomingDamageEvent` внутри
-   `LivingEntity.hurt` (кадр `GuideNpc.hurt(GuideNpc.java:336)`), удар обрывается до снятия хп.
-3. Поправка: `matchesDamageFilter` (таблица `tableswitch`) читает 0 любой / 1 игрок / 2 монстр /
-   3 не игрок — совпадает с экраном; **фильтр не был причиной**, хук 345 — no-op.
+**Из лога 346 (`latest-5.log`):** удар доходит до `GuideNpc.hurt` дважды на клиенте и сервере (клиент —
+`LocalPlayer`, сервер — `ServerPlayer`), `own=enabled=true entry=0 nodes=5 damage=1`;
+`node #4 type=6 min=1 filter=0(any) if-in=0 -> gate-ok`. Плюс прежний факт: HackersAndSlashers
+2.0-beta2.5 кидает NPE `PlayerHelper.lastComboStep()` в `LivingIncomingDamageEvent` внутри
+`LivingEntity.hurt` — урон по НПС не начисляется (чужой мод).
 
 **Урок для будущих сборок:** интерфейсный миксин (`public interface ...`) допустим только для цели,
 которая сама интерфейс. Для доступа к приватным членам чужого класса — резолв по имени (MethodHandle,

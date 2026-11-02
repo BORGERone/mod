@@ -1,17 +1,14 @@
 # HANDOFF — передача сессии следующей модели
 
 **Дата:** 2026-11-02. **Ветка:** `arena/99d7691a-mod` (**не переименовывать, не переключаться**).
-**Текущая сборка:** `settledlands-0.8.0-build346-damage-trace.jar` — сборка-прибор, поведение не
-меняется. Хуки: `GuideNpc.hurt` HEAD (`NpcDamageTraceHurtMixin346`) и `GuideDialogue.handleNpcDamaged`
-HEAD (`NpcDamageTraceChainMixin346`) → `NpcDamageTrace346` (логгер `SettledLands/DamageTrace346`, строки
-`[dmg] …`, кап 80). Патч `tools/patch_build346.py`, гейт `tools/damage_trace_check.py`, 512 записей,
-65 миксинов.
-
-**Факты (лог `latest-4.log`, сборка 345):** удары доходят до `GuideNpc.hurt`, но `NpcActions` не пишет
-ни строки → нода не совпала (нет в серверном графе либо отсекло условие). Отдельно: HackersAndSlashers
-2.0-beta2.5 кидает NPE `PlayerHelper.lastComboStep()` в `LivingIncomingDamageEvent` внутри
-`LivingEntity.hurt` — урон по НПС не наносится вовсе (чужой мод). `matchesDamageFilter` = 0 любой /
-1 игрок / 2 монстр / 3 не игрок (совпадает с UI), поэтому фильтр причиной **не был**, хук 345 — no-op.
+**Текущая сборка:** `settledlands-0.8.0-build347-common-damage.jar` — **нода урона снова срабатывает
+в личной вкладке**. Причина найдена трассой 346 (`latest-5.log`): все три вызова `handleNpcDamaged`
+несли общий граф (`nodes=2 enabled=false entry=-1 damage=0`), личная вкладка (`nodes=5 damage=1`,
+`node #4 -> gate-ok`) не читалась. Виноват `NpcCommonGraphDamageMixin334`: он отменял
+`GuideDialogue.handleNpcDamaged`, а через этот единственный метод проходят все три штатные цепочки
+(личная / прогулка / анимация) → пустой общий граф выключал урон везде. В 347 хук 334 удалён, вместо
+него `NpcCommonGraphDamageMixin347` на `GuideNpc.hurt` HEAD: общий граф добавляется, не подменяет.
+Трасса 346 осталась. Патч `tools/patch_build347.py`, 512 записей, 65 миксинов.
 
 **Подтверждено в игре:** 341 (FA/Touch'n Motion на профессионной риге — «всё прекрасно работает»),
 339 (рука NPC у Punchy!), 337, 335, 334, 333, 332, 331, 330. 340 — пустая (отозвана). 338 — отозвана.

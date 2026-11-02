@@ -1,0 +1,2 @@
+9f2aabb9d1234947a64de77192c588d83ce8e1f2d5589226e97f9a01e33c71f4  settledlands-0.8.0-build347-common-damage.jar
+1dc69a624afc90cfbfccd7dfdca0b3f05b5394455876746f687ed53240a0a026  SettledLands-Build347-CommonDamage-Source.zip

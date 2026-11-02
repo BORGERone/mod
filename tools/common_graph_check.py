@@ -30,7 +30,7 @@ import disasm
 STORAGE = "dev/settledlands/npc/NpcCommonGraphStorage.class"
 HELPER = "dev/settledlands/npc/NpcCommonGraph334.class"
 MIXIN = "dev/settledlands/mixin/NpcCommonGraphMixin334.class"
-DAMAGE = "dev/settledlands/mixin/NpcCommonGraphDamageMixin334.class"
+DAMAGE = "dev/settledlands/mixin/NpcCommonGraphDamageMixin347.class"
 CONFIG = "settledlands.mixins.json"
 
 SAVED_DATA = "net/minecraft/world/level/saveddata/SavedData"
@@ -117,7 +117,7 @@ def main(argv):
     # -- the mixins are applied where they matter ---------------------------
     common = config.get("mixins", [])
     client = config.get("client", [])
-    for name in ("NpcCommonGraphMixin334", "NpcCommonGraphDamageMixin334"):
+    for name in ("NpcCommonGraphMixin334", "NpcCommonGraphDamageMixin347"):
         if name not in common:
             return fail("%s is not in the common mixin list - the server would never apply it" % name)
         if name in client:
@@ -143,10 +143,24 @@ def main(argv):
         return fail("CompoundTag.remove is not the real %s - StubDrift" % (REMOVE[2],))
     print("ok: tick replaced for the anim pass only, editor and save read and write the store")
 
+    # -- the damage hook adds a chain, it does not replace the stock three ---------------
     damage, damage_refs = info(blobs[DAMAGE])
     if not any(r[0] == "dev/settledlands/npc/NpcCommonGraph334" and r[1] == "damage"
                for r in damage_refs):
         return fail("the damage hook does not reach the helper")
+    damage_text = text(damage)
+    if "hurt(Lnet/minecraft/world/damagesource/DamageSource;F)Z" not in damage_text:
+        return fail("the shared damage chain is not run from GuideNpc.hurt")
+    if "handleNpcDamaged" in damage_text:
+        return fail("the shared damage chain still hooks handleNpcDamaged - that method is what the "
+                    "NPC's own tab, the walk tab and the animation tab all pass through, so one hook "
+                    "there replaces all three")
+    if "cancellable" in damage_text:
+        return fail("the shared damage hook can cancel - it must add a chain, not replace one")
+    if not any(r[1] == "damageCooldowns" and r[0].endswith("NpcCommonGraphDamageMixin347")
+               for r in damage_refs) and "damageCooldowns" not in damage_text:
+        return fail("the shared damage chain has no cooldown map to work with")
+    print("ok: the shared graph is one more damage chain, run once per hit from GuideNpc.hurt")
 
     # -- the tab says so ----------------------------------------------------
     if lang_ru.get("gui.settledlands.graph.tab_anim") != "Общее":
