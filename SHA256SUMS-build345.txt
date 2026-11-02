@@ -1,0 +1,2 @@
+42215cef33ab6625cc73fa19f53e783f861de9fd857abc8cdef0b63bc7096111  settledlands-0.8.0-build345-graph-fixes.jar
+683b2a3a6344fdc1937c6482bd5f9c86738922b3ec5b5f47b8ba76e5fe3734a0  SettledLands-Build345-GraphFixes-Source.zip

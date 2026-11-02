@@ -29,6 +29,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import disasm
 
 RULE = "dev/settledlands/npc/NpcRandomLine336.class"
+DICE = "dev/settledlands/npc/NpcRandomLine345.class"
+CONTEXT = "dev/settledlands/mixin/NpcRandomLineContext345.class"
 NODE_MIXIN = "dev/settledlands/mixin/NpcRandomLineNodeMixin336.class"
 UI = "dev/settledlands/npc/client/NpcRandomLineUi337.class"
 UI_MIXIN = "dev/settledlands/mixin/NpcRandomLineInspectorMixin337.class"
@@ -81,13 +83,14 @@ def main(argv):
     jar = argv[0]
     with zipfile.ZipFile(jar) as z:
         names = set(z.namelist())
-        for entry in (RULE, NODE_MIXIN, UI, UI_MIXIN):
+        for entry in (RULE, DICE, CONTEXT, NODE_MIXIN, UI, UI_MIXIN):
             if entry not in names:
                 return fail("%s is not in the jar" % entry)
         for entry in GONE:
             if entry in names:
                 return fail("%s is still shipped - the canvas check box has to be gone" % entry)
-        blobs = {e: z.read(e) for e in (RULE, NODE_MIXIN, UI, UI_MIXIN, NODE, SCREEN)}
+        blobs = {e: z.read(e) for e in (RULE, DICE, CONTEXT, NODE_MIXIN, UI, UI_MIXIN, NODE,
+                                        SCREEN)}
         config = json.loads(z.read(CONFIG).decode("utf-8"))
         lang_ru = json.loads(z.read("assets/settledlands/lang/ru_ru.json").decode("utf-8"))
         lang_en = json.loads(z.read("assets/settledlands/lang/en_us.json").decode("utf-8"))
@@ -110,16 +113,47 @@ def main(argv):
     if LINE_FOR not in methods(node):
         return fail("Node has no %s%s - there is nothing to hook" % LINE_FOR)
     _node_mixin, node_mixin_refs = info(blobs[NODE_MIXIN])
-    if not any(r[0] == "dev/settledlands/npc/NpcRandomLine336" and r[1] == "pick"
+    if not any(r[0] == "dev/settledlands/npc/NpcRandomLine345" and r[1] == "pick"
                for r in node_mixin_refs):
-        return fail("the node hook never asks the rule for a phrase")
-    print("ok: lineFor is hooked and asks the rule")
+        return fail("the node hook never asks for the per-NPC phrase")
+    if any(r[0] == "dev/settledlands/npc/NpcRandomLine336" and r[1] == "pick"
+           for r in node_mixin_refs):
+        return fail("the node hook still asks the node for one shared phrase - every NPC would say "
+                    "the same line")
+
+    # -- the dice belong to the NPC, not to the shared node ----------------------------------
+    dice, dice_refs = info(blobs[DICE])
+    if not any(r[0] == "java/util/WeakHashMap" for r in dice_refs):
+        return fail("the rolls are not kept per NPC - the cache would hold every body forever")
+    for step in ("rollInto", "rollFor", "pick", "enter", "exit"):
+        if step not in text(dice):
+            return fail("the dice have no %s step" % step)
+    if not any(r[0] == "dev/settledlands/npc/NpcRandomLine336" and r[1] == "phrases"
+               for r in dice_refs):
+        return fail("the dice do not read the phrases of the node")
+    context, context_refs = info(blobs[CONTEXT])
+    context_text = text(context)
+    for part, why in (("sendGraph", "the view that turns a node into a line"),
+                      ("GuideDialogue$Session", "the real view signature"),
+                      ("settledlands$enterNpc", "the NPC being marked"),
+                      ("settledlands$exitNpc", "the mark being cleared")):
+        if part not in context_text:
+            return fail("the per-NPC hook does not name %s - %s" % (part, why))
+    for call in ("enter", "exit"):
+        if not any(r[0] == "dev/settledlands/npc/NpcRandomLine345" and r[1] == call
+                   for r in context_refs):
+            return fail("the per-NPC hook never calls %s()" % call)
+    print("ok: lineFor asks the per-NPC dice, and the NPC is known while its view is built")
 
     # -- the toggle is a real inspector row ---------------------------------
     common = config.get("mixins", [])
     client = config.get("client", [])
     if "NpcRandomLineNodeMixin336" not in common:
         return fail("the node hook is not a common mixin - the server would never apply it")
+    if "NpcRandomLineContext345" not in common:
+        return fail("the per-NPC hook is not a common mixin - the server would never apply it")
+    if "NpcRandomLineContext345" in client:
+        return fail("the per-NPC hook is listed as a client mixin - the server would lose it")
     if "NpcRandomLineUiMixin336" in client or "NpcRandomLineUiMixin336" in common:
         return fail("the canvas check box of 336 is still registered")
     if "NpcRandomLineInspectorMixin337" not in client:

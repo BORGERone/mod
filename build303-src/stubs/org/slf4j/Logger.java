@@ -7,4 +7,6 @@ public interface Logger {
     void warn(String message, Object argument);
 
     void warn(String message, Object first, Object second);
+
+    void warn(String message, Object... arguments);
 }

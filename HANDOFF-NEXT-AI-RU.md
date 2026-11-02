@@ -1,17 +1,16 @@
 # HANDOFF — передача сессии следующей модели
 
 **Дата:** 2026-11-02. **Ветка:** `arena/99d7691a-mod` (**не переименовывать, не переключаться**).
-**Текущая сборка:** `settledlands-0.8.0-build344-cinematic-legs.jar` — **ноги в сцене костра = ноги
-NPC** плюс руки 343 (в игре НЕ подтверждено ни то, ни другое). Костёр — единственная сцена с телом:
-`CampfireStation.renderBody` считает бедро/колено/стопу и отдаёт отрезки в `LegMesh.draw`, который
-красил свои кубы скином игрока. 344 ставит в эти же точки **кость ноги модели NPC**
-(`rightleg`/`leftleg`), растянутую по отрезку и развёрнутую на него, со своей текстурой; броня
-(`CampfireArmor.drawInScene`) — через резолвнутый `MethodHandle`; миксин `CinematicLegMesh344` —
-класс-миксин `@Pseudo`, HEAD в `LegMesh.draw`, `require=0`, без `@Invoker`, типовой связи с Cinematic
-нет. Патч `tools/patch_build344.py`, база 343, 505 записей, 61 миксин. Стабы для компиляции:
-`build303-src/api4-src` (`org/joml/Vector3fc/Vector3f/Quaternionf`, `PoseStack.mulPose`) — дескрипторы
-должны совпадать с настоящим JOML. Гейт `tools/cinematic_check.py` покрывает оба моста; харнессы
-`CinematicHandsSmokeTest` 10 ok, `CinematicLegsSmokeTest` 12 ok.
+**Текущая сборка:** `settledlands-0.8.0-build345-graph-fixes.jar` — **нода «Урон» срабатывает на
+выбранный источник** + **у случайной реплики бросок свой у каждого NPC** (344 внутри). Баг урона: UI
+нумерует источники 0 любой / 1 игрок / 2 монстр / 3 не игрок, а `GuideDialogue.matchesDamageFilter` читал
+0 игрок / 1 монстр / 2 не игрок / 3 любой → «От игрока» не срабатывал на игрока вообще. Правка — общая
+инъекция `NpcDamageFilterMixin345` + правило `NpcDamageFilter345`. Действие выполняется от игрока, НПС
+лечится через `@npc`. Рандом реплики — `NpcRandomLine345` (слабый кэш по НПС, один бросок на тело) +
+`NpcRandomLineContext345` (HEAD/RETURN `sendGraph`; `GuideDialogue$Session` package-private → стаб-зеркало
+`build303-src/stubs345-src`); `NpcRandomLineNodeMixin336` заменён на 345-й. Патч `tools/patch_build345.py`,
+509 записей, 63 миксина. Гейты: `damage_source_check` (новый), `random_line_check` (обновлён), харнесс
+`GraphFixes345SmokeTest` 24 ok. В игре НЕ подтверждено.
 
 **Подтверждено в игре:** 341 (FA/Touch'n Motion на профессионной риге — «всё прекрасно работает»),
 339 (рука NPC у Punchy!), 337, 335, 334, 333, 332, 331, 330. 340 — пустая (отозвана). 338 — отозвана.
