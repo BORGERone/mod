@@ -622,6 +622,21 @@ def external_refs(classes):
 #   KeyboardHandler, and KeyboardHandler#getClipboard / #setClipboard are exactly the pair vanilla
 #   EditBox calls for Ctrl+C and Ctrl+V in 1.21.1; every mod that puts text on the system clipboard
 #   calls them this way (checked against 1.21 mod sources: Jade, ProjectRed, RebornCore).
+#   Build 348: the armour pass. Everything it calls is vanilla's own armour layer verbatim: the
+#   NeoForge 1.21.1 patch of HumanoidArmorLayer is the game's method with a few lines replaced, so the
+#   untouched lines next to them are 1.21.1 source - itemstack.get(DataComponents.TRIM),
+#   armoritem.getEquipmentSlot() == slot, armormaterial.layers(), armormaterial$layer.dyeable(),
+#   this.renderModel(..., armormaterial$layer.texture(flag)), RenderType.armorCutoutNoCull(texture),
+#   RenderType.armorEntityGlint(), model.renderToBuffer(pose, buffer, light, OverlayTexture.NO_OVERLAY,
+#   tint), itemstack.hasFoil(), DyedItemColor.getOrDefault(itemstack, -6265536) and the four
+#   EquipmentSlot constants.
+#   https://github.com/neoforged/NeoForge/blob/1.21.1/patches/net/minecraft/client/renderer/entity/layers/HumanoidArmorLayer.java.patch
+#   The two armour layers and the bake call are shown by Ars Nouveau's DummyRenderer (1.21):
+#   new HumanoidArmorLayer<>(this, new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
+#   new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)), context.getModelManager())
+#   https://github.com/baileyholl/Ars-Nouveau/blob/1.21.x/src/main/java/com/hollingsworth/arsnouveau/client/renderer/entity/DummyRenderer.java
+#   and by irons-spells-n-spellbooks' AngelWingsLayer for Minecraft#getEntityModels().bakeLayer(...):
+#   https://github.com/iron431/irons-spells-n-spellbooks/blob/1.21.1/src/main/java/io/redspace/ironsspellbooks/render/AngelWingsLayer.java
 CONFIRMED_EXTERNAL = {
     ("net/minecraft/client/Minecraft", "keyboardHandler",
      "Lnet/minecraft/client/KeyboardHandler;"):
@@ -630,6 +645,60 @@ CONFIRMED_EXTERNAL = {
         "Build 318 clipboard: what vanilla EditBox does for Ctrl+V",
     ("net/minecraft/client/KeyboardHandler", "setClipboard", "(Ljava/lang/String;)V"):
         "Build 318 clipboard: what vanilla EditBox does for Ctrl+C",
+    ("net/minecraft/client/model/geom/EntityModelSet", "bakeLayer",
+     "(Lnet/minecraft/client/model/geom/ModelLayerLocation;)Lnet/minecraft/client/model/EntityModel;"):
+        "Build 348 armour: what every 1.21 renderer bakes its layers with (AngelWingsLayer, 1.21)",
+    ("net/minecraft/client/model/geom/ModelLayers", "PLAYER_INNER_ARMOR",
+     "Lnet/minecraft/client/model/geom/ModelLayerLocation;"):
+        "Build 348 armour: leggings layer, baked into a HumanoidModel (DummyRenderer, 1.21)",
+    ("net/minecraft/client/model/geom/ModelLayers", "PLAYER_OUTER_ARMOR",
+     "Lnet/minecraft/client/model/geom/ModelLayerLocation;"):
+        "Build 348 armour: helmet/chest/boots layer, baked into a HumanoidModel (DummyRenderer, 1.21)",
+    ("net/minecraft/client/model/HumanoidModel", "renderToBuffer",
+     "(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V"):
+        "Build 348 armour: the draw call vanilla's armour layer makes with overlay + tint",
+    ("net/minecraft/client/renderer/RenderType", "armorCutoutNoCull",
+     "(Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/client/renderer/RenderType;"):
+        "Build 348 armour: the render type vanilla's armour layer draws a plate into",
+    ("net/minecraft/client/renderer/RenderType", "armorEntityGlint",
+     "()Lnet/minecraft/client/renderer/RenderType;"):
+        "Build 348 armour: the glint pass vanilla draws over an enchanted piece",
+    ("net/minecraft/world/entity/EquipmentSlot", "HEAD",
+     "Lnet/minecraft/world/entity/EquipmentSlot;"):
+        "Build 348 armour: one of the four slots the armour layer walks",
+    ("net/minecraft/world/entity/EquipmentSlot", "CHEST",
+     "Lnet/minecraft/world/entity/EquipmentSlot;"):
+        "Build 348 armour: one of the four slots the armour layer walks",
+    ("net/minecraft/world/entity/EquipmentSlot", "LEGS",
+     "Lnet/minecraft/world/entity/EquipmentSlot;"):
+        "Build 348 armour: one of the four slots the armour layer walks (the inner model)",
+    ("net/minecraft/world/entity/EquipmentSlot", "FEET",
+     "Lnet/minecraft/world/entity/EquipmentSlot;"):
+        "Build 348 armour: one of the four slots the armour layer walks",
+    ("net/minecraft/world/entity/LivingEntity", "getItemBySlot",
+     "(Lnet/minecraft/world/entity/EquipmentSlot;)Lnet/minecraft/world/item/ItemStack;"):
+        "Build 348 armour: how the armour layer reads the piece it is about to draw",
+    ("net/minecraft/world/item/ArmorItem", "getEquipmentSlot",
+     "()Lnet/minecraft/world/entity/EquipmentSlot;"):
+        "Build 348 armour: the guard before a piece is drawn",
+    ("net/minecraft/world/item/ArmorItem", "getMaterial",
+     "()Lnet/minecraft/core/Holder;"):
+        "Build 348 armour: armouritem.getMaterial().value() in the armour layer",
+    ("net/minecraft/world/item/ArmorMaterial", "layers", "()Ljava/util/List;"):
+        "Build 348 armour: the layer list the armour layer loops over",
+    ("net/minecraft/world/item/ArmorMaterial$Layer", "dyeable", "()Z"):
+        "Build 348 armour: decides whether the piece takes the leather dye colour",
+    ("net/minecraft/world/item/ArmorMaterial$Layer", "texture",
+     "(Z)Lnet/minecraft/resources/ResourceLocation;"):
+        "Build 348 armour: the texture of a layer, inner/outer as the armour layer asks",
+    ("net/minecraft/world/entity/LivingEntity", "setItemSlot",
+     "(Lnet/minecraft/world/entity/EquipmentSlot;Lnet/minecraft/world/item/ItemStack;)V"):
+        "Build 348 armour: the equipment write vanilla's own swapHandItems makes in 1.21.1",
+    ("net/minecraft/world/item/ItemStack", "hasFoil", "()Z"):
+        "Build 348 armour: whether the enchanted glint pass is drawn over the piece",
+    ("net/minecraft/world/item/component/DyedItemColor", "getOrDefault",
+     "(Lnet/minecraft/world/item/ItemStack;I)I"):
+        "Build 348 armour: the leather colour the armour layer tints a dyeable layer with",
 }
 
 

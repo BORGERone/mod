@@ -7,4 +7,12 @@ public class RenderType {
     public static RenderType entityTranslucent(ResourceLocation texture) {
         return null;
     }
+
+    public static RenderType armorCutoutNoCull(ResourceLocation texture) {
+        return null;
+    }
+
+    public static RenderType armorEntityGlint() {
+        return null;
+    }
 }
