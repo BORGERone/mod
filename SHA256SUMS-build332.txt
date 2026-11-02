@@ -1,0 +1,2 @@
+618fad574393bba96b8aa0e8b10d9feee931b910577b16e435c18a21ed735d64  settledlands-0.8.0-build332-blue-wire-points.jar
+365dd0ee1b69dcaf911cbb7c9a881bb74d06a78f1ffbb71d80c31626795280c6  SettledLands-Build332-BlueWirePoints-Source.zip

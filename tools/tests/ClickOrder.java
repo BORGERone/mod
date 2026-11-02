@@ -68,8 +68,13 @@ public final class ClickOrder {
         // -- nothing else swallows a click ------------------------------------------------------
         expect("right click on empty canvas", NpcWirePointsUi321.ACT_NONE,
                 false, 1, false, false, false, false, false);
-        expect("middle click on a point", NpcWirePointsUi321.ACT_NONE,
-                false, 2, true, true, true, true, true);
+        // Build 331: the middle button removes a point exactly like the right one.
+        expect("middle click on a point",
+                NpcWirePointsUi321.ACT_REMOVE, false, 2, true, false, false, false, false);
+        expect("middle click on a port",
+                NpcWirePointsUi321.ACT_REMOVE, false, 2, false, false, true, true, false);
+        expect("middle click on empty canvas", NpcWirePointsUi321.ACT_NONE,
+                false, 2, false, false, false, false, false);
         expect("double click on empty canvas", NpcWirePointsUi321.ACT_NONE,
                 true, 0, false, false, false, false, false);
         expect("single press on empty canvas", NpcWirePointsUi321.ACT_NONE,

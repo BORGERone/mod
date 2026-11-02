@@ -257,6 +257,28 @@ public final class WirePointsRoundTrip {
         check$(NpcWirePoints321.hangs(sharedFrom).isEmpty(),
                 "a refused drop still left the wire waiting");
 
+        // -- a point on a blue value wire (Build 332) --------------------------------
+        NpcDialogueGraph blue = new NpcDialogueGraph();
+        Node card = blue.add(NpcDialogueGraph.TRIGGER, 0, 0);
+        Node blueFrom = blue.add(NpcDialogueGraph.TRIGGER, 200, 0);
+        NpcWirePoints321.addValuePoint(blueFrom, card.id, 96, 48, 0);
+        check$(NpcWirePoints321.valueBends(blueFrom, card.id).size() == 1,
+                "the blue point was not stored");
+        check$(blueFrom.animBone != null && blueFrom.animBone.equals("SLP2|v" + card.id + ":96,48"),
+                "unexpected blue text: " + blueFrom.animBone);
+        check$(NpcWirePoints321.points(blue).size() == 1, "the blue point is not on the canvas");
+        NpcWirePoints321.addValuePoint(blueFrom, card.id, 96, 48, 0);
+        check$(NpcWirePoints321.valueBends(blueFrom, card.id).size() == 1,
+                "the blue point was added again on top of itself");
+        check$(NpcWirePoints321.movePoint(blue, 96, 48, 104, 56), "the blue point did not move");
+        check$(NpcWirePoints321.valueBends(blueFrom, card.id).get(0)[0] == 104,
+                "the blue point did not follow the drag");
+        check$(NpcWirePoints321.hasPoint(blue, 104, 56), "the blue point is not found by position");
+        check$(NpcWirePoints321.removePoint(blue, 104, 56), "the blue point was not removed");
+        check$(NpcWirePoints321.valueBends(blueFrom, card.id).isEmpty(), "the blue point is still there");
+        check$(blueFrom.animBone == null || blueFrom.animBone.isEmpty(),
+                "the blue text was left behind: " + blueFrom.animBone);
+
         finish();
     }
 

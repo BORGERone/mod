@@ -11,6 +11,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.WeakHashMap;
+import java.util.function.BiPredicate;
 
 /**
  * Build 325: a point is a hub on the canvas, and a wire may run through a run of them.
@@ -51,6 +52,12 @@ public final class NpcWirePoints321 {
 
     /** First token of the text this build writes. */
     public static final String MARK = "SLP2";
+
+    /**
+     * The port a {@link Bend} carries when the point sits on a blue value wire instead of a stock
+     * connection. A value wire has no port number of its own, so the port is the marker.
+     */
+    public static final int VALUE_PORT = -1;
 
     /** First token of the text Build 321/322 wrote - still read. */
     public static final String MARK_OLD = "SLP1";
@@ -112,10 +119,12 @@ public final class NpcWirePoints321 {
      */
     private static final class Data {
         final Map<String, List<int[]>> bends = new LinkedHashMap<>();
+        /** Points of a blue value wire, keyed by the node on its far end. Build 332. */
+        final Map<Integer, List<int[]>> value = new LinkedHashMap<>();
         final List<int[]> hangs = new ArrayList<>();
 
         boolean empty() {
-            return bends.isEmpty() && hangs.isEmpty();
+            return bends.isEmpty() && value.isEmpty() && hangs.isEmpty();
         }
     }
 
@@ -195,6 +204,19 @@ public final class NpcWirePoints321 {
                 int colon = entry.indexOf(':');
                 if (colon < 0) continue;
                 String head = entry.substring(0, colon);
+                if (head.startsWith("v")) {
+                    // A blue value wire: the node on the far end after the marker.
+                    int to = number(head.substring(1), -1);
+                    List<int[]> points = new ArrayList<>();
+                    for (String pair : entry.substring(colon + 1).trim().split(" ")) {
+                        int comma = pair.indexOf(',');
+                        if (comma < 0) continue;
+                        points.add(new int[] { number(pair.substring(0, comma), 0),
+                                number(pair.substring(comma + 1), 0) });
+                    }
+                    if (to >= 0 && !points.isEmpty()) data.value.put(to, points);
+                    continue;
+                }
                 if (!head.startsWith("p") || head.indexOf('t') < 0) continue;
                 int t = head.indexOf('t');
                 int port = number(head.substring(1, t), 0);
@@ -223,6 +245,16 @@ public final class NpcWirePoints321 {
             if (to < 0) continue;
             out.append('|').append('p').append(keyPort(entry.getKey())).append('t').append(to)
                     .append(':');
+            boolean first = true;
+            for (int[] point : entry.getValue()) {
+                if (!first) out.append(' ');
+                out.append(point[0]).append(',').append(point[1]);
+                first = false;
+            }
+        }
+        for (Map.Entry<Integer, List<int[]>> entry : data.value.entrySet()) {
+            if (entry.getValue().isEmpty()) continue;
+            out.append('|').append('v').append(entry.getKey()).append(':');
             boolean first = true;
             for (int[] point : entry.getValue()) {
                 if (!first) out.append(' ');
@@ -309,6 +341,25 @@ public final class NpcWirePoints321 {
         return node.next == toId || node.choices.contains(toId) || node.triggers.contains(toId);
     }
 
+    /** Points of the blue value wire from this node to {@code toId}, in order. Drawing path. */
+    public static List<int[]> valueBends(Node from, int toId) {
+        if (from == null) return List.of();
+        return read(from).value.getOrDefault(toId, List.of());
+    }
+
+    /** Puts a point on a blue value wire, at {@code index} of its run. */
+    public static void addValuePoint(Node from, int toId, int x, int y, int index) {
+        if (from == null || toId < 0) return;
+        Data data = read(from);
+        List<int[]> points = data.value.computeIfAbsent(toId, k -> new ArrayList<>());
+        for (int[] point : points) {
+            if (point[0] == x && point[1] == y) return;      // the same spot twice is one point
+        }
+        int at = Math.max(0, Math.min(index, points.size()));
+        points.add(at, new int[] {x, y});
+        write(from, data);
+    }
+
     /**
      * The route of a cable, found by its two ends rather than by one exact key.
      *
@@ -346,6 +397,10 @@ public final class NpcWirePoints321 {
             out.append(" #").append(node.id).append('{');
             for (Map.Entry<String, List<int[]>> entry : data.bends.entrySet()) {
                 out.append(entry.getKey()).append('=').append(entry.getValue().size()).append(' ');
+            }
+            for (Map.Entry<Integer, List<int[]>> entry : data.value.entrySet()) {
+                out.append("v").append(entry.getKey()).append('=')
+                        .append(entry.getValue().size()).append(' ');
             }
             for (int[] hang : data.hangs) {
                 out.append("h").append(hang[0]).append('=').append(routeSize(hang)).append(' ');
@@ -448,9 +503,17 @@ public final class NpcWirePoints321 {
 
     /** Every point of the graph, in the order the nodes were written. Stale bends are dropped. */
     public static List<int[]> points(NpcDialogueGraph graph) {
+        return points(graph, null);
+    }
+
+    /**
+     * Every point of the graph, with blue value wires checked against {@code valueAlive} so a
+     * point does not outlive the value wire it was made on.
+     */
+    public static List<int[]> points(NpcDialogueGraph graph, BiPredicate<Node, Integer> valueAlive) {
         List<Bend> bends = new ArrayList<>();
         List<Hang> hangs = new ArrayList<>();
-        collect(graph, bends, hangs, true);
+        collect(graph, bends, hangs, true, valueAlive);
         Set<Long> seen = new LinkedHashSet<>();
         List<int[]> out = new ArrayList<>();
         for (Bend bend : bends) {
@@ -511,6 +574,19 @@ public final class NpcWirePoints321 {
      */
     private static void collect(NpcDialogueGraph graph, List<Bend> bends, List<Hang> hangs,
             boolean prune) {
+        collect(graph, bends, hangs, prune, null);
+    }
+
+    /**
+     * Walks every node once.
+     *
+     * @param prune       drop carrying wires whose connection no longer exists, so a point never
+     *                    outlives the cable it was made on
+     * @param valueAlive  told whether a blue value wire still exists; null keeps them all, because
+     *                    only the client knows what a value wire is
+     */
+    private static void collect(NpcDialogueGraph graph, List<Bend> bends, List<Hang> hangs,
+            boolean prune, BiPredicate<Node, Integer> valueAlive) {
         if (graph == null || graph.nodes == null) return;
         for (Node node : graph.nodes.values()) {
             Data data = read(node);
@@ -529,6 +605,20 @@ public final class NpcWirePoints321 {
             }
             if (!dead.isEmpty()) {
                 for (String key : dead) data.bends.remove(key);
+                changed = true;
+            }
+            List<Integer> deadValue = new ArrayList<>();
+            for (Map.Entry<Integer, List<int[]>> entry : data.value.entrySet()) {
+                if (prune && valueAlive != null && !valueAlive.test(node, entry.getKey())) {
+                    deadValue.add(entry.getKey());
+                    continue;
+                }
+                for (int[] point : entry.getValue()) {
+                    bends.add(new Bend(node, VALUE_PORT, entry.getKey(), point[0], point[1]));
+                }
+            }
+            if (!deadValue.isEmpty()) {
+                for (Integer key : deadValue) data.value.remove(key);
                 changed = true;
             }
             for (int[] hang : data.hangs) {
@@ -660,6 +750,15 @@ public final class NpcWirePoints321 {
                     }
                 }
             }
+            for (List<int[]> points : data.value.values()) {
+                for (int[] point : points) {
+                    if (point[0] == x && point[1] == y) {
+                        point[0] = tx;
+                        point[1] = ty;
+                        changed = true;
+                    }
+                }
+            }
             for (int[] hang : data.hangs) {
                 for (int i = 1; i + 1 < hang.length; i += 2) {
                     if (hang[i] == x && hang[i + 1] == y) {
@@ -696,6 +795,18 @@ public final class NpcWirePoints321 {
                 if (points.isEmpty()) dead.add(entry.getKey());
             }
             for (String key : dead) data.bends.remove(key);
+            List<Integer> deadValue = new ArrayList<>();
+            for (Map.Entry<Integer, List<int[]>> entry : data.value.entrySet()) {
+                List<int[]> points = entry.getValue();
+                for (int i = points.size() - 1; i >= 0; i--) {
+                    if (points.get(i)[0] == x && points.get(i)[1] == y) {
+                        points.remove(i);
+                        changed = true;
+                    }
+                }
+                if (points.isEmpty()) deadValue.add(entry.getKey());
+            }
+            for (Integer key : deadValue) data.value.remove(key);
             for (int i = data.hangs.size() - 1; i >= 0; i--) {
                 int[] hang = data.hangs.get(i);
                 int size = routeSize(hang);

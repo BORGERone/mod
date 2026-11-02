@@ -1,0 +1,2 @@
+1b8f0a0cef860ac8945b4b321b18dd07d309c8bac9e6106d403b31295972dc6b  settledlands-0.8.0-build331-middle-click-remove.jar
+1fec3b2e714352f9489c5c871a767ab8a71af779ba29866aa1480d1e95989c81  SettledLands-Build331-MiddleClickRemove-Source.zip

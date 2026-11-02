@@ -49,7 +49,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *   <li>double click on a cable - put a point on it;</li>
  *   <li>press on a point - grab it; drag it anywhere to move it, drag it onto a node to aim it,
  *       drop it back and nothing happens;</li>
- *   <li>double click or right click on a point - remove it;</li>
+ *   <li>double click, right click or middle click on a point - remove it;</li>
  *   <li>release a dragged wire on a point - the wire stops there and waits, it does not connect
  *       anywhere behind the author's back.</li>
  * </ul>
@@ -349,7 +349,10 @@ public abstract class NpcWirePointsMixin321 {
                 remember();
                 int px = at[0];
                 int py = at[1];
-                if (wire.waiting()) {
+                if (wire.value) {
+                    // A blue value wire: its points live under the source end of the wire.
+                    NpcWirePoints321.addValuePoint(wire.from, wire.toId, px, py, wire.index);
+                } else if (wire.waiting()) {
                     // One more point in the run this wire visits, where it was clicked, so
                     // node - point - point - point is possible.
                     NpcWirePoints321.addRoutePoint(wire.from, wire.fromPort, wire.endX, wire.endY,

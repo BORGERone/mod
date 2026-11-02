@@ -703,6 +703,80 @@ public final class PursuitGraphNode272 {
      * True when any pursuit node carries a value link or a pin is being dragged, so
      * the renderer can skip setting up a buffer that would draw nothing.
      */
+    // ---- blue wires: which two nodes they join, and where their ends are ----
+
+    /**
+     * True when a blue value wire runs between these two nodes, in either direction.
+     *
+     * <p>Only three shapes exist: a pursuit card taking its target from another card or from a
+     * blue source pin ("В радиусе", "Урон"), a pursuit card feeding its target to consumers, and a
+     * stock "Условие" node reading a blue source. A point on a blue wire is kept under the source
+     * end, so this has to know them all - it is also what drops a point whose wire was cut.</p>
+     */
+    /**
+     * True when the blue wire whose source end is {@code from} still ends at {@code toId}.
+     *
+     * <p>The form the drawing pass needs: it has the node that holds the points and the id on the
+     * far end, and nothing else. A point whose value wire was cut is dropped with it.</p>
+     */
+    public static boolean blueLinked(NpcDialogueGraph graph, Node from, int toId) {
+        if (graph == null || from == null || toId < 0 || from.id == toId) return false;
+        Node to = graph.get(toId);
+        return to != null && blueLinked(from, to);
+    }
+
+    public static boolean blueLinked(Node a, Node b) {
+        if (a == null || b == null || a == b) return false;
+        if (isPursuitNode(a) && sourceId(a) == b.id) return true;
+        if (isPursuitNode(b) && sourceId(b) == a.id) return true;
+        if (consumers(a).contains(b.id) || consumers(b).contains(a.id)) return true;
+        // stockInputSource, not inputSource: while the wire pass runs the link is temporarily out
+        // of the node, and a point must not be dropped because of a frame.
+        if (isValueInputNode(a) && isValueSourceNode(b) && stockInputSource(a) == b.id) return true;
+        return isValueInputNode(b) && isValueSourceNode(a) && stockInputSource(b) == a.id;
+    }
+
+    /**
+     * The screen ends of the blue wire between these nodes, laid out {@code {fromId, toId, x1, y1,
+     * x2, y2}}, or null when no blue wire joins them.
+     *
+     * <p>Direction is the one the value pass draws in: source pin first, consumer pin second. The
+     * point of a blue wire is stored under {@code fromId} with {@code toId} as its far end, and
+     * this is the single place that decides which end is which - so the store, the hit test and
+     * the drawing can never disagree about it.</p>
+     */
+    public static double[] blueEnds(NpcGraphCanvas canvas, Node a, Node b) {
+        if (canvas == null || a == null || b == null || a == b) return null;
+        if (isPursuitNode(b) && sourceId(b) == a.id) {
+            if (isPursuitNode(a)) {
+                return ends(a, b, targetPinScreenX(canvas, a), targetPinScreenY(canvas, a),
+                        targetInPinScreenX(canvas, b), targetPinScreenY(canvas, b));
+            }
+            if (isValueSourceNode(a)) {
+                return ends(a, b, checkPinScreenX(canvas, a), checkPinScreenY(canvas, a),
+                        targetInPinScreenX(canvas, b), targetPinScreenY(canvas, b));
+            }
+            return null;
+        }
+        if (isPursuitNode(a) && consumers(a).contains(b.id)) {
+            return ends(a, b, targetPinScreenX(canvas, a), targetPinScreenY(canvas, a),
+                    consumerAnchorX(canvas, b), consumerAnchorY(canvas, b));
+        }
+        if (isValueInputNode(b) && isValueSourceNode(a) && stockInputSource(b) == a.id) {
+            return ends(a, b, checkPinScreenX(canvas, a), checkPinScreenY(canvas, a),
+                    inputPinScreenX(canvas, b), inputPinScreenY(canvas, b));
+        }
+        return null;
+    }
+
+    private static double[] ends(Node from, Node to, double x1, double y1, double x2, double y2) {
+        if (!Double.isFinite(x1) || !Double.isFinite(y1) || !Double.isFinite(x2)
+                || !Double.isFinite(y2)) {
+            return null;
+        }
+        return new double[] {from.id, to.id, x1, y1, x2, y2};
+    }
+
     public static boolean hasValueWires(NpcDialogueGraph graph, int dragOut, int dragIn) {
         if (graph == null || graph.nodes == null) return false;
         if (dragOut >= 0 || dragIn >= 0) return true;

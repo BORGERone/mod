@@ -69,8 +69,17 @@ public final class NpcWirePointsUi321 {
                     Double.NaN);
         }
 
+        /** True when this wire is a blue value wire, not a stock connection. Build 332. */
+        public final boolean value;
+
         public Wire(Node from, int fromPort, int toId, int endX, int endY, int index, double sx1,
                 double sy1, double sx2, double sy2) {
+            this(from, fromPort, toId, endX, endY, index, sx1, sy1, sx2, sy2, false);
+        }
+
+        public Wire(Node from, int fromPort, int toId, int endX, int endY, int index, double sx1,
+                double sy1, double sx2, double sy2, boolean value) {
+            this.value = value;
             this.from = from;
             this.fromPort = fromPort;
             this.toId = toId;
@@ -112,7 +121,8 @@ public final class NpcWirePointsUi321 {
         double radius = hitRadius(canvas);
         int[] best = null;
         double bestSq = radius * radius;
-        for (int[] point : NpcWirePoints321.points(graph)) {
+        for (int[] point : NpcWirePoints321.points(graph,
+                (node, id) -> PursuitGraphNode272.blueLinked(graph, node, id))) {
             double dx = mouseX - canvas.screenX(point[0]);
             double dy = mouseY - canvas.screenY(point[1]);
             double distSq = dx * dx + dy * dy;
@@ -176,8 +186,47 @@ public final class NpcWirePointsUi321 {
             for (int[] hang : NpcWirePoints321.hangs(node)) {
                 found = scanWaiting(canvas, node, hang, mouseX, mouseY, best, found);
             }
+            // Blue value wires are drawn by the value pass, not by the stock one, so they are
+            // looked up through the same helper that draws them. Build 332.
+            if (PursuitGraphNode272.isPursuitNode(node)) {
+                int source = PursuitGraphNode272.sourceId(node);
+                if (source >= 0) {
+                    found = scanValue(canvas, graph.get(source), node, mouseX, mouseY, best, found);
+                }
+                for (Integer consumer : PursuitGraphNode272.consumers(node)) {
+                    found = scanValue(canvas, node, graph.get(consumer), mouseX, mouseY, best,
+                            found);
+                }
+            }
+            if (PursuitGraphNode272.isValueInputNode(node)) {
+                int source = PursuitGraphNode272.stockInputSource(node);
+                if (source >= 0) {
+                    found = scanValue(canvas, graph.get(source), node, mouseX, mouseY, best, found);
+                }
+            }
         }
         return found;
+    }
+
+    /** The blue value wire between these two nodes, measured along its drawn route. */
+    private static Wire scanValue(NpcGraphCanvas canvas, Node from, Node to, double mouseX,
+            double mouseY, double[] best, Wire found) {
+        if (from == null || to == null || from == to) return found;
+        double[] ends = PursuitGraphNode272.blueEnds(canvas, from, to);
+        if (ends == null) return found;
+        List<int[]> points = NpcWirePoints321.valueBends(from, to.id);
+        double[] route = new double[(points.size() + 2) * 2];
+        route[0] = ends[2];
+        route[1] = ends[3];
+        int at = 2;
+        for (int[] point : points) {
+            route[at++] = canvas.screenX(point[0]);
+            route[at++] = canvas.screenY(point[1]);
+        }
+        route[at++] = ends[4];
+        route[at] = ends[5];
+        return measure(canvas, from, NpcWirePoints321.VALUE_PORT, route, to.id, 0, 0, mouseX,
+                mouseY, best, found, true);
     }
 
     private static Wire scan(NpcGraphCanvas canvas, NpcDialogueGraph graph, Node from, int fromPort,
@@ -206,13 +255,20 @@ public final class NpcWirePointsUi321 {
 
     private static Wire measure(NpcGraphCanvas canvas, Node from, int fromPort, double[] route,
             int toId, int endX, int endY, double mouseX, double mouseY, double[] best, Wire found) {
+        return measure(canvas, from, fromPort, route, toId, endX, endY, mouseX, mouseY, best, found,
+                false);
+    }
+
+    private static Wire measure(NpcGraphCanvas canvas, Node from, int fromPort, double[] route,
+            int toId, int endX, int endY, double mouseX, double mouseY, double[] best, Wire found,
+            boolean value) {
         int[] segment = new int[1];
         double[] ends = new double[4];
         double dist = nearestOnRoute(canvas, route, mouseX, mouseY, segment, ends);
         if (dist > best[0]) return found;
         best[0] = dist;
         return new Wire(from, fromPort, toId, endX, endY, segment[0], ends[0], ends[1], ends[2],
-                ends[3]);
+                ends[3], value);
     }
 
     /**
@@ -443,10 +499,19 @@ public final class NpcWirePointsUi321 {
      * @param portFree  that port belongs to the point itself, not being the dot's inner circle
      * @param hasWire   a wire (carrying or waiting) runs under the cursor
      */
+    /** Mouse buttons the canvas reacts to, named so a comparison cannot be misread. */
+    private static final int BUTTON_LEFT = 0;
+
+    private static final int BUTTON_RIGHT = 1;
+
+    private static final int BUTTON_MIDDLE = 2;
+
     public static int decide(boolean again, int button, boolean hasPoint, boolean onDot,
             boolean hasPort, boolean portFree, boolean hasWire) {
-        if (button == 1) return hasPoint || hasPort ? ACT_REMOVE : ACT_NONE;   // right click
-        if (button != 0) return ACT_NONE;
+        if (button == BUTTON_RIGHT || button == BUTTON_MIDDLE) {
+            return hasPoint || hasPort ? ACT_REMOVE : ACT_NONE;     // either button removes
+        }
+        if (button != BUTTON_LEFT) return ACT_NONE;
 
         if (!again) {
             if (hasPort && portFree) return ACT_PULL;   // pull needs a deliberate single press
