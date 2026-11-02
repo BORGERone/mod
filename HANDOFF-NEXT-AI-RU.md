@@ -1,17 +1,17 @@
 # HANDOFF — передача сессии следующей модели
 
 **Дата:** 2026-11-02. **Ветка:** `arena/99d7691a-mod` (**не переименовывать, не переключаться**).
-**Текущая сборка:** `settledlands-0.8.0-build345-graph-fixes.jar` — **нода «Урон» срабатывает на
-выбранный источник** + **у случайной реплики бросок свой у каждого NPC** (344 внутри). Баг урона НЕ в фильтре:
-`tableswitch` в `matchesDamageFilter` (344) = 0 любой / 1 игрок / 2 монстр / 3 не игрок — совпадает с UI,
-хук 345 поведение не меняет; причина ищется, цепочка до `NpcActions.run` проверена и проходима, значит
-блокируется вход (см. лог `выполнена команда триггера` / `команда «…» не выполнена`). Правка — общая
-инъекция `NpcDamageFilterMixin345` + правило `NpcDamageFilter345`. Действие выполняется от игрока, НПС
-лечится через `@npc`. Рандом реплики — `NpcRandomLine345` (слабый кэш по НПС, один бросок на тело) +
-`NpcRandomLineContext345` (HEAD/RETURN `sendGraph`; `GuideDialogue$Session` package-private → стаб-зеркало
-`build303-src/stubs345-src`); `NpcRandomLineNodeMixin336` заменён на 345-й. Патч `tools/patch_build345.py`,
-509 записей, 63 миксина. Гейты: `damage_source_check` (новый), `random_line_check` (обновлён), харнесс
-`GraphFixes345SmokeTest` 24 ok. В игре НЕ подтверждено.
+**Текущая сборка:** `settledlands-0.8.0-build346-damage-trace.jar` — сборка-прибор, поведение не
+меняется. Хуки: `GuideNpc.hurt` HEAD (`NpcDamageTraceHurtMixin346`) и `GuideDialogue.handleNpcDamaged`
+HEAD (`NpcDamageTraceChainMixin346`) → `NpcDamageTrace346` (логгер `SettledLands/DamageTrace346`, строки
+`[dmg] …`, кап 80). Патч `tools/patch_build346.py`, гейт `tools/damage_trace_check.py`, 512 записей,
+65 миксинов.
+
+**Факты (лог `latest-4.log`, сборка 345):** удары доходят до `GuideNpc.hurt`, но `NpcActions` не пишет
+ни строки → нода не совпала (нет в серверном графе либо отсекло условие). Отдельно: HackersAndSlashers
+2.0-beta2.5 кидает NPE `PlayerHelper.lastComboStep()` в `LivingIncomingDamageEvent` внутри
+`LivingEntity.hurt` — урон по НПС не наносится вовсе (чужой мод). `matchesDamageFilter` = 0 любой /
+1 игрок / 2 монстр / 3 не игрок (совпадает с UI), поэтому фильтр причиной **не был**, хук 345 — no-op.
 
 **Подтверждено в игре:** 341 (FA/Touch'n Motion на профессионной риге — «всё прекрасно работает»),
 339 (рука NPC у Punchy!), 337, 335, 334, 333, 332, 331, 330. 340 — пустая (отозвана). 338 — отозвана.

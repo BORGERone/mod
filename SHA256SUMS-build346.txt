@@ -1,0 +1,2 @@
+22e35cb5509241b09746956edfa1730bd55c28a5b26c4f2114572bdbce12be70  settledlands-0.8.0-build346-damage-trace.jar
+3e200b2696103855f355ee631072e8072833c1c1b86966ebc28167349d5286dd  SettledLands-Build346-DamageTrace-Source.zip

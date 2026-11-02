@@ -7,25 +7,23 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build345-graph-fixes.jar` — Build 345: **нода «Урон» срабатывает на выбранный
-источник** + **случайная реплика бросает кубики у каждого NPC отдельно** (344 с руками/ногами Cinematic
-внутри). **ПОПРАВКА (проверено по байткоду):** фильтр нумерации был НЕ причиной — `tableswitch` в 344
-`matchesDamageFilter` читается как 0 любой / 1 игрок / 2 монстр / 3 не игрок, т.е. совпадал с экраном.
-Хук 345 повторяет ту же логику и поведение не меняет. «Урон» не работает по другой причине — ищется;
-цепочка `hurt → handleDamageTriggers → handleNpcDamaged(type 6, min, filter, cooldown, IF-вход) →
-triggerDamageChain → NpcActions.run` проверена и проходима, значит блокируется вход, и это видно по логу
-(`выполнена команда триггера` / `команда «…» не выполнена`).
-Правка — одна инъекция в HEAD `matchesDamageFilter` (`NpcDamageFilterMixin345` + правило
-`NpcDamageFilter345`), это одна точка и для ноды урона, и для ноды-значения. Отдельно: строка действия
-по-прежнему выполняется от **игрока**, поэтому `@p` — это игрок; НПС лечится через `@npc` (подстановка
-uuid, проверена в 292–293). Рандом реплики: было одно число в общей ноде (все НПС говорили одно и то
-же) → стало по НПС (`NpcRandomLine345`: слабый `WeakHashMap<GuideNpc, Map<nodeId, roll>>`, бросок один
-раз при первом показе, живёт столько же, сколько тело). Контекст NPC даёт
-`NpcRandomLineContext345` (HEAD/RETURN `GuideDialogue.sendGraph`, `GuideDialogue$Session` — package-private,
-для компиляции сделан стаб-зеркало `build303-src/stubs345-src`). `NpcRandomLineNodeMixin336` заменён и
-спрашивает 345-й, а не 336-й `pick`. Патч `tools/patch_build345.py`, база 344, 509 записей, 63 миксина
-(30 общих / 32 клиентских + compat). Новый гейт `tools/damage_source_check.py`, `tools/random_line_check.py`
-обновлён, харнесс `GraphFixes345SmokeTest` 24 ok. В игре **не подтверждено**.
+`settledlands-0.8.0-build346-damage-trace.jar` — **сборка-прибор**: поведение не меняется, пишет в лог,
+где теряется нода «Урон» (кап 80 строк, потом сам выключается). База — 345. Два общих хука:
+`GuideNpc.hurt` HEAD (удар дошёл) и `GuideDialogue.handleNpcDamaged` HEAD (какой граф и что решает каждая
+нода: min / filter / cooldown / if-in). Классы `NpcDamageTrace346`, `NpcDamageTraceHurtMixin346`,
+`NpcDamageTraceChainMixin346`; патч `tools/patch_build346.py`; гейт `tools/damage_trace_check.py`;
+512 записей, 65 миксинов. В игре **не подтверждено**.
+
+**Факты из лога 345-й сессии (`latest-4.log`):**
+
+1. Оба удара (`02:00:28`, `02:01:16`) дошли до `GuideNpc.hurt` — цепочка вызывается. Строк
+   `NpcActions` (`выполнена команда триггера` / `не выполнена`) нет **ни одной** → нода не совпала:
+   её нет в серверном графе либо её отсекло условие. `effect give` при этом в чат ничего не пишет.
+2. **Урон по НПС не наносится вообще** — и это чужой баг: HackersAndSlashers 2.0-beta2.5 бросает NPE
+   `PlayerHelper.lastComboStep(Player) == null` в `LivingIncomingDamageEvent` внутри
+   `LivingEntity.hurt` (кадр `GuideNpc.hurt(GuideNpc.java:336)`), удар обрывается до снятия хп.
+3. Поправка: `matchesDamageFilter` (таблица `tableswitch`) читает 0 любой / 1 игрок / 2 монстр /
+   3 не игрок — совпадает с экраном; **фильтр не был причиной**, хук 345 — no-op.
 
 **Урок для будущих сборок:** интерфейсный миксин (`public interface ...`) допустим только для цели,
 которая сама интерфейс. Для доступа к приватным членам чужого класса — резолв по имени (MethodHandle,
