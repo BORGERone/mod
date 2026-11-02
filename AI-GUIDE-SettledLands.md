@@ -92,7 +92,20 @@ URL/чек-суммы зависимостей — `dependencies.lock.json`.
 - **Entity-tag яиц/спавна читается из compound `Guide`** (`var1.getCompound("Guide")` → "Profile", не top-level).
 
 ## СОСТОЯНИЕ (обновлять после каждого принятого билда)
-**Build 336 «random-line» (2026-11-02, ждёт подтверждения в игре).** У ноды «Реплика» тумблер
+**Build 337 «self-link» (2026-11-02, ждёт подтверждения в игре).** Две вещи. (1) Ноду нельзя
+подключить к самой себе: `NpcSelfLinkMixin337` (common) на HEAD `NpcDialogueGraph.connect(III)Z`
+возвращает `false` при `from == to` — через `connect` идут все провода (next, falseNext, varInput,
+ответы, триггеры), `connect(II)` делегирует туда же; `load`/`fromLegacy` пишут поля напрямую, поэтому
+старые графы не меняются. Отказ помечается в `NpcSelfLink337` (ThreadLocal), и
+`NpcSelfLinkStatusMixin337` (client, TAIL `mouseReleased`) заменяет общую строку `bad_link` на
+`gui.settledlands.graph.self_link`. (2) Тумблер «Рандомный ответ» — теперь штатная строка инспектора
+(`NpcRandomLineInspectorMixin337`: `@Inject(widgets()V, RETURN)`, `y` считается от `sidebarHeight`,
+`setMessage`, обрезка по тому же правилу, `sidebarHeight += 22`), а нарисованный чекбокс 336
+(`NpcRandomLineUi336` + `NpcRandomLineUiMixin336`) **удалён из джарника**. Урок: причина «бесконечного
+цикла» из 336 — не хук `lineFor`, а самосвязь ноды; стоковый `connect(id,id)` возвращает `true`.
+Урок UI: добавлять строку в инспектор можно только увеличивая `sidebarHeight`, иначе кнопка вне
+прокрутки и не видна.
+**Build 336 «random-line» (2026-11-02, ждёт подтверждения в игре).** «random-line» (2026-11-02, ждёт подтверждения в игре).** У ноды «Реплика» тумблер
 «🎲 Случайная реплика» над карточкой: бросок костей делается **один раз**, при включении, и пишется в
 саму ноду — `Node#varValue` (0 = выкл, 1..n = выпавшая фраза); фразы разделяются новой строкой
 (пустые строки и `\r` отбрасываются). `NpcRandomLineNodeMixin336` — HEAD `Node#lineFor`, cancellable:

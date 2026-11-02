@@ -7,7 +7,20 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build336-random-line.jar` — Build 336: **у ноды «Реплика» тумблер «🎲 Случайная
+`settledlands-0.8.0-build337-self-link.jar` — Build 337: **самосвязь запрещена, тумблер в
+инспекторе**. `NpcSelfLinkMixin337` (common) на HEAD `NpcDialogueGraph.connect(III)Z` отказывает при
+`from == to` — это единственная точка, через которую редактор делает все провода; отказ помечается
+(`NpcSelfLink337.refuse()`), и `NpcSelfLinkStatusMixin337` (client TAIL `mouseReleased`) пишет в строку
+состояния `gui.settledlands.graph.self_link`. Тумблер «Рандомный ответ» переехал из нарисованного
+чекбокса (336, удалён из джарника вместе с миксином) в штатную строку инспектора:
+`NpcRandomLineInspectorMixin337` добавляет `button(...)` в конец `widgets()` с `y` от
+`sidebarHeight`, `setMessage` из `NpcRandomLineUi337`, обрезкой как у штатных строк и `sidebarHeight += 22`.
+Причина «бесконечного цикла» 336: стоковый граф принимал связь ноды с самой собой (подтверждено
+харнессом). Гейты: новый `tools/self_link_check.py`, переписан `tools/random_line_check.py`, все
+остальные PASS; харнессы `SelfLink337SmokeTest` (11), `RandomLineSmokeTest` (16),
+`CommonDialogueSmokeTest` (17) — ALL OK.
+
+Предыдущая — `settledlands-0.8.0-build336-random-line.jar` — Build 336: **у ноды «Реплика» тумблер «🎲 Случайная
 реплика»**. Включаешь — один бросок костей по числу фраз (фразы разделяются новой строкой), результат
 пишется в саму ноду: `Node#varValue`, 0 = выкл, 1..n = выпавшая фраза. `Node#lineFor` через
 `NpcRandomLineNodeMixin336` (HEAD, cancellable) отдаёт выпавшую строку — это единственная точка, через
