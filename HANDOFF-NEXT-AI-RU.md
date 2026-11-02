@@ -1,15 +1,16 @@
 # HANDOFF — передача сессии следующей модели
 
 **Дата:** 2026-11-02. **Ветка:** `arena/99d7691a-mod` (**не переименовывать, не переключаться**).
-**Текущая сборка:** `settledlands-0.8.0-build342-cinematic-arms.jar` — **руки сцены Cinematic
-Interactions = руки NPC** (в игре ещё НЕ подтверждено). Причина: Cinematic рисует руки сцены сам
-(`Hands.drawArm` → кубы + `LocalPlayer.getSkin()`, то есть скин игрока), а вселённый игрок — рига Айви.
-У Cinema есть модельный путь для той же руки (`Hands.drawModelArm`, включается с Yes Steve Model),
-который вызывает `PlayerRenderer.renderRightHand`/`renderLeftHand` — тот самый метод, который 339 уже
-отдаёт NPC; 342 уводит туда руку вселённого игрока через `@Invoker`, постановку руки по-прежнему
-считает Cinematic. Гард `CinematicArms342` (не вселён / короткая рука / исключение → рука остаётся
-своей), оба миксина `@Pseudo`. Гейт `tools/cinematic_check.py`, харнесс `CinematicHandsSmokeTest`
-(9 ok). Патч `tools/patch_build342.py`, база 341, 503 записи, 61 миксин.
+**Текущая сборка:** `settledlands-0.8.0-build343-cinematic-arms.jar` — **руки сцены Cinematic
+Interactions = руки NPC** (в игре ещё НЕ подтверждено). 342 **падала при запуске** и убрана из репозитория
+и с Drive: `@Invoker` был объявлен в интерфейсном миксине, а Mixin не даёт интерфейсному миксину
+целиться в класс (`@Mixin target type mismatch: ... Hands is not an interface`, фаза PREPARE
+`MixinInfo$SubType.validateTarget`). В 343 один класс-миксин `CinematicHands343` (`@Pseudo`,
+`require=0`, HEAD в `Hands.drawArm` с 7 аргументами) плюс `CinematicArms343`, который **один раз**
+резолвит приватный `Hands.drawModelArm` через MethodHandle и при любой неудаче оставляет руку
+Cinematic. Никакой типовой связи с Cinematic нет — только строки. Гейт `tools/cinematic_check.py`
+теперь проверяет форму миксина (класс, не интерфейс), отсутствие `@Invoker` и типовой связи; харнесс
+`CinematicHandsSmokeTest` (10 ok). Патч `tools/patch_build343.py`, база 342, 502 записи, 60 миксинов.
 
 **Подтверждено в игре:** 341 (FA/Touch'n Motion на профессионной риге — «всё прекрасно работает»),
 339 (рука NPC у Punchy!), 337, 335, 334, 333, 332, 331, 330. 340 — пустая (отозвана). 338 — отозвана.

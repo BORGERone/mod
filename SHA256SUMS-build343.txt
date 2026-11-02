@@ -1,0 +1,2 @@
+a9d222c45808baaaf3100efcf850a398c88a8907bc9d3d7076a10e91d76c3e7e  settledlands-0.8.0-build343-cinematic-arms.jar
+2f0d241ec4bca449b7fd665515a14d7667b0ca94da748b9bc18851b2378ffa64  SettledLands-Build343-CinematicArms-Source.zip

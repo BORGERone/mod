@@ -7,27 +7,26 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build342-cinematic-arms.jar` — Build 342: **руки сцены Cinematic Interactions =
-руки NPC**. Причина: Cinematic рисует руки сцены сам — `Hands.drawArm` строит свои кубы вокруг станции
-и берёт текстуру из `LocalPlayer.getSkin()`, то есть скин игрока; вселённый игрок рисуется ригой Айви,
-поэтому за верстаком висела рука игрока. У Cinema есть второй, модельный путь для этой же руки —
-`Hands.drawModelArm` (включается с Yes Steve Model): он ставит руку к станции и вызывает
-`PlayerRenderer.renderRightHand`/`renderLeftHand` — ровно тот метод, который 339 уже отдаёт NPC.
-Решение: для вселённого игрока `Hands.drawArm` (7 аргументов, HEAD, static, require=0, remap=false)
-уводит руку в `drawModelArm` через `@Invoker` (`CinematicHandsInvoker342`), и ставит/держит руку
-по-прежнему Cinematic; рисуется рука NPC. Гард `CinematicArms342`: не вселён, короткая рука (< 1e-8
-квадрата расстояния, как у Cinema), или исключение → рука остаётся своей (сцена без руки не
-остаётся); лог ограничен 4 строками (`[SettledLands/CinematicArms342] scene hands handed to the NPC
-rig '<name>'`). Оба миксина `@Pseudo` → без Cinematic мод грузится. Патч `tools/patch_build342.py`,
-база 341, 503 записи, 61 миксин (28 общих / 32 клиентских), гейт `tools/cinematic_check.py`, харнесс
-`tools/harness/CinematicHandsSmokeTest.java` (9 ok). Известное ограничение этой сборки: ноги сидячей
-сцены (костёр, `LegMesh`) пока со скина игрока — отдельная деталь, не тронута. В игре **не
-подтверждено**.
+`settledlands-0.8.0-build343-cinematic-arms.jar` — Build 343: **руки сцены Cinematic Interactions =
+руки NPC, и игра запускается**. 342 **падала при запуске**: приватный `Hands.drawModelArm` был объявлен
+через `@Invoker` в **интерфейсном** миксине, а Mixin не разрешает интерфейсному миксину целиться в
+класс — `InvalidMixinException: @Mixin target type mismatch: dev.dyslexic.cinematic.client.Hands is not
+an interface` в фазе PREPARE (`MixinInfo$SubType.validateTarget`), до заголовка. Решение 343: остаётся
+один обычный **класс-миксин** (`CinematicHands343`, `@Pseudo`, `require=0`, HEAD в `Hands.drawArm`,
+7 аргументов), а приватный метод резолвится **один раз** через MethodHandle
+(`CinematicArms343.drawModelArm` → `unreflect`/`invokeExact`), с откатом на руку Cinematic при любой
+неудаче. Cinematic нигде не связан типом — только текстом (`Class.forName` + `@Mixin(targets=...)`),
+поэтому его отсутствие/переименование не может уронить клиент. Три класса 342 и обе записи 342 из
+`settledlands.mixins.json` удалены; джарник 342 из репозитория и с Drive убран (падающий).
+Патч `tools/patch_build343.py`, база 342, 502 записи, 60 миксинов (28 общих / 31 клиентский + compat),
+гейт `tools/cinematic_check.py` (теперь проверяет **форму** миксина: класс, не интерфейс; отсутствие
+`@Invoker`; отсутствие типовой связи с Cinematic), харнесс `CinematicHandsSmokeTest` (10 ok). В игре
+**не подтверждено**.
 
-Изменения окружения под 342: добавлен стаб `build303-src/stubs/net/minecraft/client/player/LocalPlayer.java`
-(extends `AbstractClientPlayer`), в `build303-src/api3-src/net/minecraft/client/Minecraft.java` добавлено
-поле `public LocalPlayer player;` (зеркало пересобрано в `api3`), стаб `org/slf4j/LoggerFactory` теперь
-возвращает молчащий логгер вместо `null` (иначе харнесс не может прогнать код с отчётом).
+**Урок для будущих сборок:** интерфейсный миксин (`public interface ...`) допустим только для цели,
+которая сама интерфейс. Для доступа к приватным членам чужого класса — резолв по имени (MethodHandle,
+кэшируется) или `@Shadow` в класс-миксине, но `@Shadow` валидируется при применении и падает фатально,
+если метода нет; поэтому выбран резолв с откатом.
 
 Предыдущая — `settledlands-0.8.0-build341-ivy-professions.jar` — Build 341 (**подтверждена в игре: всё
 работает**): перенос позы FA/Touch'n Motion доходит и до профессионной риги. 340 была пустой:
