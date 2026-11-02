@@ -7,6 +7,27 @@
 
 ## Текущая сборка
 
+`settledlands-0.8.0-build340-tnm-possession.jar` — Build 340: **анимации взаимодействия Touch'n
+Motion на теле, в которое ты вселился**. Причина: TnM считает жест в HEAD
+`LivingEntityRenderer.render` и складывает в своё состояние (поза уходит на модель игрока при копии
+позы EMF); `PlayerBodyRenderer` отменяет отрисовку игрока в `RenderPlayerEvent.Pre`, который
+срабатывает **раньше** этого HEAD → жест для вселённого игрока не считался никогда, и ретаргет
+FA/TnM нёс на кости NPC только базовую анимацию. Решение: новый клиентский слушатель
+`TouchNMotionPose340` (`@EventBusSubscriber`, `@SubscribeEvent(priority = HIGHEST)`), который для
+вселённого игрока зовёт **собственный** `strm.touchnmotion.ModelSpace#before(LivingEntity, PoseStack,
+float, Consumer)` с тем же PoseStack/partialTick; дальше работает существующий мост (`PlayerMotionBridge`
+/ `NpcMotionBridge256`, там же `tnmReady`/`hasTnmHook`). Method резолвится один раз, потребитель —
+константа (0 аллокаций в кадре), всё в try/catch, warning один; для не-вселённых — no-op. Гейт
+`tools/touch_n_motion_check.py`, харнесс `tools/harness/TouchNMotionPoseSmokeTest.java` (6 ok). Патч
+`tools/patch_build340.py`, база 339, 499 записей. В игре **не подтверждено**.
+
+Предыдущая — `settledlands-0.8.0-build339-punchy-arm-anchor.jar` — Build 339 (подтверждена в игре:
+«руки от первого лица теперь отображаются как надо»): рука NPC рисуется после
+`ModelPart.translateAndRotate` от той самой руки, которую Punchy собирается рисовать, отмена своей
+руки Punchy — только при реально нарисованной руке NPC.
+
+Предыдущая — `settledlands-0.8.0-build338-punchy-arms.jar` — Build 338 (**отозвана**: в первом лице
+пропадали руки целиком).
 `settledlands-0.8.0-build339-punchy-arm-anchor.jar` — Build 339: **рука NPC там, где её рисует
 Punchy!**. 338 оставлял игрока без рук в первом лице: рисовал руку NPC рендерером, рассчитанным на
 пространство модели игрока (`renderPossessedFirstPersonModelArms`), тогда как `renderArm` отдаёт
