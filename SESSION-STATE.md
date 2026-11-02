@@ -7,18 +7,41 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build341-ivy-professions.jar` — Build 341: **перенос позы FA/Touch'n Motion на
-профессионную ригу**. 340 была пустой: `PlayerMotionBridge` УЖЕ зовёт `ModelSpace#before` (см.
-`available()` → `modelBefore`), слушатель 340 звал её второй раз и удалён из джарника. Настоящая
-причина: `PlayerMotionBridge.isIvy` (и `NpcMotionBridge256.isIvyRig`) принимает ровно `ivy` и
-`ivy_oleander`, а профессионная модель `ivy_oleander_professions` (её используют все NPC с
-профессией) — нет; `PlayerMotionBridge.render` для неё уходит в `settledlands$renderActorOriginal`,
-то есть тело рисуется своими клипами без переноса позы с модели игрока → жест TnM считается, но
-переносить его некуда. Решение: миксин `IvyRigGateMixin341` (client) на `isIvy` в RETURN расширяет
-ответ по префиксу `ivy` (`IvyRig341.isIvyName`); валидация риги (`validRig`/`eligible`) не тронута;
-ограниченный лог `[SettledLands/IvyRig341] actor rig '<name> ... accepted|inherited` (≤4 строк).
-Гейт `tools/touch_n_motion_check.py` переписан, харнесс `IvyRigSmokeTest` (9 ok). Патч
-`tools/patch_build341.py`, база 340, 500 записей, 59 миксинов. В игре **не подтверждено**.
+`settledlands-0.8.0-build342-cinematic-arms.jar` — Build 342: **руки сцены Cinematic Interactions =
+руки NPC**. Причина: Cinematic рисует руки сцены сам — `Hands.drawArm` строит свои кубы вокруг станции
+и берёт текстуру из `LocalPlayer.getSkin()`, то есть скин игрока; вселённый игрок рисуется ригой Айви,
+поэтому за верстаком висела рука игрока. У Cinema есть второй, модельный путь для этой же руки —
+`Hands.drawModelArm` (включается с Yes Steve Model): он ставит руку к станции и вызывает
+`PlayerRenderer.renderRightHand`/`renderLeftHand` — ровно тот метод, который 339 уже отдаёт NPC.
+Решение: для вселённого игрока `Hands.drawArm` (7 аргументов, HEAD, static, require=0, remap=false)
+уводит руку в `drawModelArm` через `@Invoker` (`CinematicHandsInvoker342`), и ставит/держит руку
+по-прежнему Cinematic; рисуется рука NPC. Гард `CinematicArms342`: не вселён, короткая рука (< 1e-8
+квадрата расстояния, как у Cinema), или исключение → рука остаётся своей (сцена без руки не
+остаётся); лог ограничен 4 строками (`[SettledLands/CinematicArms342] scene hands handed to the NPC
+rig '<name>'`). Оба миксина `@Pseudo` → без Cinematic мод грузится. Патч `tools/patch_build342.py`,
+база 341, 503 записи, 61 миксин (28 общих / 32 клиентских), гейт `tools/cinematic_check.py`, харнесс
+`tools/harness/CinematicHandsSmokeTest.java` (9 ok). Известное ограничение этой сборки: ноги сидячей
+сцены (костёр, `LegMesh`) пока со скина игрока — отдельная деталь, не тронута. В игре **не
+подтверждено**.
+
+Изменения окружения под 342: добавлен стаб `build303-src/stubs/net/minecraft/client/player/LocalPlayer.java`
+(extends `AbstractClientPlayer`), в `build303-src/api3-src/net/minecraft/client/Minecraft.java` добавлено
+поле `public LocalPlayer player;` (зеркало пересобрано в `api3`), стаб `org/slf4j/LoggerFactory` теперь
+возвращает молчащий логгер вместо `null` (иначе харнесс не может прогнать код с отчётом).
+
+Предыдущая — `settledlands-0.8.0-build341-ivy-professions.jar` — Build 341 (**подтверждена в игре: всё
+работает**): перенос позы FA/Touch'n Motion доходит и до профессионной риги. 340 была пустой:
+`PlayerMotionBridge` УЖЕ зовёт `ModelSpace#before` (см. `available()` → `modelBefore`), слушатель 340
+звал её второй раз и удалён из джарника. Настоящая причина: `PlayerMotionBridge.isIvy` (и
+`NpcMotionBridge256.isIvyRig`) принимает ровно `ivy` и `ivy_oleander`, а профессионная модель
+`ivy_oleander_professions` (её используют все NPC с профессией) — нет; `PlayerMotionBridge.render`
+для неё уходит в `settledlands$renderActorOriginal`, то есть тело рисуется своими клипами без переноса
+позы с модели игрока → жест TnM считается, но переносить его некуда. Решение: миксин
+`IvyRigGateMixin341` (client) на `isIvy` в RETURN расширяет ответ по префиксу `ivy`
+(`IvyRig341.isIvyName`); валидация риги (`validRig`/`eligible`) не тронута; ограниченный лог
+`[SettledLands/IvyRig341] actor rig '<name> ... accepted|inherited` (≤4 строк). Гейт
+`tools/touch_n_motion_check.py` переписан, харнесс `IvyRigSmokeTest` (9 ok). Патч
+`tools/patch_build341.py`, база 340, 500 записей, 59 миксинов.
 
 Предыдущая — `settledlands-0.8.0-build340-tnm-possession.jar` — Build 340 (**пустая**, отозвана по
 сути: дублировала вызов, который мост уже делает).
