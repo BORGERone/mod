@@ -1,0 +1,2 @@
+f4f7c1f2c2a556f8d3ff268f00e2676b22b5a0f7fecc06f43e5a1116e7d86355  settledlands-0.8.0-build335-common-buttons.jar
+54c669fba0f362b9487c121f8fc12de4f89b06a11cc20f3c93144d1e57dafd67  SettledLands-Build335-CommonButtons-Source.zip
