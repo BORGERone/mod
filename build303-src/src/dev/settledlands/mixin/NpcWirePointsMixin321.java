@@ -147,6 +147,13 @@ public abstract class NpcWirePointsMixin321 {
             Matrix4f matrix, Node from, int fromPort, Node to, int toPort, int color,
             boolean dashed) {
         List<int[]> points = NpcWirePoints321.bends(from, fromPort, to.id);
+        // Build 329: says whether this hook runs at all for a drawn cable, and what the exact key
+        // the drawing asks for returns. One line per cable, at most twice a second and only when
+        // it changes. Without it, "the cable is straight" cannot be told from "the hook is not
+        // called" - the two look the same on screen.
+        NpcWirePoints321.note("hit#" + from.id + "p" + fromPort + ">" + to.id,
+                "cable-hit #" + from.id + " p" + fromPort + " -> #" + to.id
+                        + ", points=" + points.size());
         if (points.isEmpty()) {
             // The drawing and the store may number the same link differently. Looking the route up
             // by its two ends keeps a point attached to its cable whatever the numbering says.
