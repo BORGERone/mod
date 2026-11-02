@@ -92,6 +92,18 @@ URL/чек-суммы зависимостей — `dependencies.lock.json`.
 - **Entity-tag яиц/спавна читается из compound `Guide`** (`var1.getCompound("Guide")` → "Profile", не top-level).
 
 ## СОСТОЯНИЕ (обновлять после каждого принятого билда)
+**Build 334 «common-graph» (2026-11-02, ждёт подтверждения в игре).** Вкладка «Анимации» → **«Общее»**:
+один граф на весь мир. Хранится в мировых данных (`NpcCommonGraphStorage` : `SavedData`, файл
+`settledlands_common_graph` — тот же механизм, что `CutsceneStorage`), доступ через `NpcCommonGraph334`
+(кэш на сервер, чтобы тик не лез в мировые данные). `NpcCommonGraphMixin334` (`GuideNpc`): HEAD
+`tickSubGraph` подменяет граф **только для прохода этой вкладки** (различается по карте
+`animCheckCooldowns`; «Распорядок» не тронут), HEAD/RETURN `sendConfigView` кладёт общий граф в то
+поле, которое читает вкладка, и возвращает личный обратно (в NBT не плодим копию), HEAD `applyConfig`
+пишет граф вкладки в мировые данные и восстанавливает личный граф NPC.
+`NpcCommonGraphDamageMixin334` — цепочка урона тоже из общего графа. Пока общий граф не сохранён,
+каждый NPC тикает свой прежний. Гейт `tools/common_graph_check.py`: мир-данные, оба хука в common-списке,
+три тиковых вызова + урон, и точные дескрипторы `CompoundTag.put(String,Tag)Tag` / `remove(String)V`
+(стабы репо были разъехавшимися — компиляция против них дала бы `NoSuchMethodError`).
 **Build 333 «dropdown-first» (2026-11-02, ждёт подтверждения в игре).** Открытый выпадающий список
 забирает клик **первым**. Причина: список рисуется последним (`render` → Z+500 →
 `openDropdown.renderPopup`), а клик искался поздно — за HEAD-хуками 272/290/320/321, за карточкой

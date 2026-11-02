@@ -28,7 +28,8 @@ def collect(readme, mixin_sources):
     for pattern, base in (("*.py", ROOT / "tools"), ("*.java", ROOT / "tools" / "tests")):
         for path in sorted(base.glob(pattern)):
             files.append((path.relative_to(ROOT).as_posix(), path))
-    for base in (ROOT / "build303-src" / "src", ROOT / "build303-src" / "api3-src"):
+    for base in (ROOT / "build303-src" / "src", ROOT / "build303-src" / "api3-src",
+                 ROOT / "build303-src" / "api-src", ROOT / "build303-src" / "stubs"):
         for path in sorted(base.rglob("*.java")):
             files.append((path.relative_to(ROOT).as_posix(), path))
     names = [n for n, _ in files]

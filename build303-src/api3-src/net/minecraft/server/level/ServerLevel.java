@@ -13,6 +13,9 @@ import net.minecraft.world.level.Level;
 public class ServerLevel extends Level {
     public MinecraftServer getServer() { return null; }
 
+    /** Build 334: CutsceneStorage and NpcMobilityGroups already reach world data this way. */
+    public net.minecraft.world.level.storage.DimensionDataStorage getDataStorage() { return null; }
+
     public Iterable<Entity> getAllEntities() { return null; }
 
     public long getGameTime() { return 0; }

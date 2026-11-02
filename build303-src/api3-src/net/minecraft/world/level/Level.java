@@ -19,6 +19,9 @@ public class Level {
 
     public long getGameTime() { return 0; }
 
+    /** Build 334: PlayerCorpsePossession already calls this on a Level. */
+    public net.minecraft.server.MinecraftServer getServer() { return null; }
+
     public Player getNearestPlayer(Entity entity, double distance) { return null; }
 
     public <T extends Entity> List<T> getEntitiesOfClass(Class<T> type, AABB box,
