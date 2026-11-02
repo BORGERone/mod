@@ -7,7 +7,17 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build334-common-graph.jar` — Build 334: вкладка **«Анимации» стала «Общим»** —
+`settledlands-0.8.0-build335-common-buttons.jar` — Build 335: **кнопки «Общего» видно в диалоге**.
+334 сделал «Общее» общим для тика и урона, но диалог собирает ответы только из `profile.dialogueGraph`
+(`sendGraph` — `choices` ноды, по которой идёт разговор; `pickGraph` — поиск id там же), поэтому нода
+из «Общего» не показывалась. Теперь на время разговора в профиль подставляется слитая копия (граф NPC
++ достижимые от корней ноды «Общего» под новыми id), корни «Общего» вешаются на стартовую реплику,
+конец цепочки ведёт назад к NPC. `NpcProfile#save` на время вызова возвращает родной граф, поэтому
+слияние не попадает ни в NBT, ни в редактор. Добавлено 4 класса, гейты PASS (включая новый
+`tools/common_dialogue_check.py` и прогон `tools/harness/CommonDialogueSmokeTest.java`). База — 334,
+патч `tools/patch_build335.py`.
+
+Предыдущая — `settledlands-0.8.0-build334-common-graph.jar` — Build 334: вкладка **«Анимации» стала «Общим»** —
 один граф на весь мир. Граф хранится в мировых данных (`NpcCommonGraphStorage`, файл
 `settledlands_common_graph`), его тикает каждый NPC вместо личного (`NpcCommonGraphMixin334`), урон
 тоже идёт из него (`NpcCommonGraphDamageMixin334`), редактор любого NPC показывает один и тот же

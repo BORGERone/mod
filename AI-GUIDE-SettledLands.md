@@ -92,6 +92,22 @@ URL/чек-суммы зависимостей — `dependencies.lock.json`.
 - **Entity-tag яиц/спавна читается из compound `Guide`** (`var1.getCompound("Guide")` → "Profile", не top-level).
 
 ## СОСТОЯНИЕ (обновлять после каждого принятого билда)
+**Build 335 «common-buttons» (2026-11-02, ждёт подтверждения в игре).** Кнопки графа «Общее» видно в
+диалоге. Причина прошлого поведения: диалог читает ответы только из `profile.dialogueGraph`
+(`sendGraph` — `choices` текущей ноды, `pickGraph` — поиск id там же), а «Общее» в 334 только
+тикалось. Фикс: `NpcCommonDialogue335` на старте разговора строит слитую копию — `copy()` графа NPC
+плюс ноды «Общего», достижимые от его корней (кнопки, на которые никто не ссылается), под новыми id
+выше максимума обоих графов; корни вешаются на реплику входа (через IF/переменные — BFS до первой
+`LINE`), у скопированных нод `next < 0` заменяется на `entry`, поэтому конец цепочки возвращает к
+реплике NPC. Хуки: `NpcCommonDialogueMixin335` — INVOKE `stop` + `Shift.AFTER` внутри
+`settledlands$originalStart` (после закрытия прошлого разговора, до создания сессии) и HEAD `stop`;
+`NpcCommonDialogueSaveMixin335` — HEAD/RETURN `NpcProfile#save`: подмена обратима, поэтому NBT,
+копирование и `sendConfigView` видят настоящий граф. Слияние кэшируется в
+`IdentityHashMap<NpcProfile, State>` и живёт только пока с NPC говорят. Ограничение: кнопки видны
+только в разговоре, который идёт по графу (`graphActive` + `defaultTab == 0`). Гейт
+`tools/common_dialogue_check.py` + прогон `tools/harness/CommonDialogueSmokeTest.java`. Стаб
+`tools/api271/.../injection/At.java` дополнен `shift()`/`by()`/`At.Shift` — без него точку
+внедрения после вызова не выразить.
 **Build 334 «common-graph» (2026-11-02, ждёт подтверждения в игре).** Вкладка «Анимации» → **«Общее»**:
 один граф на весь мир. Хранится в мировых данных (`NpcCommonGraphStorage` : `SavedData`, файл
 `settledlands_common_graph` — тот же механизм, что `CutsceneStorage`), доступ через `NpcCommonGraph334`
