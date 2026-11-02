@@ -1,0 +1,2 @@
+088fda8d622ebd422315813e09842048be33a956853905a3c5582135933e5095  settledlands-0.8.0-build337-self-link.jar
+28cbc693b52b6dcbd5bb3d601c6e92cad2429f56637471b49ab3d812dc399289  SettledLands-Build337-SelfLink-Source.zip
