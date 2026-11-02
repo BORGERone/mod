@@ -15,6 +15,7 @@ public class ModelPart {
     public float xRot;
     public float yRot;
     public float zRot;
+    public boolean visible;
     public float xScale;
     public float yScale;
     public float zScale;

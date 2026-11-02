@@ -7,6 +7,33 @@
 
 ## Текущая сборка
 
+`settledlands-0.8.0-build338-punchy-arms.jar` — Build 338: **руки NPC в первом лице с Punchy!**.
+С установленным Punchy! руки от первого лица рисует он сам (своя копия `PlayerModel` + текстура
+игрока), а ванильный проход `ItemInHandRenderer.renderHandsWithItems`, который заменяет вселение, он
+не вызывает — поэтому при вселении в NPC в первом лице оставались руки игрока (Стив). Перехват по
+имени класса/метода (мод закрытый): `@Pseudo`-миксин `PunchyArmBridgeMixin338` (**только client**) на
+`punchy.client.render.PunchyArmRenderer.renderArm` в HEAD, `require = 0`, `remap = false`; сигнатура
+обработчика ровно 9 параметров + `CallbackInfo`
+(`PlayerModel, AbstractClientPlayer, HumanoidArm, PoseStack, MultiBufferSource, int, ResourceLocation,
+boolean slim, float partialTick`). `PunchyArm338.replace(...)`: сначала `possessedModelName` (пусто →
+выход, руку Punchy не трогаем), потом наличие кости NPC (`getPart("rightarm"|"right_arm")`), затем
+`pushFirstPersonRenderContext` → `renderPossessedFirstPersonModelArms(...)` (рисует руку NPC **в позе,
+которую Punchy только что проиграл**) → `popPlayerRenderContext()` в `finally`; видимость рук модели и
+LOD восстанавливаются, `Throwable` ловится (отдаём руку Punchy). Отменяем свою руку Punchy на этой
+стороне (`ci.cancel()`), `renderArmArmor` гасится через `ThreadLocal<HumanoidArm>` (`consumeArmor`),
+чтобы рукав брони игрока не лёг поверх руки NPC. Миксинов 58 (client 29). Гейт `tools/punchy_bridge_check.py`
+(точные дескрипторы обоих обработчиков, порядок вызовов, `@Pseudo`, классы игры не попали в джарник),
+харнесс `tools/harness/PunchyArm338SmokeTest.java` (11 ok). Патч `tools/patch_build338.py`, база 337,
+497 записей. В игре **не подтверждено**.
+
+Предыдущая — `settledlands-0.8.0-build337-self-link.jar` — Build 337 (подтверждена в игре): **самосвязь
+запрещена, тумблер в инспекторе**. `NpcSelfLinkMixin337` (common) на HEAD `NpcDialogueGraph.connect(III)Z` отказывает при
+`from == to` — это единственная точка, через которую редактор делает все провода; отказ помечается
+(`NpcSelfLink337.refuse()`), и `NpcSelfLinkStatusMixin337` (client TAIL `mouseReleased`) пишет в строку
+состояния `gui.settledlands.graph.self_link`. Тумблер «Рандомный ответ» переехал из нарисованного
+чекбокса (336, удалён из джарника вместе с миксином) в штатную строку инспектора:
+`NpcRandomLineInspectorMixin337` добавляет `button(...)` в конец `widgets()` с `y` от
+`sidebarHeight`, `setMessage` из `NpcRandomLineUi337`, обрезкой как у штатных строк и `sidebarHeight += 22`.
 `settledlands-0.8.0-build337-self-link.jar` — Build 337: **самосвязь запрещена, тумблер в
 инспекторе**. `NpcSelfLinkMixin337` (common) на HEAD `NpcDialogueGraph.connect(III)Z` отказывает при
 `from == to` — это единственная точка, через которую редактор делает все провода; отказ помечается

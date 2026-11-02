@@ -1,0 +1,2 @@
+6d61844a5769adb7ff642eac1dc2d0f5aca6a957f6d9ba2e42617d86eebff755  settledlands-0.8.0-build338-punchy-arms.jar
+383cf3e9361e4fb8386a81a6952f29b4cb06a936b690cd58c91071c6ceb00aff  SettledLands-Build338-PunchyArms-Source.zip
