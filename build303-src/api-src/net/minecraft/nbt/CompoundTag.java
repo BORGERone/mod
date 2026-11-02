@@ -33,6 +33,8 @@ public class CompoundTag implements Tag {
     public boolean getBoolean(String key) { return Boolean.TRUE.equals(values.get(key)); }
     public void putBoolean(String key, boolean value) { values.put(key, value); }
     public void putInt(String key, int value) { values.put(key, value); }
+    public void putIntArray(String key, int[] value) { values.put(key, value); }
+    public int[] getIntArray(String key) { Object v = values.get(key); return v instanceof int[] a ? a : new int[0]; }
     public void putFloat(String key, float value) { values.put(key, value); }
     public double getDouble(String key) {
         Object value = values.get(key);
