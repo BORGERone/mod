@@ -1,0 +1,2 @@
+e6f7b1f544f8e664ac2b767f1a210c96f043f4d30e3775173d2157298fa507ab  settledlands-0.8.0-build336-random-line.jar
+3d665f6cfb6b7c74bfc775a6e0d241066a36d92b2be505eec9070051cf58a66e  SettledLands-Build336-RandomLine-Source.zip
