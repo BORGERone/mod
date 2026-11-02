@@ -1,16 +1,17 @@
 # HANDOFF — передача сессии следующей модели
 
 **Дата:** 2026-11-02. **Ветка:** `arena/99d7691a-mod` (**не переименовывать, не переключаться**).
-**Текущая сборка:** `settledlands-0.8.0-build343-cinematic-arms.jar` — **руки сцены Cinematic
-Interactions = руки NPC** (в игре ещё НЕ подтверждено). 342 **падала при запуске** и убрана из репозитория
-и с Drive: `@Invoker` был объявлен в интерфейсном миксине, а Mixin не даёт интерфейсному миксину
-целиться в класс (`@Mixin target type mismatch: ... Hands is not an interface`, фаза PREPARE
-`MixinInfo$SubType.validateTarget`). В 343 один класс-миксин `CinematicHands343` (`@Pseudo`,
-`require=0`, HEAD в `Hands.drawArm` с 7 аргументами) плюс `CinematicArms343`, который **один раз**
-резолвит приватный `Hands.drawModelArm` через MethodHandle и при любой неудаче оставляет руку
-Cinematic. Никакой типовой связи с Cinematic нет — только строки. Гейт `tools/cinematic_check.py`
-теперь проверяет форму миксина (класс, не интерфейс), отсутствие `@Invoker` и типовой связи; харнесс
-`CinematicHandsSmokeTest` (10 ok). Патч `tools/patch_build343.py`, база 342, 502 записи, 60 миксинов.
+**Текущая сборка:** `settledlands-0.8.0-build344-cinematic-legs.jar` — **ноги в сцене костра = ноги
+NPC** плюс руки 343 (в игре НЕ подтверждено ни то, ни другое). Костёр — единственная сцена с телом:
+`CampfireStation.renderBody` считает бедро/колено/стопу и отдаёт отрезки в `LegMesh.draw`, который
+красил свои кубы скином игрока. 344 ставит в эти же точки **кость ноги модели NPC**
+(`rightleg`/`leftleg`), растянутую по отрезку и развёрнутую на него, со своей текстурой; броня
+(`CampfireArmor.drawInScene`) — через резолвнутый `MethodHandle`; миксин `CinematicLegMesh344` —
+класс-миксин `@Pseudo`, HEAD в `LegMesh.draw`, `require=0`, без `@Invoker`, типовой связи с Cinematic
+нет. Патч `tools/patch_build344.py`, база 343, 505 записей, 61 миксин. Стабы для компиляции:
+`build303-src/api4-src` (`org/joml/Vector3fc/Vector3f/Quaternionf`, `PoseStack.mulPose`) — дескрипторы
+должны совпадать с настоящим JOML. Гейт `tools/cinematic_check.py` покрывает оба моста; харнессы
+`CinematicHandsSmokeTest` 10 ok, `CinematicLegsSmokeTest` 12 ok.
 
 **Подтверждено в игре:** 341 (FA/Touch'n Motion на профессионной риге — «всё прекрасно работает»),
 339 (рука NPC у Punchy!), 337, 335, 334, 333, 332, 331, 330. 340 — пустая (отозвана). 338 — отозвана.

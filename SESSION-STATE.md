@@ -7,21 +7,22 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build343-cinematic-arms.jar` — Build 343: **руки сцены Cinematic Interactions =
-руки NPC, и игра запускается**. 342 **падала при запуске**: приватный `Hands.drawModelArm` был объявлен
-через `@Invoker` в **интерфейсном** миксине, а Mixin не разрешает интерфейсному миксину целиться в
-класс — `InvalidMixinException: @Mixin target type mismatch: dev.dyslexic.cinematic.client.Hands is not
-an interface` в фазе PREPARE (`MixinInfo$SubType.validateTarget`), до заголовка. Решение 343: остаётся
-один обычный **класс-миксин** (`CinematicHands343`, `@Pseudo`, `require=0`, HEAD в `Hands.drawArm`,
-7 аргументов), а приватный метод резолвится **один раз** через MethodHandle
-(`CinematicArms343.drawModelArm` → `unreflect`/`invokeExact`), с откатом на руку Cinematic при любой
-неудаче. Cinematic нигде не связан типом — только текстом (`Class.forName` + `@Mixin(targets=...)`),
-поэтому его отсутствие/переименование не может уронить клиент. Три класса 342 и обе записи 342 из
-`settledlands.mixins.json` удалены; джарник 342 из репозитория и с Drive убран (падающий).
-Патч `tools/patch_build343.py`, база 342, 502 записи, 60 миксинов (28 общих / 31 клиентский + compat),
-гейт `tools/cinematic_check.py` (теперь проверяет **форму** миксина: класс, не интерфейс; отсутствие
-`@Invoker`; отсутствие типовой связи с Cinematic), харнесс `CinematicHandsSmokeTest` (10 ok). В игре
-**не подтверждено**.
+`settledlands-0.8.0-build344-cinematic-legs.jar` — Build 344: **ноги в сцене костра = ноги NPC**, плюс
+руки 343 в том же джарнике. Костёр — единственная сцена Cinematic с телом: `CampfireStation.renderBody`
+считает бедро/колено/стопу и отдаёт отрезки в `LegMesh.draw`, который строит свои кубы и красит их
+`LocalPlayer.getSkin()`. 344 оставляет точки и позу Cinematic, но в них ставит **свою кость ноги модели
+NPC** (`rightleg`/`leftleg`), растянутую по отрезку и развёрнутую на него (`Quaternionf.rotationTo`
+(0,1,0)→dir, `PoseStack.mulPose`), со своей текстурой NPC; бедро и голень — одна кость, поставленная
+дважды; броня (`CampfireArmor.drawInScene`) вызывается через резолвнутый `MethodHandle`, чтобы
+леггинсы/ботинки остались. Миксин `CinematicLegMesh344` — класс-миксин `@Pseudo`, HEAD в `LegMesh.draw`
+(10 аргументов), `require=0`, `remap=false`, без `@Invoker`; типовой связи с Cinematic нет. Патч
+`tools/patch_build344.py` (база 343, 505 записей, 61 миксин: 28 общих / 32 клиентских + compat). Гейт
+`tools/cinematic_check.py` расширен на ноги (форма миксина, точный дескриптор, гард не читает `getSkin`,
+держит броню, отчёт ограничен). Харнессы: `CinematicHandsSmokeTest` 10 ok, `CinematicLegsSmokeTest`
+12 ok. Для компиляции добавлены стабы `build303-src/api4-src` (`org/joml/Vector3fc`, `Vector3f`,
+`Quaternionf`, `PoseStack.mulPose`) — дескрипторы обязаны совпадать с настоящим JOML
+(`rotationTo(Vector3fc,Vector3fc)Lorg/joml/Quaternionf;`), иначе `NoSuchMethodError`. В игре **не
+подтверждено** (ни 343, ни 344).
 
 **Урок для будущих сборок:** интерфейсный миксин (`public interface ...`) допустим только для цели,
 которая сама интерфейс. Для доступа к приватным членам чужого класса — резолв по имени (MethodHandle,

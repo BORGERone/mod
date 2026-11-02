@@ -36,6 +36,8 @@ import disasm
 
 MIXIN = "dev/settledlands/mixin/CinematicHands343.class"
 GUARD = "dev/settledlands/npc/client/CinematicArms343.class"
+LEG_MIXIN = "dev/settledlands/mixin/CinematicLegMesh344.class"
+LEG_GUARD = "dev/settledlands/npc/client/CinematicLegs344.class"
 CONFIG = "settledlands.mixins.json"
 
 TARGET = "dev.dyslexic.cinematic.client.Hands"
@@ -47,6 +49,17 @@ HAND = "drawArm"
 HAND_DESC = ("(Lcom/mojang/blaze3d/vertex/PoseStack;Lnet/minecraft/client/renderer/MultiBufferSource;"
              "Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;"
              "Lnet/minecraft/world/phys/Vec3;ZILnet/minecraft/world/phys/Vec3;)V")
+
+# The campfire scene is Cinematic's only scene with a body: it hands each leg segment to LegMesh.draw,
+# which textures the player's own thighs and shins.
+LEG_TARGET = "dev.dyslexic.cinematic.client.LegMesh"
+LEG_DRAW = "draw"
+LEG_DESC = ("(Lcom/mojang/blaze3d/vertex/PoseStack;"
+            "Lnet/minecraft/client/renderer/MultiBufferSource;Lnet/minecraft/world/phys/Vec3;"
+            "Lnet/minecraft/client/player/LocalPlayer;ZLnet/minecraft/world/phys/Vec3;"
+            "Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/world/phys/Vec3;"
+            "Lnet/minecraft/world/phys/Vec3;I)V")
+ARMOUR = "dev.dyslexic.cinematic.client.CampfireArmor"
 
 # Build 342's shapes: an interface mixin with an @Invoker on a class target - refused by Mixin at
 # startup. None of them may come back.
@@ -106,7 +119,7 @@ def main(argv):
     jar = argv[0]
     with zipfile.ZipFile(jar) as z:
         names = set(z.namelist())
-        for entry in (MIXIN, GUARD):
+        for entry in (MIXIN, GUARD, LEG_MIXIN, LEG_GUARD):
             if entry not in names:
                 return fail("%s is not in the jar" % entry)
         for entry in BROKEN_342:
@@ -117,6 +130,8 @@ def main(argv):
             return fail("the jar carries Cinematic's own classes: %s" % ", ".join(copied[:3]))
         mixin_blob = z.read(MIXIN)
         guard_blob = z.read(GUARD)
+        leg_blob = z.read(LEG_MIXIN)
+        leg_guard_blob = z.read(LEG_GUARD)
         config = json.loads(z.read(CONFIG).decode("utf-8"))
         # Nothing may hold a compile-time reference to Cinematic: the injection names it in its
         # @Mixin targets string and the guard looks it up by name, so a mod that is absent, renamed or
@@ -129,7 +144,7 @@ def main(argv):
             if b"dev/dyslexic/cinematic" not in blob and b"dev.dyslexic.cinematic" not in blob:
                 continue
             _p, _r, classes = info(blob)
-            if TARGET_CLASS in classes:
+            if TARGET_CLASS in classes or LEG_TARGET.replace(".", "/") in classes:
                 typed.append(entry)
     if typed:
         return fail("Cinematic is linked as a compile-time type from %s - a missing or reshaped mod "
@@ -207,6 +222,66 @@ def main(argv):
     if not any(r[1] == "unreflect" for r in guard_refs):
         return fail("the guard never builds the handle it promises")
     print("ok: the arm pass is resolved once, as text, and every refusal keeps Cinematic's own hand")
+
+    # -- the campfire legs, same shape: one class mixin, no accessor, text only ---------------------
+    if "CinematicLegMesh344" not in config.get("client", []):
+        return fail("the leg hand-over is not a client mixin - it would never meet the fire")
+    if "CinematicLegMesh344" in config.get("mixins", []):
+        return fail("the leg hand-over is a common mixin - campfires are client only")
+    legs, leg_refs, _leg_classes = info(leg_blob)
+    leg_text = text(legs)
+    if legs["access"] & INTERFACE:
+        return fail("the leg hand-over is an interface mixin - Mixin refuses a class target and the "
+                    "game will not start (build 342)")
+    if "Invoker" in leg_text:
+        return fail("the leg hand-over declares an @Invoker - that is the shape that killed build 342")
+    for needle, why in ((LEG_TARGET, "Cinematic's leg class"), (LEG_DRAW, "the leg segment pass"),
+                        (LEG_DESC, "the segment signature"), ("HEAD", "the injection point"),
+                        ("require", "require = 0"), ("remap", "remap = false"),
+                        ("Pseudo", "@Pseudo"), ("cancel", "the cancel")):
+        if needle not in leg_text:
+            return fail("the leg hand-over does not name %s" % why)
+    leg_handlers = {n: v for n, v in methods(legs).items() if n != "<init>"}
+    if len(leg_handlers) != 1:
+        return fail("the leg hand-over injects more than one method: %s" % ", ".join(sorted(leg_handlers)))
+    leg_name, (leg_access, _leg_desc) = next(iter(leg_handlers.items()))
+    if not leg_access & STATIC:
+        return fail("%s is not static - Cinematic's segment pass is static" % leg_name)
+    if not any(r[0] == "dev/settledlands/npc/client/CinematicLegs344" and r[1] == "drawLegs"
+               for r in leg_refs):
+        return fail("the leg injection does not go through the NPC leg guard")
+    if not any(r[0].endswith("callback/CallbackInfo") and r[1] == "cancel" for r in leg_refs):
+        return fail("the leg hand-over never takes the legs from Cinematic")
+    print("ok: one client injection on LegMesh.%s at HEAD, class mixin, static, @Pseudo, require = 0"
+          % LEG_DRAW)
+
+    # -- and the leg guard keeps the NPC's geometry, not the player's skin ------------------------
+    leg_guard, leg_guard_refs, leg_guard_classes = info(leg_guard_blob)
+    leg_guard_text = text(leg_guard)
+    if LEG_TARGET.replace(".", "/") in leg_guard_classes:
+        return fail("the leg guard links Cinematic's leg class at compile time")
+    if ARMOUR in leg_guard_text:
+        pass
+    else:
+        return fail("the leg guard does not name Cinematic's armour pass as text")
+    for needle, why in (("drawLegs", "the leg hand-over"), ("segmentTooShort", "the segment guard"),
+                        ("rotationTo", "turning the bone onto the segment"),
+                        ("mulPose", "placing the bone"), ("invokeExact", "the resolved handle"),
+                        ("REPORT_LIMIT", "a bounded report")):
+        if needle not in leg_guard_text:
+            return fail("the leg guard does not have %s" % why)
+    if "getSkin" in leg_guard_text:
+        return fail("the leg guard reads the player's skin - the legs would stay the player's")
+    if not any(r[0] == "dev/settledlands/npc/client/CinematicArms343" and r[1] == "possessed"
+               for r in leg_guard_refs):
+        return fail("the leg guard does not ask the possession state - every campfire would be taken")
+    if not any(r[0].endswith("geom/ModelPart") and r[1] == "render" for r in leg_guard_refs):
+        return fail("the leg guard never renders the NPC's leg bone")
+    if not any(r[1] == "unreflect" for r in leg_guard_refs):
+        return fail("the leg guard never builds the armour handle it promises")
+    if not any(r[0] == "java/util/Set" for r in leg_guard_refs):
+        return fail("the leg report does not remember what it has already said")
+    print("ok: the NPC's own leg bone is placed on Cinematic's joints and kept by text only")
 
     print("cinematic_check: PASS  (%s)" % pathlib.Path(jar).name)
     return 0
