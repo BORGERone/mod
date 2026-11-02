@@ -1,28 +1,29 @@
 #!/usr/bin/env python3
-"""Gate: Touch'n Motion's own motion reaches the body you possess.
+"""Gate: Touch'n Motion's motion reaches every Ivy body you possess, not two model names.
 
-Build 340. Touch'n Motion works its gesture out at the head of
-`LivingEntityRenderer.render` and stores it; the possession mod cancels that render in
-`RenderPlayerEvent.Pre`, which is fired before that head injection ever runs - so the gesture was
-never computed for a possessed player, and the retargeted NPC body had none of it.
+Build 341. The possessed player's body is retargeted from the player model's Fresh Animations pose
+only when the actor model answers to `ivy` or `ivy_oleander` (`PlayerMotionBridge.isIvy`). The mod also
+ships `ivy_oleander_professions` - the same rig with the profession bones, the one every NPC with a
+profession uses - and it was not on that list, so such a body kept its own clips. Touch'n Motion's
+gesture was worked out and stored, but there was no retarget to carry it onto the bones.
 
 Ways that can ship silently broken:
 
-  * the listener is not registered at all, or not on the client, so nothing is ever called;
-  * the listener runs after the possession renderer that cancels the pass - the call would come too
-    late and resolve to nothing;
-  * the pose entry point is resolved per frame instead of once, or a lambda is allocated every frame;
-  * the entry point is called for players the mod is not drawing, which would run Touch'n Motion's
-    motion for every player on the server, every frame;
-  * an absent or changed Touch'n Motion throws into the render pass instead of being ignored;
+  * the widened gate is not a client mixin, or names the wrong method, so it never applies;
+  * it forces the answer instead of widening it - a model that the bridge refused for a reason would
+    now be retargeted anyway;
+  * the rig validation behind the name check is bypassed, so a rig without body/waist/limb bones is
+    retargeted and the body comes out mangled;
+  * the report is unbounded, or the build still carries the 340 listener that called Touch'n Motion a
+    second time per frame;
   * Touch'n Motion's own classes are copied into the mod jar.
 
-    python3 tools/touch_n_motion_check.py settledlands-0.8.0-build340-tnm-possession.jar
+    python3 tools/touch_n_motion_check.py settledlands-0.8.0-build341-ivy-professions.jar
 
-Exit 0 = the gesture is asked for, once per rendered frame, only for a possessed player.
+Exit 0 = every Ivy rig is offered to the retarget, and only the name test was widened.
 """
+import json
 import pathlib
-import re
 import struct
 import sys
 import zipfile
@@ -30,11 +31,17 @@ import zipfile
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import disasm
 
-POSE = "dev/settledlands/npc/client/TouchNMotionPose340.class"
-BODY = "dev/settledlands/npc/client/PlayerBodyRenderer.class"
+GATE = "dev/settledlands/model/IvyRig341.class"
+MIXIN = "dev/settledlands/mixin/IvyRigGateMixin341.class"
+BRIDGE = "dev/settledlands/model/PlayerMotionBridge.class"
+CONFIG = "settledlands.mixins.json"
 
-TN_MODEL_SPACE = "strm.touchnmotion.ModelSpace"
-TN_BEFORE = "before"
+# The 340 listener asked Touch'n Motion for the gesture a second time per frame: the bridge already
+# does it. It must not come back.
+REDUNDANT = "dev/settledlands/npc/client/TouchNMotionPose340.class"
+
+TARGET = "dev.settledlands.model.PlayerMotionBridge"
+METHOD = "isIvy"
 
 
 def fail(message):
@@ -63,17 +70,9 @@ def text(parsed):
     return " ".join(str(v[1]) for v in parsed["cp"] if v and v[0] == 1)
 
 
-def code_text(parsed, name):
+def methods(parsed):
     cp = parsed["cp"]
-    for _a, n, _d, attrs in parsed["methods"]:
-        if cp[n][1] != name:
-            continue
-        co = disasm.code_of(attrs, cp)
-        if co is None:
-            return None, None
-        txt, _labels = disasm.disasm(co["code"], cp)
-        return txt, co
-    return None, None
+    return {cp[n][1] for _a, n, _d, _t in parsed["methods"]}
 
 
 def main(argv):
@@ -83,76 +82,64 @@ def main(argv):
     jar = argv[0]
     with zipfile.ZipFile(jar) as z:
         names = set(z.namelist())
-        if POSE not in names:
-            return fail("%s is not in the jar" % POSE)
-        if BODY not in names:
-            return fail("%s is gone - nothing cancels the player render for the listener to run "
-                        "ahead of" % BODY)
+        for entry in (GATE, MIXIN, BRIDGE):
+            if entry not in names:
+                return fail("%s is not in the jar" % entry)
+        if REDUNDANT in names:
+            return fail("the jar still carries %s - the bridge already asks Touch'n Motion" % REDUNDANT)
         copied = [n for n in names if n.startswith("strm/touchnmotion/")]
         if copied:
             return fail("the jar carries Touch'n Motion's classes: %s" % ", ".join(copied[:3]))
-        data = z.read(POSE)
+        gate_blob = z.read(GATE)
+        mixin_blob = z.read(MIXIN)
+        bridge_blob = z.read(BRIDGE)
+        config = json.loads(z.read(CONFIG).decode("utf-8"))
 
-    pose, refs = info(data)
-    body = text(pose)
+    # -- the widened gate is a client mixin on the one method that decides -----
+    if "IvyRigGateMixin341" not in config.get("client", []):
+        return fail("the gate is not a client mixin - it would never meet the renderer")
+    if "IvyRigGateMixin341" in config.get("mixins", []):
+        return fail("the gate is a common mixin - the bridge it widens is client only")
+    mixin, mixin_refs = info(mixin_blob)
+    mixin_text = text(mixin)
+    if TARGET not in mixin_text:
+        return fail("the gate does not name %s" % TARGET)
+    if METHOD not in mixin_text:
+        return fail("the gate does not name the model name test %s" % METHOD)
+    if "RETURN" not in mixin_text or "require" not in mixin_text or "remap" not in mixin_text:
+        return fail("the gate does not sit at RETURN with require = 0 / remap = false")
+    handlers = methods(mixin) - {"<init>"}
+    if len(handlers) != 1:
+        return fail("the gate injects more than the one name test: %s" % ", ".join(sorted(handlers)))
+    print("ok: one client injection on PlayerMotionBridge.%s at RETURN" % METHOD)
 
-    # -- registered, on the client, ahead of the renderer that cancels ------
-    if "Lnet/neoforged/fml/common/EventBusSubscriber;" not in body:
-        return fail("the listener is not registered on the event bus")
-    if "settledlands" not in body or "Lnet/neoforged/api/distmarker/Dist;" not in body:
-        return fail("the listener does not declare the mod id and the client side")
-    if "Lnet/neoforged/bus/api/SubscribeEvent;" not in body:
-        return fail("the handler is not a subscriber")
-    if "HIGHEST" not in body:
-        return fail("the handler does not run at HIGHEST - the possession renderer would cancel the "
-                    "pass before Touch'n Motion is asked")
-    if not any(r[0] == "net/neoforged/neoforge/client/event/RenderPlayerEvent$Pre"
-               for r in refs):
-        return fail("the listener does not take the player render event")
-    print("ok: a client listener at HIGHEST on RenderPlayerEvent.Pre")
+    # -- it widens the answer, it does not force it ---------------------------
+    if not any(r[0].endswith("callback/CallbackInfoReturnable") and r[1] == "getReturnValue"
+               for r in mixin_refs):
+        return fail("the gate does not read the bridge's own answer")
+    if not any(r[0].endswith("callback/CallbackInfoReturnable") and r[1] == "setReturnValue"
+               for r in mixin_refs):
+        return fail("the gate never widens the answer")
+    if any(r[0] == TARGET and r[1] in ("validRig", "eligible") for r in mixin_refs):
+        return fail("the gate touches the rig validation - a rig without the bones would be "
+                    "retargeted anyway")
+    bridge, _bridge_refs = info(bridge_blob)
+    if not {"validRig", "eligible"} <= methods(bridge):
+        return fail("the bridge no longer validates the rig behind the name test")
+    print("ok: the answer is only widened, and the bridge's own rig validation still decides")
 
-    # -- it asks Touch'n Motion itself, once resolved ----------------------
-    if TN_MODEL_SPACE not in body:
-        return fail("the listener does not name Touch'n Motion's pose entry point")
-    if TN_BEFORE not in body:
-        return fail("the listener does not name the entry point method")
-    for param in ("net/minecraft/world/entity/LivingEntity", "com/mojang/blaze3d/vertex/PoseStack",
-                  "java/util/function/Consumer"):
-        if param not in body:
-            return fail("the resolved signature does not match Touch'n Motion's (%s)" % param)
-    if not any(r[0] == "java/lang/Class" and r[1] == "forName" for r in refs):
-        return fail("the class is never looked up - it would be a load-time dependency on "
-                    "Touch'n Motion")
-    if not any(r[1] == "invoke" and r[0] == "java/lang/reflect/Method" for r in refs):
-        return fail("the entry point is never called")
-    fields = {pose["cp"][n][1]: pose["cp"][d][1] for _a, n, d, _t in pose["methods"]}
-    static_fields = {pose["cp"][f[1]][1]: pose["cp"][f[2]][1] for f in pose["fields"]}
-    if static_fields.get("poseBefore") != "Ljava/lang/reflect/Method;":
-        return fail("the resolved method is not kept - it would be looked up every frame")
-    if "Ljava/util/function/Consumer;" not in "".join(static_fields.values()):
-        return fail("no constant consumer - a lambda would be allocated every frame")
-    print("ok: Touch'n Motion's entry point is resolved once and reused")
-
-    # -- only for a possessed player, and never at the cost of the pass ----
-    guard, guard_code = code_text(pose, "onRenderPlayerPre")
-    if not guard:
-        return fail("the listener has no handler")
-    order = [guard.find("possessedModelName"), guard.find("getPoseStack")]
-    if -1 in order:
-        return fail("the handler does not check possession before using the PoseStack")
-    if not any(r[0] == "dev/settledlands/npc/client/FirstPersonPossession256"
-               and r[1] == "possessedModelName" for r in refs):
-        return fail("the handler never asks whether the player is possessed")
-    if not guard_code["exc"]:
-        return fail("nothing catches a failure in the handler - it would reach the render pass")
-    if not any(r[0] == "org/slf4j/Logger" and r[1] == "warn" for r in refs):
-        return fail("a changed Touch'n Motion is never reported")
-    if "reported" not in static_fields:
-        return fail("the warning is not bounded to once")
-    call, call_code = code_text(pose, "pose")
-    if not call or not call_code["exc"]:
-        return fail("the call itself is not guarded - a version change would throw every frame")
-    print("ok: only a possessed player is passed on, and a changed Touch'n Motion is reported once")
+    # -- and only for the Ivy rigs -------------------------------------------
+    gate, gate_refs = info(gate_blob)
+    gate_text = text(gate)
+    if "ivy" not in gate_text:
+        return fail("the gate does not name the rig prefix")
+    if not any(r[1] == "startsWith" for r in gate_refs):
+        return fail("the gate does not match by prefix - the profession rig would still be refused")
+    if "REPORT_LIMIT" not in " ".join(v[1] for v in gate["cp"] if v and v[0] == 1):
+        return fail("the report is not bounded")
+    if not any(r[0] == "java/util/Set" for r in gate_refs):
+        return fail("the report does not remember what it has already said")
+    print("ok: every Ivy rig answers yes, and the report is bounded")
 
     print("touch_n_motion_check: PASS  (%s)" % pathlib.Path(jar).name)
     return 0

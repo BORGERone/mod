@@ -7,6 +7,24 @@
 
 ## Текущая сборка
 
+`settledlands-0.8.0-build341-ivy-professions.jar` — Build 341: **перенос позы FA/Touch'n Motion на
+профессионную ригу**. 340 была пустой: `PlayerMotionBridge` УЖЕ зовёт `ModelSpace#before` (см.
+`available()` → `modelBefore`), слушатель 340 звал её второй раз и удалён из джарника. Настоящая
+причина: `PlayerMotionBridge.isIvy` (и `NpcMotionBridge256.isIvyRig`) принимает ровно `ivy` и
+`ivy_oleander`, а профессионная модель `ivy_oleander_professions` (её используют все NPC с
+профессией) — нет; `PlayerMotionBridge.render` для неё уходит в `settledlands$renderActorOriginal`,
+то есть тело рисуется своими клипами без переноса позы с модели игрока → жест TnM считается, но
+переносить его некуда. Решение: миксин `IvyRigGateMixin341` (client) на `isIvy` в RETURN расширяет
+ответ по префиксу `ivy` (`IvyRig341.isIvyName`); валидация риги (`validRig`/`eligible`) не тронута;
+ограниченный лог `[SettledLands/IvyRig341] actor rig '<name> ... accepted|inherited` (≤4 строк).
+Гейт `tools/touch_n_motion_check.py` переписан, харнесс `IvyRigSmokeTest` (9 ok). Патч
+`tools/patch_build341.py`, база 340, 500 записей, 59 миксинов. В игре **не подтверждено**.
+
+Предыдущая — `settledlands-0.8.0-build340-tnm-possession.jar` — Build 340 (**пустая**, отозвана по
+сути: дублировала вызов, который мост уже делает).
+
+Предыдущая — `settledlands-0.8.0-build339-punchy-arm-anchor.jar` — Build 339 (подтверждена в игре:
+«руки от первого лица теперь отображаются как надо»).
 `settledlands-0.8.0-build340-tnm-possession.jar` — Build 340: **анимации взаимодействия Touch'n
 Motion на теле, в которое ты вселился**. Причина: TnM считает жест в HEAD
 `LivingEntityRenderer.render` и складывает в своё состояние (поза уходит на модель игрока при копии

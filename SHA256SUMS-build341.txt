@@ -1,0 +1,2 @@
+592d253deca54e360fe3d7cddc1afbb91a79cb6be4ae75a32a7a0a1a44ee98f5  settledlands-0.8.0-build341-ivy-professions.jar
+25e8341df1a82669f5a587e7d43dc3076b71e75563520e073d804c53444d86b6  SettledLands-Build341-IvyProfessions-Source.zip
