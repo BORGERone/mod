@@ -3,6 +3,7 @@ package dev.settledlands.npc;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -240,6 +241,7 @@ public final class NpcWirePoints321 {
     }
 
     private static void write(Node node, Data data) {
+        scannedGraph = null;                 // the graph's contents just changed
         String next = format(data);
         String current = field(node);
         if (next.isEmpty()) {
@@ -352,6 +354,53 @@ public final class NpcWirePoints321 {
         }
         return out.length() == 0 ? "empty" : out.toString().trim();
     }
+
+    /**
+     * True when the graph holds at least one point, cached for a fraction of a second.
+     *
+     * <p>The drawing asks this for every cable on the screen, every frame. The store is empty in
+     * almost every ordinary frame, so a graph with no points must cost one timestamp comparison per
+     * cable - a route lookup per cable would walk every node of the graph instead. The cache is
+     * dropped the moment anything is written, so a point appears in the same frame it was made.</p>
+     */
+    public static boolean anyPoints(NpcDialogueGraph graph) {
+        if (graph == null) return false;
+        long now = System.currentTimeMillis();
+        if (graph != scannedGraph || now - scannedAt > 500L) {
+            scannedGraph = graph;
+            scannedAt = now;
+            boolean any = false;
+            if (graph.nodes != null) {
+                for (Node node : graph.nodes.values()) {
+                    if (!read(node).empty()) {
+                        any = true;
+                        break;
+                    }
+                }
+            }
+            scannedAny = any;
+        }
+        return scannedAny;
+    }
+
+    private static NpcDialogueGraph scannedGraph;
+    private static long scannedAt;
+    private static boolean scannedAny;
+
+    /** True while there is room for another one-shot diagnostic line. Checked before any text is
+     *  built, so once the limit is reached a frame costs nothing. */
+    public static boolean onceRoom() {
+        return ONCE.size() < ONCE_LIMIT;
+    }
+
+    /** Writes a line the first time this channel is seen, and never again. */
+    public static void noteOnce(String channel, String text) {
+        if (ONCE.size() >= ONCE_LIMIT) return;
+        if (ONCE.add(channel)) System.out.println("[settledlands/wires] " + text);
+    }
+
+    private static final Set<String> ONCE = new HashSet<>();
+    private static final int ONCE_LIMIT = 24;
 
     /**
      * Writes one diagnostic line, at most twice a second and only when it changes.

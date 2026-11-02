@@ -1,0 +1,2 @@
+cf819fe971184abecbf3d2b75f8c41a73d2abde6598c17ac0765cd153a19e6ee  settledlands-0.8.0-build330-wire-through-cable.jar
+8f665f196cb55481a4dae285dc40b1e9c5f6e9df5ac3fd9258b00ad3bd40288f  SettledLands-Build330-WireThroughCable-Source.zip

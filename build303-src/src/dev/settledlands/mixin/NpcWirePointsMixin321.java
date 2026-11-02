@@ -22,7 +22,6 @@ import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
-import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
@@ -92,12 +91,6 @@ public abstract class NpcWirePointsMixin321 {
     private boolean settledlands$gestureMoved;
 
     @Shadow
-    private int cable(BufferBuilder buffer, Matrix4f matrix, Node from, int fromPort, Node to,
-            int toPort, int color, boolean dashed) {
-        throw new AssertionError();
-    }
-
-    @Shadow
     private int curve(BufferBuilder buffer, Matrix4f matrix, double x1, double y1, double x2,
             double y2, int color, boolean dashed) {
         throw new AssertionError();
@@ -139,50 +132,84 @@ public abstract class NpcWirePointsMixin321 {
 
     // -- drawing ------------------------------------------------------------
 
-    @Redirect(method = "wires(Lnet/minecraft/client/gui/GuiGraphics;II)V",
-            at = @At(value = "INVOKE",
-                    target = "Ldev/settledlands/npc/client/NpcDialogueGraphScreen;cable(Lcom/mojang/blaze3d/vertex/BufferBuilder;Lorg/joml/Matrix4f;Ldev/settledlands/npc/NpcDialogueGraph$Node;ILdev/settledlands/npc/NpcDialogueGraph$Node;IIZ)I"),
-            require = 1, remap = false)
-    private int settledlands$cableThroughPoints(NpcDialogueGraphScreen self, BufferBuilder buffer,
-            Matrix4f matrix, Node from, int fromPort, Node to, int toPort, int color,
-            boolean dashed) {
+    /**
+     * Build 330: the route is applied where every cable is drawn, not at one call site.
+     *
+     * <p>Builds 321-329 replaced the {@code cable(...)} call inside {@code wires(...)}. The log of
+     * 329 proves that replacement never ran: the store line printed for the whole session, the
+     * cable-hit line never printed once, while the white colour of that very same call was still
+     * applied - and the colour hook sits on the same instruction. A call site can be taken by
+     * another injector; a method cannot. So the hook moved to the head of {@code cable(...)}
+     * itself, which every drawn cable passes through, whoever draws it.</p>
+     *
+     * <p>Nothing is drawn when the cable has no points: the method returns untouched and the stock
+     * body runs exactly as before. A graph with no points at all pays one cached check per cable.
+     * </p>
+     */
+    @Inject(method = "cable(Lcom/mojang/blaze3d/vertex/BufferBuilder;Lorg/joml/Matrix4f;"
+            + "Ldev/settledlands/npc/NpcDialogueGraph$Node;ILdev/settledlands/npc/NpcDialogueGraph$Node;IIZ)I",
+            at = @At("HEAD"), cancellable = true, remap = false)
+    private void settledlands$cableThroughPoints(BufferBuilder buffer, Matrix4f matrix, Node from,
+            int fromPort, Node to, int toPort, int color, boolean dashed,
+            CallbackInfoReturnable<Integer> cir) {
+        if (from == null || to == null) return;
+        NpcDialogueGraph graph = settledlands$graph();
+        // Fast path: a graph without a single point costs one timestamp check per cable.
+        if (graph == null || !NpcWirePoints321.anyPoints(graph)) return;
         List<int[]> points = NpcWirePoints321.bends(from, fromPort, to.id);
-        // Build 329: says whether this hook runs at all for a drawn cable, and what the exact key
-        // the drawing asks for returns. One line per cable, at most twice a second and only when
-        // it changes. Without it, "the cable is straight" cannot be told from "the hook is not
-        // called" - the two look the same on screen.
-        NpcWirePoints321.note("hit#" + from.id + "p" + fromPort + ">" + to.id,
-                "cable-hit #" + from.id + " p" + fromPort + " -> #" + to.id
-                        + ", points=" + points.size());
         if (points.isEmpty()) {
             // The drawing and the store may number the same link differently. Looking the route up
             // by its two ends keeps a point attached to its cable whatever the numbering says.
-            points = NpcWirePoints321.routed(settledlands$graph(), from.id, to.id);
-            if (!points.isEmpty()) {
-                NpcWirePoints321.note("cable", "cable #" + from.id + " p" + fromPort + " -> #"
-                        + to.id + ": found by ends, " + points.size() + " point(s)");
-            }
+            points = NpcWirePoints321.routed(graph, from.id, to.id);
         }
         if (points.isEmpty()) {
-            return cable(buffer, matrix, from, fromPort, to, toPort, color, dashed);
+            if (NpcWirePoints321.onceRoom()) {
+                NpcWirePoints321.noteOnce("c" + from.id + "p" + fromPort + ">" + to.id,
+                        "cable #" + from.id + " p" + fromPort + " -> #" + to.id
+                                + ": no points for this key");
+            }
+            return;                       // no route: the stock body draws it as it always did
         }
         NpcGraphCanvas canvas = settledlands$canvas();
-        if (canvas == null) {
-            return cable(buffer, matrix, from, fromPort, to, toPort, color, dashed);
-        }
+        if (canvas == null) return;
+
         double x = canvas.portScreenX(from, true);
         double y = canvas.portScreenY(from, true, fromPort);
-        int drawn = 0;
-        for (int[] point : points) {
-            double px = canvas.screenX(point[0]);
-            double py = canvas.screenY(point[1]);
-            drawn += curve(buffer, matrix, x, y, px, py, color, dashed);
-            x = px;
-            y = py;
+        double endX = canvas.portScreenX(to, false);
+        double endY = canvas.portScreenY(to, false, toPort);
+        int count = points.size();
+        double[] px = new double[count];
+        double[] py = new double[count];
+        double left = Math.min(x, endX);
+        double right = Math.max(x, endX);
+        double top = Math.min(y, endY);
+        double bottom = Math.max(y, endY);
+        for (int i = 0; i < count; i++) {
+            px[i] = canvas.screenX(points.get(i)[0]);
+            py[i] = canvas.screenY(points.get(i)[1]);
+            left = Math.min(left, px[i]);
+            right = Math.max(right, px[i]);
+            top = Math.min(top, py[i]);
+            bottom = Math.max(bottom, py[i]);
         }
-        drawn += curve(buffer, matrix, x, y, canvas.portScreenX(to, false),
-                canvas.portScreenY(to, false, toPort), color, dashed);
-        return drawn;
+        // The same visibility cut the stock body makes, over the box of the whole run.
+        if (right < canvas.left || left > canvas.right
+                || bottom < canvas.top || top > canvas.bottom) {
+            cir.setReturnValue(0);
+            return;
+        }
+
+        NpcWirePoints321.note("cable#" + from.id + "p" + fromPort + ">" + to.id,
+                "cable #" + from.id + " p" + fromPort + " -> #" + to.id + ": routed through "
+                        + count + " point(s)");
+        int drawn = 0;
+        for (int i = 0; i < count; i++) {
+            drawn += curve(buffer, matrix, x, y, px[i], py[i], color, dashed);
+            x = px[i];
+            y = py[i];
+        }
+        drawn += curve(buffer, matrix, x, y, endX, endY, color, dashed);
+        cir.setReturnValue(drawn);
     }
 
     @Inject(method = "wires(Lnet/minecraft/client/gui/GuiGraphics;II)V", at = @At("TAIL"),
