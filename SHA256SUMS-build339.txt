@@ -1,0 +1,2 @@
+cb348cb01b31a5ccc53c8c90233dfac09f9862297a99681cb35f77b10e309351  settledlands-0.8.0-build339-punchy-arm-anchor.jar
+c81d238fe6e3b05be5f809e5ea8041de90845e3520c3289dd2baaa816eac4b7a  SettledLands-Build339-PunchyArmAnchor-Source.zip

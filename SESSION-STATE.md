@@ -7,6 +7,28 @@
 
 ## Текущая сборка
 
+`settledlands-0.8.0-build339-punchy-arm-anchor.jar` — Build 339: **рука NPC там, где её рисует
+Punchy!**. 338 оставлял игрока без рук в первом лице: рисовал руку NPC рендерером, рассчитанным на
+пространство модели игрока (`renderPossessedFirstPersonModelArms`), тогда как `renderArm` отдаёт
+своё пространство руки, и при этом безусловно отменял руку Punchy. 339 берёт ту руку, которую Punchy
+собирается рисовать, применяет её собственный `ModelPart.translateAndRotate(poseStack)` (тот же приём,
+что в принятом мосте сообщества) и рисует руку NPC вокруг этой точки — она встаёт ровно на
+заменяемую руку и наследует анимацию кадра (замах, удар, «потянуться к рычагу» из Touch'n Motion).
+Отмена руки Punchy только при реально отправленной руке NPC; нет кости/модели/текстуры — Punchy
+рисует свою. Кости руки NPC сохраняются/возвращаются в `finally`, LOD форсируется и возвращается,
+состояние костей кэшировано по модели (в кадре 0 аллокаций). Из 338 убраны push/pop first-person
+контекста и переключение видимости рук модели игрока; классы 338 удалены из джарника. Гейт
+`tools/punchy_bridge_check.py` переписан под 339 (ловит отсутствие `translateAndRotate`, пуш
+контекста, забытые кости), харнесс `tools/harness/PunchyArm339SmokeTest.java` (12 ok). Патч
+`tools/patch_build339.py`, база 338, 498 записей. В игре **не подтверждено**.
+
+Предыдущая — `settledlands-0.8.0-build338-punchy-arms.jar` — Build 338 (**отозвана**: в первом лице
+пропадали руки целиком). Первый заход в Punchy!: `@Pseudo`-миксин на
+`punchy.client.render.PunchyArmRenderer.renderArm` HEAD + `renderArmArmor`, отрисовка руки NPC через
+`FirstPersonPossession256.renderPossessedFirstPersonModelArms` с пушем first-person контекста.
+
+Предыдущая — `settledlands-0.8.0-build337-self-link.jar` — Build 337 (подтверждена в игре):
+**самосвязь запрещена, тумблер в инспекторе**.
 `settledlands-0.8.0-build338-punchy-arms.jar` — Build 338: **руки NPC в первом лице с Punchy!**.
 С установленным Punchy! руки от первого лица рисует он сам (своя копия `PlayerModel` + текстура
 игрока), а ванильный проход `ItemInHandRenderer.renderHandsWithItems`, который заменяет вселение, он
