@@ -88,6 +88,19 @@ DISPATCH_HOOKS = {
     "dev/settledlands/npc/client/PursuitGraphNode272": ("drawNode", "the pursuit card"),
 }
 
+# Members a mixin may @Shadow although the target class does not declare them: they are inherited
+# from a Minecraft superclass, which lives outside the jar and cannot be resolved here. Each entry
+# carries the evidence that the member really is there - the mod's own bytecode calls it on that very
+# class, so the descriptor below is read off a real call site instead of guessed.
+# tools/block_name_check.py re-reads that call site, so an entry cannot go stale silently.
+INHERITED_MEMBERS = {
+    ("dev/settledlands/npc/client/NpcDialogueGraphScreen", "addRenderableWidget",
+     "(Lnet/minecraft/client/gui/components/events/GuiEventListener;)"
+     "Lnet/minecraft/client/gui/components/events/GuiEventListener;"):
+        "net.minecraft.client.gui.screens.Screen#addRenderableWidget - called by "
+        "NpcDialogueGraphScreen#textBox (base jar)",
+}
+
 DESC_CALLBACK_INFO = "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;"
 DESC_CALLBACK_RET = "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfoReturnable;"
 
@@ -393,6 +406,10 @@ def check_targets(cf, entry, classes, problems, external, verbose):
                             problems.append("%s: @Shadow %s%s - target %s has the "
                                             "name with a different descriptor"
                                             % (entry, m.name, m.desc, tname))
+                        elif (tname, m.name, m.desc) in INHERITED_MEMBERS:
+                            external.append("inherited @Shadow %s: %s%s -> %s"
+                                            % (entry, m.name, m.desc,
+                                               INHERITED_MEMBERS[(tname, m.name, m.desc)]))
                         else:
                             problems.append("%s: @Shadow method %s%s does not exist "
                                             "in %s" % (entry, m.name, m.desc, tname))

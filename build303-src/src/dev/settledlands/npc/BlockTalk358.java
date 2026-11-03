@@ -99,13 +99,20 @@ public final class BlockTalk358 {
             NpcProfile profile = new NpcProfile();
             profile.blockMouseLook = true;   // the view stays on the block while it speaks
             profile.blockMovement = true;    // and so does the player
+            // Build 359: the block speaks under the name it was given, in the colour it was given.
+            // Without a name - a block nobody has named yet - the coordinates identify it, the way
+            // build 358 did for every block.
+            String name = BlockName359.name(graph);
+            String speaker = name.isEmpty() ? where(where) : name;
+            String subtitle = name.isEmpty() ? "" : where(where);
+            profile.nameColor = BlockName359.color(graph);
             NpcNet.DlgStyle style = style(profile, player);
             if (style == null) return false;
             int id = BlockTrigger351.idFor(where.key());
             prune();
             // The camera first: the channel is ordered, so the head turns before the window is drawn.
             NpcNet.sendTo(player, new NpcNet.CfgView(id, marker(where.x(), where.y(), where.z())));
-            NpcNet.sendTo(player, new NpcNet.DlgView(id, "", where(where), text,
+            NpcNet.sendTo(player, new NpcNet.DlgView(id, speaker, subtitle, text,
                     List.of(), List.of(), 0, 1, false, style));
             OPEN.put(player.getUUID(), new Open(id, graph, node.id, where, System.currentTimeMillis()));
             return true;

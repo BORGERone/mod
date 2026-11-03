@@ -179,6 +179,10 @@ public final class BlockTrigger351 {
         try {
             CompoundTag tag = data.getCompound("DialogueGraph");
             NpcDialogueGraph graph = tag.isEmpty() ? null : NpcDialogueGraph.load(tag);
+            // Build 359: a block has no «Характеристики». A graph that arrived with one - copied
+            // from a body, or saved by an older build - is stored without it, so what a block loads
+            // back is only what a block can show.
+            if (graph != null) BlockName359.dropType(graph, BlockName359.STATS_TYPE);
             // An empty graph is no graph: the entry is dropped, so the block stops sparkling and a
             // right click on it does nothing - "cleared" and "never configured" are the same state.
             if (graph != null && graph.nodes.isEmpty()) graph = null;
@@ -329,6 +333,12 @@ public final class BlockTrigger351 {
             }
             if (RadiusPass354.isRadiusNode(cur)) {
                 // An event node: the tick pass fires it, a walk only steps over it.
+                curId = cur.next;
+                continue;
+            }
+            // Build 359: the name card is the block's identity, not a step of the walk - it is
+            // stepped over in silence, exactly like the event node above.
+            if (BlockName359.isName(cur)) {
                 curId = cur.next;
                 continue;
             }

@@ -1,0 +1,2 @@
+c9cad206227c960e1af6fc4921e83649885cb8dbced83b680b3c72c077323230  settledlands-0.8.0-build359-block-name.jar
+692b61e7bb9b256219a31b3443e08130b34c6da8e56a17e2e52adce2deff542f  SettledLands-Build359-BlockName-Source.zip
