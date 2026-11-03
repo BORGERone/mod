@@ -25,6 +25,11 @@ active=false`; `switchTab` для блока по-прежнему запрещ�
 выпускается), классы из `build303-src/out360`. В игре **не подтверждено**.
 Выложено: коммит `7e0b4e8` + push; Drive jar `1bh3JtiUVbxNC_G_Vw7malNJZxyizQVDw`,
 zip `1w_rEPDnSGSsEWENUUbOU2ySzgwuv-93i` (папка `0AB-al7DFuWhEUk9PVA`).
+**Ссылки были 403** — файлы заливались без публичного доступа (приватно видел только владелец).
+Исправлено: `make_public(role=reader, allow_file_discovery=true)` на 360 jar+zip, а также на 358 и 359
+(их тоже открыл). **Правило на будущее: сразу после `upload_file` делать файл публичным** — иначе
+`https://drive.google.com/uc?export=download&id=…` отдаёт 403. Папку `make_public` не даёт (политика
+Google Workspace: «This file is never writable»), поэтому публичность — **на каждом файле отдельно**.
 
 **Урок 360 (главный):** `@Shadow` работает **только** для членов, объявленных в самом классе-цели.
 Наследуемый от Minecraft член надо **вызывать** — компилятор найдёт его через стуб суперкласса, а

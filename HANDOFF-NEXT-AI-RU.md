@@ -17,7 +17,11 @@
 `block_name_check` OK, 19 остальных гейтов зелёные, `screen_smoke` SKIP. Патч `tools/patch_build360.py`
 (**база 358**), классы из `build303-src/out360`. В игре **не подтверждено**. Выложено: коммит
 `7e0b4e8` + push; Drive jar `1bh3JtiUVbxNC_G_Vw7malNJZxyizQVDw`, zip
-`1w_rEPDnSGSsEWENUUbOU2ySzgwuv-93i`.
+`1w_rEPDnSGSsEWENUUbOU2ySzgwuv-93i`. **Выкладывать файлы так: `upload_file`, затем СРАЗУ
+`make_public(role=reader, allow_file_discovery=true)`** — без этого ссылка
+`https://drive.google.com/uc?export=download&id=…` отдаёт пользователю 403 (файл приватный). Папку
+`0AB-al7DFuWhEUk9PVA` сделать публичной нельзя (политика Workspace), значит — каждый файл отдельно.
+Пользователь просит **всегда прямую ссылку на скачивание**, а не ссылку на страницу просмотра.
 
 
 **Следующий шаг:** ждать проверки в игре по списку из `README-Build359-RU.md`. Открытые вопросы:
