@@ -16,6 +16,8 @@
 выключает броню на сессию и пишет одну строку `SettledLands/Armor348: armour pass switched off ...`.
 Обновлены `api5-src` (EntityModelSet, HumanoidModel(ModelPart)), `CONFIRMED_EXTERNAL` (форма вызова) и
 `body_armor_check.py` (форма + наличие защиты). 518 записей, 68 миксинов. В игре **не подтверждено**.
+Выложено: коммит `00f7528` + push в `arena/5618404a-mod`; Drive jar `1dMTjT57WU0nB6X4JeRurtuuh7qehfN_G`,
+zip `1WJh908IXCLrBtlTFRKXov1SlGXWUHJss` (папка `0AB-al7DFuWhEUk9PVA`).
 
 Предыдущая — `settledlands-0.8.0-build348-body-armor.jar` — броня на теле (краш, отозвана логом):
 
