@@ -12,4 +12,9 @@ public class Player extends LivingEntity {
     /** Build 351: same call the base jar's wand and dialogue feedback use. */
     public void displayClientMessage(net.minecraft.network.chat.Component message, boolean actionBar) {}
 
+    /** Build 352: declared on Player; the base jar holds the wand through this exact call. */
+    public net.minecraft.world.item.ItemStack getItemInHand(net.minecraft.world.InteractionHand hand) {
+        return null;
+    }
+
 }

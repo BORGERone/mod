@@ -14,7 +14,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Build 351: a block can carry a graph, and right clicking it with an empty hand runs that graph.
+ * Build 351/352: a block can carry a graph, right clicking it with an empty hand runs that graph, and
+ * a "В радиусе" node in it fires by itself while somebody stands in its radius.
  *
  * <p>The block is opened in the very same editor the NPCs use - the stock screen is handed a profile
  * whose main graph is the block's graph, under an id of its own
@@ -24,7 +25,7 @@ import org.slf4j.LoggerFactory;
  * ids before it ever looks for an entity.</p>
  *
  * <p>What runs from a block is the chain that the block does not need a body for - the palette of the
- * block graph holds exactly those four nodes:</p>
+ * block graph holds exactly those nodes:</p>
  *
  * <ul>
  *   <li><b>Триггер</b> - runs its action/command with the clicking player as the command source, so
@@ -33,15 +34,17 @@ import org.slf4j.LoggerFactory;
  *       the false branch, exactly like the NPC graph does;</li>
  *   <li><b>Переменная</b> - adds its delta to a named variable, stored in the same {@code NpcPoints}
  *       the NPC graphs use, so a block and an NPC can share one counter;</li>
- *   <li><b>Случайность</b> - picks one of its branches.</li>
+ *   <li><b>Случайность</b> - picks one of its branches;</li>
+ *   <li><b>В радиусе</b> - build 352: an event node, ticked by {@code BlockTrigger352} - when a body of
+ *       the chosen kind stands within its radius, its action runs and the chain continues from it.</li>
  * </ul>
  *
- * <p>The author's rule for the trigger: an empty hand and a graph with a start node. No start node, no
- * graph, a disabled store, anything in the hand - nothing happens and nothing is cancelled, the block
- * keeps doing whatever it did before.</p>
+ * <p>The author's rule for the click trigger: an empty hand and a graph with a start node. No start
+ * node, no graph, anything in the hand - nothing happens and nothing is cancelled, the block keeps
+ * doing whatever it did before.</p>
  *
- * <p>Cost: one hash lookup and one chain walk per click, both bounded (256 nodes, a visited set), no
- * ticking at all. Nothing here runs per frame or per tick.</p>
+ * <p>Cost: one hash lookup and one chain walk per click, both bounded (256 nodes, a visited set). The
+ * radius nodes are the only periodic work and live in {@code BlockTrigger352}, not here.</p>
  */
 public final class BlockTrigger351 {
 
@@ -64,7 +67,7 @@ public final class BlockTrigger351 {
     /** Node types the block graph offers; everything else is not in its palette. */
     public static final int[] PALETTE = {
         NpcDialogueGraph.TRIGGER, NpcDialogueGraph.IF, NpcDialogueGraph.VARIABLE,
-        NpcDialogueGraph.RANDOM,
+        NpcDialogueGraph.RANDOM, NpcDialogueGraph.CHECK,
     };
 
     private static final Set<String> WARNED = new HashSet<>();
@@ -191,12 +194,34 @@ public final class BlockTrigger351 {
     }
 
     /**
+     * Fire one node of a block graph and continue from it - what a "В радиусе" node does when its
+     * radius has somebody in it. Build 352, called from the tick pass.
+     */
+    public static boolean fire(ServerPlayer source, NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+        if (graph == null || node == null) return false;
+        try {
+            Set<Integer> visited = new HashSet<>();
+            visited.add(node.id);
+            act(source, node);
+            fireTriggers(source, graph, node, visited);
+            if (node.next >= 0) walk(source, graph, node.next, visited);
+            return true;
+        } catch (Throwable failure) {
+            fail(failure);
+            return false;
+        }
+    }
+
+    /**
      * The chain itself, node for node the semantics of the NPC graph: a trigger action is run with the
      * player as source, a variable moves its points, an If compares and picks a branch, a random node
      * picks one of its ports. Trigger lists attached to a node fire too, like they do for an NPC.
      */
     private static void walk(ServerPlayer player, NpcDialogueGraph graph, int start) {
-        Set<Integer> visited = new HashSet<>();
+        walk(player, graph, start, new HashSet<>());
+    }
+
+    private static void walk(ServerPlayer player, NpcDialogueGraph graph, int start, Set<Integer> visited) {
         int curId = start;
         while (curId >= 0 && visited.size() < MAX_STEPS && visited.add(curId)) {
             NpcDialogueGraph.Node cur = graph.get(curId);
@@ -209,7 +234,8 @@ public final class BlockTrigger351 {
                 continue;
             }
             if (cur.type == NpcDialogueGraph.VARIABLE) {
-                if (!cur.pointsName.isBlank() && cur.varValue != 0 && player.getServer() != null) {
+                if (!cur.pointsName.isBlank() && cur.varValue != 0 && player != null
+                        && player.getServer() != null) {
                     NpcPoints.get(player.getServer())
                             .add(player.getUUID(), cur.pointsName, cur.pointsShared, cur.varValue);
                 }
@@ -236,6 +262,11 @@ public final class BlockTrigger351 {
                         ? cur.randomBranches.get(port) : -1;
                 continue;
             }
+            if (BlockTrigger352.isRadiusNode(cur)) {
+                // An event node: the tick pass fires it, a walk only steps over it.
+                curId = cur.next;
+                continue;
+            }
             // A node the block palette cannot create (an older file, a hand-edited graph): step over
             // it instead of stalling, and say it once per session so it is never a silent surprise.
             warnOnce(cur.type);
@@ -254,7 +285,7 @@ public final class BlockTrigger351 {
                 shared = source.pointsShared;
             }
         }
-        if (name.isBlank() || player.getServer() == null) return 0;
+        if (name.isBlank() || player == null || player.getServer() == null) return 0;
         return NpcPoints.get(player.getServer()).get(player.getUUID(), name, shared);
     }
 

@@ -15,8 +15,18 @@ Build 351 adds a feature with four ways to ship silently broken:
 
     python3 tools/block_trigger_check.py settledlands-0.8.0-build351-block-trigger.jar
 
-Exit 0 = the store is world data, the hooks are in the right lists, the palette is the four nodes a
-block can run, and the chain walker is bounded.
+Build 352 adds the fifth node and the passive work around it, with three ways to get it wrong:
+
+  * the tick pass runs every tick or walks the whole store every pass - a server with one radius block
+    would pay for all 4096 entries;
+  * the ring and the highlight disagree with the toggle the author sees - the node says "yes" and
+    nothing is drawn, or the box on the card and the ring say different things;
+  * the visibility row is offered on an NPC (where build 320 already draws the flag) or on a node that
+    has no radius.
+
+Exit 0 = the store is world data, the hooks are in the right lists, the palette is the five nodes a
+block can run, the chain walker is bounded, and the periodic work is one gated pass over one
+dimension's entries.
 """
 import json
 import pathlib
@@ -31,6 +41,8 @@ STORE = "dev/settledlands/npc/BlockTriggerStore351.class"
 LOGIC = "dev/settledlands/npc/BlockTrigger351.class"
 EVENTS = "dev/settledlands/npc/BlockTriggerEvents351.class"
 CLIENT = "dev/settledlands/npc/client/BlockTriggerClient351.class"
+TICKER = "dev/settledlands/npc/BlockTrigger352.class"
+CHECK_ROW = "dev/settledlands/mixin/NpcBlockCheckRow352Mixin.class"
 OPEN_MIXIN = "dev/settledlands/mixin/NpcBlockOpen351Mixin.class"
 GRAPH_MIXIN = "dev/settledlands/mixin/NpcBlockGraph351Mixin.class"
 SAVE_MIXIN = "dev/settledlands/mixin/NpcBlockSave351Mixin.class"
@@ -127,12 +139,13 @@ def main(argv):
     jar = argv[0]
     with zipfile.ZipFile(jar) as z:
         names = set(z.namelist())
-        missing = [n for n in (STORE, LOGIC, EVENTS, CLIENT, OPEN_MIXIN, GRAPH_MIXIN, SAVE_MIXIN)
+        missing = [n for n in (STORE, LOGIC, EVENTS, CLIENT, TICKER, CHECK_ROW, OPEN_MIXIN,
+                               GRAPH_MIXIN, SAVE_MIXIN)
                    if n not in names]
         if missing:
             return fail("build 351 is not in this jar: %s" % ", ".join(missing))
-        blobs = {n: z.read(n) for n in (STORE, LOGIC, EVENTS, CLIENT, OPEN_MIXIN, GRAPH_MIXIN,
-                                        SAVE_MIXIN)}
+        blobs = {n: z.read(n) for n in (STORE, LOGIC, EVENTS, CLIENT, TICKER, CHECK_ROW, OPEN_MIXIN,
+                                        GRAPH_MIXIN, SAVE_MIXIN)}
         config = json.loads(z.read(CONFIG).decode("utf-8"))
         ru = json.loads(z.read(RU).decode("utf-8"))
         en = json.loads(z.read(EN).decode("utf-8"))
@@ -147,7 +160,7 @@ def main(argv):
         if common.index("NpcBlockSave351Mixin") > common.index(SHARED_GRAPH_MIXIN):
             return fail("the block save hook is listed after %s: a block save would be taken as the "
                         "shared graph" % SHARED_GRAPH_MIXIN)
-    for name in ("NpcBlockOpen351Mixin", "NpcBlockGraph351Mixin"):
+    for name in ("NpcBlockOpen351Mixin", "NpcBlockGraph351Mixin", "NpcBlockCheckRow352Mixin"):
         if name not in client:
             return fail("%s is not a client mixin - the editor would never open" % name)
         if name in common:
@@ -210,7 +223,7 @@ def main(argv):
     if palette is None:
         return fail("the block palette is not a switch on the stock row numbers")
     low, high, default, targets = palette
-    wanted = {2: "Trigger", 3: "If", 4: "Variable", 13: "Random"}
+    wanted = {2: "Trigger", 3: "If", 4: "Variable", 5: "In radius", 13: "Random"}
     rows = {row for row, offset in targets.items() if offset != default}
     if rows != set(wanted):
         return fail("the block palette maps rows %s; it must map exactly %s (Trigger, If, "
@@ -222,20 +235,66 @@ def main(argv):
     if not any(r[0] and r[0].endswith("client/NpcDialogueGraphScreen") for r in client_refs):
         return fail("the block editor is not the stock graph screen")
 
+    # ---- build 352: the radius node, its ring and the wand highlight --------------------------
+    ticker, ticker_refs = parse(blobs[TICKER])
+    ticker_methods = {(ticker["cp"][n][1], ticker["cp"][d][1]) for _a, n, d, _at in ticker["methods"]}
+    if not any(m[0] == "onServerTick" for m in ticker_methods):
+        return fail("the tick pass has no server tick handler")
+    if not any(r[0] and r[0].endswith("event/tick/ServerTickEvent$Post") for r in ticker_refs):
+        return fail("the tick pass is not bound to the server tick event the base jar already uses")
+    if not any(r[1] == "getGameTime" for r in ticker_refs):
+        return fail("the tick pass has no period gate - it would run every tick")
+    if 8 not in consts(ticker):
+        return fail("the tick period (8) is not in the tick pass")
+    if not any(r[0] and r[0].endswith("particles/ParticleTypes") and r[1] == "ELECTRIC_SPARK"
+               for r in ticker_refs):
+        return fail("the wand highlight does not spark on the blocks")
+    if not any(r[0] and r[0].endswith("particles/ParticleTypes") and r[1] == "ENCHANT"
+               for r in ticker_refs):
+        return fail("the radius ring is not drawn")
+    if not any(r[1] == "sendParticles" for r in ticker_refs):
+        return fail("the tick pass never sends a particle")
+    if not any(r[1] == "getItemInHand" for r in ticker_refs):
+        return fail("the highlight does not look at the hand holding the wand")
+    if not any(r[1] == "ofDimension" for r in ticker_refs):
+        return fail("the tick pass does not go through the per-dimension index - it would scan the "
+                    "whole store every period")
+
+    store_text = text(store)
+    if "byDimension" not in store_text or "ofDimension" not in store_text:
+        return fail("the store has no per-dimension index")
+    if not any(r[1] == "ring" for r in ticker_refs) or not any(r[1] == "check" for r in ticker_refs):
+        return fail("the tick pass does not separate the ring entries from the check entries")
+
+    row_mixin, row_refs = parse(blobs[CHECK_ROW])
+    if not any(r[1] == "setVisible" for r in row_refs):
+        return fail("the visibility row does not write the node flag")
+    if not any(r[1] == "isBlockEditorId" for r in row_refs):
+        return fail("the visibility row is not limited to the block editor")
+
+    for key in ("gui.settledlands.block.visible", "gui.settledlands.block.visible_on",
+                "gui.settledlands.block.visible_off"):
+        if key not in LANG_KEYS:
+            pass
+
     for path, table in (("ru", ru), ("en", en)):
-        for key in LANG_KEYS:
+        for key in LANG_KEYS + ("gui.settledlands.block.visible",
+                                "gui.settledlands.block.visible_on",
+                                "gui.settledlands.block.visible_off"):
             if key not in table:
                 return fail("%s is missing %s" % (path, key))
 
-    # No per-tick work: the whole feature is a click handler, nothing may be added to a tick loop.
-    for name, data in blobs.items():
-        _parsed, refs = parse(data)
+    # Only the tick pass may be periodic; the click path must stay a hash lookup.
+    for name in (LOGIC, EVENTS, CLIENT, STORE):
+        _parsed, refs = parse(blobs[name])
         for owner, member, desc in refs:
-            if member in ("tick", "tickSubGraph", "aiStep") and owner is not None:
-                return fail("%s calls %s - a block graph must not tick" % (name, member))
+            if member in ("tick", "tickSubGraph", "aiStep"):
+                return fail("%s calls %s - the periodic work belongs to the tick pass only"
+                            % (name, member))
 
     print("block_trigger_check: OK  %s  (a block keeps its graph in world data, the palette is the "
-          "four nodes it can run, and the chain walk is bounded)" % jar)
+          "five nodes it can run, the chain walk is bounded, and the radius pass is one dimension "
+          "twice a second)" % jar)
     return 0
 
 

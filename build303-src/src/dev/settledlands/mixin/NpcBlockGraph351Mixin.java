@@ -95,6 +95,7 @@ public abstract class NpcBlockGraph351Mixin {
             case 2 -> NpcDialogueGraph.TRIGGER;
             case 3 -> NpcDialogueGraph.IF;
             case 4 -> NpcDialogueGraph.VARIABLE;
+            case 5 -> NpcDialogueGraph.CHECK;
             case 13 -> NpcDialogueGraph.RANDOM;
             default -> -1;
         };

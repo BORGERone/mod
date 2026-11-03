@@ -10,4 +10,7 @@ public class MinecraftServer {
     public Iterable<ServerLevel> getAllLevels() { return null; }
 
     public ServerLevel overworld() { return null; }
+
+    /** Build 352: the base jar already walks the player list from here. */
+    public net.minecraft.server.players.PlayerList getPlayerList() { return null; }
 }
