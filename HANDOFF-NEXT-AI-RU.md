@@ -2,22 +2,23 @@
 
 **Дата:** 2026-11-03. **Ветка:** `arena/5618404a-mod` (**не переименовывать, не переключаться**;
 в прошлых сессиях она называлась `arena/99d7691a-mod`).
-**Текущая сборка:** `settledlands-0.8.0-build359-block-name.jar` — **у блока есть имя**. На канвасе
-блока нет карточек «Характеристики» и «Автономный ИИ» (требование пользователя), вместо них одна
-своя карточка **«ИМЯ»**: поле имени + выпадающий список цвета, «как нода характеристики» (есть сразу,
-из палитры не добавляется). Нода типа **18**; данные в `Node#text` (имя, кап 32) и `Node#varValue`
-(индекс 0..3 из `GuideDialogueScreen.NAME_COLORS`). Ставит её `BlockNoStats359Mixin` (перехват
-`NpcStatsGraphUi.ensure`: выбросить 16, создать 18, `changed()`), панель ИИ не синхронизируется
-`BlockNoAi359Mixin`, вторую карточку не даёт `BlockNameOne359Mixin` (`NpcStatsGraph.add`). Рисует
-`BlockNameCard359` (свой `drawNode`-хук: сток подписал бы неизвестный тип «Случайность»), правит
-`BlockNameInspector359Mixin` (`widgets()` RETURN, `sidebarHeight += 66`). Сохранение блока выбрасывает
-карточку характеристик, обход цепочки молча переступает ноду имени. Окно диалога 358 теперь говорит
-именем блока и его цветом (`BlockTalk358.say`), координаты — в подписи; безымянный блок говорит
-координатами. 538 записей, 490 классов, 79 миксин-классов (38/40), `verify_jar` PASS (1394 внешние
-ссылки, **0 новых**), `jvm_verify` OK, `check_mixin_class` OK, `block_name_check` OK, 19 остальных
-гейтов зелёные, `screen_smoke` SKIP. Патч `tools/patch_build359.py`, классы из `build303-src/out359`.
-В игре **не подтверждено**. Выложено: коммит `492aa4b` + push; Drive jar
-`1HXrXbICNbR1igONSrOs4Q51fHYWvq7cL`, zip `1b8DluDBwT-pAMEAS9ATZmn8t98p30UNH`.
+**Текущая сборка:** `settledlands-0.8.0-build360-block-name-fix.jar` — **имя блока + без вкладок у
+графа блока**, замена **отозванной 359**. 359 валила клиент при открытии любого графа: `@Shadow` на
+`Screen#addRenderableWidget` — Mixin ищет тень только в самом классе-цели, метод унаследован, экран
+`NpcDialogueGraphScreen` не загружался. В 360 виджет регистрируется **вызовом** (стуб `Screen`
+объявляет `(GuiEventListener)GuiEventListener`), тени нет; `check_mixin_class` снова строгий и на jar
+359 **FAIL** с текстом из лога. У графа блока **нет вкладок** (`BlockNoTabs360Mixin` — `@Redirect` на
+`button(...)` в `widgets()`, кнопки `gui.settledlands.graph.tab_*` получают `visible=false`,
+`active=false` только для блочного id; запрет `switchTab` в 351 остался). Остальное как в 359:
+карточка «ИМЯ» (нода 18; `Node#text` — имя, кап 32; `Node#varValue` — индекс цвета из
+`GuideDialogueScreen.NAME_COLORS`), карточек «Характеристики» и «Автономный ИИ» на графе блока нет,
+окно диалога говорит именем и цветом, координаты — фолбэк. 539 записей, 491 класс, 80 миксин-классов
+(38/41), `verify_jar` PASS (1394 внешние ссылки, **0 новых**), `jvm_verify` OK, `check_mixin_class` OK,
+`block_name_check` OK, 19 остальных гейтов зелёные, `screen_smoke` SKIP. Патч `tools/patch_build360.py`
+(**база 358**), классы из `build303-src/out360`. В игре **не подтверждено**. Выложено: коммит
+`7e0b4e8` + push; Drive jar `1bh3JtiUVbxNC_G_Vw7malNJZxyizQVDw`, zip
+`1w_rEPDnSGSsEWENUUbOU2ySzgwuv-93i`.
+
 
 **Следующий шаг:** ждать проверки в игре по списку из `README-Build359-RU.md`. Открытые вопросы:
 вид/место карточки «ИМЯ» (рамочная геометрия `NODE_W`×`NODE_H`), высота и прокрутка строк инспектора
