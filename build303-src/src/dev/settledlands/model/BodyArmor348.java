@@ -6,7 +6,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.WeakHashMap;
 import net.minecraft.client.Minecraft;
-import net.minecraft.client.model.EntityModel;
 import net.minecraft.client.model.HumanoidModel;
 import net.minecraft.client.model.geom.EntityModelSet;
 import net.minecraft.client.model.geom.ModelLayers;
@@ -21,6 +20,8 @@ import net.minecraft.world.item.ArmorItem;
 import net.minecraft.world.item.ArmorMaterial;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.component.DyedItemColor;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Build 348 - the armour an entity wears, drawn on the body the mod renders.
@@ -42,6 +43,13 @@ import net.minecraft.world.item.component.DyedItemColor;
  * {@code LivingEntityRenderer} does), which is the space the armour model was built for. No extra
  * transform is applied, so a plate cannot drift away from the body it belongs to.</p>
  *
+ * <h2>Never a crash</h2>
+ * <p>Armour is a visual extra, so this pass is not allowed to take the client down: a wrong or missing
+ * member of the game's model API is caught, reported once, and the pass switches itself off for the
+ * session. Build 348 did not do that and died on the first frame - {@code EntityModelSet#bakeLayer}
+ * returns the layer's root part, not a model, and the {@code NoSuchMethodError} went straight out of
+ * the render pass.</p>
+ *
  * <h2>Cost</h2>
  * <p>No allocation per frame: the two baked models are static, the bone map is a {@link WeakHashMap}
  * keyed by model instance, and a frame with no armour on the entity returns after four empty checks.
@@ -58,6 +66,11 @@ public final class BodyArmor348 {
     private static HumanoidModel<?> innerArmor;
     /** Attempts left before the pass stops trying to bake; an unready model set is not a failure. */
     private static int bakeAttempts = 8;
+    /** Set by the first failure: from then on the pass costs one boolean test per frame. */
+    private static boolean disabled;
+    /** Says the one line once, whatever took the pass down first. */
+    private static boolean reported;
+    private static final Logger LOG = LoggerFactory.getLogger("SettledLands/Armor348");
 
     /** BbModel instance -> the bones the armour model copies its rotations from. */
     private static final Map<BbModel, Rig> RIGS = new WeakHashMap<>();
@@ -78,9 +91,18 @@ public final class BodyArmor348 {
      */
     public static void draw(BbModel model, LivingEntity entity, PoseStack pose, MultiBufferSource buffer,
                             int light) {
-        if (model == null || entity == null || pose == null || buffer == null) {
+        if (disabled || model == null || entity == null || pose == null || buffer == null) {
             return;
         }
+        try {
+            drawUnguarded(model, entity, pose, buffer, light);
+        } catch (Throwable failure) {
+            fail(failure);
+        }
+    }
+
+    private static void drawUnguarded(BbModel model, LivingEntity entity, PoseStack pose,
+                                      MultiBufferSource buffer, int light) {
         HumanoidModel<?> outer = outer();
         HumanoidModel<?> inner = inner();
         if (outer == null || inner == null) {
@@ -325,20 +347,38 @@ public final class BodyArmor348 {
      * a genuinely missing layer stops being asked for after eight tries instead of every frame.
      */
     private static HumanoidModel<?> bake(boolean inner) {
-        Minecraft client = Minecraft.getInstance();
-        if (client == null) {
+        try {
+            Minecraft client = Minecraft.getInstance();
+            if (client == null) {
+                return null;
+            }
+            EntityModelSet models = client.getEntityModels();
+            if (models == null) {
+                return null;
+            }
+            bakeAttempts--;
+            ModelPart root = models.bakeLayer(inner ? ModelLayers.PLAYER_INNER_ARMOR
+                    : ModelLayers.PLAYER_OUTER_ARMOR);
+            return root == null ? null : new HumanoidModel<LivingEntity>(root);
+        } catch (Throwable failure) {
+            fail(failure);
             return null;
         }
-        EntityModelSet models = client.getEntityModels();
-        if (models == null) {
-            return null;
+    }
+
+    /**
+     * Switches the pass off for the session and says so once.
+     *
+     * <p>One line, with the failure's own {@code toString}: enough to name a wrong API call from the log
+     * (that is how 348's {@code NoSuchMethodError} would have been readable instead of fatal) and cheap
+     * enough that a broken client keeps rendering bodies.</p>
+     */
+    private static void fail(Throwable failure) {
+        disabled = true;
+        bakeAttempts = 0;
+        if (!reported) {
+            reported = true;
+            LOG.warn("armour pass switched off for this session: {}", failure.toString());
         }
-        bakeAttempts--;
-        EntityModel<?> baked = models.bakeLayer(inner ? ModelLayers.PLAYER_INNER_ARMOR
-                : ModelLayers.PLAYER_OUTER_ARMOR);
-        if (!(baked instanceof HumanoidModel)) {
-            return null;
-        }
-        return (HumanoidModel<?>) baked;
     }
 }

@@ -1,0 +1,2 @@
+3f757d0be36f16900a2454a6d025c8f1054218ce797a47c09892e0a2d5a7389c  settledlands-0.8.0-build349-armor-apifix.jar
+1a696460f3c03e425b4ea56171e294b338b8d83c40e36d45aa86fc52019e1983  SettledLands-Build349-ArmorApiFix-Source.zip

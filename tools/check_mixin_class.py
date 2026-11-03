@@ -637,6 +637,10 @@ def external_refs(classes):
 #   https://github.com/baileyholl/Ars-Nouveau/blob/1.21.x/src/main/java/com/hollingsworth/arsnouveau/client/renderer/entity/DummyRenderer.java
 #   and by irons-spells-n-spellbooks' AngelWingsLayer for Minecraft#getEntityModels().bakeLayer(...):
 #   https://github.com/iron431/irons-spells-n-spellbooks/blob/1.21.1/src/main/java/io/redspace/ironsspellbooks/render/AngelWingsLayer.java
+#   Build 349 lesson: those same two lines say bakeLayer returns a ROOT PART, not a model (the caller
+#   wraps it in a constructor). Build 348 declared the return type as EntityModel from memory instead of
+#   reading the wrapping constructor, and the client died with NoSuchMethodError on the first frame. A new
+#   external member is confirmed only when the evidence shows the exact shape, not the name.
 CONFIRMED_EXTERNAL = {
     ("net/minecraft/client/Minecraft", "keyboardHandler",
      "Lnet/minecraft/client/KeyboardHandler;"):
@@ -646,8 +650,12 @@ CONFIRMED_EXTERNAL = {
     ("net/minecraft/client/KeyboardHandler", "setClipboard", "(Ljava/lang/String;)V"):
         "Build 318 clipboard: what vanilla EditBox does for Ctrl+C",
     ("net/minecraft/client/model/geom/EntityModelSet", "bakeLayer",
-     "(Lnet/minecraft/client/model/geom/ModelLayerLocation;)Lnet/minecraft/client/model/EntityModel;"):
-        "Build 348 armour: what every 1.21 renderer bakes its layers with (AngelWingsLayer, 1.21)",
+     "(Lnet/minecraft/client/model/geom/ModelLayerLocation;)Lnet/minecraft/client/model/geom/ModelPart;"):
+        "Build 349 armour: bakeLayer returns the layer's ROOT PART, wrapped by the caller "
+        "(new HumanoidModel<>(context.bakeLayer(...)) - 348 declared it as EntityModel and crashed)",
+    ("net/minecraft/client/model/HumanoidModel", "<init>",
+     "(Lnet/minecraft/client/model/geom/ModelPart;)V"):
+        "Build 349 armour: the constructor every renderer builds a humanoid from a baked layer with",
     ("net/minecraft/client/model/geom/ModelLayers", "PLAYER_INNER_ARMOR",
      "Lnet/minecraft/client/model/geom/ModelLayerLocation;"):
         "Build 348 armour: leggings layer, baked into a HumanoidModel (DummyRenderer, 1.21)",

@@ -86,6 +86,18 @@ def method_body(data, name):
     return None
 
 
+def guards(data):
+    """Methods of the class whose bytecode has an exception handler (a try/catch around the body)."""
+    parsed = disasm.parse_class(data)
+    cp = parsed["cp"]
+    out = set()
+    for method in parsed["methods"]:
+        code = disasm.code_of(method[3], cp)
+        if code and code["exc"]:
+            out.add(cp[method[1]][1])
+    return out
+
+
 def main(argv):
     if len(argv) != 1:
         print(__doc__)
@@ -157,6 +169,12 @@ def main(argv):
     print("ok: the NPC sync reads the inventory and writes only the equipment slots")
 
     body = code_strings(blobs[BODY])
+    # Build 348 died here: bakeLayer returns the root part, not a model.
+    for needed in ("EntityModelSet.bakeLayer(Lnet/minecraft/client/model/geom/ModelLayerLocation;)"
+                   "Lnet/minecraft/client/model/geom/ModelPart;",
+                   "HumanoidModel.<init>(Lnet/minecraft/client/model/geom/ModelPart;)V"):
+        if not any(needed in entry for entry in body):
+            return fail("%s does not use the game's bakeLayer shape (%s)" % (BODY, needed))
     for needed in ("ModelLayers.PLAYER_INNER_ARMOR", "ModelLayers.PLAYER_OUTER_ARMOR",
                    "RenderType.armorCutoutNoCull", "RenderType.armorEntityGlint",
                    "HumanoidModel.renderToBuffer"):
@@ -167,6 +185,13 @@ def main(argv):
     plain = strings(blobs[BODY])
     if not any(entry == "LEGS" for entry in plain):
         return fail("%s never splits leggings off onto the inner model" % BODY)
+    guarded = guards(blobs[BODY])
+    for method in ("draw", "bake"):
+        if method not in guarded:
+            return fail("%s.%s has no exception guard - a wrong game API would kill the client "
+                        "(that is exactly how 348 crashed)" % (BODY, method))
+    print("ok: the bake uses the game's real shape, and both entry points are guarded")
+
     print("body_armor_check: OK  %s  (armour on both bodies, NPC wears what it carries)"
           % pathlib.Path(jar).name)
     return 0

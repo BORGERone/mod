@@ -7,8 +7,20 @@
 
 ## Текущая сборка
 
+`settledlands-0.8.0-build349-armor-apifix.jar` — **исправление краша 348**. Лог `latest-6.log`:
+`java.lang.NoSuchMethodError: EntityModelSet.bakeLayer(ModelLayerLocation)` из
+`BodyArmor348.bake` на первом кадре, затем `ReportedException: Rendering entity in world`. Причина:
+возврат `bakeLayer` — `ModelPart` (корневая часть слоя), модель строит вызывающий
+(`new HumanoidModel<>(context.bakeLayer(...))`); в 348 стояло `EntityModel`. В 349 вызов исправлен
+(`ModelPart` + `new HumanoidModel<>(root)`), плюс пасс защищён: `bake` и `draw` обёрнуты, первый сбой
+выключает броню на сессию и пишет одну строку `SettledLands/Armor348: armour pass switched off ...`.
+Обновлены `api5-src` (EntityModelSet, HumanoidModel(ModelPart)), `CONFIRMED_EXTERNAL` (форма вызова) и
+`body_armor_check.py` (форма + наличие защиты). 518 записей, 68 миксинов. В игре **не подтверждено**.
+
+Предыдущая — `settledlands-0.8.0-build348-body-armor.jar` — броня на теле (краш, отозвана логом):
+
 `settledlands-0.8.0-build348-body-armor.jar` — **броня видна на теле** (игрок + все NPC), NPC надевают
-броню из своего инвентаря. Причина: тело рисует сам мод (`BbModel`), ванильные слои брони к нему не
+броню из своего инвентаря (в игре не подтверждено: клиент падал). Причина: тело рисует сам мод (`BbModel`), ванильные слои брони к нему не
 привязаны, поэтому игра не рисовала броню вообще. Сделано: `BodyArmor348` запекает
 `PLAYER_OUTER_ARMOR`/`PLAYER_INNER_ARMOR` (`Minecraft#getEntityModels().bakeLayer`), копирует повороты
 костей тела (торс = `waist`+`body`, голова дополнительно наследует торс) и рисует слои поверх тела;
