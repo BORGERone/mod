@@ -8,7 +8,9 @@ does nothing).
 
 So the shipped classes are read for the numbers that keep it cheap - period, point count, view
 range, radius cap - and for the calls that prove it works end to end: the saved flag field, the
-particle send, and the two mixin lists (the ring is server side, the tick box is client side).
+particle send, and the two mixin lists (the ring is server side, the row is client side).
+Build 361 moved the toggle of the flag from a check box on the canvas to the inspector row, so the
+gate reads the row of build 355 instead of the retired box - and refuses to let the box come back.
 
     python3 tools/radius_zone_check.py settledlands-0.8.0-build320-radius-zone.jar
 
@@ -27,6 +29,7 @@ ZONE = "dev/settledlands/npc/NpcRadiusZone320.class"
 UI = "dev/settledlands/npc/client/NpcRadiusZoneUi320.class"
 MIXIN_SERVER = "dev/settledlands/mixin/NpcRadiusZoneMixin320.class"
 MIXIN_CLIENT = "dev/settledlands/mixin/NpcRadiusZoneUiMixin320.class"
+ROW = "dev/settledlands/mixin/NpcRadiusRow355Mixin.class"
 NAMES = {"": "NpcRadiusZoneMixin320", "client": "NpcRadiusZoneUiMixin320"}
 LANG_KEY = "gui.settledlands.graph.radius_zone"
 
@@ -70,7 +73,7 @@ def run(jar):
     problems = []
     with zipfile.ZipFile(jar) as z:
         names = set(z.namelist())
-        for needed in (ZONE, UI, MIXIN_SERVER, MIXIN_CLIENT):
+        for needed in (ZONE, UI, MIXIN_SERVER, MIXIN_CLIENT, ROW):
             if needed not in names:
                 problems.append("missing %s" % needed)
         if problems:
@@ -113,16 +116,28 @@ def run(jar):
         if any("setDeltaMovement" in r for r in zone_refs):
             problems.append("the ring moves the NPC - this is a display aid, not a mechanic")
 
+        # Build 361: the one toggle of the flag is the inspector row of build 354/355 - the same row
+        # the «В радиусе» node has - and the check box build 320 painted on the canvas is retired.
         # The flag is read and written through the two accessors, never as a bare field, so it has
-        # exactly one owner. Drawing reads it, the click handler writes it.
+        # exactly one owner: the row reads it, the row writes it, and the row saves on the click.
+        if ROW not in names:
+            problems.append("missing %s" % ROW)
+        else:
+            row_refs = refs(disasm.parse_class(z.read(ROW)))
+            if not any("RadiusPass354.visible" in r for r in row_refs):
+                problems.append("the inspector row does not read the saved flag")
+            if not any("RadiusPass354.setVisible" in r for r in row_refs):
+                problems.append("the inspector row does not write the saved flag")
+            if not any("NpcRadiusRow355Mixin.save" in r for r in row_refs):
+                problems.append("the inspector row does not save the graph on the click")
         ui_refs = refs(disasm.parse_class(z.read(UI)))
-        if not any("NpcRadiusZone320.visible" in r for r in ui_refs):
-            problems.append("the tick box does not read the saved flag")
+        if any("GuiGraphics.fill" in r for r in ui_refs):
+            problems.append("the retired canvas check box is painted again")
+        if any("NpcRadiusZone320.visible" in r for r in ui_refs):
+            problems.append("the retired canvas check box reads the flag again")
         client_mixin = refs(disasm.parse_class(z.read(MIXIN_CLIENT)))
-        if not any("NpcRadiusZone320.setVisible" in r for r in client_mixin):
-            problems.append("the tick box does not write the saved flag")
         if not any("NpcRadiusZoneUi320.draw" in r for r in client_mixin):
-            problems.append("the client mixin does not draw the tick box")
+            problems.append("the client mixin no longer calls the retired box")
 
         server_mixin = refs(disasm.parse_class(z.read(MIXIN_SERVER)))
         if not any("NpcRadiusZone320.tick" in r for r in server_mixin):

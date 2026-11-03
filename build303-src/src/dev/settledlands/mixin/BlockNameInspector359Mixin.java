@@ -8,6 +8,7 @@ import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcUi;
 import java.util.List;
 import java.util.function.Consumer;
+import dev.settledlands.npc.client.WidgetPark361;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
@@ -17,8 +18,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Build 359: the two properties of a block's «Имя» node, edited the way every other node property is
- * edited - as rows of the inspector.
+ * Build 359/361: the two properties of a block's «Имя» node, edited the way every other node property
+ * is edited - as rows of the inspector.
  *
  * <p>The rows are added at the end of {@code widgets()}, after the screen has laid out and clipped its
  * own, so their position is read from what the screen left behind: the content of the inspector ends
@@ -34,6 +35,15 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * <p><b>Цвет</b> is the stock dropdown, filled with the four colours this mod already renders a
  * speaker name in, written into {@code Node#varValue}. Picking one repaints the card on the spot and
  * is what the dialogue is told when the block speaks.</p>
+ *
+ * <p><b>Build 361: the stock rows of this node are taken away.</b> The editor does not know the type
+ * of a name card, so its switch falls through to the rows of a «Реплика» - a text box, a trigger, a
+ * relation change, points - every one of which writes a field the name card does not use, and the
+ * author saw a name card with a line editor on it. A name is <i>one</i> name and <i>one</i> colour, so
+ * the screen's own rows for this node are hidden and moved out of the panel, its labels are dropped,
+ * and the two rows below are the whole inspector of the node. The hiding is a park, not a flag: the
+ * widgets are pushed far above the window, so no later frame can bring them back (that is exactly how
+ * the tabs of build 360 came back).</p>
  */
 @Mixin(targets = "dev.settledlands.npc.client.NpcDialogueGraphScreen", remap = false)
 public abstract class BlockNameInspector359Mixin {
@@ -58,6 +68,8 @@ public abstract class BlockNameInspector359Mixin {
 
     @Shadow private List inspectorWidgets;
 
+    @Shadow private List labels;
+
     @Shadow private void label(String key, int x, int y) { throw new AssertionError(); }
 
     @Shadow private EditBox textBox(String value, int maxLen, int x, int y, int width, int height,
@@ -71,6 +83,12 @@ public abstract class BlockNameInspector359Mixin {
         if (!BlockTrigger351.isBlockEditorId(((NpcDialogueGraphScreen) (Object) this).entityId())) return;
         Node node = graph.get(selected);
         if (node == null || node.type != BlockName359.TYPE) return;
+
+        // The rows the stock switch built for a type it does not know: parked, and their labels with
+        // them. Both lists were cleared at the start of this same widgets() call, so everything in
+        // them belongs to the node that is selected right now.
+        settledlands$parkStockRows();
+        sidebarHeight = 0;
 
         int x = inspectorX + 8;
         int width = inspectorW - 16;
@@ -109,6 +127,15 @@ public abstract class BlockNameInspector359Mixin {
             buildingInspector = false;
         }
         sidebarHeight += 66;
+    }
+
+    /** Push every row and every label of this node out of the panel - hidden and moved, both. */
+    private void settledlands$parkStockRows() {
+        if (labels != null) labels.clear();
+        if (inspectorWidgets == null) return;
+        for (Object widget : inspectorWidgets) {
+            WidgetPark361.park(widget);
+        }
     }
 
 }

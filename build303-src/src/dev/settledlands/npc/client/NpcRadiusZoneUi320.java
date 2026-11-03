@@ -3,99 +3,54 @@ package dev.settledlands.npc.client;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
 import dev.settledlands.npc.NpcRadiusZone320;
-import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.network.chat.Component;
 
 /**
- * Build 320: the visibility toggle of a "В радиусе" node, on the canvas.
+ * Build 320: the visibility toggle of a radius node - retired in build 361.
  *
- * <p>A small check box with a label sits just above the node's card - above, because the card's own
- * height depends on its text and a box drawn inside would sometimes land on a line of it. It is
- * painted in screen space at a fixed size, the way the pins are, so it stays readable at any zoom,
- * and it is clickable without selecting the node first.</p>
+ * <p>Build 320 painted a small check box with the label «Зона» just above the card of a radius node,
+ * in screen space, so the zone could be switched on and off without selecting the node first. It was
+ * the only way to switch it for the node it was written for. Build 320 was also the last time it was
+ * the only way: build 354 put the same flag into the inspector as a row («Видимость радиуса: да/нет»)
+ * and build 355 made that row save the graph on the click, and the row is what the «В радиусе» node
+ * has used since.</p>
  *
- * <p>The tick itself is the server's job, see {@link NpcRadiusZone320}: the box only writes the flag
- * into the node, and the graph is saved the way every other edit is - Ctrl+S sends the whole graph.
- * The zone is in the world, so it becomes visible when the editor is closed.</p>
+ * <p>Two controls for one flag, drawn in two different places and in two different shapes, is one
+ * control too many - and it left the two nodes that share the flag looking different: a button in the
+ * inspector for «В радиусе», a box on the canvas for «Цель». Build 361 therefore keeps only the row,
+ * so a node that shows a zone shows it the same way wherever it is: the checkbox is no longer painted
+ * ({@link #draw}) and it no longer takes clicks ({@link #hit}). The flag, the ring in the world and
+ * the save are untouched - they live in {@link NpcRadiusZone320} and {@code RadiusPass354}.</p>
  */
 public final class NpcRadiusZoneUi320 {
 
-    /** Screen size of the box, and the gap between the box and its label. */
+    /** Screen size of the box the retired control was painted with. Kept for the callers' geometry. */
     public static final int BOX = 8;
 
     public static final int GAP = 4;
 
-    /** How far above the top edge of the card the control sits. */
+    /** How far above the top edge of the card the control used to sit. */
     public static final int LIFT = 15;
-
-    private static final int COL_BOX = 0xFF8A8A8A;
-
-    private static final int COL_BOX_ON = 0xFF6FD36F;
-
-    private static final int COL_TEXT = 0xFFD0D0D0;
 
     private NpcRadiusZoneUi320() {
     }
 
-    private static String label() {
-        return Component.translatable("gui.settledlands.graph.radius_zone").getString();
-    }
-
-    /** Left edge of the control in screen space, or NaN when this node has no control. */
-    private static double left(NpcGraphCanvas canvas, Node node) {
-        if (canvas == null || !NpcRadiusZone320.isRadiusNode(node)) return Double.NaN;
-        return canvas.screenX(node.x);
-    }
-
-    private static double top(NpcGraphCanvas canvas, Node node) {
-        return canvas.screenY(node.y) - LIFT;
-    }
-
+    /**
+     * Build 361: nothing is painted above a radius node any more. The one control of this flag is the
+     * inspector row of build 354/355, which both radius nodes already have.
+     */
     public static void draw(NpcDialogueGraphScreen screen, GuiGraphics graphics, Node node) {
-        if (screen == null || graphics == null || !NpcRadiusZone320.isRadiusNode(node)) return;
-        NpcGraphCanvas canvas = screen.settledlands$canvas();
-        Font font = screen.settledlands$font();
-        if (canvas == null || font == null) return;
-
-        double x = left(canvas, node);
-        double y = top(canvas, node);
-        if (Double.isNaN(x)) return;
-        int bx = (int) Math.round(x);
-        int by = (int) Math.round(y);
-
-        boolean on = NpcRadiusZone320.visible(node);
-        int color = on ? COL_BOX_ON : COL_BOX;
-        graphics.fill(bx, by, bx + BOX, by + BOX, color);
-        graphics.fill(bx + 2, by + 2, bx + BOX - 2, by + BOX - 2,
-                on ? 0xFF202020 : 0xFF303030);
-        if (on) {
-            // A filled centre reads as "on" from across the canvas.
-            graphics.fill(bx + 3, by + 3, bx + BOX - 3, by + BOX - 3, COL_BOX_ON);
-        }
-        graphics.drawString(font, label(), bx + BOX + GAP, by, COL_TEXT, false);
+        // Retired: the inspector row is the toggle.
     }
 
-    /** True when the click landed on the box or on its label. */
+    /** Build 361: and the retired control cannot be hit either, so it never eats a click. */
     public static boolean hit(NpcDialogueGraphScreen screen, Node node, double mouseX, double mouseY) {
-        if (screen == null || !NpcRadiusZone320.isRadiusNode(node)) return false;
-        NpcGraphCanvas canvas = screen.settledlands$canvas();
-        Font font = screen.settledlands$font();
-        if (canvas == null || font == null) return false;
-        double x = left(canvas, node);
-        if (Double.isNaN(x)) return false;
-        double y = top(canvas, node);
-        double right = x + BOX + GAP + font.width(label());
-        return mouseX >= x && mouseX <= right && mouseY >= y && mouseY <= y + BOX;
+        return false;
     }
 
-    /** Finds the radius node whose control is under the cursor, or null. */
+    /** Finds the radius node whose control is under the cursor - never, since build 361. */
     public static Node at(NpcDialogueGraphScreen screen, NpcDialogueGraph graph, double mouseX,
             double mouseY) {
-        if (screen == null || graph == null || graph.nodes == null) return null;
-        for (Node node : graph.nodes.values()) {
-            if (hit(screen, node, mouseX, mouseY)) return node;
-        }
         return null;
     }
 }

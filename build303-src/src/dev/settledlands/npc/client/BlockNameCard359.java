@@ -58,10 +58,13 @@ public final class BlockNameCard359 {
             graphics.fill(0, 19, width, 20, color);
             graphics.drawString(font, tr(BlockName359.TITLE_KEY), 8, 6, color, false);
 
+            // Build 361: the card shows the name and nothing but the name. A block nobody has named
+            // yet has an empty name, and an empty name is what the line says - no coordinates of the
+            // block, no placeholder the author would have to explain to a player.
             String name = BlockName359.nameOf(node);
-            boolean named = !name.isEmpty();
-            graphics.drawString(font, named ? clip(font, name, width - 16) : tr(BlockName359.EMPTY_KEY),
-                    8, 30, named ? color : LABEL, false);
+            if (!name.isEmpty()) {
+                graphics.drawString(font, clip(font, name, width - 16), 8, 30, color, false);
+            }
             graphics.drawString(font,
                     tr(BlockName359.COLOR_KEY) + ": " + tr(BlockName359.COLOR_KEYS[BlockName359.colorOf(node)]),
                     8, 52, LABEL, false);

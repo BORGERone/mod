@@ -24,14 +24,17 @@ So this gate asks the shipped jar:
   * drawNode hands a name node to BlockNameCard359 instead of the stock card, and the card is drawn in
     the block's colour - the colour the window is told;
   * the inspector adds the name box and the colour dropdown at the end of widgets(), inside
-    buildingInspector, and grows the scroll range by the rows it added;
+    buildingInspector, grows the scroll range by the rows it added, and parks the stock rows and
+    labels of the card (build 361) so the panel is the name and the colour only;
   * the block's save drops the stats card, and the walk steps over the name card in silence;
-  * BlockTalk358#say reads the name and the colour, and still falls back to the coordinates;
+  * BlockTalk358#say reads the name and the colour, and never falls back to the coordinates - build
+    361: the name of a block is its name, and a block without one has an empty name;
   * the colour dropdown is registered by calling Screen#addRenderableWidget the way the stock textBox
     does, and NOT by a @Shadow - build 359 did shadow it and every graph screen died on open, because
     Mixin looks a shadow up in the target class only and the member is inherited;
-  * a block's graph has no tabs: the tab buttons the stock widgets() builds are hidden for a block id
-    and only for it, so a body's editor keeps its three graphs;
+  * a block's graph has no tabs: the tab buttons the stock widgets() builds are parked out of the
+    window for a block id and only for it (hidden and moved, not only flagged - build 360 hid them and
+    the game still showed them), so a body's editor keeps its three graphs;
   * the arithmetic and the round trip are read by running them: tools/harness/BlockNameProbe.java is
     compiled against this jar and executed.
 
@@ -59,6 +62,7 @@ ECJ = ROOT / "tools" / "vendor" / "ecj-3.46.100.jar"
 PROBE = ROOT / "tools" / "harness" / "BlockNameProbe.java"
 BASE = ROOT / "settledlands-0.8.0-build358-block-talk.jar"
 TABS = "dev/settledlands/mixin/BlockNoTabs360Mixin.class"
+PARK = "dev/settledlands/npc/client/WidgetPark361.class"
 STUBS = [str(ROOT / "build303-src" / part) for part in
          ("api", "api5", "api4", "api3", "stubs-out", "api2")]
 
@@ -123,7 +127,7 @@ def structural(jar):
     problems = []
     with zipfile.ZipFile(jar) as zf:
         names = set(zf.namelist())
-        for needed in (NAME, CARD, DRAW, INSPECT, NO_STATS, NO_AI, ONE, TABS, TALK, BLOCK):
+        for needed in (NAME, CARD, DRAW, INSPECT, NO_STATS, NO_AI, ONE, TABS, PARK, TALK, BLOCK):
             if needed not in names:
                 problems.append("the jar has no %s" % needed)
         if problems:
@@ -201,6 +205,20 @@ def structural(jar):
         if "BlockTrigger351.isBlockEditorId" not in find_method(
                 _am, "settledlands$blockWithoutAi"):
             problems.append("the AI hook does not check for a block - a body would lose its panel")
+        # Build 361: cancelling the sync was not enough (the card came back in game through the profile
+        # snapshot), so the drawing and the click are cancelled as well.
+        for needle, why in (("draw", "the panel is not cancelled where it is drawn"),
+                            ("mouseClicked", "a click on a panel that is not drawn is still taken")):
+            if needle not in ai_strings:
+                problems.append("the AI hook is wrong: %s" % why)
+        ai_draw = find_method(_am, "settledlands$blockWithoutAiDraw")
+        for needle, why in (("cancel", "the panel is still painted on a block's canvas"),
+                            ("BlockTrigger351.isBlockEditorId",
+                             "a body's canvas would lose its AI panel too")):
+            if needle not in ai_draw:
+                problems.append("the AI draw hook is wrong: %s" % why)
+        if "setReturnValue" not in find_method(_am, "settledlands$blockWithoutAiClick"):
+            problems.append("the AI click hook never reports the click as taken")
 
         _ko, _oc, one_methods, _ro = load_class(zf, ONE)
         one = find_method(one_methods, "settledlands$singleNameCard")
@@ -247,6 +265,14 @@ def structural(jar):
                                   "unreachable")):
             if needle not in whole:
                 problems.append("the inspector rows are wrong: %s" % why)
+        # Build 361: the stock rows the editor builds for an unknown node type are taken away, so the
+        # card's inspector is the name and the colour and nothing else.
+        for needle, why in (
+                ("WidgetPark361.park", "the stock rows of the card are still built and kept"),
+                ("labels", "the stock labels of the card are still drawn"),
+                ("inspectorWidgets", "the stock widgets of the card are never looked at")):
+            if needle not in whole:
+                problems.append("the inspector rows are wrong: %s" % why)
         if "widgets()V" not in strings(insp_cp):
             problems.append("the inspector hook does not name widgets()")
 
@@ -268,6 +294,11 @@ def structural(jar):
                 ("NpcProfile.nameColor", "the window is not told which colour to paint the name")):
             if needle not in say:
                 problems.append("say() is wrong: %s" % why)
+        # Build 361: the coordinates are not a name. The speaker is the name and only the name, so the
+        # helper that turned a block into "x y z" must not be called by the window any more.
+        if "BlockTalk358.where" in say:
+            problems.append("say() still writes the block's coordinates - the name of a block is its "
+                            "name, and a block without one has an empty name")
 
         # ---- the dropdown's registration -----------------------------------
         registered = ("(Lnet/minecraft/client/gui/components/events/GuiEventListener;)"
@@ -287,10 +318,24 @@ def structural(jar):
         for needle, why in (
                 ("BlockTrigger351.isBlockEditorId", "a body's editor would lose its tabs too"),
                 ("NpcDialogueGraphScreen.entityId", "the hook never asks which screen it is on"),
-                ("Button.visible", "the tab button is never hidden"),
-                ("Button.active", "a hidden tab is still clickable")):
+                ("WidgetPark361.park", "the tab button is never taken off the screen")):
             if needle not in tabs:
                 problems.append("the tabs hook is wrong: %s" % why)
+        # Build 361: hiding a flag was not enough in game (360 came back with the tabs on screen), so
+        # the park has to hide the button AND move it out of the window - both, in one helper.
+        _kp, park_cp, park_methods, _rp = load_class(zf, PARK)
+        park_all = "\n".join(park_methods.values())
+        park_strings = strings(park_cp)
+        for needle, why in (
+                ("visible", "a parked widget is never hidden"),
+                ("active", "a parked widget is never made unclickable"),
+                ("setPosition", "a parked widget is never moved - a hidden flag can be set back"),
+                ("setY", "the second way of moving a widget is gone"),
+                ("setHeight", "the third way of moving a widget is gone")):
+            if needle not in park_all and needle not in park_strings:
+                problems.append("the park helper is wrong: %s" % why)
+        if "0x1" not in park_all and "invoke" not in park_all:
+            problems.append("the park helper does not call anything - every widget would stay put")
         tab_button = "(Ljava/lang/String;IIIILjava/lang/Runnable;)Lnet/minecraft/client/gui/components/Button;"
         if not any(ref[1] == "button" and ref[2] == tab_button for ref in tabs_refs):
             problems.append("the tabs hook does not wrap the stock button() that builds the strip")

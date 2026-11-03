@@ -2,6 +2,7 @@ package dev.settledlands.mixin;
 
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
+import dev.settledlands.npc.client.WidgetPark361;
 import net.minecraft.client.gui.components.Button;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -25,6 +26,11 @@ import org.spongepowered.asm.mixin.injection.Redirect;
  * a tab a block does not have should be.</p>
  *
  * <p>The guard on {@code switchTab} stays, so a hotkey cannot reach the two hidden graphs either.</p>
+ *
+ * <p>Build 361 adds the part 360 was missing: hiding is not the only thing done to a tab button any
+ * more, it is also parked above the window ({@link WidgetPark361#PARK_Y}). A hidden widget is only hidden as
+ * long as nothing shows it again - the game that came back from 360 still had all three tabs on a
+ * block's top bar - while a widget a thousand rows up has no pixels on the screen to be seen in.</p>
  */
 @Mixin(targets = "dev.settledlands.npc.client.NpcDialogueGraphScreen", remap = false)
 public abstract class BlockNoTabs360Mixin {
@@ -49,8 +55,11 @@ public abstract class BlockNoTabs360Mixin {
         if (made == null || key == null || !key.startsWith(TAB_PREFIX)) return made;
         NpcDialogueGraphScreen screen = (NpcDialogueGraphScreen) (Object) this;
         if (!BlockTrigger351.isBlockEditorId(screen.entityId())) return made;
-        made.visible = false;
-        made.active = false;
+        // Build 361: hidden AND moved out of the window. The button has to exist - the loop around
+        // this call writes "you are the current tab" into it, so a missing button is a crash - but
+        // nothing says it has to be on the screen it was made for, and a box thousands of rows above
+        // the top edge cannot be drawn or clicked even if some later code hands it its flag back.
+        WidgetPark361.park(made);
         return made;
     }
 }

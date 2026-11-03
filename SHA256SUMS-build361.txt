@@ -1,0 +1,2 @@
+762cefbde8f01dab865217ecbd6b3450d424b6caebd8b816b336996453f547da  settledlands-0.8.0-build361-block-graph-cleanup.jar
+40c72af0c8208d919d6f0dc6e90f32d8ce8672034393f3c3bb20aa8b30e9f764  SettledLands-Build361-BlockGraphCleanup-Source.zip

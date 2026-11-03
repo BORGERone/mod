@@ -99,12 +99,12 @@ public final class BlockTalk358 {
             NpcProfile profile = new NpcProfile();
             profile.blockMouseLook = true;   // the view stays on the block while it speaks
             profile.blockMovement = true;    // and so does the player
-            // Build 359: the block speaks under the name it was given, in the colour it was given.
-            // Without a name - a block nobody has named yet - the coordinates identify it, the way
-            // build 358 did for every block.
-            String name = BlockName359.name(graph);
-            String speaker = name.isEmpty() ? where(where) : name;
-            String subtitle = name.isEmpty() ? "" : where(where);
+            // Build 359/361: the block speaks under the name it was given, in the colour it was given,
+            // and under nothing else. A block nobody has named has an empty name - the window says so
+            // by leaving the island blank, exactly as the author asked; the coordinates of the block
+            // are not a name and never appear in one (build 361).
+            String speaker = BlockName359.name(graph);
+            String subtitle = "";
             profile.nameColor = BlockName359.color(graph);
             NpcNet.DlgStyle style = style(profile, player);
             if (style == null) return false;
