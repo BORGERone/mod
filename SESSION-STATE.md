@@ -22,6 +22,8 @@
 `verify_jar` PASS (1392 внешние ссылки, 0 новых против 353, 0 висячих, 0 недостающих своих классов),
 `jvm_verify` OK, `block_trigger_check` OK, остальные 15 проверок зелёные. Патч
 `tools/patch_build354.py`, классы из `build303-src/out354`. В игре **не подтверждено**.
+Выложено: коммит `63d0db2` + push; Drive jar `1UldCqej57owr2yYBHMscgh9OGz2Fbx1W`,
+zip `1e4M8cp9kQEqkgQ0SkW-Y_gwJSUNo2c5s` (папка `0AB-al7DFuWhEUk9PVA`).
 
 **Урок 354 (два поля радиуса):** у ноды `CHECK` («В радиусе», её и даёт палитра) радиус — `checkRadius`
 / `checkTarget` / `checkCooldown`; у ноды `RADIUS` («Цель») радиус — `radius` / `radiusTarget`. Сборка 320
