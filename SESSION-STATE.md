@@ -7,6 +7,53 @@
 
 ## Текущая сборка
 
+`settledlands-0.8.0-build359-block-name.jar` — **у блока есть имя, и этим именем он говорит в диалоге**.
+На канвасе блока вместо карточек «Характеристики» и «Автономный ИИ» — одна своя карточка **«ИМЯ»**
+(поле имени + выпадающий список цвета), устроенная как карточка характеристик у тела: есть сразу при
+открытии блока, правится в инспекторе, из палитры не добавляется. Данные — в уже сохраняемых полях
+ноды: `Node#text` (имя, кап 32) и `Node#varValue` (индекс цвета 0..3, значения как
+`GuideDialogueScreen.NAME_COLORS`: `FFFFFFFF`, `FFFFE9A8`, `FFFFD24A`, `FFBFBFBF`). Нода типа **18**
+(`NpcStatsGraph.TYPE = 16`, 17 свободен, 16 — карточка характеристик). Карточку ставит
+`NpcStatsGraphUi.ensure`, перехваченный `BlockNoStats359Mixin`: для блочного id вызов отменяется,
+старая карточка характеристик выбрасывается (`BlockName359.dropType`), создаётся имя
+(`BlockName359.ensure`), экран получает `changed()`. Панель ИИ (`NpcAutoAiGraphUi255.ensure`) для
+блока не вызывается `BlockNoAi359Mixin` — это не нода, а боковое состояние `NpcAutoAi255`, «убрать» =
+не синхронизировать. Отрисовка своя (`BlockNameDraw359Mixin` → `client/BlockNameCard359`): стоковый
+`drawNode` для незнакомого типа подписал бы карточку «Случайность» и не нарисовал текст; рамка
+совпадает с `NODE_W`×`NODE_H`, поэтому выделение и перетаскивание стоковые. Инспектор —
+`BlockNameInspector359Mixin` (`widgets()` RETURN, `buildingInspector`, `sidebarHeight += 66`): поле
+имени (`textBox`) и `NpcUi.dropdown` на четыре цвета. `BlockNameOne359Mixin` — одно имя на граф
+(`NpcStatsGraph.add`). Сохранение блока (`BlockTrigger351.save`) выбрасывает карточку характеристик,
+обход цепочки молча переступает ноду имени (`BlockName359.isName`). Окно диалога
+(`BlockTalk358.say`) говорит именем блока и его цветом (`profile.nameColor`), координаты уходят в
+подпись; безымянный блок говорит координатами, как в 358.
+**538 записей**, 490 классов, 79 миксин-классов (38/40), `verify_jar` PASS (1394 внешние ссылки,
+**0 новых** против 358, 0 потерянных членов, 0 висячих), `jvm_verify` OK, `check_mixin_class` OK,
+новый гейт `block_name_check` OK (одна карточка только у блока, своя отрисовка, снятие карточек
+характеристик и ИИ, строки инспектора, выбрасывание старой карточки при сохранении, молчаливый
+переступ ноды имени, окно читает имя и цвет, прогон `tools/harness/BlockNameProbe.java`:
+`ENSURE added=true again=false cards=1 name='' color=0 where=left`,
+`SET name='Forge' color=2 rgb=-11702`, `CLAMP high=3 low=0`, `LENGTH kept=32 of 40`,
+`ROUND name='Forge' color=2 nodes=2`, `DROP stats=true dropped=1 left=0 name=true`,
+`PLAIN find=null name='' color=0`), остальные 19 гейтов зелёные, `screen_smoke` SKIP. Патч
+`tools/patch_build359.py`, классы из `build303-src/out359`. В игре **не подтверждено**.
+Выложено: коммит `492aa4b` + push; Drive jar `1HXrXbICNbR1igONSrOs4Q51fHYWvq7cL`,
+zip `1b8DluDBwT-pAMEAS9ATZmn8t98p30UNH` (папка `0AB-al7DFuWhEUk9PVA`).
+
+**Урок 359:** `static final int` **инлайнится** — проверка «в байткоде есть `BlockName359.TYPE`» молча
+врала, пока сравнение не стало вызовом `BlockName359.isName(node)`. Гейт, который ищет константу,
+ищет `bipush`/`sipush`, а не имя. И второе: `@Shadow` на метод, объявленный не в цели, а в её
+суперклассе Minecraft (`Screen#addRenderableWidget`), проверять нечем — поэтому в `check_mixin_class`
+появилось исключение `INHERITED_MEMBERS` с указанием **живого вызова** в базовом jar, а
+`block_name_check` этот вызов перечитывает.
+
+**Инфраструктура 359:** в этой сессии не было Java — `pip install --break-system-packages jdk4py`
+ставит её в `/usr/local/lib/python3.11/dist-packages/jdk4py/java-runtime` (все гейты ищут именно там).
+Компиляция: `-cp build303-src/api:api5:api4:api3:stubs-out:api2:<предыдущий jar>` — **`api` первым**:
+в `api` лежат богатые стубы (`CompoundTag#isEmpty`, `Player#displayClientMessage`), в `api2` их нет, и
+с порядком «api2 раньше api» `BlockTrigger351` не собирается.
+
+
 `settledlands-0.8.0-build358-block-talk.jar` — **«Реплика» блока открывает настоящее окно диалога, и
 камера смотрит на блок**. Решение 357 («окна у блока нет, чат и есть голос») **отменено
 пользователем**: окно — это не тело. `NpcNet.DlgView` несёт id, спикера, строку и стиль, а сущность
