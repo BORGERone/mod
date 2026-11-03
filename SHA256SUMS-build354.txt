@@ -1,0 +1,2 @@
+df34b12cf6dc397af558dbed30705988272860fd5d888d3b01bdba2085c49119  settledlands-0.8.0-build354-radius-motion.jar
+3c2bf1cc912107aac1a205a51179c91d5b92eea856f4dd0455970dfd5fd3196d  SettledLands-Build354-RadiusMotion-Source.zip

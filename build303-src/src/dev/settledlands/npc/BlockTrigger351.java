@@ -35,7 +35,7 @@ import org.slf4j.LoggerFactory;
  *   <li><b>Переменная</b> - adds its delta to a named variable, stored in the same {@code NpcPoints}
  *       the NPC graphs use, so a block and an NPC can share one counter;</li>
  *   <li><b>Случайность</b> - picks one of its branches;</li>
- *   <li><b>В радиусе</b> - build 352: an event node, ticked by {@code BlockTrigger352} - when a body of
+ *   <li><b>В радиусе</b> - build 352: an event node, ticked by {@code RadiusPass354} - when a body of
  *       the chosen kind stands within its radius, its action runs and the chain continues from it.</li>
  * </ul>
  *
@@ -44,7 +44,7 @@ import org.slf4j.LoggerFactory;
  * doing whatever it did before.</p>
  *
  * <p>Cost: one hash lookup and one chain walk per click, both bounded (256 nodes, a visited set). The
- * radius nodes are the only periodic work and live in {@code BlockTrigger352}, not here.</p>
+ * radius nodes are the only periodic work and live in {@code RadiusPass354}, not here.</p>
  */
 public final class BlockTrigger351 {
 
@@ -262,7 +262,7 @@ public final class BlockTrigger351 {
                         ? cur.randomBranches.get(port) : -1;
                 continue;
             }
-            if (BlockTrigger352.isRadiusNode(cur)) {
+            if (RadiusPass354.isRadiusNode(cur)) {
                 // An event node: the tick pass fires it, a walk only steps over it.
                 curId = cur.next;
                 continue;

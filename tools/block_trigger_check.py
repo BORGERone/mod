@@ -23,6 +23,9 @@ Build 352 adds the fifth node and the passive work around it, with three ways to
     nothing is drawn, or the box on the card and the ring say different things;
   * the class that carries the entry is compiled but never packed - build 352 shipped without
     `BlockTriggerStore351$Entry` and the game could not construct the mod at all;
+  * the picture is drawn at the speed of the radius event (2.5 times a second), which makes the wand
+    highlight blink between refreshes and freezes the ring in place - and a body's ring is not taken
+    over at all, so an NPC shows a still circle on its "Цель" node and nothing on "В радиусе";
   * the visibility row is offered on an NPC (where build 320 already draws the flag) or on a node that
     has no radius.
 
@@ -43,9 +46,10 @@ STORE = "dev/settledlands/npc/BlockTriggerStore351.class"
 LOGIC = "dev/settledlands/npc/BlockTrigger351.class"
 EVENTS = "dev/settledlands/npc/BlockTriggerEvents351.class"
 CLIENT = "dev/settledlands/npc/client/BlockTriggerClient351.class"
-TICKER = "dev/settledlands/npc/BlockTrigger352.class"
+TICKER = "dev/settledlands/npc/RadiusPass354.class"
+NPC_RING = "dev/settledlands/mixin/NpcRadiusRingMixin354.class"
 ENTRY = "dev/settledlands/npc/BlockTriggerStore351$Entry.class"
-CHECK_ROW = "dev/settledlands/mixin/NpcBlockCheckRow352Mixin.class"
+CHECK_ROW = "dev/settledlands/mixin/NpcRadiusRow354Mixin.class"
 OPEN_MIXIN = "dev/settledlands/mixin/NpcBlockOpen351Mixin.class"
 GRAPH_MIXIN = "dev/settledlands/mixin/NpcBlockGraph351Mixin.class"
 SAVE_MIXIN = "dev/settledlands/mixin/NpcBlockSave351Mixin.class"
@@ -142,12 +146,12 @@ def main(argv):
     jar = argv[0]
     with zipfile.ZipFile(jar) as z:
         names = set(z.namelist())
-        missing = [n for n in (STORE, ENTRY, LOGIC, EVENTS, CLIENT, TICKER, CHECK_ROW, OPEN_MIXIN,
+        missing = [n for n in (STORE, ENTRY, LOGIC, EVENTS, CLIENT, TICKER, NPC_RING, CHECK_ROW, OPEN_MIXIN,
                                GRAPH_MIXIN, SAVE_MIXIN)
                    if n not in names]
         if missing:
             return fail("build 351 is not in this jar: %s" % ", ".join(missing))
-        blobs = {n: z.read(n) for n in (STORE, ENTRY, LOGIC, EVENTS, CLIENT, TICKER, CHECK_ROW, OPEN_MIXIN,
+        blobs = {n: z.read(n) for n in (STORE, ENTRY, LOGIC, EVENTS, CLIENT, TICKER, NPC_RING, CHECK_ROW, OPEN_MIXIN,
                                         GRAPH_MIXIN, SAVE_MIXIN)}
         config = json.loads(z.read(CONFIG).decode("utf-8"))
         ru = json.loads(z.read(RU).decode("utf-8"))
@@ -163,7 +167,7 @@ def main(argv):
         if common.index("NpcBlockSave351Mixin") > common.index(SHARED_GRAPH_MIXIN):
             return fail("the block save hook is listed after %s: a block save would be taken as the "
                         "shared graph" % SHARED_GRAPH_MIXIN)
-    for name in ("NpcBlockOpen351Mixin", "NpcBlockGraph351Mixin", "NpcBlockCheckRow352Mixin"):
+    for name in ("NpcBlockOpen351Mixin", "NpcBlockGraph351Mixin", "NpcRadiusRow354Mixin"):
         if name not in client:
             return fail("%s is not a client mixin - the editor would never open" % name)
         if name in common:
@@ -247,8 +251,12 @@ def main(argv):
         return fail("the tick pass is not bound to the server tick event the base jar already uses")
     if not any(r[1] == "getGameTime" for r in ticker_refs):
         return fail("the tick pass has no period gate - it would run every tick")
-    if 8 not in consts(ticker):
-        return fail("the tick period (8) is not in the tick pass")
+    periods = consts(ticker)
+    if 2 not in periods:
+        return fail("the picture period (2) is not in the pass - the sparks would blink again")
+    if 8 not in periods:
+        return fail("the radius event period (8) is not in the pass - it would ask the world every "
+                    "other tick")
     if not any(r[0] and r[0].endswith("particles/ParticleTypes") and r[1] == "ELECTRIC_SPARK"
                for r in ticker_refs):
         return fail("the wand highlight does not spark on the blocks")
@@ -269,11 +277,34 @@ def main(argv):
     if not any(r[1] == "ring" for r in ticker_refs) or not any(r[1] == "check" for r in ticker_refs):
         return fail("the tick pass does not separate the ring entries from the check entries")
 
+    # the ring of a body: build 320 draws a still circle for the "Цель" node only, the hook takes
+    # the whole drawing over so a body gets a travelling ring for "В радиусе" too
+    npc_ring, npc_ring_refs = parse(blobs[NPC_RING])
+    if "dev.settledlands.npc.NpcRadiusZone320" not in text(npc_ring):
+        return fail("the NPC ring hook does not target build 320's class")
+    if "tick(Ldev/settledlands/npc/GuideNpc;)V" not in text(npc_ring):
+        return fail("the NPC ring hook does not name build 320's tick method - it would never apply")
+    if not any(r[1] == "npcTick" for r in npc_ring_refs):
+        return fail("the NPC ring hook does not draw through the pass - a body would show nothing")
+
     row_mixin, row_refs = parse(blobs[CHECK_ROW])
     if not any(r[1] == "setVisible" for r in row_refs):
         return fail("the visibility row does not write the node flag")
-    if not any(r[1] == "isBlockEditorId" for r in row_refs):
-        return fail("the visibility row is not limited to the block editor")
+    if not any(r[0] and r[0].endswith("npc/RadiusPass354") and r[1] == "isRadiusNode"
+               for r in row_refs):
+        return fail("the visibility row does not use the pass's idea of a radius node - build 320's "
+                    "own answer excludes the \"В радиусе\" node, so the row would miss it")
+    if any(r[1] == "isBlockEditorId" for r in row_refs):
+        return fail("the visibility row is still limited to a block - a body must get it too")
+
+    common, client_list = config.get("mixins", []), config.get("client", [])
+    if "NpcRadiusRingMixin354" not in common:
+        return fail("the NPC ring hook is not registered as a common mixin - the server would keep "
+                    "320's still circle")
+    if "NpcRadiusRow354Mixin" not in client_list or "NpcRadiusRow354Mixin" in common:
+        return fail("the visibility row must be a client mixin")
+    if "NpcBlockCheckRow352Mixin" in client_list or "NpcBlockCheckRow352Mixin" in common:
+        return fail("build 352's block-only row is still registered")
 
     for key in ("gui.settledlands.block.visible", "gui.settledlands.block.visible_on",
                 "gui.settledlands.block.visible_off"):
@@ -296,8 +327,8 @@ def main(argv):
                             % (name, member))
 
     print("block_trigger_check: OK  %s  (a block keeps its graph in world data, the palette is the "
-          "five nodes it can run, the chain walk is bounded, and the radius pass is one dimension "
-          "twice a second)" % jar)
+          "five nodes it can run, the chain walk is bounded, the picture runs every 2 ticks, the "
+          "radius event every 8, and a body's ring goes through the same pass)" % jar)
     return 0
 
 

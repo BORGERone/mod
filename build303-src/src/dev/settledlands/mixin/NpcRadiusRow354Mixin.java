@@ -1,8 +1,7 @@
 package dev.settledlands.mixin;
 
-import dev.settledlands.npc.BlockTrigger351;
-import dev.settledlands.npc.BlockTrigger352;
 import dev.settledlands.npc.NpcDialogueGraph;
+import dev.settledlands.npc.RadiusPass354;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
@@ -13,19 +12,20 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Build 352: the "Видимость" row of a "В радиусе" node, in a block's graph.
+ * Build 354: the "Видимость" row of a "В радиусе" node - now for bodies as well as for blocks.
  *
- * <p>Build 320 gave this toggle a small box painted on the node card. That box is still there (and
- * still the same flag), but a box has no name: this row is the named control, in the inspector, next
- * to the radius and the cooldown it belongs to - "Видимость радиуса: да/нет". Both write
- * {@code Node#timerRepeat}, so they can never disagree, and the ring itself is drawn by the block tick
- * pass ({@code BlockTrigger352}), which reads the same flag.</p>
+ * <p>Build 320 gave this toggle a small box painted on the node card. The box is still there and
+ * still the same flag ({@code Node#timerRepeat}), but a box has no name: this row is the named
+ * control, in the inspector, next to the radius and the cooldown it belongs to -
+ * "Видимость радиуса: да/нет". Both write the same flag, so they can never disagree, and the ring
+ * itself is drawn by {@link RadiusPass354}, which reads the same flag for a block and for a body.</p>
  *
- * <p>Only the block editor gets the row: an NPC's radius node is drawn by the NPC tick that build 320
- * added, and showing the row twice on an NPC would be noise.</p>
+ * <p>Build 352 showed the row in the block editor only; the author asked for a body's radius to be
+ * visible the same way, so the restriction is gone - the row appears for any radius node in any of
+ * the three tabs.</p>
  */
 @Mixin(targets = "dev.settledlands.npc.client.NpcDialogueGraphScreen", remap = false)
-public abstract class NpcBlockCheckRow352Mixin {
+public abstract class NpcRadiusRow354Mixin {
 
     @Shadow
     private NpcDialogueGraph graph;
@@ -77,9 +77,8 @@ public abstract class NpcBlockCheckRow352Mixin {
     @Inject(method = "widgets()V", at = @At("RETURN"), remap = false)
     private void settledlands$visibleRow(CallbackInfo ci) {
         if (graph == null || selected < 0) return;
-        if (!BlockTrigger351.isBlockEditorId(((NpcDialogueGraphScreen) (Object) this).entityId())) return;
         NpcDialogueGraph.Node node = graph.get(selected);
-        if (!BlockTrigger352.isRadiusNode(node)) return;
+        if (!RadiusPass354.isRadiusNode(node)) return;
 
         int x = inspectorX + 8;
         int width = inspectorW - 16;
@@ -89,12 +88,12 @@ public abstract class NpcBlockCheckRow352Mixin {
         try {
             Button toggle = button("gui.settledlands.block.visible", x, y, width, 16, () -> {
                 remember();
-                BlockTrigger352.setVisible(node, !BlockTrigger352.visible(node));
+                RadiusPass354.setVisible(node, !RadiusPass354.visible(node));
                 changed();
                 widgets();
             });
             if (toggle == null) return;
-            toggle.setMessage(Component.translatable(BlockTrigger352.visible(node)
+            toggle.setMessage(Component.translatable(RadiusPass354.visible(node)
                     ? "gui.settledlands.block.visible_on" : "gui.settledlands.block.visible_off"));
             toggle.visible = y >= inspectorY + 22
                     && y + toggle.getHeight() <= inspectorY + inspectorH - 4;

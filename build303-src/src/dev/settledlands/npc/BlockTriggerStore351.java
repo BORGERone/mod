@@ -153,7 +153,7 @@ public final class BlockTriggerStore351 extends SavedData {
     private static boolean hasFiringCheck(NpcDialogueGraph graph) {
         if (graph == null) return false;
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-            if (!BlockTrigger352.isRadiusNode(node)) continue;
+            if (!RadiusPass354.isRadiusNode(node)) continue;
             if (node.next >= 0 || !node.triggers.isEmpty() || (node.action != null
                     && !node.action.isBlank())) {
                 return true;
@@ -166,7 +166,7 @@ public final class BlockTriggerStore351 extends SavedData {
     private static boolean hasRing(NpcDialogueGraph graph) {
         if (graph == null) return false;
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-            if (BlockTrigger352.isRadiusNode(node) && BlockTrigger352.visible(node)) return true;
+            if (RadiusPass354.isRadiusNode(node) && RadiusPass354.visible(node)) return true;
         }
         return false;
     }
