@@ -28,6 +28,10 @@ import org.slf4j.LoggerFactory;
  * block graph holds exactly those nodes:</p>
  *
  * <ul>
+ *   <li><b>Реплика</b> - build 357: the block says a line to the player who clicked it, in the chat -
+ *       the node text with the stock {@code %player%} / {@code %relation%} placeholders filled, and
+ *       the chain continues from it at once. There is no body to show a dialogue window for, so the
+ *       chat is the block's voice;</li>
  *   <li><b>Триггер</b> - runs its action/command with the clicking player as the command source, so
  *       {@code @p} is that player;</li>
  *   <li><b>Условие If</b> - compares a variable (or the variable wired into it) and takes the true or
@@ -66,9 +70,32 @@ public final class BlockTrigger351 {
 
     /** Node types the block graph offers; everything else is not in its palette. */
     public static final int[] PALETTE = {
-        NpcDialogueGraph.TRIGGER, NpcDialogueGraph.IF, NpcDialogueGraph.VARIABLE,
-        NpcDialogueGraph.RANDOM, NpcDialogueGraph.CHECK,
+        NpcDialogueGraph.LINE, NpcDialogueGraph.TRIGGER, NpcDialogueGraph.IF,
+        NpcDialogueGraph.VARIABLE, NpcDialogueGraph.CHECK, NpcDialogueGraph.RANDOM,
     };
+
+    /**
+     * The rows of the stock palette that a block may create, one per type in {@link #PALETTE}.
+     * The editor asks {@link #typeForRow} about a click, so this is the one place that decides what
+     * a block can build - and {@code BlockPaletteProbe} keeps the two arrays in step.
+     */
+    public static final int[] PALETTE_ROWS = {0, 2, 3, 4, 5, 13};
+
+    /**
+     * Stock palette row -> node type, or -1 when a block cannot run that row. Row 0 is «Реплика»,
+     * the node build 357 adds; the rest is the palette of build 351.
+     */
+    public static int typeForRow(int row) {
+        return switch (row) {
+            case 0 -> NpcDialogueGraph.LINE;
+            case 2 -> NpcDialogueGraph.TRIGGER;
+            case 3 -> NpcDialogueGraph.IF;
+            case 4 -> NpcDialogueGraph.VARIABLE;
+            case 5 -> NpcDialogueGraph.CHECK;
+            case 13 -> NpcDialogueGraph.RANDOM;
+            default -> -1;
+        };
+    }
 
     private static final Set<String> WARNED = new HashSet<>();
 
@@ -237,6 +264,15 @@ public final class BlockTrigger351 {
             NpcDialogueGraph.Node cur = graph.get(curId);
             if (cur == null) return;
 
+            if (cur.type == NpcDialogueGraph.LINE) {
+                // The block's voice: the line goes to the player in the chat, and the chain walks
+                // on at once - there is no dialogue window to wait for a click in.
+                say(player, cur);
+                act(player, cur);
+                fireTriggers(player, graph, cur, visited);
+                curId = cur.next;
+                continue;
+            }
             if (cur.type == NpcDialogueGraph.TRIGGER) {
                 act(player, cur);
                 fireTriggers(player, graph, cur, visited);
@@ -297,6 +333,26 @@ public final class BlockTrigger351 {
         }
         if (name.isBlank() || player == null || player.getServer() == null) return 0;
         return NpcPoints.get(player.getServer()).get(player.getUUID(), name, shared);
+    }
+
+    /**
+     * A "Реплика" node: the text the author wrote, said to one player in the chat.
+     *
+     * <p>The placeholders are the stock ones - {@code NpcProfile#fill} replaces {@code %player%} with
+     * the name and {@code %relation%} with the relation of the talker; a block has no relation of its
+     * own, so that one is always 0. Nothing is sent when the text is blank or there is no player (a
+     * radius event may fire for a body that is not a player) - the chain still goes on, because a
+     * silent line is a line, not a stop.</p>
+     */
+    private static void say(ServerPlayer player, NpcDialogueGraph.Node node) {
+        if (player == null || node == null || node.text == null || node.text.isBlank()) return;
+        try {
+            String line = NpcProfile.fill(node.text, player, 0);
+            if (line == null || line.isBlank()) return;
+            player.displayClientMessage(Component.literal(line), false);
+        } catch (Throwable failure) {
+            fail(failure);
+        }
     }
 
     private static void act(ServerPlayer player, NpcDialogueGraph.Node node) {

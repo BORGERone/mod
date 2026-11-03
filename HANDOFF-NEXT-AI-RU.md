@@ -2,7 +2,23 @@
 
 **Дата:** 2026-11-03. **Ветка:** `arena/5618404a-mod` (**не переименовывать, не переключаться**;
 в прошлых сессиях она называлась `arena/99d7691a-mod`).
-**Текущая сборка:** `settledlands-0.8.0-build356-radius-flag.jar` — **флаг «Видимость радиуса»
+**Текущая сборка:** `settledlands-0.8.0-build357-block-line.jar` — **нода «Реплика» у блока**.
+Блоку добавлена штатная нода-строка (тип 0, `NpcDialogueGraph.LINE`): палитра блока — шесть нод
+(**Реплика**, Триггер, Условие If, Переменная, Случайность, В радиусе), текст говорит в чат игроку,
+который запустил цепочку, через `NpcProfile.fill(text, player, 0)` (`%player%`, `%relation%`=0), и
+цепочка идёт дальше сразу. Карта «строка палитры → тип ноды» живёт в `BlockTrigger351#typeForRow`
+(+ `PALETTE_ROWS`), хук `NpcBlockGraph351Mixin` её только спрашивает — так её можно проверить прогоном.
+525 записей, 72 миксин-класса (35/36), 477 классов, `verify_jar` PASS, `jvm_verify` OK, новый гейт
+`block_line_check` OK, `block_trigger_check` OK, `radius_flag_check` OK, остальные 15 зелёные. В игре
+**не подтверждено**.
+
+**Урок 357:** подпись палитры (`gui.settledlands.block.palette`) и карта строк — тоже код: менять их
+вместе с `PALETTE` и проверять прогоном `tools/harness/BlockPaletteProbe.java`, иначе редактор
+обещает ноду, которую обходчик молча пропускает. `jdk4py` в новой песочнице лежит в `dist-packages`;
+гейты, которым нужен java, теперь падают обратно на `jdk4py.JAVA_HOME`.
+
+Ниже — предыдущая сборка, она вся в 357:
+**356** — `settledlands-0.8.0-build356-radius-flag.jar` — **флаг «Видимость радиуса»
 сохраняется**.
 Жалоба «тумблер сразу возвращается на включено» — не клик, а запись: `NpcDialogueGraph#save` пишет
 `TimerRepeat` только для ноды таймера (`type == 8`), а `load` читает его для любой ноды и при
@@ -383,6 +399,7 @@ python3 tools/pursuit_check.py      settledlands-0.8.0-build329-XXX.jar
 python3 tools/clipboard_check.py    settledlands-0.8.0-build329-XXX.jar
 python3 tools/radius_zone_check.py  settledlands-0.8.0-build329-XXX.jar
 python3 tools/radius_flag_check.py  settledlands-0.8.0-build329-XXX.jar   # флаг видимости переживает save
+python3 tools/block_line_check.py   settledlands-0.8.0-build329-XXX.jar   # палитра блока и «Реплика»
 ```
 
 `verify_jar.py` включает гейты 1–5 (zip/CRC/toml/JSON, JVM-структура, миксины + фаза D «внешние API
@@ -391,7 +408,8 @@ python3 tools/radius_flag_check.py  settledlands-0.8.0-build329-XXX.jar   # фл
 Тесты внутри `wire_points_check.py`: `WirePointsRoundTrip`, `PointHitTest`, `ClickOrder`,
 `WireKeyTest` (`tools/tests/*.java`, компилируются ECJ против готового jar). `radius_flag_check.py`
 компилирует и гоняет `tools/harness/RadiusFlagProbe.java` — NBT-круг `save → load` на реальных
-классах из jar.
+классах из jar; `block_line_check.py` так же гоняет `tools/harness/BlockPaletteProbe.java` (карта
+«строка палитры → тип ноды» и валидность графа с репликой).
 
 ---
 

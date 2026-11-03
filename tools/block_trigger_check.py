@@ -10,6 +10,9 @@ Build 351 adds a feature with four ways to ship silently broken:
     lands nowhere, and everything looks fine;
   * the palette offers nodes a block has no way to run (no body, no tick, no damage event), so the
     author builds a chain that quietly does half of what it says;
+  * the palette hook and the block's own list of allowed types disagree - build 357 moved the row ->
+    type map into BlockTrigger351#typeForRow so the two can be asked in one place, and the map itself
+    is checked by block_line_check.py with BlockPaletteProbe;
   * the client half is registered as a common mixin (the server would load widgets) or the common half
     as a client mixin (a dedicated server would never run the save).
 
@@ -29,9 +32,9 @@ Build 352 adds the fifth node and the passive work around it, with three ways to
   * the visibility row is offered on an NPC (where build 320 already draws the flag) or on a node that
     has no radius.
 
-Exit 0 = the store is world data, the hooks are in the right lists, the palette is the five nodes a
-block can run, the chain walker is bounded, and the periodic work is one gated pass over one
-dimension's entries.
+Exit 0 = the store is world data, the hooks are in the right lists, the palette is the six nodes a
+block can run (build 357 added «Реплика»), the chain walker is bounded, and the periodic work is one
+gated pass over one dimension's entries.
 """
 import json
 import pathlib
@@ -228,15 +231,15 @@ def main(argv):
     for wanted in ("mouseClicked", "switchTab", "addAt", "contextMenu"):
         if not any(r[1] == wanted or wanted in text(graph_mixin) for r in graph_refs):
             return fail("the palette hook is not bound to %s" % wanted)
-    palette = palette_rows(graph_mixin)
-    if palette is None:
-        return fail("the block palette is not a switch on the stock row numbers")
-    low, high, default, targets = palette
-    wanted = {2: "Trigger", 3: "If", 4: "Variable", 5: "In radius", 13: "Random"}
-    rows = {row for row, offset in targets.items() if offset != default}
-    if rows != set(wanted):
-        return fail("the block palette maps rows %s; it must map exactly %s (Trigger, If, "
-                    "Variable, Random)" % (sorted(rows), sorted(wanted)))
+    # build 357: the row -> type map moved into BlockTrigger351#typeForRow, next to the palette it
+    # has to agree with; block_line_check.py runs BlockPaletteProbe to read the map itself.
+    if not any(r[1] == "typeForRow" and r[0] and r[0].endswith("npc/BlockTrigger351")
+               for r in graph_refs):
+        return fail("the block palette does not ask BlockTrigger351 which node a row builds - the "
+                    "editor and the walker could disagree about what a block can build")
+    if palette_rows(graph_mixin) is not None:
+        return fail("the block palette still carries its own switch - the map must live in "
+                    "BlockTrigger351#typeForRow, where it can be checked against PALETTE")
 
     client_cls, client_refs = parse(blobs[CLIENT])
     if not any(r[1] == "setScreen" for r in client_refs):
@@ -349,9 +352,10 @@ def main(argv):
                             % (name, member))
 
     print("block_trigger_check: OK  %s  (a block keeps its graph in world data, the palette is the "
-          "five nodes it can run, the chain walk is bounded, the picture runs every 2 ticks, the "
-          "radius event every 8, a body's ring goes through the same pass, and both the "
-          "visibility toggle and the delete button reach the server)" % jar)
+          "six nodes it can run and the row map lives in BlockTrigger351#typeForRow, the chain walk "
+          "is bounded, the picture runs every 2 ticks, the radius event every 8, a body's ring goes "
+          "through the same pass, and both the visibility toggle and the delete button reach the "
+          "server)" % jar)
     return 0
 
 

@@ -25,6 +25,9 @@ import zipfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 JAVA = "/tmp/venv/lib/python3.11/site-packages/jdk4py/java-runtime/bin/java"
+if not pathlib.Path(JAVA).is_file():          # jdk4py lands in dist-packages on a fresh machine
+    import jdk4py
+    JAVA = str(pathlib.Path(jdk4py.JAVA_HOME) / "bin" / "java")
 ECJ = ROOT / "tools" / "vendor" / "ecj-3.46.100.jar"
 TEST = ROOT / "tools" / "tests" / "ClipboardRoundTrip.java"
 # The graph model names Minecraft types in its signatures, so the compile-time mirrors

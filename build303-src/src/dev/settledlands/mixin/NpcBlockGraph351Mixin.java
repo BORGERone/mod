@@ -18,11 +18,16 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * nodes a block can actually run.
  *
  * <p>The palette of the editor is one popup with fifteen rows. An NPC can run all of them; a block
- * cannot - it has no body to talk, walk, animate or trade, and its only event is the right click, so
- * there is nothing to attach "время", "таймер", "проверка" or "урон" to. Rather than leave rows that
- * would quietly do nothing, the block editor keeps four: <b>Триггер, Условие If, Переменная,
- * Случайность</b>. A click on any other row is answered with a line that says which four there are,
- * so the palette never lies about what a block can do.</p>
+ * cannot - it has no body to walk, animate or trade, and its only event is the right click, so
+ * there is nothing to attach "время", "таймер" or "урон" to. Rather than leave rows that would
+ * quietly do nothing, the block editor keeps five: <b>Реплика, Триггер, Условие If, Переменная,
+ * Случайность</b> (plus the event node "В радиусе" that build 352 added). A click on any other row is
+ * answered with a line that says which ones there are, so the palette never lies about what a block
+ * can do.</p>
+ *
+ * <p>Build 357 adds the first of them: a block says a line to the player in the chat, which is why
+ * "Реплика" is no longer a row a block has to refuse. The text box of the stock inspector already
+ * edits {@code Node#text}, so the node is written without a single new widget.</p>
  *
  * <p>The copy/delete menu of an existing node stays stock, and so does everything else on the canvas:
  * this hook only reacts to the create menu, and only while a block id is open.</p>
@@ -89,16 +94,13 @@ public abstract class NpcBlockGraph351Mixin {
         ci.cancel();
     }
 
-    /** Row of the stock palette -> the node type, or -1 when a block cannot run that row. */
+    /**
+     * Row of the stock palette -> the node type, or -1 when a block cannot run that row. The map
+     * itself lives in {@code BlockTrigger351#typeForRow}, next to the palette it has to agree with;
+     * this hook only asks. That is also what keeps the answer testable without a screen.
+     */
     private static int settledlands$paletteType(int row) {
-        return switch (row) {
-            case 2 -> NpcDialogueGraph.TRIGGER;
-            case 3 -> NpcDialogueGraph.IF;
-            case 4 -> NpcDialogueGraph.VARIABLE;
-            case 5 -> NpcDialogueGraph.CHECK;
-            case 13 -> NpcDialogueGraph.RANDOM;
-            default -> -1;
-        };
+        return BlockTrigger351.typeForRow(row);
     }
 
     private boolean settledlands$isBlock() {
