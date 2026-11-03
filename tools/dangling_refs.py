@@ -8,9 +8,17 @@ it (the mixin was not recompiled), jvm_verify only checks the shape of each clas
 and check_mixin_class only checks injection points, so the game crashed while
 rendering the dialogue screen with NoSuchMethodError.
 
+Build 352 shipped a jar without `BlockTriggerStore351$Entry.class`: the nested class was compiled,
+the build script copied the outer class only, and every gate stayed green - `jvm_verify` checks the
+classes that are present, `check_mixin_class` checks injection points, and the base comparison below
+only looks at classes that exist in both jars. The game died in `Class.getDeclaredMethods0` with
+`NoClassDefFoundError`. So this gate also checks that every class the mod's own code refers to is
+actually in the jar.
+
 This gate compares every class that exists in both jars with the previous jar and
 looks for methods/fields that disappeared while some class in the new jar still
-references them.
+references them - and, independently of the base, that nothing inside the jar
+points at one of the mod's own classes that the jar does not contain.
 
 Usage: python3 tools/dangling_refs.py <jar> [--base PREVIOUS.jar]
 Exit code 0 = no dangling reference.
@@ -18,6 +26,7 @@ Exit code 0 = no dangling reference.
 
 import argparse
 import os
+import re
 import sys
 import zipfile
 
@@ -68,6 +77,41 @@ def refs(cf):
     return out
 
 
+INTERNAL = "dev/settledlands/"
+
+# A type can reach a class two ways: a CONSTANT_Class entry the code actually uses, and a method or
+# field *descriptor*. The JVM resolves both when the class is linked, and `getDeclaredMethods` alone
+# is enough to walk every descriptor - which is how build 352 died. So both are checked.
+DESCRIPTOR = re.compile(r"L(dev/settledlands/[A-Za-z0-9_$/]+)[;<]")
+
+
+def missing_internal(files, classes):
+    """(user, missing) for every reference to a dev/settledlands class the jar does not carry."""
+    out = []
+    for name, cf in sorted(classes.items()):
+        seen = set()
+        for index, entry in enumerate(cf.cp):
+            if not entry:
+                continue
+            if entry[0] == 7:
+                try:
+                    seen.add(cf.utf8(entry[1]))
+                except (ClassFormatError, IndexError, TypeError):
+                    continue
+            elif entry[0] == 1:
+                try:
+                    text = cf.utf8(index)
+                except (ClassFormatError, IndexError, TypeError):
+                    continue
+                seen.update(m.group(1) for m in DESCRIPTOR.finditer(text))
+        for target in sorted(seen):
+            if not target.startswith(INTERNAL):
+                continue
+            if target + ".class" not in files:
+                out.append((name[:-len(".class")], target))
+    return out
+
+
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("jar")
@@ -81,8 +125,19 @@ def main(argv):
         print("dangling_refs: FAIL - no such base jar: %s" % args.base)
         return 1
 
+    with zipfile.ZipFile(args.jar) as z:
+        files = set(n for n in z.namelist() if n.endswith(".class"))
+
     new = load(args.jar)
     old = load(args.base)
+
+    absent = missing_internal(files, new)
+    if absent:
+        print("dangling_refs: FAIL  %s" % os.path.basename(args.jar))
+        print("  classes the jar refers to but does not carry : %d" % len(absent))
+        for user, target in absent:
+            print("    ! %s refers to %s (no such class in the jar)" % (user, target))
+        return 1
 
     removed = {}
     for name, cf in new.items():

@@ -1,2 +1,0 @@
-0d5ced70e5c52326490ce3d42add158890516e1aa0d2828ce0da6ee95b61904f  settledlands-0.8.0-build352-block-radius.jar
-ba52cb6ea68660eb4087f02c963d71feec160ce09f095d88ad9949cd57338b26  SettledLands-Build352-BlockRadius-Source.zip

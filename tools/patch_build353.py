@@ -1,12 +1,19 @@
 #!/usr/bin/env python3
 """
-Build 352 - the "В радиусе" node reaches blocks, blocks with graphs spark while the wand is held, and
-the node's visibility toggle draws its radius around the block.
+Build 353 - build 352's feature, shipped in a jar that can actually load.
 
-Base 351. Two classes added, three replaced:
+Build 352 was broken by packaging, not by code: `BlockTriggerStore351$Entry` was compiled but never
+copied into the jar, so `Class.getDeclaredMethods0` on the tick pass threw NoClassDefFoundError while
+the loader was collecting automatic event subscribers, and the mod failed to construct. Every gate
+stayed green because all of them check the classes that are present. The nested class is added below,
+and `tools/dangling_refs.py` now fails any jar that refers to one of the mod's own classes it does not
+carry, so this cannot ship twice.
+
+Base 351 (the 351 jar, not the broken 352 one). Three classes added, three replaced:
 
     BlockTrigger352          the tick pass: radius node, radius ring, wand highlight (ServerTickEvent)
     NpcBlockCheckRow352Mixin (client) the "Видимость" row of the node's inspector, block editor only
+    BlockTriggerStore351$Entry  the block record the tick pass reads (the class 352 forgot)
 
     BlockTriggerStore351     replaced: per-dimension index + the two flags the pass asks about
     BlockTrigger351          replaced: the radius node in the palette, and fire() for the tick pass
@@ -24,8 +31,8 @@ import sys
 import zipfile
 
 BASE_VERSION = "0.8.0-build351-block-trigger"
-NEW_VERSION = "0.8.0-build352-block-radius"
-OUT_NAME = "settledlands-0.8.0-build352-block-radius.jar"
+NEW_VERSION = "0.8.0-build353-block-radius"
+OUT_NAME = "settledlands-0.8.0-build353-block-radius.jar"
 
 REMOVED = ()
 REPLACED = (
@@ -38,6 +45,7 @@ REPLACED = (
 )
 ADDED = (
     "dev/settledlands/npc/BlockTrigger352.class",
+    "dev/settledlands/npc/BlockTriggerStore351$Entry.class",
     "dev/settledlands/mixin/NpcBlockCheckRow352Mixin.class",
 )
 
@@ -50,6 +58,8 @@ CLIENT_REMOVED = ()
 MIXIN_MARKERS = {
     "dev/settledlands/npc/BlockTriggerStore351.class": (
         "settledlands_block_triggers", "ofDimension", "check", "ring"),
+    "dev/settledlands/npc/BlockTriggerStore351$Entry.class": (
+        "centerX", "distanceSqr", "check", "ring"),
     "dev/settledlands/npc/BlockTrigger351.class": (
         "BlockGraph", "DialogueGraph", "evalCondition", "NpcActions", "fire"),
     "dev/settledlands/npc/BlockTrigger352.class": (
@@ -75,6 +85,8 @@ LANG_SET_EN = {
 }
 
 CHANGELOG_EN = (
+    "Build 353 is build 352 with the nested class the 352 jar was missing - that jar could not load "
+    "(NoClassDefFoundError on BlockTriggerStore351$Entry). Same feature, complete jar. "
     "Build 352 brings the \"В радиусе\" node to blocks and makes the block graphs visible. The node is "
     "in the block palette now and it is an event node: a block tick pass, twice a second, checks the "
     "radius with the node's own rules (target, radius, per-body cooldown) and, when somebody is in it, "
@@ -85,14 +97,12 @@ CHANGELOG_EN = (
     "the entries whose flags are set."
 )
 PATCHINFO = (
-    "\\u0421\\u0431\\u043e\\u0440\\u043a\\u0430 352: \\u043d\\u043e\\u0434\\u0430 "
-    "\\u00ab\\u0412 \\u0440\\u0430\\u0434\\u0438\\u0443\\u0441\\u0435\\u00bb "
-    "\\u0443 \\u0431\\u043b\\u043e\\u043a\\u0430, \\u043f\\u043e\\u0434\\u0441"
-    "\\u0432\\u0435\\u0442\\u043a\\u0430 \\u0431\\u043b\\u043e\\u043a\\u043e"
-    "\\u0432 \\u0441 \\u0433\\u0440\\u0430\\u0444\\u0430\\u043c\\u0438 \\u043f"
-    "\\u0440\\u0438 \\u0436\\u0435\\u0437\\u043b\\u0435 \\u0438 \\u0442\\u0443"
-    "\\u043c\\u0431\\u043b\\u0435\\u0440 \\u00ab\\u0412\\u0438\\u0434\\u0438"
-    "\\u043c\\u043e\\u0441\\u0442\\u044c\\u00bb."
+    "Сборка 353: та же 352 (нода «В радиусе» у блока, подсветка блоков с графом при жезле, "
+    "тумблер «Видимость»), но джарник полный.\n"
+    "В 352 не хватало вложенного класса dev/settledlands/npc/BlockTriggerStore351$Entry: "
+    "мод падал на старте (NoClassDefFoundError при регистрации подписчиков событий). "
+    "Гейт dangling_refs теперь проверяет, что все свои классы, на которые ссылается код, лежат в "
+    "джарнике.\n"
 )
 
 

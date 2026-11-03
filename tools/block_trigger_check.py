@@ -21,6 +21,8 @@ Build 352 adds the fifth node and the passive work around it, with three ways to
     would pay for all 4096 entries;
   * the ring and the highlight disagree with the toggle the author sees - the node says "yes" and
     nothing is drawn, or the box on the card and the ring say different things;
+  * the class that carries the entry is compiled but never packed - build 352 shipped without
+    `BlockTriggerStore351$Entry` and the game could not construct the mod at all;
   * the visibility row is offered on an NPC (where build 320 already draws the flag) or on a node that
     has no radius.
 
@@ -42,6 +44,7 @@ LOGIC = "dev/settledlands/npc/BlockTrigger351.class"
 EVENTS = "dev/settledlands/npc/BlockTriggerEvents351.class"
 CLIENT = "dev/settledlands/npc/client/BlockTriggerClient351.class"
 TICKER = "dev/settledlands/npc/BlockTrigger352.class"
+ENTRY = "dev/settledlands/npc/BlockTriggerStore351$Entry.class"
 CHECK_ROW = "dev/settledlands/mixin/NpcBlockCheckRow352Mixin.class"
 OPEN_MIXIN = "dev/settledlands/mixin/NpcBlockOpen351Mixin.class"
 GRAPH_MIXIN = "dev/settledlands/mixin/NpcBlockGraph351Mixin.class"
@@ -139,12 +142,12 @@ def main(argv):
     jar = argv[0]
     with zipfile.ZipFile(jar) as z:
         names = set(z.namelist())
-        missing = [n for n in (STORE, LOGIC, EVENTS, CLIENT, TICKER, CHECK_ROW, OPEN_MIXIN,
+        missing = [n for n in (STORE, ENTRY, LOGIC, EVENTS, CLIENT, TICKER, CHECK_ROW, OPEN_MIXIN,
                                GRAPH_MIXIN, SAVE_MIXIN)
                    if n not in names]
         if missing:
             return fail("build 351 is not in this jar: %s" % ", ".join(missing))
-        blobs = {n: z.read(n) for n in (STORE, LOGIC, EVENTS, CLIENT, TICKER, CHECK_ROW, OPEN_MIXIN,
+        blobs = {n: z.read(n) for n in (STORE, ENTRY, LOGIC, EVENTS, CLIENT, TICKER, CHECK_ROW, OPEN_MIXIN,
                                         GRAPH_MIXIN, SAVE_MIXIN)}
         config = json.loads(z.read(CONFIG).decode("utf-8"))
         ru = json.loads(z.read(RU).decode("utf-8"))
