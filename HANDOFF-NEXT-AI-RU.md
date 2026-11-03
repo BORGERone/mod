@@ -2,7 +2,24 @@
 
 **Дата:** 2026-11-03. **Ветка:** `arena/5618404a-mod` (**не переименовывать, не переключаться**;
 в прошлых сессиях она называлась `arena/99d7691a-mod`).
-**Текущая сборка:** `settledlands-0.8.0-build355-radius-toggle.jar` — **тумблер радиуса и удаление
+**Текущая сборка:** `settledlands-0.8.0-build356-radius-flag.jar` — **флаг «Видимость радиуса»
+сохраняется**.
+Жалоба «тумблер сразу возвращается на включено» — не клик, а запись: `NpcDialogueGraph#save` пишет
+`TimerRepeat` только для ноды таймера (`type == 8`), а `load` читает его для любой ноды и при
+отсутствии ключа подставляет `true`. Фикс: `RadiusFlagSave356Mixin` (**общий**) на `save()` в точке
+`RETURN` кладёт `TimerRepeat` в тег нод `CHECK` (5) / `RADIUS` (15); читатель не тронут. Хранить в
+голове: `CHECK = 5`, `RADIUS = 15`, `TIMER = 8`; `load` читает `TimerRepeat` без охраны по типу —
+поэтому вторая правка не нужна. 525 записей, 72 миксин-класса (35/36), 477 классов, `verify_jar` PASS,
+`jvm_verify` OK, `radius_flag_check` OK, `block_trigger_check` OK, остальные 16 зелёные. В игре
+**не подтверждено**. Drive jar `1dEZLl484QmHaTdz6rlEFvvZBZX3EoV1h`, zip
+`1NhEvpEtXTdZ0JNZRg6Xxq5Rlbl_x9_hj`.
+
+**Урок 356:** проверять `save` и `load` парой: ключ, который пишется только для одного типа ноды, для
+другого теряется, а `load` подставляет `true` — снаружи это выглядит как «кнопка не работает». Проба
+`tools/harness/RadiusFlagProbe.java` (`BASE → DEFAULT → MIXIN → LOAD → ON`) — готовый способ ловить это.
+
+Ниже — предыдущая сборка, она вся в 356:
+**355** — `settledlands-0.8.0-build355-radius-toggle.jar` — **тумблер радиуса и удаление
 графа блока**.
 Причина жалобы «не могу убрать тумблер»: кольцо рисует сервер по сохранённому графу, а строка
 `Видимость` меняла флаг только в редакторе — до `save()` сервер о нём не знал. Фикс:
@@ -365,13 +382,16 @@ python3 tools/blue_wire_check.py    settledlands-0.8.0-build329-XXX.jar
 python3 tools/pursuit_check.py      settledlands-0.8.0-build329-XXX.jar
 python3 tools/clipboard_check.py    settledlands-0.8.0-build329-XXX.jar
 python3 tools/radius_zone_check.py  settledlands-0.8.0-build329-XXX.jar
+python3 tools/radius_flag_check.py  settledlands-0.8.0-build329-XXX.jar   # флаг видимости переживает save
 ```
 
 `verify_jar.py` включает гейты 1–5 (zip/CRC/toml/JSON, JVM-структура, миксины + фаза D «внешние API
 против базы», `dangling_refs`). **Без гейтов не выпускать.** Зелёные гейты ≠ работает в игре.
 
 Тесты внутри `wire_points_check.py`: `WirePointsRoundTrip`, `PointHitTest`, `ClickOrder`,
-`WireKeyTest` (`tools/tests/*.java`, компилируются ECJ против готового jar).
+`WireKeyTest` (`tools/tests/*.java`, компилируются ECJ против готового jar). `radius_flag_check.py`
+компилирует и гоняет `tools/harness/RadiusFlagProbe.java` — NBT-круг `save → load` на реальных
+классах из jar.
 
 ---
 

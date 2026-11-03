@@ -1,0 +1,2 @@
+c6d934ae99ddeead617fe1eb1e15e3add4193335364eede5f1688985c55daaef  settledlands-0.8.0-build356-radius-flag.jar
+1240e721bc1b558f1fe09979fdbbccd407b8a0af40df6e8911c87daeede431fe  SettledLands-Build356-RadiusFlag-Source.zip
