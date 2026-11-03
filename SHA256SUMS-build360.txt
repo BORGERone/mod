@@ -1,0 +1,2 @@
+ae6758a845e49dfeb602d80b5b5ace8eda4bd7afd1955941c7905afe5b7b08f7  settledlands-0.8.0-build360-block-name-fix.jar
+f9850ec810d6f9dcb756fa21bbad547e73b264ce4cbed3a088dbf0c0f276ab4c  SettledLands-Build360-BlockNameFix-Source.zip

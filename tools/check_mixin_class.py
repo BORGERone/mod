@@ -35,7 +35,12 @@ Phase B - target resolution (catches "Critical injection failure" crashes)
     descriptor" and the build never got past mixin application)
   * @ModifyConstant(@Constant(intValue = N)) finds N in the target method's
     bytecode (injectors.defaultRequire=1 turns a miss into a hard crash)
-  * @Shadow fields and methods exist in the target with the same descriptor
+  * @Shadow fields and methods exist in the target with the same descriptor - the target CLASS,
+    not its superclasses. Build 359 shadowed Screen#addRenderableWidget on the graph screen, the
+    descriptor was right (it is what the stock textBox calls), Mixin still refused it with
+    "@Shadow method addRenderableWidget ... was not located in the target class" and every graph
+    screen died on first open. A member inherited from Minecraft is CALLED, never shadowed: our
+    compile-time stubs declare it, the call site lands inside the target and protected access holds.
   * @Overwrite matches an existing method
   * an @Inject handler that calls CallbackInfo.cancel() or
     CallbackInfoReturnable.setReturnValue(...) but whose annotation is not
@@ -86,19 +91,6 @@ DESC_RETENTION = "Ljava/lang/annotation/Retention;"
 # class -> method that some mixin must call, else the class is dead code
 DISPATCH_HOOKS = {
     "dev/settledlands/npc/client/PursuitGraphNode272": ("drawNode", "the pursuit card"),
-}
-
-# Members a mixin may @Shadow although the target class does not declare them: they are inherited
-# from a Minecraft superclass, which lives outside the jar and cannot be resolved here. Each entry
-# carries the evidence that the member really is there - the mod's own bytecode calls it on that very
-# class, so the descriptor below is read off a real call site instead of guessed.
-# tools/block_name_check.py re-reads that call site, so an entry cannot go stale silently.
-INHERITED_MEMBERS = {
-    ("dev/settledlands/npc/client/NpcDialogueGraphScreen", "addRenderableWidget",
-     "(Lnet/minecraft/client/gui/components/events/GuiEventListener;)"
-     "Lnet/minecraft/client/gui/components/events/GuiEventListener;"):
-        "net.minecraft.client.gui.screens.Screen#addRenderableWidget - called by "
-        "NpcDialogueGraphScreen#textBox (base jar)",
 }
 
 DESC_CALLBACK_INFO = "Lorg/spongepowered/asm/mixin/injection/callback/CallbackInfo;"
@@ -406,10 +398,6 @@ def check_targets(cf, entry, classes, problems, external, verbose):
                             problems.append("%s: @Shadow %s%s - target %s has the "
                                             "name with a different descriptor"
                                             % (entry, m.name, m.desc, tname))
-                        elif (tname, m.name, m.desc) in INHERITED_MEMBERS:
-                            external.append("inherited @Shadow %s: %s%s -> %s"
-                                            % (entry, m.name, m.desc,
-                                               INHERITED_MEMBERS[(tname, m.name, m.desc)]))
                         else:
                             problems.append("%s: @Shadow method %s%s does not exist "
                                             "in %s" % (entry, m.name, m.desc, tname))

@@ -9,7 +9,6 @@ import dev.settledlands.npc.client.NpcUi;
 import java.util.List;
 import java.util.function.Consumer;
 import net.minecraft.client.gui.components.EditBox;
-import net.minecraft.client.gui.components.events.GuiEventListener;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -66,10 +65,6 @@ public abstract class BlockNameInspector359Mixin {
         throw new AssertionError();
     }
 
-    @Shadow private GuiEventListener addRenderableWidget(GuiEventListener widget) {
-        throw new AssertionError();
-    }
-
     @Inject(method = "widgets()V", at = @At("RETURN"), remap = false)
     private void settledlands$blockNameRows(CallbackInfo ci) {
         if (graph == null || selected < 0) return;
@@ -101,7 +96,12 @@ public abstract class BlockNameInspector359Mixin {
                     Component.translatable(BlockName359.COLOR_KEYS[3])),
                     BlockName359.colorOf(node), index -> BlockName359.setColor(node, index));
             if (picker != null) {
-                addRenderableWidget(picker);
+                // Inherited from Screen, so it is called and not shadowed: Mixin looks a @Shadow up
+                // in the target class itself, and a member inherited from a Minecraft superclass is
+                // not there - build 359 crashed every graph screen on exactly that (see the class
+                // doc of BlockNoTabs360Mixin). The stub of Screen declares the erased signature, so
+                // this compiles to the same call the stock textBox makes.
+                ((NpcDialogueGraphScreen) (Object) this).addRenderableWidget(picker);
                 if (inspectorWidgets != null) inspectorWidgets.add(picker);
                 picker.visible = y >= top && y + picker.getHeight() <= bottom;
             }

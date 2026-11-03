@@ -27,9 +27,11 @@ So this gate asks the shipped jar:
     buildingInspector, and grows the scroll range by the rows it added;
   * the block's save drops the stats card, and the walk steps over the name card in silence;
   * BlockTalk358#say reads the name and the colour, and still falls back to the coordinates;
-  * the one @Shadow this build adds that the target does not declare (Screen#addRenderableWidget) is
-    backed by a real call site in the base jar - the mod's own textBox already calls it on this class,
-    so the descriptor is read off that call, not guessed;
+  * the colour dropdown is registered by calling Screen#addRenderableWidget the way the stock textBox
+    does, and NOT by a @Shadow - build 359 did shadow it and every graph screen died on open, because
+    Mixin looks a shadow up in the target class only and the member is inherited;
+  * a block's graph has no tabs: the tab buttons the stock widgets() builds are hidden for a block id
+    and only for it, so a body's editor keeps its three graphs;
   * the arithmetic and the round trip are read by running them: tools/harness/BlockNameProbe.java is
     compiled against this jar and executed.
 
@@ -56,6 +58,7 @@ if not JAVA.is_file():
 ECJ = ROOT / "tools" / "vendor" / "ecj-3.46.100.jar"
 PROBE = ROOT / "tools" / "harness" / "BlockNameProbe.java"
 BASE = ROOT / "settledlands-0.8.0-build358-block-talk.jar"
+TABS = "dev/settledlands/mixin/BlockNoTabs360Mixin.class"
 STUBS = [str(ROOT / "build303-src" / part) for part in
          ("api", "api5", "api4", "api3", "stubs-out", "api2")]
 
@@ -120,7 +123,7 @@ def structural(jar):
     problems = []
     with zipfile.ZipFile(jar) as zf:
         names = set(zf.namelist())
-        for needed in (NAME, CARD, DRAW, INSPECT, NO_STATS, NO_AI, ONE, TALK, BLOCK):
+        for needed in (NAME, CARD, DRAW, INSPECT, NO_STATS, NO_AI, ONE, TABS, TALK, BLOCK):
             if needed not in names:
                 problems.append("the jar has no %s" % needed)
         if problems:
@@ -133,7 +136,7 @@ def structural(jar):
             problems.append("BlockNameOne359Mixin is not a common mixin - NpcStatsGraph is a "
                             "common class and the guard has to be there on both sides")
         for name in ("BlockNameDraw359Mixin", "BlockNameInspector359Mixin",
-                     "BlockNoStats359Mixin", "BlockNoAi359Mixin"):
+                     "BlockNoStats359Mixin", "BlockNoAi359Mixin", "BlockNoTabs360Mixin"):
             if name not in client:
                 problems.append("%s is not a client mixin - its target is a client class" % name)
             if name in common:
@@ -266,20 +269,37 @@ def structural(jar):
             if needle not in say:
                 problems.append("say() is wrong: %s" % why)
 
-        # ---- the one inherited @Shadow -------------------------------------
-        if BASE.is_file():
-            with zipfile.ZipFile(BASE) as bz:
-                _kscr, _scp, scr_methods, _r = load_class(bz, SCREEN)
-                add = ("addRenderableWidget(Lnet/minecraft/client/gui/components/events/"
-                       "GuiEventListener;)Lnet/minecraft/client/gui/components/events/"
-                       "GuiEventListener;")
-                boxes = [body for name, body in scr_methods.items() if name.startswith("textBox(")]
-                if not any(add.split("(")[0] in body for body in boxes):
-                    problems.append("the base jar's textBox does not call addRenderableWidget - "
-                                    "the inherited @Shadow in the inspector hook has no evidence "
-                                    "behind it")
-        else:
-            problems.append("no base jar %s - the inherited @Shadow cannot be checked" % BASE.name)
+        # ---- the dropdown's registration -----------------------------------
+        registered = ("(Lnet/minecraft/client/gui/components/events/GuiEventListener;)"
+                      "Lnet/minecraft/client/gui/components/events/GuiEventListener;")
+        _ki2, insp_cp2, insp_methods2, insp_refs2 = load_class(zf, INSPECT)
+        if not any(ref[1] == "addRenderableWidget" and ref[2] == registered
+                   for ref in insp_refs2):
+            problems.append("the inspector does not register the dropdown through "
+                            "addRenderableWidget - the colour row would never be drawn")
+        if any(m.startswith("addRenderableWidget(") for m in insp_methods2):
+            problems.append("the inspector hook declares addRenderableWidget itself - Mixin looks a "
+                            "@Shadow up in the target class only, so this is the crash of build 359")
+
+        # ---- no tabs on a block's graph -------------------------------------
+        _kt2, tabs_cp, tabs_methods, tabs_refs = load_class(zf, TABS)
+        tabs = find_method(tabs_methods, "settledlands$blockHasNoTabs")
+        for needle, why in (
+                ("BlockTrigger351.isBlockEditorId", "a body's editor would lose its tabs too"),
+                ("NpcDialogueGraphScreen.entityId", "the hook never asks which screen it is on"),
+                ("Button.visible", "the tab button is never hidden"),
+                ("Button.active", "a hidden tab is still clickable")):
+            if needle not in tabs:
+                problems.append("the tabs hook is wrong: %s" % why)
+        tab_button = "(Ljava/lang/String;IIIILjava/lang/Runnable;)Lnet/minecraft/client/gui/components/Button;"
+        if not any(ref[1] == "button" and ref[2] == tab_button for ref in tabs_refs):
+            problems.append("the tabs hook does not wrap the stock button() that builds the strip")
+        tab_strings = strings(tabs_cp)
+        for needle, why in (
+                ("widgets()V", "the tabs hook does not run in widgets(), where the strip is built"),
+                ("gui.settledlands.graph.tab_", "the hook does not recognise the tab labels")):
+            if needle not in tab_strings:
+                problems.append("the tabs hook is wrong: %s" % why)
     return problems
 
 
