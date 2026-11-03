@@ -1,0 +1,1 @@
+6437bef636fd7b38e6290c5b1ac5a8124ee75901eacfc818894e4fee49a36e49  settledlands-0.8.0-build350-armor-off.jar
