@@ -30,6 +30,11 @@
 В игре **не подтверждено**. **Урок 361:** «поставил флаг — значит сделано» не работает: если в игре
 эффекта нет, надо бить по самой отрисовке (или увозить виджет из окна), а не по состоянию, которое
 кто-то другой может вернуть.
+Выложено: коммит `5fccfd3` + push; Drive jar `1BeFwj37CgdtmD6z2EAxqGoJKbCcs6Wsa`,
+zip `1kkSCGiX2dOzUYcaXfMMEJMn19otSXzMH` (папка `0AB-al7DFuWhEUk9PVA`), оба **сразу сделаны
+публичными** (`anyone/reader`, `allow_file_discovery=true`) — проверено через `list_permissions`.
+sha256: jar `762cefbde8f01dab865217ecbd6b3450d424b6caebd8b816b336996453f547da`,
+zip `40c72af0c8208d919d6f0dc6e90f32d8ce8672034393f3c3bb20aa8b30e9f764`.
 
 ## Предыдущая сборка (360, заменена 361)
 

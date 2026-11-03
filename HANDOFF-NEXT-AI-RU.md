@@ -22,7 +22,10 @@
 (флаг `Node#timerRepeat`, `RadiusPass354.visible/setVisible`).
 **540 записей**, 492 класса, 80 миксин-классов (38/41), `verify_jar --base 360` PASS (1394 внешние
 ссылки, **0 новых**), `validate_jar` OK, **21 гейт зелёный**. Патч `tools/patch_build361.py`
-(**база 360**), классы из `build303-src/out361`. В игре **не подтверждено**. Выложено: см. ниже.
+(**база 360**), классы из `build303-src/out361`. В игре **не подтверждено**. Выложено: коммит
+`5fccfd3` + push; Drive jar `1BeFwj37CgdtmD6z2EAxqGoJKbCcs6Wsa`, zip
+`1kkSCGiX2dOzUYcaXfMMEJMn19otSXzMH` (оба `anyone/reader` + `allow_file_discovery`, проверено
+`list_permissions`).
 **Выкладывать файлы так: `upload_file`, затем СРАЗУ `make_public(role=reader,
 allow_file_discovery=true)`** — без этого ссылка `https://drive.google.com/uc?export=download&id=…`
 отдаёт пользователю 403 (файл приватный). Папку `0AB-al7DFuWhEUk9PVA` сделать публичной нельзя
