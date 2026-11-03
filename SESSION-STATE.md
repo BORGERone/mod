@@ -22,6 +22,8 @@ save/load и буфер обмена — родные. Блок **говорит
 `block_trigger_check` OK (обновлён: карта в `typeForRow`, палитра из шести), `radius_flag_check` OK,
 остальные 15 зелёные. Патч `tools/patch_build357.py`, классы из `build303-src/out357`, проба
 `tools/harness/BlockPaletteProbe.java`. В игре **не подтверждено**.
+Выложено: коммит `31b708c` + push; Drive jar `1c73_xoC0h19obIXkFUn36ebHpERGbbua`,
+zip `1RFRtGQG6UufUOFjmH_HsFNUCt6UGg4Yo` (папка `0AB-al7DFuWhEUk9PVA`).
 
 **Урок 357:** подпись палитры и карта строк — тоже код: их надо обновлять вместе с `PALETTE` и
 проверять прогоном (`BlockPaletteProbe`), иначе редактор обещает ноду, которую обходчик пропускает.
