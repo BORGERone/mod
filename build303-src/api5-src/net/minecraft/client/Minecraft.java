@@ -13,6 +13,10 @@ public class Minecraft {
         return null;
     }
 
+    /** Build 351: NpcConfigScreen#open already switches screens this way. */
+    public void setScreen(net.minecraft.client.gui.screens.Screen screen) {
+    }
+
     public net.minecraft.client.model.geom.EntityModelSet getEntityModels() {
         return null;
     }

@@ -22,6 +22,9 @@ public final class ItemStack {
         return false;
     }
 
+    /** Build 351: the same identity check the base jar makes on sticks and the coord stick. */
+    public boolean is(Item item) { return false; }
+
     public ItemStack copy() {
         return this;
     }

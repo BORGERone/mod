@@ -1,0 +1,2 @@
+7b9eed4159700a3dd05efc39e09e81e445d5851357354ee27261cb1277b74ee2  settledlands-0.8.0-build351-block-trigger.jar
+3dab5b5956609a998390520936522ce9480f05c5efc1c551779725effd70fd89  SettledLands-Build351-BlockTrigger-Source.zip

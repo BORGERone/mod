@@ -2,6 +2,6 @@ package net.minecraft.nbt;
 
 import java.util.ArrayList;
 
-public class ListTag extends ArrayList<CompoundTag> {
+public class ListTag extends ArrayList<CompoundTag> implements Tag {
     public CompoundTag getCompound(int index) { return get(index); }
 }

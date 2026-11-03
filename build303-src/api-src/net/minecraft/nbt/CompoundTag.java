@@ -12,6 +12,8 @@ import java.util.Map;
  */
 public class CompoundTag implements Tag {
     private final Map<String, Object> values = new HashMap<>();
+    public boolean isEmpty() { return values.isEmpty(); }
+
     public boolean contains(String key) { return values.containsKey(key); }
     public boolean contains(String key, int type) { return values.containsKey(key); }
     public ListTag getList(String key, int elementType) {

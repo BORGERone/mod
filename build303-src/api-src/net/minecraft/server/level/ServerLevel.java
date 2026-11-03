@@ -8,4 +8,9 @@ public class ServerLevel extends Level {
     public Iterable<Entity> getAllEntities() { return null; }
     public long getGameTime() { return 0; }
     public ResourceKey<Level> dimension() { return null; }
+
+    /** Build 351: the same call CutsceneStorage and NpcCommonGraphStorage already make. */
+    public net.minecraft.world.level.storage.DimensionDataStorage getDataStorage() {
+        return null;
+    }
 }
