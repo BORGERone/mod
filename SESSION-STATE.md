@@ -19,6 +19,8 @@
 ссылок против 351, 0 висячих, 0 недостающих своих классов), `jvm_verify` OK, `block_trigger_check` OK,
 остальные 14 проверок зелёные. Патч `tools/patch_build353.py`, база — jar 351, классы из
 `build303-src/out352`. В игре **не подтверждено**.
+Выложено: коммит `cd77ba2` + push; Drive jar `1_Q7e8K5P7fIT5mVc3kA6tN5LanIbAID5`,
+zip `1DP-eDj1DySUgodcOtJTLQbbYT7kFSfB_` (папка `0AB-al7DFuWhEUk9PVA`); 352 с Drive в корзине.
 
 **Урок 352 (причина падения):** в архиве не было вложенного класса `BlockTriggerStore351$Entry` —
 компилировался, но не копировался; `Class.getDeclaredMethods0` уронил регистрацию подписчиков
