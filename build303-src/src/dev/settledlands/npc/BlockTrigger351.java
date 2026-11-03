@@ -150,6 +150,9 @@ public final class BlockTrigger351 {
         try {
             CompoundTag tag = data.getCompound("DialogueGraph");
             NpcDialogueGraph graph = tag.isEmpty() ? null : NpcDialogueGraph.load(tag);
+            // An empty graph is no graph: the entry is dropped, so the block stops sparkling and a
+            // right click on it does nothing - "cleared" and "never configured" are the same state.
+            if (graph != null && graph.nodes.isEmpty()) graph = null;
             BlockTriggerStore351 store = BlockTriggerStore351.get(player.getServer());
             if (store == null) return;
             if (!store.put(key, graph)) {
@@ -160,10 +163,17 @@ public final class BlockTrigger351 {
                 return;
             }
             String where = key.substring(key.indexOf('@') + 1);
+            if (graph == null) {
+                player.displayClientMessage(
+                        Component.translatable("message.settledlands.block.deleted",
+                                Component.literal(where)),
+                        true);
+                return;
+            }
             player.displayClientMessage(
                     Component.translatable("message.settledlands.block.saved",
                             Component.literal(where),
-                            Component.literal(Integer.toString(graph == null ? 0 : graph.nodes.size()))),
+                            Component.literal(Integer.toString(graph.nodes.size()))),
                     true);
         } catch (Throwable failure) {
             fail(failure);

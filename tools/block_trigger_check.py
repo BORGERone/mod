@@ -49,7 +49,8 @@ CLIENT = "dev/settledlands/npc/client/BlockTriggerClient351.class"
 TICKER = "dev/settledlands/npc/RadiusPass354.class"
 NPC_RING = "dev/settledlands/mixin/NpcRadiusRingMixin354.class"
 ENTRY = "dev/settledlands/npc/BlockTriggerStore351$Entry.class"
-CHECK_ROW = "dev/settledlands/mixin/NpcRadiusRow354Mixin.class"
+CHECK_ROW = "dev/settledlands/mixin/NpcRadiusRow355Mixin.class"
+DELETE_ROW = "dev/settledlands/mixin/NpcBlockDelete355Mixin.class"
 OPEN_MIXIN = "dev/settledlands/mixin/NpcBlockOpen351Mixin.class"
 GRAPH_MIXIN = "dev/settledlands/mixin/NpcBlockGraph351Mixin.class"
 SAVE_MIXIN = "dev/settledlands/mixin/NpcBlockSave351Mixin.class"
@@ -146,13 +147,13 @@ def main(argv):
     jar = argv[0]
     with zipfile.ZipFile(jar) as z:
         names = set(z.namelist())
-        missing = [n for n in (STORE, ENTRY, LOGIC, EVENTS, CLIENT, TICKER, NPC_RING, CHECK_ROW, OPEN_MIXIN,
-                               GRAPH_MIXIN, SAVE_MIXIN)
+        missing = [n for n in (STORE, ENTRY, LOGIC, EVENTS, CLIENT, TICKER, NPC_RING, CHECK_ROW, DELETE_ROW,
+                               OPEN_MIXIN, GRAPH_MIXIN, SAVE_MIXIN)
                    if n not in names]
         if missing:
             return fail("build 351 is not in this jar: %s" % ", ".join(missing))
-        blobs = {n: z.read(n) for n in (STORE, ENTRY, LOGIC, EVENTS, CLIENT, TICKER, NPC_RING, CHECK_ROW, OPEN_MIXIN,
-                                        GRAPH_MIXIN, SAVE_MIXIN)}
+        blobs = {n: z.read(n) for n in (STORE, ENTRY, LOGIC, EVENTS, CLIENT, TICKER, NPC_RING, CHECK_ROW, DELETE_ROW,
+                                        OPEN_MIXIN, GRAPH_MIXIN, SAVE_MIXIN)}
         config = json.loads(z.read(CONFIG).decode("utf-8"))
         ru = json.loads(z.read(RU).decode("utf-8"))
         en = json.loads(z.read(EN).decode("utf-8"))
@@ -167,7 +168,8 @@ def main(argv):
         if common.index("NpcBlockSave351Mixin") > common.index(SHARED_GRAPH_MIXIN):
             return fail("the block save hook is listed after %s: a block save would be taken as the "
                         "shared graph" % SHARED_GRAPH_MIXIN)
-    for name in ("NpcBlockOpen351Mixin", "NpcBlockGraph351Mixin", "NpcRadiusRow354Mixin"):
+    for name in ("NpcBlockOpen351Mixin", "NpcBlockGraph351Mixin", "NpcRadiusRow355Mixin",
+                 "NpcBlockDelete355Mixin"):
         if name not in client:
             return fail("%s is not a client mixin - the editor would never open" % name)
         if name in common:
@@ -296,15 +298,32 @@ def main(argv):
                     "own answer excludes the \"В радиусе\" node, so the row would miss it")
     if any(r[1] == "isBlockEditorId" for r in row_refs):
         return fail("the visibility row is still limited to a block - a body must get it too")
+    if not any(r[1] == "save" for r in row_refs):
+        return fail("the visibility row does not save on the click - the ring is drawn by the "
+                    "server, so the toggle would look off and stay on")
+
+    # build 355: a block can be cleared with a button, and an empty graph means "no graph"
+    delete_mixin, delete_refs = parse(blobs[DELETE_ROW])
+    for wanted in ("clear", "save", "isBlockEditorId"):
+        if not any(r[1] == wanted for r in delete_refs):
+            return fail("the block delete button does not %s" % wanted)
+    if "entry" not in text(delete_mixin):
+        return fail("the block delete button leaves the start node pointing at a removed node")
+    if "block.deleted" not in text(logic):
+        return fail("the server does not report a cleared block - an empty graph must remove the "
+                    "entry, not keep an empty one")
 
     common, client_list = config.get("mixins", []), config.get("client", [])
     if "NpcRadiusRingMixin354" not in common:
         return fail("the NPC ring hook is not registered as a common mixin - the server would keep "
                     "320's still circle")
-    if "NpcRadiusRow354Mixin" not in client_list or "NpcRadiusRow354Mixin" in common:
+    if "NpcRadiusRow355Mixin" not in client_list or "NpcRadiusRow355Mixin" in common:
         return fail("the visibility row must be a client mixin")
-    if "NpcBlockCheckRow352Mixin" in client_list or "NpcBlockCheckRow352Mixin" in common:
-        return fail("build 352's block-only row is still registered")
+    if "NpcBlockDelete355Mixin" not in client_list or "NpcBlockDelete355Mixin" in common:
+        return fail("the block delete button must be a client mixin")
+    for stale in ("NpcBlockCheckRow352Mixin", "NpcRadiusRow354Mixin"):
+        if stale in client_list or stale in common:
+            return fail("%s is still registered" % stale)
 
     for key in ("gui.settledlands.block.visible", "gui.settledlands.block.visible_on",
                 "gui.settledlands.block.visible_off"):
@@ -314,7 +333,10 @@ def main(argv):
     for path, table in (("ru", ru), ("en", en)):
         for key in LANG_KEYS + ("gui.settledlands.block.visible",
                                 "gui.settledlands.block.visible_on",
-                                "gui.settledlands.block.visible_off"):
+                                "gui.settledlands.block.visible_off",
+                                "gui.settledlands.block.delete",
+                                "gui.settledlands.block.delete_ask",
+                                "message.settledlands.block.deleted"):
             if key not in table:
                 return fail("%s is missing %s" % (path, key))
 
@@ -328,7 +350,8 @@ def main(argv):
 
     print("block_trigger_check: OK  %s  (a block keeps its graph in world data, the palette is the "
           "five nodes it can run, the chain walk is bounded, the picture runs every 2 ticks, the "
-          "radius event every 8, and a body's ring goes through the same pass)" % jar)
+          "radius event every 8, a body's ring goes through the same pass, and both the "
+          "visibility toggle and the delete button reach the server)" % jar)
     return 0
 
 

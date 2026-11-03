@@ -1,0 +1,2 @@
+3ea7f505a48cca2b15657c7278889cec0ce1000f7459c551aff06df9fe5ca318  settledlands-0.8.0-build355-radius-toggle.jar
+4f9bec69261f6a698be82fb02c8cb0c0e20d91173195a2d61d510d2d3f72b339  SettledLands-Build355-RadiusToggle-Source.zip
