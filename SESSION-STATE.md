@@ -32,7 +32,8 @@
 `block_line_check` OK (обновлён: окно первым, чат после него), `block_trigger_check` OK,
 `radius_flag_check` OK, остальные гейты зелёные, `screen_smoke` SKIP (нет `NpcWorkspace306`). Патч `tools/patch_build358.py`, классы из
 `build303-src/out358`. В игре **не подтверждено**.
-Выложено: коммит ниже + push; Drive — см. строку «Выложено» в истории.
+Выложено: коммит `f460cf2` + push; Drive jar `1a74tPHz1h174ecE_axsrHq66-MIkfeDT`,
+zip `1s3YyLAqp4pNxT_M8fBKvGJ5xK9Btnjb4` (папка `0AB-al7DFuWhEUk9PVA`).
 
 **Урок 358:** перед тем как писать обходной путь («тела нет — значит окна нет»), проверить, что
 окну действительно нужно тело. Здесь нужен был только прицел, и он оказался отдельной задачей на
