@@ -9,6 +9,15 @@ package net.minecraft.client;
  * {@code render/AngelWingsLayer}, 1.21 NeoForge).</p>
  */
 public class Minecraft {
+
+    /**
+     * Build 358: the two fields every client path in the jar reads. {@code player} is the body the
+     * aim turns and {@code keyboardHandler} is the clipboard of build 318; both are public on the real
+     * class, and this mirror is the one the build classpath sees first, so it has to carry them.
+     */
+    public KeyboardHandler keyboardHandler;
+    public net.minecraft.client.player.LocalPlayer player;
+
     public static Minecraft getInstance() {
         return null;
     }

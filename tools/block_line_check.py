@@ -2,20 +2,23 @@
 """Gate: a block can say a line ("Реплика") to the player who clicked it.
 
 Build 357 puts the stock «Реплика» node (type 0, the one every NPC graph has) into the palette of a
-block. Three things can go wrong and none of them is visible in a screenshot:
+block; build 358 hands the line to the stock dialogue window (see block_talk_check.py) and keeps the
+chat of 357 as the fallback only. Three things can go wrong and none of them is visible in a
+screenshot:
 
   * the palette offers the row but the server steps over the node - the author writes a line, clicks,
     and nothing is said, without an error anywhere;
   * the row maps to a type the block cannot run, or the palette array and the row map drift apart -
     a row builds a node the walker refuses;
   * the line is sent raw, without the placeholders every other text of the mod understands, or to the
-    wrong audience (a radius event may fire for a body that is not a player).
+    wrong audience (a radius event may fire for a body that is not a player), or the chat fallback is
+    gone so a line with no window possible is dropped.
 
 So this gate asks the shipped jar:
 
-  * the walk has a branch for a line node, and that branch speaks through one helper that fills the
-    stock placeholders ({@code NpcProfile#fill}, relation 0 for a block) and sends the result to one
-    player in the chat;
+  * the walk has a branch for a line node; that branch opens the dialogue window first (build 358) and
+    falls back to one chat helper that fills the stock placeholders ({@code NpcProfile#fill}, relation
+    0 for a block) and sends the result to one player;
   * the palette hook does not carry its own map any more: it asks {@code BlockTrigger351#typeForRow},
     so there is one answer to "what can a block build";
   * the map is read by running it: {@code tools/harness/BlockPaletteProbe.java} is compiled against
@@ -99,8 +102,10 @@ def structural(jar):
             return problems
 
         k, cp, methods, refs = load_class(zf, LOGIC)
-        walk = methods.get("walk(Lnet/minecraft/server/level/ServerPlayer;"
-                           "Ldev/settledlands/npc/NpcDialogueGraph;ILjava/util/Set;)V", "")
+        walk = ""
+        for name, body in methods.items():
+            if name.startswith("walk("):
+                walk = body
         say = ""
         for name, body in methods.items():
             if name.startswith("say("):
@@ -123,10 +128,17 @@ def structural(jar):
         else:
             lines = walk.splitlines()
             call = next(i for i, line in enumerate(lines) if "BlockTrigger351.say(" in line)
-            guard = "\n".join(lines[max(0, call - 8):call])
+            guard = "\n".join(lines[max(0, call - 14):call])
             if "Node.typeI" not in guard or ("ifne" not in guard and "if_icmpne" not in guard):
                 problems.append("say() is not reached through the node type - the walk could speak "
                                 "for a node that is not a line:\n%s" % guard)
+            window = next((i for i, line in enumerate(lines) if "BlockTalk358.say(" in line), -1)
+            if window < 0:
+                problems.append("the line branch never opens the dialogue window - the chat of build "
+                                "357 is back as the only voice")
+            elif window > call:
+                problems.append("the chat is tried before the dialogue window - build 358 wants the "
+                                "window first, the chat only as the fallback")
         if not any(name.startswith("typeForRow(") for name in methods):
             problems.append("BlockTrigger351 has no typeForRow - the palette hook has no map to ask")
         if not any(cp[ni][1] == "PALETTE_ROWS" for _a, ni, _d, _at in k["fields"]):
@@ -194,8 +206,9 @@ def main(argv):
         for line in problems:
             print("  - " + line)
         return 1
-    print("block_line_check: OK  %s  («Реплика» is in the block palette, builds its own node, and is "
-          "said to the clicking player in the chat with the stock placeholders filled)" % jar.name)
+    print("block_line_check: OK  %s  («Реплика» is in the block palette, builds its own node, opens "
+          "the dialogue window, and falls back to the chat with the stock placeholders filled)"
+          % jar.name)
     return 0
 
 

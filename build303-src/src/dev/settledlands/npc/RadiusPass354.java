@@ -301,7 +301,8 @@ public final class RadiusPass354 {
 
             ServerPlayer source = matched instanceof ServerPlayer player ? player
                     : nearestPlayer(level, block, radius + 32.0D, players);
-            BlockTrigger351.fire(source, graph, node);
+            BlockTrigger351.fire(source, graph, node,
+                    new BlockTalk358.Where(level, block.key, block.x, block.y, block.z));
         }
     }
 

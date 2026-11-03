@@ -20,4 +20,12 @@ public class Entity {
     public net.minecraft.world.phys.AABB getBoundingBox() { return null; }
     public final void moveTo(double x, double y, double z) {}
     public void setDeltaMovement(double x, double y, double z) {}
+    /** Build 358: the eye height every aim in the jar uses (GuideDialogueScreen#face). */
+    public double getEyeY() { return 0; }
+    /** Build 358: descriptors read off the game's own GuideDialogueScreen#face bytecode. */
+    public void setYRot(float yRot) {}
+    public void setXRot(float xRot) {}
+    public float yRotO;
+    public float xRotO;
 }
+

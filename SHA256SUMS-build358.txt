@@ -1,0 +1,2 @@
+ecff465bfe1a7a65b74e1a57045a53953c880792d21afc6ff41c8b6702f1454a  settledlands-0.8.0-build358-block-talk.jar
+a3c8c4402d2426c6a8d95046dd23a2eda2ec877dc527474a6927219bdd7ceae4  SettledLands-Build358-BlockTalk-Source.zip

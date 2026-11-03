@@ -7,32 +7,45 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build357-block-line.jar` — **нода «Реплика» у блока**. В палитру блока добавлена
-штатная нода-строка (тип 0, `NpcDialogueGraph.LINE`), поэтому инспектор с полем текста, карточка,
-save/load и буфер обмена — родные. Блок **говорит текст в чат** игроку, который запустил цепочку
-(ПКМ пустой рукой или игрок из радиуса), с подстановкой `NpcProfile.fill(text, player, 0)`
-(`%player%`, `%relation%`=0); цепочка идёт дальше сразу — окна диалога у блока нет. Пустой текст или
-нет игрока → молча идём дальше. Палитра блока теперь шесть нод: **Реплика, Триггер, Условие If,
-Переменная, Случайность, В радиусе**; карта «строка палитры → тип» переехала в
-`BlockTrigger351#typeForRow` (+ `PALETTE_ROWS`), хук `NpcBlockGraph351Mixin` только спрашивает её;
-подпись `gui.settledlands.block.palette` обновлена в обоих языках. **525 записей**, 72 миксин-класса
-(35/36), 477 классов, `verify_jar` PASS (0 новых внешних ссылок против 356, 0 висячих), `jvm_verify` OK,
-новый гейт `block_line_check` OK (палитра = один источник, «Реплика» строится, прочие строки -1, нода
-валидна и текст переживает save→load, реплика уходит через `NpcProfile.fill`, подпись честная),
-`block_trigger_check` OK (обновлён: карта в `typeForRow`, палитра из шести), `radius_flag_check` OK,
-остальные 15 зелёные. Патч `tools/patch_build357.py`, классы из `build303-src/out357`, проба
-`tools/harness/BlockPaletteProbe.java`. В игре **не подтверждено**.
-Выложено: коммит `31b708c` + push; Drive jar `1c73_xoC0h19obIXkFUn36ebHpERGbbua`,
-zip `1RFRtGQG6UufUOFjmH_HsFNUCt6UGg4Yo` (папка `0AB-al7DFuWhEUk9PVA`).
+`settledlands-0.8.0-build358-block-talk.jar` — **«Реплика» блока открывает настоящее окно диалога, и
+камера смотрит на блок**. Решение 357 («окна у блока нет, чат и есть голос») **отменено
+пользователем**: окно — это не тело. `NpcNet.DlgView` несёт id, спикера, строку и стиль, а сущность
+экран ищет только чтобы повернуть камеру (`getEntity(id)`), и этот путь null-safe — поэтому блок
+получает штатное окно под **своим block-id** (`BlockTrigger351.isBlockEditorId`), а прицел делает
+клиент: сервер посылает координаты блока **одним `CfgView` впереди окна** (`BlockTalk358#marker`,
+теги `BlockTalkX/Y/Z`), `NpcBlockOpen351Mixin` отличает разговор от редактора, `BlockTalkClient358#aim`
+считает углы `BlockTalk358#aimAngles` (та же арифметика, что `GuideDialogueScreen#face`) к центру блока
+и ставит и текущий и предыдущий угол. `NpcProfile.blockMouseLook = true` → обзор мышью заблокирован,
+вид стоит на блоке; `blockMovement = true`. Стиль берётся **у самого `GuideDialogue#style`**
+(рефлексией, один раз, фолбэк в чат) — 26 полей `DlgStyle` руками не собираются, урок 342 про
+`@Invoker` учтён. Клик/E/Enter → `DlgPick(id,0)` → `BlockTalkPick358Mixin` на `GuideDialogue#pick`
+закрывает окно (`DlgEnd`) и продолжает цепочку с `node.next` (`BlockTrigger351#resume`); Esc →
+`DlgClose` → `BlockTalkStop358Mixin` на `GuideDialogue#stop` обрывает цепочку. Окно забывается через
+2 минуты (кап 64), чтобы поздний клик не пошёл по брошенной цепочке. Чат 357 остался **только
+фолбэком** (нет игрока, пустой текст, стиль недоступен). `RadiusPass354` передаёт цепочке
+`BlockTalk358.Where` — узел радиуса знает свой блок, прицел работает и там.
+**531 запись**, 74 миксин-класса (37/36), 483 класса, `verify_jar` PASS (0 новых внешних ссылок против
+357, 0 висячих), `jvm_verify` OK, `check_mixin_class` OK (1392 внешние ссылки, 0 новых), новый гейт
+`block_talk_check` OK (пакет прицела до окна, `setYRot/setXRot/yRotO/xRotO`, чистит Esc, клик ведёт на
+ноду после реплики, стиль рефлексией; проба `tools/harness/BlockTalkProbe.java`: `AIM -90.00 26.57 |
+90.00 36.87 | 0.00 -9.46`, `MARKER round=same plain=null`, `NEXT line=ok end=-1 missing=-1 null=-1`),
+`block_line_check` OK (обновлён: окно первым, чат после него), `block_trigger_check` OK,
+`radius_flag_check` OK, остальные гейты зелёные, `screen_smoke` SKIP (нет `NpcWorkspace306`). Патч `tools/patch_build358.py`, классы из
+`build303-src/out358`. В игре **не подтверждено**.
+Выложено: коммит ниже + push; Drive — см. строку «Выложено» в истории.
 
-**Урок 357:** подпись палитры и карта строк — тоже код: их надо обновлять вместе с `PALETTE` и
-проверять прогоном (`BlockPaletteProbe`), иначе редактор обещает ноду, которую обходчик пропускает.
+**Урок 358:** перед тем как писать обходной путь («тела нет — значит окна нет»), проверить, что
+окну действительно нужно тело. Здесь нужен был только прицел, и он оказался отдельной задачей на
+один пакет. И второе: **дескрипторы новых обращений к MC снимать с байткода самого мода** —
+`GuideDialogueScreen#face` дал точные `Player.setYRot(F)V`, `Player.yRotO:F`; поэтому в стубах
+(`Entity`, `Minecraft`) появились именно они, и `check_mixin_class` показал 0 новых внешних ссылок.
 
-**Инфраструктура 357:** в новой песочнице `jdk4py` встал в `dist-packages`, а `clipboard_check`,
-`wire_points_check`, `screen_smoke` были прибиты к `/tmp/venv/...`. Теперь все три падают обратно на
-`jdk4py.JAVA_HOME` (как `radius_flag_check`), гейты снова запускаются. Ставится:
-`pip install jdk4py --break-system-packages`.
+**Инфраструктура 358:** в стубах дописаны `Entity#getEyeY/setYRot/setXRot/yRotO/xRotO` и поля
+`Minecraft#player`/`#keyboardHandler`. Второе — заодно починка: `api5` лежит в classpath первым, а его
+`Minecraft.class` был собран из старого `api5-src` без полей, поэтому сборка «не видела» `player`.
 
+Предыдущая — `settledlands-0.8.0-build357-block-line.jar` — **нода «Реплика» у блока, говорившая в
+чат** (решение отменено в 358: теперь окно диалога + прицел, чат только фолбэк).
 Предыдущая — `settledlands-0.8.0-build356-radius-flag.jar` — **флаг «Видимость радиуса» теперь сохраняется**. Причина
 жалобы «тумблер сразу возвращается на включено» найдена и она не в клике: `NpcDialogueGraph#save`
 пишет ключ `TimerRepeat` **только для ноды таймера** (`type == 8`), а `load` читает его **для любой ноды**

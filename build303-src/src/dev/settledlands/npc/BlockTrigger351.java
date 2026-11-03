@@ -28,10 +28,12 @@ import org.slf4j.LoggerFactory;
  * block graph holds exactly those nodes:</p>
  *
  * <ul>
- *   <li><b>Реплика</b> - build 357: the block says a line to the player who clicked it, in the chat -
- *       the node text with the stock {@code %player%} / {@code %relation%} placeholders filled, and
- *       the chain continues from it at once. There is no body to show a dialogue window for, so the
- *       chat is the block's voice;</li>
+ *   <li><b>Реплика</b> - build 358: the block says its line in the stock dialogue window, with the
+ *       camera turned to the block, and the chain waits until that window is closed - see
+ *       {@link BlockTalk358}. A block has no body, but the window never needed one: it needs an id,
+ *       a line and a style, and the entity is only looked up to aim the camera. Build 357 said the
+ *       line in the chat instead; the chat is now only the fallback for when no window can be shown
+ *       at all;</li>
  *   <li><b>Триггер</b> - runs its action/command with the clicking player as the command source, so
  *       {@code @p} is that player;</li>
  *   <li><b>Условие If</b> - compares a variable (or the variable wired into it) and takes the true or
@@ -222,7 +224,9 @@ public final class BlockTrigger351 {
             if (graph == null) return false;
             int start = graph.entry;
             if (start < 0 || graph.get(start) == null) return false;  // no start node: nothing happens
-            walk(player, graph, start);
+            String key = BlockTriggerStore351.key(level, pos);
+            walk(player, graph, start, new HashSet<>(),
+                    new BlockTalk358.Where(level, key, pos.getX(), pos.getY(), pos.getZ()));
             return true;
         } catch (Throwable failure) {
             fail(failure);
@@ -232,16 +236,18 @@ public final class BlockTrigger351 {
 
     /**
      * Fire one node of a block graph and continue from it - what a "В радиусе" node does when its
-     * radius has somebody in it. Build 352, called from the tick pass.
+     * radius has somebody in it. Build 352, called from the tick pass; build 358 hands it the block
+     * the node lives on, so a line in the chain can open the dialogue window like a click does.
      */
-    public static boolean fire(ServerPlayer source, NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+    public static boolean fire(ServerPlayer source, NpcDialogueGraph graph, NpcDialogueGraph.Node node,
+            BlockTalk358.Where where) {
         if (graph == null || node == null) return false;
         try {
             Set<Integer> visited = new HashSet<>();
             visited.add(node.id);
             act(source, node);
             fireTriggers(source, graph, node, visited);
-            if (node.next >= 0) walk(source, graph, node.next, visited);
+            if (node.next >= 0) walk(source, graph, node.next, visited, where);
             return true;
         } catch (Throwable failure) {
             fail(failure);
@@ -254,19 +260,32 @@ public final class BlockTrigger351 {
      * player as source, a variable moves its points, an If compares and picks a branch, a random node
      * picks one of its ports. Trigger lists attached to a node fire too, like they do for an NPC.
      */
-    private static void walk(ServerPlayer player, NpcDialogueGraph graph, int start) {
-        walk(player, graph, start, new HashSet<>());
+    /**
+     * Build 358: continue a chain the player has just closed the block's window on - the click in the
+     * window is the "next" of that line, exactly like a click in a body's dialogue.
+     */
+    public static void resume(ServerPlayer player, NpcDialogueGraph graph, int start,
+            BlockTalk358.Where where) {
+        if (player == null || graph == null) return;
+        try {
+            walk(player, graph, start, new HashSet<>(), where);
+        } catch (Throwable failure) {
+            fail(failure);
+        }
     }
 
-    private static void walk(ServerPlayer player, NpcDialogueGraph graph, int start, Set<Integer> visited) {
+    private static void walk(ServerPlayer player, NpcDialogueGraph graph, int start,
+            Set<Integer> visited, BlockTalk358.Where where) {
         int curId = start;
         while (curId >= 0 && visited.size() < MAX_STEPS && visited.add(curId)) {
             NpcDialogueGraph.Node cur = graph.get(curId);
             if (cur == null) return;
 
             if (cur.type == NpcDialogueGraph.LINE) {
-                // The block's voice: the line goes to the player in the chat, and the chain walks
-                // on at once - there is no dialogue window to wait for a click in.
+                // The block's voice: the stock dialogue window with the camera on the block, and the
+                // chain waits for that window to be closed (BlockTalk358#pick continues it). The chat
+                // below is only the fallback for when no window can be shown at all.
+                if (BlockTalk358.say(player, graph, cur, where)) return;
                 say(player, cur);
                 act(player, cur);
                 fireTriggers(player, graph, cur, visited);
@@ -336,7 +355,8 @@ public final class BlockTrigger351 {
     }
 
     /**
-     * A "Реплика" node: the text the author wrote, said to one player in the chat.
+     * A "Реплика" node, chat fallback: the text the author wrote, said to one player in the chat. Build
+     * 358 uses it only when the dialogue window cannot be shown (no player, no style, no level).
      *
      * <p>The placeholders are the stock ones - {@code NpcProfile#fill} replaces {@code %player%} with
      * the name and {@code %relation%} with the relation of the talker; a block has no relation of its
