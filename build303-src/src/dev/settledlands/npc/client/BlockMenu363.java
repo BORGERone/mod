@@ -267,11 +267,26 @@ public final class BlockMenu363 {
     public static boolean wheel(NpcGraphContextMenu menu, double scrollY) {
         if (menu == null || !menu.open || menu.targetNodeId >= 0 || !ready) return false;
         if (fits()) return true;
+        scroll(menu, wheelStep(scrollY));
+        return true;
+    }
+
+    /**
+     * The direction one wheel notch moves the window, in rows. This is the <b>stock</b> convention -
+     * the stock screen passes its wheel on as {@code scrollY > 0 ? -1 : +1} - and build 366 had it
+     * the other way round, so the notch scrolled the list against the hand and the scrollbar read as
+     * inverted. Pure and static, so a probe can check the sign without a screen.
+     */
+    public static int wheelStep(double scrollY) {
+        return scrollY > 0.0D ? -1 : scrollY < 0.0D ? 1 : 0;
+    }
+
+    /** Move the window by whole rows, the one place that clamps it. */
+    public static void scroll(NpcGraphContextMenu menu, int step) {
+        if (menu == null || !ready || step == 0) return;
         int max = Math.max(0, count() - visible);
-        int step = scrollY > 0.0D ? 1 : scrollY < 0.0D ? -1 : 0;
         menu.scrollRow = Math.max(0, Math.min(max, menu.scrollRow + step));
         firstRow = menu.scrollRow;
-        return true;
     }
 
     /** True when the point is on the scrollbar of the open panel. */
@@ -291,8 +306,10 @@ public final class BlockMenu363 {
      */
     public static boolean stripClick(NpcGraphContextMenu menu, double mouseY) {
         if (menu == null || !ready) return false;
+        // Above the middle of the strip is "towards the first row", below it "towards the last" -
+        // the same direction as the thumb travels.
         int middle = top + HEADER_H + (height - HEADER_H) / 2;
-        wheel(menu, mouseY < middle ? -1.0D : 1.0D);
+        scroll(menu, mouseY < middle ? -1 : 1);
         return true;
     }
 

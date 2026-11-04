@@ -1,0 +1,1 @@
+86e4f48563340e51c4553aebac7684602df53884bb97961e2aa7863fd49975b1  settledlands-0.8.0-build367-zone-default.jar

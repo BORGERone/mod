@@ -387,6 +387,13 @@ def main(argv):
             return fail("the block panel lost the stock row colours (missing %d) - every row "
                         "would be painted grey" % wanted)
     menu_methods = {menu_cls["cp"][n][1] for _a, n, _d, _at in menu_cls["methods"]}
+    if "wheelStep" not in menu_methods:
+        return fail("the block panel has no wheelStep - the wheel direction would be written inline "
+                    "and could be inverted again (build 366 scrolled against the hand)")
+    if not any(r[1] == "wheelStep" and r[0] and r[0].endswith("client/BlockMenu363")
+               for r in menu_refs):
+        return fail("the panel's wheel does not go through BlockMenu363#wheelStep - the direction of "
+                    "the notch is not the stock one")
     for wanted in ("rowAt", "stripHit", "stripClick", "colour"):
         if wanted not in menu_methods:
             return fail("BlockMenu363 has no %s - the panel could not be clicked below its fifth "
@@ -526,7 +533,8 @@ def main(argv):
           "through the same pass, Время and Таймер fire from that pass, Цель fires in the same pass, "
           "a «Кнопка» waits for its click and a «Катсцена» for its playback, and both the visibility "
           "toggle and the delete button reach the server; the panel is the stock five-row list with "
-          "its scrollbar and its colours, and a click reaches every row)" % jar)
+          "its scrollbar and its colours, a click reaches every row, and the wheel moves it the stock "
+          "way)" % jar)
     return 0
 
 

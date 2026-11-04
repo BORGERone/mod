@@ -12,24 +12,46 @@ particle send, and the two mixin lists (the ring is server side, the row is clie
 Build 361 moved the toggle of the flag from a check box on the canvas to the inspector row, so the
 gate reads the row of build 355 instead of the retired box - and refuses to let the box come back.
 
+Build 367 adds one more rule to this gate: the zone is <b>off</b> when the node is born. The stock
+field behind it defaults to true, so every new «В радиусе» and «Цель» came with a ring already drawn;
+the rule lives in RadiusPass354#hideByDefault and RadiusDefault367Mixin applies it to every node
+NpcDialogueGraph#add creates. The probe below proves it, and that a node saved switched on is not
+erased by the default.
+
     python3 tools/radius_zone_check.py settledlands-0.8.0-build320-radius-zone.jar
 
-Exit 0 = the toggle is present, bounded and connected.
+Exit 0 = the toggle is present, bounded, connected, and off by default.
 """
 import json
 import pathlib
 import struct
+import subprocess
 import sys
+import tempfile
 import zipfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 import disasm
+
+ROOT = pathlib.Path(__file__).resolve().parent.parent
+JAVA = pathlib.Path("/tmp/venv/lib/python3.11/site-packages/jdk4py/java-runtime/bin/java")
+if not JAVA.is_file():
+    import jdk4py
+    JAVA = pathlib.Path(jdk4py.JAVA_HOME) / "bin" / "java"
 
 ZONE = "dev/settledlands/npc/NpcRadiusZone320.class"
 UI = "dev/settledlands/npc/client/NpcRadiusZoneUi320.class"
 MIXIN_SERVER = "dev/settledlands/mixin/NpcRadiusZoneMixin320.class"
 MIXIN_CLIENT = "dev/settledlands/mixin/NpcRadiusZoneUiMixin320.class"
 ROW = "dev/settledlands/mixin/NpcRadiusRow355Mixin.class"
+# build 367: a radius node starts with its zone off
+DEFAULT = "dev/settledlands/mixin/RadiusDefault367Mixin.class"
+PROBE = ROOT / "tools" / "harness" / "RadiusDefault367Probe.java"
+ECJ = ROOT / "tools" / "vendor" / "ecj-3.46.100.jar"
+STUBS = [str(ROOT / "build303-src" / part) for part in
+         ("api", "api5", "api4", "api3", "stubs-out", "api2")]
+EXPECT = {"ZONE": "check=false radius=false timer=true line=true", "SAVED": "check=true",
+          "WHEEL": "up=-1 down=1 none=0"}
 NAMES = {"": "NpcRadiusZoneMixin320", "client": "NpcRadiusZoneUiMixin320"}
 LANG_KEY = "gui.settledlands.graph.radius_zone"
 
@@ -130,6 +152,24 @@ def run(jar):
                 problems.append("the inspector row does not write the saved flag")
             if not any("NpcRadiusRow355Mixin.save" in r for r in row_refs):
                 problems.append("the inspector row does not save the graph on the click")
+        # ---- build 367: the zone starts off ------------------------------------------------
+        if DEFAULT not in names:
+            problems.append("missing %s - a new radius node would draw a ring again" % DEFAULT)
+        else:
+            if "RadiusDefault367Mixin" not in config.get("mixins", []):
+                problems.append("RadiusDefault367Mixin is not in the common mixin list - the server "
+                                "builds the same nodes")
+            default_refs = refs(disasm.parse_class(z.read(DEFAULT)))
+            if not any("RadiusPass354.hideByDefault" in r for r in default_refs):
+                problems.append("the default-off hook does not call RadiusPass354#hideByDefault - the "
+                                "rule would live in two places")
+            if not any("RadiusPass354.hideByDefault" in r for r in default_refs):
+                problems.append("the default-off hook calls nothing on the pass")
+            for marker in (b"add(III)Ldev/settledlands/npc/NpcDialogueGraph$Node;",):
+                if marker not in z.read(DEFAULT):
+                    problems.append("the default-off hook names no descriptor for add - an overload "
+                                    "would be picked at random")
+
         ui_refs = refs(disasm.parse_class(z.read(UI)))
         if any("GuiGraphics.fill" in r for r in ui_refs):
             problems.append("the retired canvas check box is painted again")
@@ -145,6 +185,39 @@ def run(jar):
     return problems
 
 
+def probe(jar):
+    """Run the two rules of build 367: the default, and the wheel direction."""
+    if not PROBE.is_file():
+        return ["the probe %s is missing" % PROBE]
+    with tempfile.TemporaryDirectory() as tmp:
+        tmpdir = pathlib.Path(tmp)
+        compiled = subprocess.run(
+            [str(JAVA), "-jar", str(ECJ), "-21", "-nowarn", "-cp",
+             ":".join([str(jar)] + STUBS), "-d", str(tmpdir), str(PROBE)],
+            capture_output=True, text=True)
+        if compiled.returncode != 0 or not (tmpdir / "RadiusDefault367Probe.class").is_file():
+            return ["the default probe did not compile: %s"
+                    % (compiled.stdout + compiled.stderr).strip()[-400:]]
+        result = subprocess.run(
+            [str(JAVA), "-cp", ":".join([str(tmpdir), str(jar)] + STUBS),
+             "RadiusDefault367Probe"],
+            capture_output=True, text=True)
+        output = (result.stdout + result.stderr).strip()
+        if result.returncode != 0:
+            return ["the default probe crashed:\n%s" % output[-800:]]
+        problems = []
+        got = {}
+        for line in output.splitlines():
+            parts = line.split(None, 1)
+            if len(parts) == 2:
+                got[parts[0]] = parts[1].strip()
+        for key, want in EXPECT.items():
+            if got.get(key) != want:
+                problems.append("the probe says %s = %r, expected %r"
+                                % (key, got.get(key), want))
+        return problems
+
+
 def main(argv):
     if len(argv) != 1:
         print(__doc__)
@@ -153,7 +226,7 @@ def main(argv):
     if not jar.is_file():
         print("radius_zone_check: no such jar %s" % jar)
         return 2
-    problems = run(jar)
+    problems = run(jar) + probe(jar)
     if problems:
         print("radius_zone_check: FAIL  %s" % jar.name)
         for line in problems:

@@ -126,6 +126,19 @@ public final class RadiusPass354 {
         if (node != null) node.timerRepeat = on;
     }
 
+    /**
+     * Build 367: a radius node starts with its zone <b>off</b>. {@code Node#timerRepeat} is a saved
+     * field of the stock node and its own default is {@code true}, so every node that carries a radius
+     * drew a ring the moment it was placed - eleven rows of new nodes in a block graph, and a ring
+     * around each. The author asked for the toggle to start switched off; this is the rule, and
+     * {@code RadiusDefault367Mixin} applies it to every node the graph creates, in an NPC graph and in
+     * a block graph alike. A node that was saved with the flag on keeps it - this is a default, not an
+     * eraser.
+     */
+    public static void hideByDefault(NpcDialogueGraph.Node node) {
+        if (isRadiusNode(node)) node.timerRepeat = false;
+    }
+
     // ---- the tick -----------------------------------------------------------
 
     @SubscribeEvent
