@@ -1023,3 +1023,13 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 Техника: Utf8-запись пула констант можно переписать с новой длиной (`tools/patch_build293.py`), в class-файле
 нет абсолютных смещений, остальные байты не двигаются. Проверка: `python3 - <<'PY'` парсит класс через
 `java.lang.classfile` (JDK 25) — `parsed ok, methods=20`, строка в пуле `cp#181`.
+
+## Drive-ids
+
+**365 (текущая):** jar `1A2IaBOmiDTK8xvWG5t5WobYsi9onAPM7` (**public**), zip
+`1K7hHFVjaHiTQalpSrw8MLzK56mOWkYn_` (**public**) — оба `anyone/reader` + `allow_file_discovery`,
+проверено `list_permissions`. Коммит `d15bd7a` запушен в `arena/5618404a-mod`.
+
+**364:** jar `1NixebxWn-UIo2aOR-QeFNgTby0dsANzn`, zip `1X-IGiIK48wp0IcsyUmIUyt2xuBAwNYkm` (оба public).
+**363:** jar `1qEgOmyOlUT2UGq-sgd2NkHmh0DeC-xA2`, zip `1xN3cHMTJgS0_VPvOmnrSiyfD7L29V5BZ`.
+**362:** jar `13U34J8UT1wSrpEnLBsvdUj7toZ3YSSFu`, zip `19UrXja_ObbPPvMft_1wj0Ap9K7TjwuKv`.
