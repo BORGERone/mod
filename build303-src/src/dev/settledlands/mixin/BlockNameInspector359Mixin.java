@@ -16,6 +16,8 @@ import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Build 359/361: the two properties of a block's «Имя» node, edited the way every other node property
@@ -48,6 +50,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 @Mixin(targets = "dev.settledlands.npc.client.NpcDialogueGraphScreen", remap = false)
 public abstract class BlockNameInspector359Mixin {
 
+    private static final Logger LOG = LoggerFactory.getLogger("SettledLands/BlockName359");
+
     @Shadow private NpcDialogueGraph graph;
 
     @Shadow private int selected;
@@ -71,6 +75,15 @@ public abstract class BlockNameInspector359Mixin {
     @Shadow private List labels;
 
     @Shadow private void label(String key, int x, int y) { throw new AssertionError(); }
+
+    /**
+     * The screen's own way of committing a property: it takes an undo point (throttled to one every
+     * few hundred milliseconds), runs the write, and marks the graph changed - which is what the save
+     * and the dirty flag read. Build 362 shipped the two rows below writing the node directly, so the
+     * colour of a name was picked, shown by the list, and then lost: nothing had told the screen that
+     * anything had changed. Every stock row of every other node goes through this.
+     */
+    @Shadow private void propertyChange(Runnable action) { throw new AssertionError(); }
 
     @Shadow private EditBox textBox(String value, int maxLen, int x, int y, int width, int height,
             Consumer<String> responder) {
@@ -101,7 +114,7 @@ public abstract class BlockNameInspector359Mixin {
             label(BlockName359.FIELD_KEY, x, y);
             y += 11;
             EditBox box = textBox(BlockName359.nameOf(node), BlockName359.MAX_NAME, x, y, width, 18,
-                    value -> BlockName359.setName(node, value));
+                    value -> propertyChange(() -> BlockName359.setName(node, value)));
             if (box != null) box.visible = y >= top && y + box.getHeight() <= bottom;
             y += 22;
 
@@ -112,7 +125,12 @@ public abstract class BlockNameInspector359Mixin {
                     Component.translatable(BlockName359.COLOR_KEYS[1]),
                     Component.translatable(BlockName359.COLOR_KEYS[2]),
                     Component.translatable(BlockName359.COLOR_KEYS[3])),
-                    BlockName359.colorOf(node), index -> BlockName359.setColor(node, index));
+                    BlockName359.colorOf(node), index -> {
+                        // One line in the log per pick: if a colour ever fails again, the log says
+                        // whether the list was reached at all and what it asked to store.
+                        LOG.warn("[settledlands] block name colour: index " + index);
+                        propertyChange(() -> BlockName359.setColor(node, index));
+                    });
             if (picker != null) {
                 // Inherited from Screen, so it is called and not shadowed: Mixin looks a @Shadow up
                 // in the target class itself, and a member inherited from a Minecraft superclass is

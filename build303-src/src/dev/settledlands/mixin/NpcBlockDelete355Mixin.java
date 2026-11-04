@@ -3,6 +3,7 @@ package dev.settledlands.mixin;
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
+import dev.settledlands.npc.client.WidgetPark361;
 import net.minecraft.client.gui.components.Button;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -73,6 +74,10 @@ public abstract class NpcBlockDelete355Mixin {
         Button delete = button(armed ? "gui.settledlands.block.delete_ask"
                 : "gui.settledlands.block.delete", X, Y, WIDTH, HEIGHT, () -> settledlands$delete());
         if (delete == null) return;
+        // Build 362: the tab strip of a block is taken off the screen by the box it is built in, and
+        // this button is built in that very box (x 66, y 10, h 20). Marking it is what keeps the
+        // removal of the strip from removing the block's own button - build 362 shipped without it.
+        WidgetPark361.keep(delete);
         // An empty graph is nothing to delete: the button says so instead of pretending.
         if (graph.nodes.isEmpty() && !armed) {
             delete.active = false;

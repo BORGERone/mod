@@ -102,6 +102,11 @@ public abstract class BlockNoTabs360Mixin {
             // question: the label it shows, and the box the stock strip is laid out in (y 10, height 20,
             // from x 66 - undo and redo are the same box at x 10 and 38).
             boolean byBox = WidgetPark361.isTabStrip(child, TAB_Y, TAB_HEIGHT, TAB_MIN_X);
+            // Build 362 took the block's own «удалить граф» button off the bar with the strip: the
+            // button of build 355 is built in exactly this box (x 66, y 10, h 20) and the box rule,
+            // unlike the label rule, could not tell the two apart. Anything this mod declared with
+            // WidgetPark361#keep - the delete button marks itself when it is built - is skipped.
+            if (WidgetPark361.isKept(child)) continue;
             if (byLabel || byBox) {
                 WidgetPark361.park(screen, child);
                 parked++;

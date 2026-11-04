@@ -35,6 +35,12 @@ So this gate asks the shipped jar:
   * a block's graph has no tabs: the tab buttons the stock widgets() builds are parked out of the
     window for a block id and only for it (hidden and moved, not only flagged - build 360 hid them and
     the game still showed them), so a body's editor keeps its three graphs;
+  * build 363: the name and the colour of the card commit through NpcDialogueGraphScreen#propertyChange.
+    Writing the node directly (what 359-362 did) leaves the graph not marked changed, and a block's
+    editor saves on close only when it is marked - so the colour was picked and thrown away;
+  * build 363: the block's own «delete graph» button of build 355 is marked with WidgetPark361#keep
+    before the strip removal looks at the screen, because that button is built in the strip's box
+    (x 66, y 10, 104x20) and 362 removed it together with the tabs;
   * the arithmetic and the round trip are read by running them: tools/harness/BlockNameProbe.java is
     compiled against this jar and executed.
 
@@ -62,6 +68,7 @@ ECJ = ROOT / "tools" / "vendor" / "ecj-3.46.100.jar"
 PROBE = ROOT / "tools" / "harness" / "BlockNameProbe.java"
 BASE = ROOT / "settledlands-0.8.0-build358-block-talk.jar"
 TABS = "dev/settledlands/mixin/BlockNoTabs360Mixin.class"
+DELETE_BTN = "dev/settledlands/mixin/NpcBlockDelete355Mixin.class"
 PARK = "dev/settledlands/npc/client/WidgetPark361.class"
 STUBS = [str(ROOT / "build303-src" / part) for part in
          ("api", "api5", "api4", "api3", "stubs-out", "api2")]
@@ -127,7 +134,8 @@ def structural(jar):
     problems = []
     with zipfile.ZipFile(jar) as zf:
         names = set(zf.namelist())
-        for needed in (NAME, CARD, DRAW, INSPECT, NO_STATS, NO_AI, ONE, TABS, PARK, TALK, BLOCK):
+        for needed in (NAME, CARD, DRAW, INSPECT, NO_STATS, NO_AI, ONE, TABS, PARK, TALK, BLOCK,
+                       DELETE_BTN):
             if needed not in names:
                 problems.append("the jar has no %s" % needed)
         if problems:
@@ -280,6 +288,18 @@ def structural(jar):
                 ("inspectorWidgets", "the stock widgets of the card are never looked at")):
             if needle not in whole:
                 problems.append("the inspector rows are wrong: %s" % why)
+        # Build 363: a row that writes the node and tells the screen nothing is a row whose change is
+        # thrown away when the window closes - the colour (and the name) of build 362.
+        for needle, why in (
+                ("propertyChange", "a picked colour or a typed name never marks the graph changed - "
+                                   "the change is thrown away on close"),
+                ("BlockName359.setColor", "the colour row writes nothing"),
+                ("BlockName359.setName", "the name row writes nothing")):
+            if needle not in whole:
+                problems.append("the inspector rows are wrong: %s" % why)
+        if whole.count("propertyChange") < 2:
+            problems.append("only one of my two rows commits through propertyChange - both must: "
+                            "the colour and the name are saved the same way")
         if "widgets()V" not in strings(insp_cp):
             problems.append("the inspector hook does not name widgets()")
 
@@ -337,6 +357,9 @@ def structural(jar):
                 ("WidgetPark361.park", "the strip is never taken off the screen")):
             if needle not in strip:
                 problems.append("the tab strip hook is wrong: %s" % why)
+        if "WidgetPark361.isKept" not in strip:
+            problems.append("the tab strip hook does not skip kept widgets - the block's «delete "
+                            "graph» button sits in the strip's box and would be removed with it")
         for key in ("gui.settledlands.graph.tab_main", "gui.settledlands.graph.tab_walk",
                     "gui.settledlands.graph.tab_anim"):
             if key not in strings(tabs_cp):
@@ -365,6 +388,11 @@ def structural(jar):
         tab_button = "(Ljava/lang/String;IIIILjava/lang/Runnable;)Lnet/minecraft/client/gui/components/Button;"
         if not any(ref[1] == "button" and ref[2] == tab_button for ref in tabs_refs):
             problems.append("the tabs hook does not wrap the stock button() that builds the strip")
+        _kd2, del_cp, del_methods, _rd2 = load_class(zf, DELETE_BTN)
+        del_whole = "\n".join(del_methods.values())
+        if "WidgetPark361.keep" not in del_whole:
+            problems.append("the block's «delete graph» button does not mark itself as kept - the strip "
+                            "removal takes it off the bar with the tabs")
         tab_strings = strings(tabs_cp)
         for needle, why in (
                 ("widgets()V", "the tabs hook does not run in widgets(), where the strip is built"),

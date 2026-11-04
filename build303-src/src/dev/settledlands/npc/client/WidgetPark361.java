@@ -25,12 +25,31 @@ public final class WidgetPark361 {
     /** Where a parked widget goes: far above any window, so it is never inside the viewport. */
     public static final int PARK_Y = -20000;
 
+    /**
+     * Widgets this mod put on the bar itself and wants to keep - the «удалить граф» button of build 355
+     * lives in the same box as the stock tab strip, so a rule that takes the strip away by geometry
+     * would take that button with it. Marking is by identity and weak, so a closed screen is collected.
+     */
+    private static final java.util.Set<Object> KEPT =
+            java.util.Collections.newSetFromMap(
+                    java.util.Collections.synchronizedMap(new java.util.WeakHashMap<>()));
+
     /** The list a {@code Screen} renders, and the list it dispatches clicks through. */
     private static final String[] LISTS = {"renderables", "children"};
 
     private static final String[] MOVERS = {"setPosition", "setY", "setHeight"};
 
     private WidgetPark361() {}
+
+    /** Declare a widget this mod owns: {@link #park(Object, Object)} is never applied to it. */
+    public static void keep(Object widget) {
+        if (widget != null) KEPT.add(widget);
+    }
+
+    /** True for a widget that was declared with {@link #keep(Object)} - never parked. */
+    public static boolean isKept(Object widget) {
+        return widget != null && KEPT.contains(widget);
+    }
 
     /**
      * Hide a widget and move it out of the window, without touching the screen. Used where only the
@@ -47,6 +66,7 @@ public final class WidgetPark361 {
      */
     public static void park(Object screen, Object widget) {
         if (widget == null) return;
+        if (isKept(widget)) return;
         if (screen != null) {
             for (String list : LISTS) {
                 settledlands$drop(screen, list, widget);
