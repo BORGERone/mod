@@ -6,35 +6,35 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 /**
- * Build 363: the right-click menu of a block's graph offers only the nodes a block can run.
+ * Build 363/364: the right-click menu of a block's graph carries the rows a block can run, painted as
+ * the stock panel.
  *
- * <p>The stock menu is one panel with sixteen rows, one per node type of the editor. Build 351 made a
- * block's editor <i>refuse</i> the rows it cannot run - the click closed the menu and wrote a line into
- * the status bar - but the rows were still there, so the only way to learn what a block can do was to
- * try every row and read the answers. The author asked for the list itself to be the answer.</p>
+ * <p>Build 366: the panel is the <b>stock panel again</b> - five rows and a scrollbar, not a taller
+ * list. Build 365 grew the panel to eleven rows to fit the new nodes and broke four things at once:
+ * the stock row hit test only knows the five rows of its own window, so every click below the fifth
+ * row was dropped; the panel no longer fitted the screen; there was no scrollbar; and the rows lost
+ * the colour each node type has in the stock menu. The fix is the one the author asked for - take the
+ * existing dropdown list as the model:</p>
  *
- * <p>What a block can run is not decided here: {@link BlockTrigger351#typeForRow(int)} already is that
- * decision, and build 351's palette and the in-game note both come from it. This class asks it once,
- * caches the answer, and the menu becomes those rows in the stock order - <b>Реплика, Триггер, Условие
- * If, Переменная, В радиусе, Случайность</b>. Nothing is added to the map here, so a node type that
- * becomes available later appears in the menu without a second edit.</p>
+ * <ul>
+ *   <li><b>size</b> - the stock height, {@code 20 + 5 x 22 + 4 = 134}, cut to the canvas;</li>
+ *   <li><b>colours</b> - the sixteen colours of the stock painter, one per node type, so a block's
+ *       rows look exactly like the rows of the same nodes in an NPC graph;</li>
+ *   <li><b>scroll</b> - a window of five rows and the dropdown's own arithmetic: the wheel moves
+ *       {@code firstRow} between 0 and {@code count - 5}, and the scrollbar on the right shows where
+ *       the window is and takes a click;</li>
+ *   <li><b>hit test</b> - {@link #rowAt} counts from the window, not from the stock's five-row map, so
+ *       every row of the block can be clicked once it is scrolled into view.</li>
+ * </ul>
  *
- * <p>The panel is drawn by this class because the stock one is a hard-coded switch over sixteen row
- * numbers: there is no list to cut, and a row index cannot be re-pointed from outside. The colours,
- * the header, the row height and the hover fill are the stock ones, so a block's menu looks like the
- * menu of an NPC - it is the same panel with the rows a block cannot use simply absent.</p>
- *
- * <p>One menu is open at a time, so the geometry of the open one is kept in fields: the panel is
- * measured once when the menu appears ({@link #fit}) and painted from those numbers, which keeps the
- * frame path free of lookups. A menu that was never measured is not painted by this class at all -
- * the stock panel is the fallback, so an unforeseen path can cost the filtering, never the menu.</p>
+ * <p>The copy/delete menu of an existing node is not touched: it never reaches this class.</p>
  */
 public final class BlockMenu363 {
 
-    /** The header of the stock create menu, drawn the same way. */
+    /** Header «Создать узел». */
     private static final String HEADER_KEY = "gui.settledlands.graph.create";
 
-    /** One label per stock row, in the order the stock panel draws them. */
+    /** The sixteen stock rows, in the order the stock painter uses. */
     private static final String[] LABEL_KEYS = {
         "gui.settledlands.graph.add_line",
         "gui.settledlands.graph.add_button",
@@ -54,18 +54,47 @@ public final class BlockMenu363 {
         "gui.settledlands.graph.add_radius",
     };
 
-    /** Geometry of the stock panel: header, row, and the two pixels of padding at the bottom. */
+    /**
+     * The colour of each stock row, copied from the painter of the stock menu - the same colour the
+     * node has when it stands in the graph. Build 365 painted every row grey, which is the "no colour
+     * on the buttons" the author saw.
+     */
+    private static final int[] ROW_COLOUR = {
+        -7550482,   // 0 Реплика
+        -1852043,   // 1 Кнопка
+        -2974723,   // 2 Триггер
+        -13058568,  // 3 Условие If
+        -290244,    // 4 Переменная
+        -13315175,  // 5 В радиусе
+        -770210,    // 6 Урон
+        -278748,    // 7 Время
+        -5796870,   // 8 Таймер
+        -1292135,   // 9 Анимация
+        -680437,    // 10 Задание
+        -8286984,   // 11 Передвижение
+        -13773633,  // 12 Подвижность
+        -5745161,   // 13 Случайность
+        -1004548,   // 14 Катсцена
+        -8467457,   // 15 Цель
+    };
+
     private static final int HEADER_H = 20;
     private static final int ROW_H = 22;
     private static final int PAD = 4;
+    /** Rows that fit in the stock panel - the window the stock hit test knows. */
+    private static final int VISIBLE = 5;
+    /** The height of the stock panel, scrollbar included. */
+    private static final int PANEL_H = HEADER_H + VISIBLE * ROW_H + PAD;
 
-    /** Colours of the stock panel, so a block's menu is the same panel with fewer rows. */
     private static final int BODY = -15656669;
     private static final int EDGE = -8415050;
     private static final int HEADER = -5588790;
     private static final int LABEL = -1852043;
     private static final int HOVER_BG = -13351331;
     private static final int HOVER_TEXT = -1;
+    private static final int STRIP_BG = -14800581;
+    private static final int THUMB = -10193781;
+    private static final int THUMB_HOT = -7035976;
 
     /** The stock rows a block may create, computed once from the block's own palette. */
     private static int[] rows;
@@ -77,9 +106,11 @@ public final class BlockMenu363 {
     private static int height;
     private static boolean ready;
 
-    /** Build 365: the rows of the panel that fit, and the first one painted. */
+    /** Build 366: the rows of the window that fit, and the first one painted. */
     private static int visible;
     private static int firstRow;
+    /** The menu this geometry belongs to: a second measurement of the same open menu keeps the window. */
+    private static NpcGraphContextMenu measured;
 
     private BlockMenu363() {}
 
@@ -113,6 +144,12 @@ public final class BlockMenu363 {
         return stock < 0 ? "" : Component.translatable(LABEL_KEYS[stock]).getString();
     }
 
+    /** The stock colour of a row of this panel. */
+    public static int colour(int compact) {
+        int stock = stockRow(compact);
+        return stock >= 0 && stock < ROW_COLOUR.length ? ROW_COLOUR[stock] : LABEL;
+    }
+
     /** True once the open panel has been measured and may be painted. */
     public static boolean ready() {
         return ready;
@@ -122,12 +159,14 @@ public final class BlockMenu363 {
     public static void reset() {
         ready = false;
         height = 0;
+        firstRow = 0;
+        measured = null;
     }
 
     /**
-     * Measure the menu that has just opened for a block: the panel is made as tall as its rows and no
-     * taller than the canvas, the scroll is put back to the first row, and the geometry is kept for
-     * the frame path. A copy/delete menu of an existing node is not touched - that one is stock.
+     * Measure the menu that has just opened for a block. The panel is the stock one - five rows and
+     * the scrollbar, never taller - and the window starts at the first row. A copy/delete menu of an
+     * existing node is not touched: that one is stock.
      */
     public static void fit(NpcGraphContextMenu menu, NpcGraphCanvas canvas) {
         if (menu == null || canvas == null || !menu.open || menu.targetNodeId >= 0) {
@@ -135,11 +174,14 @@ public final class BlockMenu363 {
             return;
         }
         int available = Math.max(HEADER_H + ROW_H, canvas.bottom - canvas.top);
-        int wanted = Math.min(HEADER_H + count() * ROW_H + PAD, available);
+        int wanted = Math.min(PANEL_H, available);
+        boolean same = measured == menu;
         menu.height = wanted;
-        menu.scrollRow = 0;
         visible = Math.max(1, (wanted - HEADER_H) / ROW_H);
-        firstRow = 0;
+        int max = Math.max(0, count() - visible);
+        firstRow = same ? Math.max(0, Math.min(max, firstRow)) : 0;
+        menu.scrollRow = firstRow;
+        measured = menu;
         if (menu.top + wanted > canvas.bottom) {
             menu.top = Math.max(canvas.top, canvas.bottom - wanted);
         }
@@ -157,6 +199,7 @@ public final class BlockMenu363 {
         int y0 = top;
         int x1 = left + width;
         int y1 = top + height;
+        int textRight = x1 - 6 - 4;
         graphics.pose().pushPose();
         graphics.pose().translate(0.0F, 0.0F, 500.0F);
         try {
@@ -167,31 +210,47 @@ public final class BlockMenu363 {
             graphics.fill(x1 - 1, y0, x1, y1, EDGE);
             graphics.drawString(font, Component.translatable(HEADER_KEY).getString(), x0 + 8, y0 + 6,
                     HEADER, false);
-            int first = Math.max(0, firstRow);
             for (int drawn = 0; drawn < visible; drawn++) {
-                int row = first + drawn;
+                int row = firstRow + drawn;
                 if (row >= count()) break;
                 int rowY = y0 + HEADER_H + drawn * ROW_H;
                 if (rowY + ROW_H > y1) break;
                 if (row == hoverRow) {
-                    graphics.fill(x0 + 2, rowY, x1 - 2, rowY + ROW_H, HOVER_BG);
+                    graphics.fill(x0 + 2, rowY, textRight, rowY + ROW_H, HOVER_BG);
+                    graphics.fill(x0 + 2, rowY, x0 + 2, rowY, HOVER_BG);
                 }
-                graphics.drawString(font, label(row), x0 + 8, rowY + 7,
-                        row == hoverRow ? HOVER_TEXT : LABEL, false);
+                String text = clip(font, label(row), textRight - (x0 + 8));
+                graphics.drawString(font, text, x0 + 8, rowY + 7,
+                        row == hoverRow ? HOVER_TEXT : colour(row), false);
             }
+            strip(graphics, hoverRow >= 0);
         } finally {
             graphics.pose().popPose();
         }
     }
 
-    /** How many rows fit in the measured panel - build 365 has more rows than fit. */
+    /** The scrollbar on the right, drawn exactly as the stock menu draws it. */
+    private static void strip(GuiGraphics graphics, boolean hot) {
+        if (count() <= visible) return;
+        int sx = left + width - 6 - 2;
+        int sy = top + HEADER_H + 2;
+        int sh = height - HEADER_H - 4;
+        if (sh <= 0) return;
+        graphics.fill(sx, sy, sx + 6, sy + sh, STRIP_BG);
+        int thumb = Math.max(16, sh * visible / count());
+        int maxRow = Math.max(1, count() - visible);
+        int ty = sy + (sh - thumb) * firstRow / maxRow;
+        graphics.fill(sx, ty, sx + 6, ty + thumb, hot ? THUMB_HOT : THUMB);
+    }
+
+    /** How many rows fit in the measured panel. */
     public static int visible() {
         return visible;
     }
 
-    /** True when every row of the panel fits: nothing to scroll, so the wheel stays cancelled. */
+    /** True when every row fits: nothing to scroll. */
     public static boolean fits() {
-        return ready && visible >= count();
+        return ready && count() <= visible;
     }
 
     /** The first painted row of the open panel. */
@@ -200,11 +259,10 @@ public final class BlockMenu363 {
     }
 
     /**
-     * One wheel notch over an open block panel. Before build 365 six rows always fit and the wheel was
-     * simply cancelled; now the panel may hold eleven, so the notch moves the window and the stock
-     * scroller never sees it - the paint and the cursor stay on the same row.
+     * One wheel notch over an open block panel, the way the stock dropdown scrolls: one row, between
+     * the first and the last window that still shows a row.
      *
-     * @return true when the wheel was used by the panel
+     * @return true when the wheel belongs to the panel
      */
     public static boolean wheel(NpcGraphContextMenu menu, double scrollY) {
         if (menu == null || !menu.open || menu.targetNodeId >= 0 || !ready) return false;
@@ -216,10 +274,57 @@ public final class BlockMenu363 {
         return true;
     }
 
+    /** True when the point is on the scrollbar of the open panel. */
+    public static boolean stripHit(NpcGraphContextMenu menu, double mouseX, double mouseY) {
+        if (menu == null || !menu.open || menu.targetNodeId >= 0 || !ready) return false;
+        if (count() <= visible) return false;
+        int sx = left + width - 6 - 2;
+        return mouseX >= sx && mouseX <= sx + 6 && mouseY >= top + HEADER_H
+                && mouseY <= top + height;
+    }
+
+    /**
+     * A click on the scrollbar: the upper half turns the window back, the lower half forward. One row
+     * per click - the same stride as a wheel notch, so the panel never jumps under the cursor.
+     *
+     * @return true when the click was the scrollbar
+     */
+    public static boolean stripClick(NpcGraphContextMenu menu, double mouseY) {
+        if (menu == null || !ready) return false;
+        int middle = top + HEADER_H + (height - HEADER_H) / 2;
+        wheel(menu, mouseY < middle ? -1.0D : 1.0D);
+        return true;
+    }
+
+    /**
+     * The row of this panel under the cursor, or -1. Counted from the window ({@code firstRow}) and
+     * not from the stock hit test, which only knows the five rows of its own map and answered -1 for
+     * everything below the fifth row - the click bug the author hit in build 365.
+     */
+    public static int rowAt(NpcGraphContextMenu menu, double mouseX, double mouseY) {
+        if (menu == null || !ready) return -1;
+        if (mouseX < left || mouseX > left + width) return -1;
+        if (mouseY < top + HEADER_H || mouseY >= top + height) return -1;
+        if (stripHit(menu, mouseX, mouseY)) return -1;
+        int local = (int) ((mouseY - top - HEADER_H) / ROW_H);
+        if (local < 0 || local >= visible) return -1;
+        int row = firstRow + local;
+        return row < count() ? row : -1;
+    }
+
     /** The row of this panel under the cursor, or -1. */
     public static int hoverRow(NpcGraphContextMenu menu, double mouseX, double mouseY) {
-        if (menu == null || !ready) return -1;
-        int row = menu.rowAt(mouseX, mouseY);
-        return row >= 0 && row < count() ? row : -1;
+        return rowAt(menu, mouseX, mouseY);
+    }
+
+    /** A label cut to the width of the panel, so a long one never runs over the edge. */
+    private static String clip(Font font, String text, int room) {
+        if (text == null) return "";
+        if (room <= 0 || font.width(text) <= room) return text;
+        String cut = text;
+        while (cut.length() > 1 && font.width(cut + "…") > room) {
+            cut = cut.substring(0, cut.length() - 1);
+        }
+        return cut + "…";
     }
 }

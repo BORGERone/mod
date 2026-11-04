@@ -372,6 +372,36 @@ def main(argv):
         return fail("the walk never plays a scene - the «Катсцена» row would build a node that does "
                     "nothing")
 
+    # ---- build 366: the panel is the stock one again -------------------------------------------
+    # 365 made the panel eleven rows tall: the window grew, the scrollbar vanished, the rows lost the
+    # colours of their node types, and every click below the fifth row was dropped because the stock
+    # hit test only knows its own five rows. These checks forbid that panel from coming back.
+    menu_nums = numeric_consts(menu_cls)
+    if 134 not in menu_nums:
+        return fail("the block panel is not the stock height (134) - it is the tall panel of build "
+                    "365 again: it does not fit the screen and has no scrollbar")
+    if 266 in menu_nums:
+        return fail("the block panel still computes the eleven-row height of build 365")
+    for wanted in (-7550482, -8467457):
+        if wanted not in menu_nums:
+            return fail("the block panel lost the stock row colours (missing %d) - every row "
+                        "would be painted grey" % wanted)
+    menu_methods = {menu_cls["cp"][n][1] for _a, n, _d, _at in menu_cls["methods"]}
+    for wanted in ("rowAt", "stripHit", "stripClick", "colour"):
+        if wanted not in menu_methods:
+            return fail("BlockMenu363 has no %s - the panel could not be clicked below its fifth "
+                        "row, or would have no scrollbar" % wanted)
+    graph_mixin_parsed, graph_mixin_refs2 = parse(blobs[GRAPH_MIXIN])
+    if any(r[1] == "rowAt" and r[0] and r[0].endswith("client/NpcGraphContextMenu")
+           for r in graph_mixin_refs2):
+        return fail("the block palette still asks NpcGraphContextMenu#rowAt for the clicked row - "
+                    "that hit test only knows five rows and drops every row below them")
+    for wanted in ("rowAt", "stripHit"):
+        if not any(r[1] == wanted and r[0] and r[0].endswith("client/BlockMenu363")
+                   for r in graph_mixin_refs2):
+            return fail("the block palette click never asks BlockMenu363#%s - the row of the click "
+                        "and the row that is painted could disagree" % wanted)
+
     menu_cls, _menu_refs = parse(blobs[MENU])
     if "wheel" not in {menu_cls["cp"][n][1] for _a, n, _d, _at in menu_cls["methods"]}:
         return fail("the block panel cannot scroll - eleven rows do not fit and the last five could "
@@ -495,7 +525,8 @@ def main(argv):
           "is bounded, the picture runs every 2 ticks, the radius event every 8, a body's ring goes "
           "through the same pass, Время and Таймер fire from that pass, Цель fires in the same pass, "
           "a «Кнопка» waits for its click and a «Катсцена» for its playback, and both the visibility "
-          "toggle and the delete button reach the server)" % jar)
+          "toggle and the delete button reach the server; the panel is the stock five-row list with "
+          "its scrollbar and its colours, and a click reaches every row)" % jar)
     return 0
 
 

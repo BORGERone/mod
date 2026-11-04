@@ -7,31 +7,30 @@
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build365-block-events.jar` — **у графа блока появились Кнопка, Время, Таймер,
-Катсцена и Цель, и все пять работают**. До этого меню блока давало шесть нод (364), а проход по тикам
-умел только «В радиусе».
-* `BlockTrigger351`: `PALETTE_ROWS` 0,1,2,3,4,5,7,8,13,14,15 (11 строк, штатный порядок);
-  `typeForRow` знает 1/7/8/14/15; в `walk` два новых **шага** — «Кнопка» (`BlockTalk358.choices`, ждёт
-  клика) и «Катсцена» (`CutsceneCamera.play` + `RadiusPass354.afterCutscene`, ждёт проигрывания);
-  событийные ноды (Время/Таймер/Цель) — шаг вперёд через `RadiusPass354.isEventNode`.
-* `BlockTalk358`: `choices(player, graph, node, where)` — то же окно, строки = кнопки ноды, в `Open`
-  хранится `List<Integer> targets`; `pick` для такого окна берёт цель кнопки, для реплики — `next`.
-* `RadiusPass354`: `isEventNode` (CHECK/RADIUS/TIME/TIMER), `check` теперь и для RADIUS (тип тела из
-  `radiusTarget`, иначе ANY), `timeEvents` (режим 1..4 → 6000/12000/18000/свои тики, окно 400 тиков,
-  раз в сутки по `level.getDayTime()/24000`), `timerEvents` (интервал сек ×20 тиков, `timerRepeat`
-  заводит заново, иначе `SPENT`), `afterCutscene`/`resumeCutscenes` (опрос `CutsceneCamera.isPlaying`,
-  grace 500 мс, таймаут 300 с), ближайший игрок в 32 блоках, spectator пропускается.
-* `BlockTriggerStore351`: `hasFiringCheck` считает `isEventNode` — блок только с часами тоже тикает.
-* `BlockMenu363`: 11 строк не влезают → `visible`/`firstRow`, `wheel(menu, scrollY)` двигает окно,
-  `fits()`; `BlockMenu363Mixin` отдаёт колесо панели (и гасит его), вместо простой отмены.
-**543 записи**, 495 классов, 38 общих / 42 клиентских миксина, 21 гейт зелёный (`block_line_check`
-переписан под 11 строк: `REFUSED = 6 9 10 11 12`, `EVENTS time/timer/cutscene/target=true`;
-`block_trigger_check` получил раздел 365), `verify_jar --base 364` PASS (**0 новых внешних ссылок**,
-единственная разница — смена сигнатуры `RadiusPass354.findTarget`), `validate_jar` OK.
-sha256 `6462e32acee20357883c2c9569eb4716e0bd7ae5722d4613bda71ef729d89f58`, 3 488 984 B.
-Патч `tools/patch_build365.py` (**база 364**), классы из `build303-src/out365`.
+`settledlands-0.8.0-build366-menu-fix.jar` — **меню ПКМ блока снова штатная панель, и нажимается
+любая строка**. 365 растянул панель под 11 строк (266 px) — и сломал четыре вещи разом.
+* `BlockMenu363` (переписан): панель штатная — `PANEL_H = 20 + 5×22 + 4 = 134`, обрезка по холсту;
+  таблица `ROW_COLOUR` из 16 цветов штатного painter'а (по цвету на тип ноды); полоса прокрутки справа
+  (`STRIP_BG -14800581`, бегунок `-10193781`/`-7035976`, высота `max(16, sh*visible/count)`);
+  окно `firstRow` 0..`count-visible`; `rowAt`/`hoverRow` считают строку **от окна**, `stripHit`/
+  `stripClick` отделяют полосу; `wheel` листает по строке; `fit` запоминает `measured`, поэтому
+  повторный замер той же открытой панели не сбрасывает прокрутку.
+* `NpcBlockGraph351Mixin` (заменён): строка клика — `BlockMenu363.rowAt` (НЕ
+  `NpcGraphContextMenu#rowAt`: тот знает только 5 строк и отдаёт -1 ниже пятой — это и был баг
+  «нажатия ниже переменной не засчитываются»); клик по полосе листает и меню не закрывает.
+**543 записи**, 495 классов, 38 общих / 42 клиентских миксина, 21 гейт зелёный (`block_trigger_check`
+получил раздел 366: 134 обязано быть, 266 запрещено, цвета -7550482/-8467457 обязательны, `rowAt`/
+`stripHit`/`stripClick`/`colour` существуют, обращение к `NpcGraphContextMenu#rowAt` запрещено),
+`verify_jar --base 365` PASS (0 удалённых членов), `validate_jar` OK.
+sha256 `375c7ead80cb000cc8aaee929f9a10ea8fc86f63723f0d1ad34c2d81750192c3`, 3 490 711 B.
+Патч `tools/patch_build366.py` (**база 365**), классы из `build303-src/out366`.
 **В игре не подтверждено.**
-**Доставка 365:** см. блок Drive-ids в конце файла.
+
+## Предыдущая сборка (365, заменена 366)
+
+`settledlands-0.8.0-build365-block-events.jar` — пять новых нод блока (Кнопка, Время, Таймер,
+Катсцена, Цель) и их запуск. Панель меню была 266 px и с дефектами — исправлено в 366.
+**543 записи**, 495 классов, sha256 `6462e32acee20357883c2c9569eb4716e0bd7ae5722d4613bda71ef729d89f58`.
 
 ## Предыдущая сборка (364, заменена 365)
 

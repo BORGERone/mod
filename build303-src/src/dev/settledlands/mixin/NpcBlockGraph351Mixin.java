@@ -26,6 +26,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * answered with a line that says which ones there are, so the palette never lies about what a block
  * can do.</p>
  *
+ * <p>Build 365 added five rows and made the panel eleven rows tall; build 366 puts the panel back to
+ * the stock five rows with a scrollbar and takes the row of a click from the panel's own window, so
+ * every row of a block can be clicked once it is scrolled into view.</p>
+ *
  * <p>Build 357 adds the first of them: a block says a line to the player in the chat, which is why
  * "Реплика" is no longer a row a block has to refuse. The text box of the stock inspector already
  * edits {@code Node#text}, so the node is written without a single new widget.</p>
@@ -67,7 +71,18 @@ public abstract class NpcBlockGraph351Mixin {
         if (this.contextMenu.targetNodeId >= 0) return;   // copy / delete of a node: stock behaviour
         if (!this.contextMenu.contains(x, y)) return;
 
-        int row = this.contextMenu.rowAt(x, y);
+        // Build 366: the scrollbar of the panel is not a row - a click on it moves the window and
+        // leaves the menu open, exactly like the stock strip.
+        if (BlockMenu363.stripHit(this.contextMenu, x, y)) {
+            BlockMenu363.stripClick(this.contextMenu, y);
+            cir.setReturnValue(Boolean.TRUE);
+            return;
+        }
+
+        // Build 366: the row is counted from the window BlockMenu363 painted. The stock hit test
+        // knows only the five rows of its own map and answers -1 below the fifth row, which is why
+        // the rows of build 365 could be seen but not clicked.
+        int row = BlockMenu363.rowAt(this.contextMenu, x, y);
         double worldX = this.contextMenu.worldX;
         double worldY = this.contextMenu.worldY;
         int wireFrom = this.contextMenu.pendingWireFrom;

@@ -1,0 +1,2 @@
+375c7ead80cb000cc8aaee929f9a10ea8fc86f63723f0d1ad34c2d81750192c3  settledlands-0.8.0-build366-menu-fix.jar
+50b8657ffb5a75906109a089ad7b6f485db60ca99eea7234b252d2e795870520  SettledLands-Build366-MenuFix-Source.zip
