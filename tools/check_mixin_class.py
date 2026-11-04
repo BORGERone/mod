@@ -647,6 +647,29 @@ def external_refs(classes):
 #   reading the wrapping constructor, and the client died with NoSuchMethodError on the first frame. A new
 #   external member is confirmed only when the evidence shows the exact shape, not the name.
 CONFIRMED_EXTERNAL = {
+    # ---------------------------------------------------------------------------------------
+    # Build 368, doors. These four are the first game calls this mod makes that no earlier
+    # build of the jar already made, so the rule "backed by code that already runs in game"
+    # cannot be satisfied by the base jar - there was nothing in it that touched a block
+    # state. They are confirmed against the published mappings instead (Yarn javadoc for
+    # 1.20, 23w07a, 23w43a: DoorBlock.OPEN is `public static final BooleanProperty OPEN`,
+    # BlockState.getValue/setValue are the generic accessors, Level.setBlock is the write
+    # vanilla's own door uses), not against a game jar in this workspace: no Minecraft jar
+    # is available here. If build 368 dies on a door with NoSuchMethodError or
+    # NoSuchFieldError, the answer is here and the fix is one line, not a redesign.
+    ("net/minecraft/world/level/block/state/BlockState", "getValue",
+     "(Lnet/minecraft/world/level/block/state/properties/Property;)Ljava/lang/Comparable;"):
+        "Build 368 doors: read the OPEN property of a door (Yarn: BlockState#get(Property))",
+    ("net/minecraft/world/level/block/state/BlockState", "setValue",
+     "(Lnet/minecraft/world/level/block/state/properties/Property;Ljava/lang/Comparable;)"
+     "Lnet/minecraft/world/level/block/state/BlockState;"):
+        "Build 368 doors: write the OPEN property of a door (Yarn: BlockState#with(Property, value))",
+    ("net/minecraft/world/level/Level", "setBlock",
+     "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z"):
+        "Build 368 doors: put the changed state back in the world, flag 10 (Yarn: World#setBlockState)",
+    ("net/minecraft/world/level/block/DoorBlock", "OPEN",
+     "Lnet/minecraft/world/level/block/state/properties/BooleanProperty;"):
+        "Build 368 doors: the OPEN property DoorBlock declares (public in the 1.20+ mappings)",
     ("net/minecraft/client/Minecraft", "keyboardHandler",
      "Lnet/minecraft/client/KeyboardHandler;"):
         "Build 318 clipboard: public field on Minecraft, the client keyboard handler",

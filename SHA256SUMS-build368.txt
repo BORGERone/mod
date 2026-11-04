@@ -1,0 +1,2 @@
+c45254f93b988af0f6e9373f6188c7e19ededcfa3f676d8469bede643de3705e  settledlands-0.8.0-build368-door-lock.jar
+4f2818bdd98e6e3a0448359a4352d0298bc4325c05c0296db11bb35c1fb2b5c5  SettledLands-Build368-DoorLock-Source.zip

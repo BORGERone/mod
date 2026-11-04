@@ -13,4 +13,12 @@ public @interface EventBusSubscriber {
     Dist[] value() default {Dist.CLIENT};
 
     String modid() default "";
+
+    /** Build 368: the item is registered on the mod bus, exactly as the mob effect already is. */
+    Bus bus() default Bus.GAME;
+
+    enum Bus {
+        GAME,
+        MOD
+    }
 }
