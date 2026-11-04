@@ -25,4 +25,11 @@ public class Level {
     public boolean destroyBlock(BlockPos pos, boolean dropBlock) { return true; }
 
     public boolean isEmptyBlock(BlockPos pos) { return true; }
+
+    /**
+     * Build 371: push the authoritative state of one block to the clients that track it. A client opens
+     * a door the instant it is clicked and asks the server afterwards; a locked door has to be put back
+     * in the client's hands at once, or the door stays open in that picture for as long as it takes.
+     */
+    public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {}
 }

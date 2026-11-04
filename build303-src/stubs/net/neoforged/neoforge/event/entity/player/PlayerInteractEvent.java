@@ -19,6 +19,11 @@ public class PlayerInteractEvent {
     public void setCanceled(boolean canceled) {}
     public void setCancellationResult(InteractionResult result) {}
 
+    /** Build 371: the explicit answer for "may the block be used" and "may the item be used". */
+    public void setUseBlock(net.neoforged.bus.api.Event.Result result) {}
+
+    public void setUseItem(net.neoforged.bus.api.Event.Result result) {}
+
     /** Right click on a block: adds the hit position. */
     public static class RightClickBlock extends PlayerInteractEvent {
         public BlockPos getPos() { return null; }

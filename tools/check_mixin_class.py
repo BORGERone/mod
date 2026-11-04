@@ -667,6 +667,37 @@ CONFIRMED_EXTERNAL = {
     ("net/minecraft/world/level/Level", "setBlock",
      "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z"):
         "Build 368 doors: put the changed state back in the world, flag 10 (Yarn: World#setBlockState)",
+    # ---------------------------------------------------------------------------------------
+    # Build 371, doors that stay shut. Same situation as the four above - nothing in the base jar
+    # ever refused a block use - confirmed against the published NeoForge 1.21.1 API
+    # (PlayerInteractEvent#setUseBlock/setUseItem take Event.Result; Event.Result has DENY;
+    # Level#sendBlockUpdated(BlockPos, BlockState, BlockState, int) is the documented way to push a
+    # block to the clients), not against a running game. All four are touched only when a player
+    # clicks a locked door, so a mistake here cannot stop the game from starting.
+    ("net/neoforged/neoforge/event/entity/player/PlayerInteractEvent", "setUseBlock",
+     "(Lnet/neoforged/bus/api/Event$Result;)V"):
+        "Build 371 doors: the flag the game actually reads to refuse a block use",
+    ("net/neoforged/neoforge/event/entity/player/PlayerInteractEvent", "setUseItem",
+     "(Lnet/neoforged/bus/api/Event$Result;)V"):
+        "Build 371 doors: and the one it reads to refuse the item use",
+    ("net/neoforged/neoforge/event/entity/player/PlayerInteractEvent$RightClickBlock", "setUseBlock",
+     "(Lnet/neoforged/bus/api/Event$Result;)V"):
+        "Build 371 doors: the same two flags, called through the subclass the mod actually handles "
+        "(the method is declared on the parent event and resolves there)",
+    ("net/neoforged/neoforge/event/entity/player/PlayerInteractEvent$RightClickBlock", "setUseItem",
+     "(Lnet/neoforged/bus/api/Event$Result;)V"):
+        "Build 371 doors: and the item flag, same call shape",
+    ("net/minecraft/server/level/ServerLevel", "sendBlockUpdated",
+     "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;"
+     "Lnet/minecraft/world/level/block/state/BlockState;I)V"):
+        "Build 371 doors: the level the mod holds is a ServerLevel, and that is the override which "
+        "sends the packet",
+    ("net/neoforged/bus/api/Event$Result", "DENY", "Lnet/neoforged/bus/api/Event$Result;"):
+        "Build 371 doors: the deny answer itself",
+    ("net/minecraft/world/level/Level", "sendBlockUpdated",
+     "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;"
+     "Lnet/minecraft/world/level/block/state/BlockState;I)V"):
+        "Build 371 doors: push the closed state back to a client that guessed the door open",
     ("net/minecraft/world/level/block/DoorBlock", "OPEN",
      "Lnet/minecraft/world/level/block/state/properties/BooleanProperty;"):
         "Build 368 doors: the OPEN property DoorBlock declares (public in the 1.20+ mappings)",

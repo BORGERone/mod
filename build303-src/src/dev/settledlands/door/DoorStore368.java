@@ -131,4 +131,45 @@ public final class DoorStore368 extends SavedData {
     public int size() {
         return locked.size();
     }
+
+    /**
+     * Build 371: the locks as they stand, as a copy.
+     *
+     * <p>{@link DoorGuard371} walks this list a slice at a time to put a locked door back the way it
+     * must be if anything at all manages to open it. A copy, because the guard must never be able to
+     * trip over a click that unlocks a door in the middle of its walk.</p>
+     */
+    public java.util.Set<String> snapshot() {
+        return new java.util.HashSet<>(locked);
+    }
+
+    /** The dimension part of a key, {@code minecraft:overworld} in {@code minecraft:overworld@1,2,3}. */
+    public static String dimensionOf(String key) {
+        if (key == null) return "";
+        int at = key.indexOf('@');
+        return at < 0 ? "" : key.substring(0, at);
+    }
+
+    /** The same name {@link #key(ServerLevel, BlockPos)} writes, so the two can be compared. */
+    public static String dimensionOf(ServerLevel level) {
+        if (level == null || level.dimension() == null || level.dimension().location() == null) {
+            return "?";
+        }
+        return String.valueOf(level.dimension().location());
+    }
+
+    /** The position part of a key, or null when the key is not one of ours. */
+    public static BlockPos positionOf(String key) {
+        if (key == null) return null;
+        int at = key.indexOf('@');
+        if (at < 0) return null;
+        String[] parts = key.substring(at + 1).split(",");
+        if (parts.length != 3) return null;
+        try {
+            return new BlockPos(Integer.parseInt(parts[0].trim()), Integer.parseInt(parts[1].trim()),
+                    Integer.parseInt(parts[2].trim()));
+        } catch (NumberFormatException notANumber) {
+            return null;
+        }
+    }
 }

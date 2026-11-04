@@ -1,0 +1,2 @@
+47c49098c251bb5c8ddf3b55075c1b511eae2df49f5ea1cc4153eb5e64154709  settledlands-0.8.0-build371-door-shut.jar
+4846ee06a8243b6d075920ac4ca9bd5bef1acf36bf6119383b843a306a4d1f31  SettledLands-Build371-DoorShut-Source.zip

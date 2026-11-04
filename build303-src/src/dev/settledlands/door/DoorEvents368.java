@@ -6,6 +6,8 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.state.BlockState;
+import net.neoforged.bus.api.Event;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
@@ -59,11 +61,13 @@ public final class DoorEvents368 {
                 if (!locked) return;
                 // A locked door is not a door for a player: no opening, no closing, no sound of a
                 // door that would only teach the player to try again.
-                event.setCanceled(true);
+                deny(event);
+                shut(server, pos);
                 say(event.getEntity());
                 return;
             }
-            event.setCanceled(true);
+            deny(event);
+            shut(server, pos);
             boolean nowLocked;
             if (locked) {
                 store.unlock(server, pos);
@@ -91,6 +95,39 @@ public final class DoorEvents368 {
             if (event.getPlayer() instanceof ServerPlayer player) say(player);
         } catch (Throwable failure) {
             LOG.warn("a door break could not be handled", failure);
+        }
+    }
+
+    /**
+     * Refuses the click at its source.
+     *
+     * <p>Build 371: cancelling alone was not enough. A right click on a door is carried out by the
+     * block's own use, and the yes/no the game actually reads is {@code useBlock} / {@code useItem} -
+     * so both are denied explicitly, and the cancellation stays for every listener that never looks at
+     * those two fields.</p>
+     */
+    private static void deny(PlayerInteractEvent.RightClickBlock event) {
+        event.setCanceled(true);
+        event.setUseBlock(Event.Result.DENY);
+        event.setUseItem(Event.Result.DENY);
+    }
+
+    /**
+     * Puts the door back the way it must be, and tells the clients.
+     *
+     * <p>Build 371: this is what "the door opens for a second" was. The client opens a door the moment
+     * it is clicked and only then asks the server; when the server refuses, nothing had changed on the
+     * server, so nothing was sent back - and the client kept its open door in front of the player for
+     * as long as it took. Closing the door here and pushing the state out costs two calls and ends the
+     * picture: whatever the client guessed, the answer arrives in the same tick.</p>
+     */
+    private static void shut(ServerLevel server, BlockPos pos) {
+        if (Doors368.anyOpen(server, pos)) {
+            Doors368.setOpen(server, pos, false);
+        }
+        BlockState state = server.getBlockState(pos);
+        if (state != null) {
+            server.sendBlockUpdated(pos, state, state, 3);
         }
     }
 

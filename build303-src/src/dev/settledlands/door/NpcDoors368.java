@@ -179,6 +179,19 @@ public final class NpcDoors368 {
         return false;
     }
 
+    /**
+     * Build 371: did a guide open this very door? The guard asks, so a locked door a guide is walking
+     * through is not slammed in its face a tick later.
+     */
+    public static boolean guideOpened(net.minecraft.world.level.Level level, BlockPos pos) {
+        if (level == null || pos == null) return false;
+        for (int i = 0; i < OPENED.size(); i++) {
+            Open open = OPENED.get(i);
+            if (open.level == level && open.pos != null && open.pos.equals(pos)) return true;
+        }
+        return false;
+    }
+
     /** How many doors a guide has open right now - a probe, not a rule. */
     public static int openDoors() {
         return OPENED.size();

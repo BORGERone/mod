@@ -1,4 +1,5 @@
 import dev.settledlands.door.DoorKey368;
+import net.minecraft.core.BlockPos;
 import dev.settledlands.door.Doors368;
 import dev.settledlands.door.DoorStore368;
 import java.util.LinkedHashSet;
@@ -30,5 +31,12 @@ public final class DoorLock368Probe {
                 + " parts=" + Doors368.parts(null, null).size());
 
         System.out.println("KEY isKey=" + DoorKey368.isKey(null));
+
+        BlockPos pos = DoorStore368.positionOf("minecraft:overworld@12,64,-30");
+        System.out.println("PARSE dim=" + DoorStore368.dimensionOf("minecraft:overworld@12,64,-30")
+                + " x=" + (pos == null ? "-" : pos.getX())
+                + " y=" + (pos == null ? "-" : pos.getY())
+                + " z=" + (pos == null ? "-" : pos.getZ())
+                + " junk=" + (DoorStore368.positionOf("nonsense") == null));
     }
 }

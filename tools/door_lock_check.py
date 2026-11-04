@@ -58,7 +58,8 @@ LANG = ("item.settledlands.door_key", "message.settledlands.door.locked",
         "message.settledlands.door.key_on", "message.settledlands.door.key_off")
 EXPECT = {"FORMAT": "keys=2 round=2 has=true empty=0",
           "DOOR": "isDoor=false isOpen=false parts=0",
-          "KEY": "isKey=false"}
+          "KEY": "isKey=false",
+          "PARSE": "dim=minecraft:overworld x=12 y=64 z=-30 junk=true"}
 
 
 def parse(data):
@@ -114,6 +115,15 @@ def structural(jar):
         if not any(r[1] == "isLocked" and r[0] and r[0].endswith("door/DoorStore368")
                    for r in event_refs):
             problems.append("the rules never ask the store whether the place is locked")
+        # Build 371: cancelling the event is not the answer the game reads - the two use flags are.
+        if not any(r[1] == "setUseBlock" for r in event_refs):
+            problems.append("a locked door is only cancelled, not denied - build 371: the game reads "
+                            "useBlock/useItem, and the door opens anyway")
+        if not any(r[1] == "DENY" for r in event_refs):
+            problems.append("nothing denies the use of a locked door (Event.Result.DENY)")
+        if not any(r[1] == "sendBlockUpdated" for r in event_refs):
+            problems.append("the client is never told the door is still closed - that is the door "
+                            "that 'opens for a second'")
 
         pass_cls, pass_refs = parse(z.read(PASS))
         if not any(r[1] == "setOpen" and r[0] and r[0].endswith("door/Doors368") for r in pass_refs):
@@ -177,6 +187,16 @@ def structural(jar):
         if not tab_found:
             problems.append("no class adds the key to the mod's creative tab - the item would exist "
                             "but never be visible (settledlands:guide)")
+
+        # Build 371: the lock is a fact of the world, not one event's opinion.
+        guard = "dev/settledlands/door/DoorGuard371.class"
+        if guard not in names:
+            problems.append("no guard pass: a locked door that something else opened would stay open")
+        else:
+            guard_cls, guard_refs = parse(z.read(guard))
+            if not any(r[1] == "setOpen" and r[0] and r[0].endswith("door/Doors368")
+                       for r in guard_refs):
+                problems.append("the guard never closes a door")
 
         model = json.loads(z.read(MODEL).decode("utf-8"))
         if model.get("textures", {}).get("layer0") != "settledlands:item/door_key":
