@@ -28,6 +28,12 @@ x>=66; undo/redo — та же коробка при x=10/38). В лог пиш�
 `WidgetPark361.children/label/park`, а `park` — трогать `renderables` и `children`),
 `verify_jar --base 361` PASS, `validate_jar` OK. Патч `tools/patch_build362.py` (**база 361**), классы
 из `build303-src/out362`. В игре **не подтверждено**.
+**Доставка 362 (Drive снова включён 2026-11-04):** jar `13U34J8UT1wSrpEnLBsvdUj7toZ3YSSFu`, zip
+`19UrXja_ObbPPvMft_1wj0Ap9K7TjwuKv`, оба `make_public(reader, allow_file_discovery=true)` +
+`list_permissions` = `anyone/reader`. Форма отчёта закреплена в `AI-GUIDE-SettledLands.md` §10: краткое
+описание сверху → детали → **одна голая ссылка на прямое скачивание последней строкой, после неё ничего**.
+Репозиторий `BORGERone/mod` публичный, поэтому резервный прямой путь —
+`https://github.com/BORGERone/mod/raw/<sha>/<файл>`.
 **Урок 362:** прежде чем отменять чужой метод, посмотри, кто его вызывает и что он передаёт дальше —
 `mouseClicked` экрана был тонкой делегацией в цепочку UI-классов, и отмена «одной карточки» выключила
 весь холст. И второе: «спрятать» ≠ «убрать» — если виджет не подчиняется дважды, его надо вынимать из
