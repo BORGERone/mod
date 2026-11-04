@@ -7,7 +7,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
-import net.neoforged.bus.api.Event;
+import net.minecraft.world.InteractionResult;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
@@ -128,8 +128,16 @@ public final class DoorEvents368 {
      */
     private static void deny(PlayerInteractEvent.RightClickBlock event) {
         event.setCanceled(true);
-        event.setUseBlock(Event.Result.DENY);
-        event.setUseItem(Event.Result.DENY);
+        // Build 373: this is the answer NeoForge 1.21.1 actually reads - the same call the base mod
+        // already makes elsewhere. 371 used setUseBlock/setUseItem, which do not exist on this event:
+        // the call threw, the listener died before it could refuse anything, and the door opened
+        // exactly as before. Nothing in this method may run after a call that can fail, which is why
+        // the result is set in its own small guard.
+        try {
+            event.setCancellationResult(InteractionResult.FAIL);
+        } catch (Throwable missing) {
+            LOG.warn("the door could not be refused through the event: " + missing);
+        }
     }
 
     /**

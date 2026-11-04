@@ -674,19 +674,12 @@ CONFIRMED_EXTERNAL = {
     # Level#sendBlockUpdated(BlockPos, BlockState, BlockState, int) is the documented way to push a
     # block to the clients), not against a running game. All four are touched only when a player
     # clicks a locked door, so a mistake here cannot stop the game from starting.
-    ("net/neoforged/neoforge/event/entity/player/PlayerInteractEvent", "setUseBlock",
-     "(Lnet/neoforged/bus/api/Event$Result;)V"):
-        "Build 371 doors: the flag the game actually reads to refuse a block use",
-    ("net/neoforged/neoforge/event/entity/player/PlayerInteractEvent", "setUseItem",
-     "(Lnet/neoforged/bus/api/Event$Result;)V"):
-        "Build 371 doors: and the one it reads to refuse the item use",
-    ("net/neoforged/neoforge/event/entity/player/PlayerInteractEvent$RightClickBlock", "setUseBlock",
-     "(Lnet/neoforged/bus/api/Event$Result;)V"):
-        "Build 371 doors: the same two flags, called through the subclass the mod actually handles "
-        "(the method is declared on the parent event and resolves there)",
-    ("net/neoforged/neoforge/event/entity/player/PlayerInteractEvent$RightClickBlock", "setUseItem",
-     "(Lnet/neoforged/bus/api/Event$Result;)V"):
-        "Build 371 doors: and the item flag, same call shape",
+    # Build 373 removed the build-371 entries for setUseBlock/setUseItem: those methods do not exist
+    # on PlayerInteractEvent in NeoForge 1.21.1. The wall was not the entry, the entry was the wall -
+    # an allowlist that let a non-existent API through is worse than no allowlist.
+    ("net/minecraft/world/InteractionResult", "FAIL", "Lnet/minecraft/world/InteractionResult;"):
+        "Build 373 doors: 'this interaction did nothing' - the same class the base jar already uses "
+        "for SUCCESS and PASS (NeoForge 1.21.1 javadoc), and the answer the refusal returns",
     ("net/minecraft/server/level/ServerLevel", "sendBlockUpdated",
      "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;"
      "Lnet/minecraft/world/level/block/state/BlockState;I)V"):

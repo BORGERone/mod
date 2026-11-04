@@ -115,12 +115,26 @@ def structural(jar):
         if not any(r[1] == "isLocked" and r[0] and r[0].endswith("door/DoorStore368")
                    for r in event_refs):
             problems.append("the rules never ask the store whether the place is locked")
-        # Build 371: cancelling the event is not the answer the game reads - the two use flags are.
-        if not any(r[1] == "setUseBlock" for r in event_refs):
-            problems.append("a locked door is only cancelled, not denied - build 371: the game reads "
-                            "useBlock/useItem, and the door opens anyway")
-        if not any(r[1] == "DENY" for r in event_refs):
-            problems.append("nothing denies the use of a locked door (Event.Result.DENY)")
+        # Build 373: setUseBlock/setUseItem do NOT exist on PlayerInteractEvent in NeoForge 1.21.1.
+        # Build 371 called them, threw NoSuchMethodError on the click, refused nothing, and the door
+        # opened for a tick on every click - long enough to lean on it and walk through. The gate now
+        # forbids those two names outright, so the mistake cannot come back by accident.
+        for name in names:
+            if not name.startswith("dev/settledlands/"):
+                continue
+            data = z.read(name)
+            for banned in (b"setUseBlock", b"setUseItem"):
+                if banned in data:
+                    problems.append("%s calls %s, which PlayerInteractEvent does not have in 1.21.1 - "
+                                    "that is build 371's silent refusal"
+                                    % (name, banned.decode()))
+                    break
+        if not any(r[1] == "setCancellationResult" for r in event_refs):
+            problems.append("a refused door click never says what it means - setCancellationResult("
+                            "InteractionResult.FAIL) is the answer the game reads")
+        if not any(r[1] == "FAIL" and r[0] and r[0].endswith("world/InteractionResult")
+                   for r in event_refs):
+            problems.append("the refused interaction result is not InteractionResult.FAIL")
         if not any(r[1] == "sendBlockUpdated" for r in event_refs):
             problems.append("the client is never told the door is still closed - that is the door "
                             "that 'opens for a second'")
@@ -189,6 +203,22 @@ def structural(jar):
                             "but never be visible (settledlands:guide)")
 
         # Build 371: the lock is a fact of the world, not one event's opinion.
+        # Build 373: the refusal has to sit where the door is opened, not only on the event.
+        door_use = "dev/settledlands/mixin/DoorUse373Mixin.class"
+        if door_use not in names:
+            problems.append("no DoorBlock guard: a locked door would open for a tick on every click, "
+                            "which is exactly what the author can walk through")
+        else:
+            data = z.read(door_use)
+            if b"useWithoutItem(BlockState;Level;BlockPos;Player;BlockHitResult;)" not in data \
+                    and b"useWithoutItem(Lnet/minecraft/world/level/block/state/BlockState;" not in data:
+                problems.append("the DoorBlock guard does not bind to useWithoutItem")
+            if b"require" not in data:
+                problems.append("the DoorBlock guard is required - a signature this game lacks would "
+                                "stop the launch (build 368)")
+            if "DoorUse373Mixin" not in common:
+                problems.append("DoorUse373Mixin is not in the common mixin list")
+
         guard = "dev/settledlands/door/DoorGuard371.class"
         if guard not in names:
             problems.append("no guard pass: a locked door that something else opened would stay open")

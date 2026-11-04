@@ -19,10 +19,8 @@ public class PlayerInteractEvent {
     public void setCanceled(boolean canceled) {}
     public void setCancellationResult(InteractionResult result) {}
 
-    /** Build 371: the explicit answer for "may the block be used" and "may the item be used". */
-    public void setUseBlock(net.neoforged.bus.api.Event.Result result) {}
-
-    public void setUseItem(net.neoforged.bus.api.Event.Result result) {}
+    // Build 373 removed setUseBlock/setUseItem from this mirror: NeoForge 1.21.1 does not have them.
+    // 371 called them, threw NoSuchMethodError at the click, and quietly refused nothing.
 
     /** Right click on a block: adds the hit position. */
     public static class RightClickBlock extends PlayerInteractEvent {

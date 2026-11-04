@@ -1,0 +1,2 @@
+c68e256891609b458dfb6017ad1a512900cf5fb2357724456d1b74c712e61a66  settledlands-0.8.0-build373-door-refuse.jar
+980fb3df03b341d7806446976c73c4abacf85704af2b892486737f1bd3cd7963  SettledLands-Build373-DoorRefuse-Source.zip
