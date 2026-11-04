@@ -22,6 +22,9 @@
 добавлена проверка меню, включая существование трёх целевых методов экрана), `verify_jar --base 363` PASS,
 `validate_jar` OK. Патч `tools/patch_build364.py` (**база 363**), классы из `build303-src/out364`.
 В игре **не подтверждено**.
+**Доставка 364:** jar `1NixebxWn-UIo2aOR-QeFNgTby0dsANzn`, zip `1X-IGiIK48wp0IcsyUmIUyt2xuBAwNYkm`,
+оба `make_public(reader, allow_file_discovery=true)` + `list_permissions` = `anyone/reader`; коммит
+`cdfba3c` запушен в `arena/5618404a-mod`.
 **Геометрия меню (для следующих сборок):** HEADER_H=20, ROW_H=22, `rowAt = (y - top - 20)/22 + scrollRow`,
 полоса скроллбара в правых 9 px (`left+width-6-3`) при `targetNodeId<0` возвращает -1.
 
