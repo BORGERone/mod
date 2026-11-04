@@ -1047,3 +1047,4 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - 369: jar `10NmZoT2EMt-CNRbqZFvV_AxW4lBlZ129` (public), zip `16XvrKcgbXcIOzs9hpfmd-9GCtLgiKlTa` (public) - **boots** (user log: only createrailwaysnavigator failed)
 - 370: jar `1c1taj-mj1kFX5vk0XWtnQbf4v9Ew-tMk` (public), zip `1mIoHYFmbT3h1vFOU_6CuLMT7b0SWkufM` (public)
 - 371: jar `1P7GecY-8QcNlCWAqZJgCcJKXoEvxcv_6` (public), zip `1IQfkxtt7vpaCu-Wa-o7bJrrxoWRAxY9H` (public)
+- 372: jar `1Tu01-FJ1ajWNJ7H2M4tdEWRp__luvM5l` (public), zip `1z07djo7NRVoHVCVNXhn3g1GdZB2f6Bts` (public)
