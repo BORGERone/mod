@@ -217,8 +217,15 @@ def structural(jar):
                              "a body's canvas would lose its AI panel too")):
             if needle not in ai_draw:
                 problems.append("the AI draw hook is wrong: %s" % why)
-        if "setReturnValue" not in find_method(_am, "settledlands$blockWithoutAiClick"):
-            problems.append("the AI click hook never reports the click as taken")
+        # Build 362: the screen's mouseClicked is a one-line delegation to this method, which in turn
+        # hands a missed click on to NpcStatsGraphUi and the rest of the editor. Dropping the click here
+        # (build 361) made a block's graph unclickable, so the hook has to hand it on.
+        ai_click = find_method(_am, "settledlands$blockWithoutAiClick")
+        if "NpcStatsGraphUi.mouseClicked" not in ai_click:
+            problems.append("the AI click hook does not hand the click on - the canvas of a block's "
+                            "graph would stop answering the mouse (the defect of build 361)")
+        if "setReturnValue" not in ai_click:
+            problems.append("the AI click hook never reports a result")
 
         _ko, _oc, one_methods, _ro = load_class(zf, ONE)
         one = find_method(one_methods, "settledlands$singleNameCard")
@@ -321,6 +328,19 @@ def structural(jar):
                 ("WidgetPark361.park", "the tab button is never taken off the screen")):
             if needle not in tabs:
                 problems.append("the tabs hook is wrong: %s" % why)
+        # Build 362: hiding a widget twice was not enough (360 and 361 both came back with the strip on
+        # screen), so the strip is taken out of the screen's lists once widgets() has built it.
+        strip = find_method(tabs_methods, "settledlands$blockHasNoTabStrip")
+        for needle, why in (
+                ("WidgetPark361.children", "the strip is never looked for among the screen's widgets"),
+                ("WidgetPark361.label", "a button is parked without checking which tab it is"),
+                ("WidgetPark361.park", "the strip is never taken off the screen")):
+            if needle not in strip:
+                problems.append("the tab strip hook is wrong: %s" % why)
+        for key in ("gui.settledlands.graph.tab_main", "gui.settledlands.graph.tab_walk",
+                    "gui.settledlands.graph.tab_anim"):
+            if key not in strings(tabs_cp):
+                problems.append("the tab strip hook does not recognise %s" % key)
         # Build 361: hiding a flag was not enough in game (360 came back with the tabs on screen), so
         # the park has to hide the button AND move it out of the window - both, in one helper.
         _kp, park_cp, park_methods, _rp = load_class(zf, PARK)
@@ -333,6 +353,12 @@ def structural(jar):
                 ("setY", "the second way of moving a widget is gone"),
                 ("setHeight", "the third way of moving a widget is gone")):
             if needle not in park_all and needle not in park_strings:
+                problems.append("the park helper is wrong: %s" % why)
+        # Build 362: the widget is removed from the two lists a Screen draws and clicks.
+        for needle, why in (
+                ("renderables", "a parked widget is still in the list the screen renders"),
+                ("children", "a parked widget is still in the list the screen clicks")):
+            if needle not in park_strings:
                 problems.append("the park helper is wrong: %s" % why)
         if "0x1" not in park_all and "invoke" not in park_all:
             problems.append("the park helper does not call anything - every widget would stay put")

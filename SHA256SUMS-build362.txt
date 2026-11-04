@@ -1,0 +1,2 @@
+d3987531a2f98a65f561d15d86d0b6472077d17704d17dd6244e2aab48f14200  settledlands-0.8.0-build362-block-tabs-fix.jar
+35a215d8b482f8a9a1ed11c33ca6bf125b85b5cd3881843adc57fde143e3d78f  SettledLands-Build362-BlockTabsFix-Source.zip
