@@ -1032,11 +1032,10 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 
 ## Drive-ids
 
-**366 (текущая):** jar `1gaq6vVgHTwtjs6nvGH_S8-KlS2CXqUQt` (**public**), zip
-`1Ruzv_yQvHlpzjWzpjddC2MnPR6ucKLuA` (**public**) — оба `anyone/reader` + `allow_file_discovery`,
-проверено `list_permissions`. Коммит `2b38f86` в `arena/5618404a-mod` (push прошёл со 2-й попытки:
-GitHub отвечал 500 — это транзиентно, повторять `git push`).
+**367 (текущая):** jar `1_XOIzzcukkt07-kShQFic_SRPxzO8jzq` (**public**), zip
+`1sVQUl2KPPXNwJ5gwzcGHPpgDDuMY6Ds0` (**public**) — оба `anyone/reader` + `allow_file_discovery`,
+проверено `list_permissions`. Коммит `f00e245` в `arena/5618404a-mod`.
 
-**365:** jar `1A2IaBOmiDTK8xvWG5t5WobYsi9onAPM7`, zip `1K7hHFVjaHiTQalpSrw8MLzK56mOWkYn_` (оба public).
+**366:** jar `1gaq6vVgHTwtjs6nvGH_S8-KlS2CXqUQt`, zip `1Ruzv_yQvHlpzjWzpjddC2MnPR6ucKLuA` (оба public).
+**365:** jar `1A2IaBOmiDTK8xvWG5t5WobYsi9onAPM7`, zip `1K7hHFVjaHiTQalpSrw8MLzK56mOWkYn_`.
 **364:** jar `1NixebxWn-UIo2aOR-QeFNgTby0dsANzn`, zip `1X-IGiIK48wp0IcsyUmIUyt2xuBAwNYkm`.
-**363:** jar `1qEgOmyOlUT2UGq-sgd2NkHmh0DeC-xA2`, zip `1xN3cHMTJgS0_VPvOmnrSiyfD7L29V5BZ`.
