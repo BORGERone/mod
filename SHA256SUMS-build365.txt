@@ -1,0 +1,2 @@
+6462e32acee20357883c2c9569eb4716e0bd7ae5722d4613bda71ef729d89f58  settledlands-0.8.0-build365-block-events.jar
+10ec5cd8a7d110710160d8bbbcaab17cda874ce04e343cbfc0283ffdc2511758  SettledLands-Build365-BlockEvents-Source.zip

@@ -2,6 +2,7 @@ package dev.settledlands.npc;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -100,6 +101,15 @@ public final class RadiusPass354 {
                 || node.type == NpcDialogueGraph.RADIUS);
     }
 
+    /**
+     * Build 365: every node this pass fires. The radius pair came in 354; Время and Таймер joined in
+     * 365, together with the five new palette rows of a block. A walk steps over all four.
+     */
+    public static boolean isEventNode(NpcDialogueGraph.Node node) {
+        return isRadiusNode(node) || (node != null && (node.type == NpcDialogueGraph.TIME
+                || node.type == NpcDialogueGraph.TIMER));
+    }
+
     /** The radius the node actually fires with, and the one its ring must show. */
     public static int radius(NpcDialogueGraph.Node node) {
         if (node == null) return 1;
@@ -153,6 +163,8 @@ public final class RadiusPass354 {
             if (player != null && player.level() == level) here.add(player);
         }
         if (here.isEmpty()) return;
+        // Build 365: a scene started by a block is resumed from here too, before the blocks walk on.
+        if (check) resumeCutscenes(here);
         int lit = 0;
 
         for (int i = 0; i < blocks.size(); i++) {
@@ -178,7 +190,11 @@ public final class RadiusPass354 {
                     lit++;
                 }
             }
-            if (check && block.check) check(level, block, graph, here, now);
+            if (check && block.check) {
+                check(level, block, graph, here, now);
+                timeEvents(level, block, graph, here);
+                timerEvents(level, block, graph, here);
+            }
         }
     }
 
@@ -285,7 +301,7 @@ public final class RadiusPass354 {
     private static void check(ServerLevel level, BlockTriggerStore351.Entry block,
             NpcDialogueGraph graph, List<ServerPlayer> players, long now) {
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-            if (node.type != NpcDialogueGraph.CHECK) continue;
+            if (!isRadiusNode(node)) continue;
             if (node.next < 0 && node.triggers.isEmpty()
                     && (node.action == null || node.action.isBlank())) {
                 continue;
@@ -295,12 +311,178 @@ public final class RadiusPass354 {
             // than once a second, or a body standing in the zone would run the chain non-stop.
             long cooldownTicks = Math.max(1, node.checkCooldown) * 20L;
             Map<UUID, Long> seen = cooldowns(block.key, node.id, now, cooldownTicks);
-            Entity matched = findTarget(level, block, node, radius, seen, now, cooldownTicks);
+            Entity matched = findTarget(level, block, kind(node), radius, seen, now, cooldownTicks);
             if (matched == null) continue;
             seen.put(matched.getUUID(), now);
 
             ServerPlayer source = matched instanceof ServerPlayer player ? player
                     : nearestPlayer(level, block, radius + 32.0D, players);
+            BlockTrigger351.fire(source, graph, node,
+                    new BlockTalk358.Where(level, block.key, block.x, block.y, block.z));
+        }
+    }
+
+    /**
+     * The kind «Цель» watches. The check node keeps its own field; a radius node carries its kind in
+     * {@code radiusTarget}, and anything the palette does not know means "any body" - a zone that
+     * fires on nobody is a zone the author cannot see working.
+     */
+    private static int kind(NpcDialogueGraph.Node node) {
+        int value = node.type == NpcDialogueGraph.RADIUS ? node.radiusTarget : node.checkTarget;
+        return value >= 0 && value <= NpcDialogueGraph.TARGET_PASSIVE ? value
+                : NpcDialogueGraph.TARGET_ANY;
+    }
+
+    // ---- build 365: Время, Таймер, Катсцена ----------------------------------
+
+    /** The world day a «Время» node last fired on, per block and node. */
+    private static final Map<String, Long> TIME_DAY = new HashMap<>();
+
+    /** When a «Таймер» node last fired, per block and node; {@link #SPENT} means it is done. */
+    private static final Map<String, Long> TIMER_AT = new HashMap<>();
+
+    /** A one-shot timer that has fired and must never fire again this session. */
+    private static final long SPENT = -1L;
+
+    /** The stock window a time event may fire in, and the stock reach of a scene-less event. */
+    private static final long TIME_WINDOW = 400L;
+
+    private static final double EVENT_RANGE = 32.0D;
+
+    /** A scene nobody finishes within this long stops holding its chain. */
+    private static final long SCENE_MS = 300_000L;
+
+    /** A scene is never considered finished this soon, or {@code play} would be undone at once. */
+    private static final long SCENE_GRACE_MS = 500L;
+
+    private static final List<After> AFTER = new ArrayList<>();
+
+    private static final class After {
+        final UUID player;
+        final NpcDialogueGraph graph;
+        final int next;
+        final BlockTalk358.Where where;
+        final long at;
+
+        After(UUID player, NpcDialogueGraph graph, int next, BlockTalk358.Where where, long at) {
+            this.player = player;
+            this.graph = graph;
+            this.next = next;
+            this.where = where;
+            this.at = at;
+        }
+    }
+
+    /**
+     * Build 365: a «Катсцена» node of a block started a scene and the chain waits for it. The player
+     * is polled here, and when the playback is over the chain walks on from the node after the scene.
+     */
+    public static void afterCutscene(ServerPlayer player, NpcDialogueGraph graph, int next,
+            BlockTalk358.Where where) {
+        if (player == null || graph == null) return;
+        synchronized (AFTER) {
+            if (AFTER.size() > 64) AFTER.clear();
+            AFTER.add(new After(player.getUUID(), graph, next, where, System.currentTimeMillis()));
+        }
+    }
+
+    private static void resumeCutscenes(List<ServerPlayer> players) {
+        synchronized (AFTER) {
+            if (AFTER.isEmpty()) return;
+            long now = System.currentTimeMillis();
+            for (Iterator<After> it = AFTER.iterator(); it.hasNext();) {
+                After after = it.next();
+                if (now - after.at > SCENE_MS) {
+                    it.remove();
+                    continue;
+                }
+                if (now - after.at < SCENE_GRACE_MS) continue;
+                ServerPlayer player = null;
+                for (int i = 0; i < players.size(); i++) {
+                    ServerPlayer candidate = players.get(i);
+                    if (candidate != null && candidate.getUUID().equals(after.player)) {
+                        player = candidate;
+                        break;
+                    }
+                }
+                if (player == null) {
+                    it.remove();
+                    continue;
+                }
+                if (CutsceneCamera.isPlaying(player)) continue;
+                it.remove();
+                if (after.next >= 0) {
+                    BlockTrigger351.resume(player, after.graph, after.next, after.where);
+                }
+            }
+        }
+    }
+
+    /**
+     * Build 365: the «Время» node - the stock rule of {@code GuideDialogue#tickGraphTimeNodes}. A mode
+     * picks the hour (0 dawn, 6000 noon, 12000 sunset, 18000 midnight, 4 the author's own ticks); the
+     * node fires once a day, inside a 400 tick window after that hour, for the nearest player within
+     * 32 blocks.
+     */
+    private static void timeEvents(ServerLevel level, BlockTriggerStore351.Entry block,
+            NpcDialogueGraph graph, List<ServerPlayer> players) {
+        long dayTime = level.getDayTime();
+        long day = dayTime / 24000L;
+        long tod = ((dayTime % 24000L) + 24000L) % 24000L;
+        for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+            if (node.type != NpcDialogueGraph.TIME) continue;
+            if (node.next < 0 && node.triggers.isEmpty()
+                    && (node.action == null || node.action.isBlank())) {
+                continue;
+            }
+            long start;
+            if (node.timeMode == 1) start = 6000L;
+            else if (node.timeMode == 2) start = 12000L;
+            else if (node.timeMode == 3) start = 18000L;
+            else if (node.timeMode == 4) start = Math.max(0L, Math.min(23999L, node.timeTicks));
+            else start = 0L;
+            if (tod < start || tod >= start + TIME_WINDOW) continue;
+            String key = block.key + "#" + node.id;
+            Long seen = TIME_DAY.get(key);
+            if (seen != null && seen.longValue() == day) continue;
+            ServerPlayer source = nearestPlayer(level, block, EVENT_RANGE, players);
+            if (source == null || source.isSpectator()) continue;
+            TIME_DAY.put(key, day);
+            BlockTrigger351.fire(source, graph, node,
+                    new BlockTalk358.Where(level, block.key, block.x, block.y, block.z));
+        }
+    }
+
+    /**
+     * Build 365: the «Таймер» node - the stock rule of {@code GuideDialogue#tickGraphTimerNodes}. The
+     * interval is in seconds and counts from the moment the node was first seen; a repeating node
+     * restarts from the moment it fired, a one-shot node is spent and never fires again.
+     */
+    private static void timerEvents(ServerLevel level, BlockTriggerStore351.Entry block,
+            NpcDialogueGraph graph, List<ServerPlayer> players) {
+        long now = level.getGameTime();
+        for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+            if (node.type != NpcDialogueGraph.TIMER) continue;
+            if (node.next < 0 && node.triggers.isEmpty()
+                    && (node.action == null || node.action.isBlank())) {
+                continue;
+            }
+            long period = Math.max(1, node.timerInterval) * 20L;
+            String key = block.key + "#" + node.id;
+            Long last = TIMER_AT.get(key);
+            if (last == null) {
+                if (TIMER_AT.size() > 4096) TIMER_AT.clear();
+                TIMER_AT.put(key, now);
+                continue;
+            }
+            if (last.longValue() == SPENT) continue;
+            if (now - last.longValue() < period) continue;
+            ServerPlayer source = nearestPlayer(level, block, EVENT_RANGE, players);
+            if (source == null || source.isSpectator()) {
+                TIMER_AT.put(key, now);
+                continue;
+            }
+            TIMER_AT.put(key, node.timerRepeat ? now : SPENT);
             BlockTrigger351.fire(source, graph, node,
                     new BlockTalk358.Where(level, block.key, block.x, block.y, block.z));
         }
@@ -327,24 +509,23 @@ public final class RadiusPass354 {
 
     /** The node's own rules, copied from {@code GuideDialogue#findCheckTarget}. */
     private static Entity findTarget(ServerLevel level, BlockTriggerStore351.Entry block,
-            NpcDialogueGraph.Node node, int radius, Map<UUID, Long> seen, long now,
-            long cooldownTicks) {
+            int kind, int radius, Map<UUID, Long> seen, long now, long cooldownTicks) {
         double r = radius;
         AABB box = new AABB(block.x, block.y, block.z, block.x + 1.0D, block.y + 1.0D,
                 block.z + 1.0D).inflate(r);
 
-        if (node.checkTarget == NpcDialogueGraph.TARGET_MONSTER) {
+        if (kind == NpcDialogueGraph.TARGET_MONSTER) {
             return first(level, box, r, block, seen, now, cooldownTicks, body -> body instanceof Enemy);
         }
-        if (node.checkTarget == NpcDialogueGraph.TARGET_ANY) {
+        if (kind == NpcDialogueGraph.TARGET_ANY) {
             return first(level, box, r, block, seen, now, cooldownTicks,
                     body -> !(body instanceof Player player && player.isSpectator()));
         }
-        if (node.checkTarget == NpcDialogueGraph.TARGET_NPC) {
+        if (kind == NpcDialogueGraph.TARGET_NPC) {
             return first(level, box, r, block, seen, now, cooldownTicks,
                     body -> !(body instanceof Player));
         }
-        if (node.checkTarget == NpcDialogueGraph.TARGET_PASSIVE) {
+        if (kind == NpcDialogueGraph.TARGET_PASSIVE) {
             return first(level, box, r, block, seen, now, cooldownTicks,
                     body -> !(body instanceof Player) && !(body instanceof Enemy));
         }

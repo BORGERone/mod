@@ -59,11 +59,15 @@ EN = "assets/settledlands/lang/en_us.json"
 NOTE = "gui.settledlands.block.palette"
 
 EXPECT = {
-    "ROWS": "0:0 2:2 3:3 4:4 5:5 13:13",
-    "PALETTE": "0 2 3 4 5 13",
-    "REFUSED": "1 6 7 8 9 10 11 12 14",
+    # Build 365 grew the palette from six rows to eleven; these numbers are the new truth, and the
+    # REFUSED list is what forbids the six-row palette of 364 from coming back: 1/7/8/14/15 are now
+    # rows a block may build, so a jar that refuses them again fails here.
+    "ROWS": "0:0 1:1 2:2 3:3 4:4 5:5 7:7 8:8 13:13 14:14 15:15",
+    "PALETTE": "0 1 2 3 4 5 7 8 13 14 15",
+    "REFUSED": "6 9 10 11 12",
     "CONSISTENT": "true",
-    "ALLOWED": "line=true button=false timer=false",
+    "ALLOWED": "line=true button=true timer=true",
+    "EVENTS": "time=true timer=true cutscene=true target=true",
     "GRAPH": "error=ok text=kept entry=set",
 }
 

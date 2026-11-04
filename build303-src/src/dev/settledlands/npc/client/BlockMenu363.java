@@ -77,6 +77,10 @@ public final class BlockMenu363 {
     private static int height;
     private static boolean ready;
 
+    /** Build 365: the rows of the panel that fit, and the first one painted. */
+    private static int visible;
+    private static int firstRow;
+
     private BlockMenu363() {}
 
     /** Stock row numbers a block can create - the rows whose type {@link BlockTrigger351} allows. */
@@ -134,6 +138,8 @@ public final class BlockMenu363 {
         int wanted = Math.min(HEADER_H + count() * ROW_H + PAD, available);
         menu.height = wanted;
         menu.scrollRow = 0;
+        visible = Math.max(1, (wanted - HEADER_H) / ROW_H);
+        firstRow = 0;
         if (menu.top + wanted > canvas.bottom) {
             menu.top = Math.max(canvas.top, canvas.bottom - wanted);
         }
@@ -161,9 +167,11 @@ public final class BlockMenu363 {
             graphics.fill(x1 - 1, y0, x1, y1, EDGE);
             graphics.drawString(font, Component.translatable(HEADER_KEY).getString(), x0 + 8, y0 + 6,
                     HEADER, false);
-            int[] kept = rows();
-            for (int row = 0; row < kept.length; row++) {
-                int rowY = y0 + HEADER_H + row * ROW_H;
+            int first = Math.max(0, firstRow);
+            for (int drawn = 0; drawn < visible; drawn++) {
+                int row = first + drawn;
+                if (row >= count()) break;
+                int rowY = y0 + HEADER_H + drawn * ROW_H;
                 if (rowY + ROW_H > y1) break;
                 if (row == hoverRow) {
                     graphics.fill(x0 + 2, rowY, x1 - 2, rowY + ROW_H, HOVER_BG);
@@ -174,6 +182,38 @@ public final class BlockMenu363 {
         } finally {
             graphics.pose().popPose();
         }
+    }
+
+    /** How many rows fit in the measured panel - build 365 has more rows than fit. */
+    public static int visible() {
+        return visible;
+    }
+
+    /** True when every row of the panel fits: nothing to scroll, so the wheel stays cancelled. */
+    public static boolean fits() {
+        return ready && visible >= count();
+    }
+
+    /** The first painted row of the open panel. */
+    public static int scrollRow() {
+        return firstRow;
+    }
+
+    /**
+     * One wheel notch over an open block panel. Before build 365 six rows always fit and the wheel was
+     * simply cancelled; now the panel may hold eleven, so the notch moves the window and the stock
+     * scroller never sees it - the paint and the cursor stay on the same row.
+     *
+     * @return true when the wheel was used by the panel
+     */
+    public static boolean wheel(NpcGraphContextMenu menu, double scrollY) {
+        if (menu == null || !menu.open || menu.targetNodeId >= 0 || !ready) return false;
+        if (fits()) return true;
+        int max = Math.max(0, count() - visible);
+        int step = scrollY > 0.0D ? 1 : scrollY < 0.0D ? -1 : 0;
+        menu.scrollRow = Math.max(0, Math.min(max, menu.scrollRow + step));
+        firstRow = menu.scrollRow;
+        return true;
     }
 
     /** The row of this panel under the cursor, or -1. */

@@ -72,8 +72,10 @@ public final class BlockTrigger351 {
 
     /** Node types the block graph offers; everything else is not in its palette. */
     public static final int[] PALETTE = {
-        NpcDialogueGraph.LINE, NpcDialogueGraph.TRIGGER, NpcDialogueGraph.IF,
-        NpcDialogueGraph.VARIABLE, NpcDialogueGraph.CHECK, NpcDialogueGraph.RANDOM,
+        NpcDialogueGraph.LINE, NpcDialogueGraph.BUTTON, NpcDialogueGraph.TRIGGER,
+        NpcDialogueGraph.IF, NpcDialogueGraph.VARIABLE, NpcDialogueGraph.CHECK,
+        NpcDialogueGraph.TIME, NpcDialogueGraph.TIMER, NpcDialogueGraph.RANDOM,
+        NpcDialogueGraph.CUTSCENE, NpcDialogueGraph.RADIUS,
     };
 
     /**
@@ -81,20 +83,26 @@ public final class BlockTrigger351 {
      * The editor asks {@link #typeForRow} about a click, so this is the one place that decides what
      * a block can build - and {@code BlockPaletteProbe} keeps the two arrays in step.
      */
-    public static final int[] PALETTE_ROWS = {0, 2, 3, 4, 5, 13};
+    public static final int[] PALETTE_ROWS = {0, 1, 2, 3, 4, 5, 7, 8, 13, 14, 15};
 
     /**
      * Stock palette row -> node type, or -1 when a block cannot run that row. Row 0 is «Реплика»,
-     * the node build 357 adds; the rest is the palette of build 351.
+     * the node build 357 adds; rows 1/7/8/14/15 are the build 365 additions (Кнопка, Время, Таймер,
+     * Катсцена, Цель); the rest is the palette of build 351.
      */
     public static int typeForRow(int row) {
         return switch (row) {
             case 0 -> NpcDialogueGraph.LINE;
+            case 1 -> NpcDialogueGraph.BUTTON;
             case 2 -> NpcDialogueGraph.TRIGGER;
             case 3 -> NpcDialogueGraph.IF;
             case 4 -> NpcDialogueGraph.VARIABLE;
             case 5 -> NpcDialogueGraph.CHECK;
+            case 7 -> NpcDialogueGraph.TIME;
+            case 8 -> NpcDialogueGraph.TIMER;
             case 13 -> NpcDialogueGraph.RANDOM;
+            case 14 -> NpcDialogueGraph.CUTSCENE;
+            case 15 -> NpcDialogueGraph.RADIUS;
             default -> -1;
         };
     }
@@ -296,6 +304,25 @@ public final class BlockTrigger351 {
                 curId = cur.next;
                 continue;
             }
+            if (cur.type == NpcDialogueGraph.BUTTON) {
+                // Build 365: the buttons of the author, in the same window. The window waits for a
+                // click and the pick continues the chain at the node the row is wired to, so the walk
+                // stops here; a node with no usable button is only a step of the chain.
+                act(player, cur);
+                fireTriggers(player, graph, cur, visited);
+                if (BlockTalk358.choices(player, graph, cur, where)) return;
+                curId = cur.next;
+                continue;
+            }
+            if (cur.type == NpcDialogueGraph.CUTSCENE) {
+                // Build 365: the stock camera scene, played on the server for this player. The chain
+                // waits for the playback to finish - RadiusPass354 polls it and walks on from next.
+                act(player, cur);
+                fireTriggers(player, graph, cur, visited);
+                if (playCutscene(player, graph, cur, where)) return;
+                curId = cur.next;
+                continue;
+            }
             if (cur.type == NpcDialogueGraph.TRIGGER) {
                 act(player, cur);
                 fireTriggers(player, graph, cur, visited);
@@ -331,8 +358,9 @@ public final class BlockTrigger351 {
                         ? cur.randomBranches.get(port) : -1;
                 continue;
             }
-            if (RadiusPass354.isRadiusNode(cur)) {
-                // An event node: the tick pass fires it, a walk only steps over it.
+            if (RadiusPass354.isEventNode(cur)) {
+                // An event node (В радиусе, Время, Таймер, Цель): the tick pass fires it, a walk only
+                // steps over it - build 365 widened the pass, this branch stayed a step.
                 curId = cur.next;
                 continue;
             }
@@ -362,6 +390,27 @@ public final class BlockTrigger351 {
         }
         if (name.isBlank() || player == null || player.getServer() == null) return 0;
         return NpcPoints.get(player.getServer()).get(player.getUUID(), name, shared);
+    }
+
+    /**
+     * Build 365: start the camera scene of a «Катсцена» node on the server. True means the scene is
+     * playing and the chain must wait; the pass then continues at {@code next} when the playback is
+     * over, the way the stock graph resumes a dialogue after its scene.
+     */
+    private static boolean playCutscene(ServerPlayer player, NpcDialogueGraph graph,
+            NpcDialogueGraph.Node node, BlockTalk358.Where where) {
+        if (player == null || node == null || node.cutsceneName == null
+                || node.cutsceneName.isBlank() || where == null) {
+            return false;
+        }
+        try {
+            if (!CutsceneCamera.play(player, node.cutsceneName)) return false;
+            RadiusPass354.afterCutscene(player, graph, node.next, where);
+            return true;
+        } catch (Throwable failure) {
+            fail(failure);
+            return false;
+        }
     }
 
     /**

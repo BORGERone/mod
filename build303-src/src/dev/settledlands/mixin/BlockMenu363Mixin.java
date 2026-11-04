@@ -28,8 +28,9 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  *   <li><b>paint</b> - the stock painter is a switch over sixteen row numbers with nothing to cut, so
  *       for a block it is replaced by {@link BlockMenu363#draw}. The copy/delete menu of an existing
  *       node is left completely stock;</li>
- *   <li><b>scroll</b> - six rows fit in the panel, so an open block menu does not scroll. Without this
- *       the row under the cursor and the row that is painted could disagree after one wheel notch.</li>
+ *   <li><b>scroll</b> - build 365 puts eleven rows in the panel and not all of them fit, so the notch
+ *       moves the window from here ({@link BlockMenu363#wheel}); the stock scroller counts sixteen
+ *       rows and would paint a row the cursor does not mean.</li>
  * </ul>
  *
  * <p>A menu this class never measured keeps the stock panel: an unforeseen path costs the filtering,
@@ -64,13 +65,18 @@ public abstract class BlockMenu363Mixin {
         ci.cancel();
     }
 
-    /** Six rows fit: a wheel notch must not move them, or the cursor and the paint disagree. */
+    /**
+     * The wheel over a block panel: the panel moves its own window when its rows do not all fit, and
+     * swallows the notch either way, so the stock scroller never moves a row the paint ignores.
+     */
     @Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$blockMenuNoScroll(double mouseX, double mouseY, double scrollX, double scrollY,
             CallbackInfoReturnable<Boolean> cir) {
         if (!settledlands$isBlock()) return;
         if (this.contextMenu == null || !this.contextMenu.open) return;
         if (this.contextMenu.targetNodeId >= 0) return;
+        if (!BlockMenu363.ready()) return;
+        BlockMenu363.wheel(this.contextMenu, scrollY);
         cir.setReturnValue(Boolean.TRUE);
     }
 

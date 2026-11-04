@@ -15,7 +15,8 @@ import dev.settledlands.npc.NpcDialogueGraph;
  *   PALETTE   0 2 3 4 5 13                   the array the walker and the hooks agree on
  *   REFUSED   1 6 7 8 9 10 11 12 14          a row a block cannot run answers -1
  *   CONSISTENT true                          rows and types are the same list, in the same order
- *   ALLOWED   line=true button=false         the replica node is in, a text button is not
+ *   ALLOWED   line=true button=true          the replica node and the button are both in
+ *   EVENTS    time=true timer=true ...       build 365: the two clocks, a scene and a zone too
  *   GRAPH     error=ok text=kept entry=set   a line node is a valid block node and its text survives
  * </pre>
  */
@@ -56,6 +57,13 @@ public final class BlockPaletteProbe {
         System.out.println("ALLOWED line=" + BlockTrigger351.allowed(NpcDialogueGraph.LINE)
                 + " button=" + BlockTrigger351.allowed(NpcDialogueGraph.BUTTON)
                 + " timer=" + BlockTrigger351.allowed(NpcDialogueGraph.TIMER));
+
+        // Build 365: the four event nodes the author asked for. A row that builds a node the walker
+        // steps over silently is the one defect this probe has caught before, so it is asked here.
+        System.out.println("EVENTS time=" + BlockTrigger351.allowed(NpcDialogueGraph.TIME)
+                + " timer=" + BlockTrigger351.allowed(NpcDialogueGraph.TIMER)
+                + " cutscene=" + BlockTrigger351.allowed(NpcDialogueGraph.CUTSCENE)
+                + " target=" + BlockTrigger351.allowed(NpcDialogueGraph.RADIUS));
 
         // A block graph with a line node has to be something the editor agrees to save, and the text
         // has to survive the NBT round trip - that is what the block will say later.

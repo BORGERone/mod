@@ -38,9 +38,10 @@ Build 352 adds the fifth node and the passive work around it, with three ways to
     from a copy of it), the stock painter is replaced for a block only, the copy/delete menu of an
     existing node stays stock, and the click maps the row of the shorter panel back to the stock row;
 
-Exit 0 = the store is world data, the hooks are in the right lists, the palette is the six nodes a
+Exit 0 = the store is world data, the hooks are in the right lists, the palette is the eleven nodes a
 block can run (build 357 added «Реплика»), the chain walker is bounded, the periodic work is one
-gated pass over one dimension's entries, and the block's right-click menu is the same six nodes.
+gated pass over one dimension's entries, and the block's right-click menu is the same eleven nodes,
+each of the five new ones fired or waited for by something the jar actually runs.
 """
 import json
 import pathlib
@@ -64,6 +65,8 @@ OPEN_MIXIN = "dev/settledlands/mixin/NpcBlockOpen351Mixin.class"
 GRAPH_MIXIN = "dev/settledlands/mixin/NpcBlockGraph351Mixin.class"
 SAVE_MIXIN = "dev/settledlands/mixin/NpcBlockSave351Mixin.class"
 # build 363: the right-click menu of a block's graph carries only the rows a block can run
+# build 365: the block window grew buttons
+TALK = "dev/settledlands/npc/BlockTalk358.class"
 MENU = "dev/settledlands/npc/client/BlockMenu363.class"
 MENU_MIXIN = "dev/settledlands/mixin/BlockMenu363Mixin.class"
 SCREEN = "dev/settledlands/npc/client/NpcDialogueGraphScreen.class"
@@ -108,6 +111,23 @@ def consts(parsed):
     for value in parsed["cp"]:
         if value and value[0] == 3:
             out.add(struct.unpack(">i", value[1])[0])
+    return out
+
+
+def numeric_consts(parsed):
+    """Every number in the pool: int, long, float and double - a 400 written as 400L is still 400."""
+    out = set()
+    for value in parsed["cp"]:
+        if not value:
+            continue
+        if value[0] == 3:
+            out.add(struct.unpack(">i", value[1])[0])
+        elif value[0] == 5:
+            out.add(struct.unpack(">q", value[1])[0])
+        elif value[0] == 4:
+            out.add(struct.unpack(">f", value[1])[0])
+        elif value[0] == 6:
+            out.add(struct.unpack(">d", value[1])[0])
     return out
 
 
@@ -166,7 +186,7 @@ def main(argv):
         if missing:
             return fail("build 351 is not in this jar: %s" % ", ".join(missing))
         blobs = {n: z.read(n) for n in (STORE, ENTRY, LOGIC, EVENTS, CLIENT, TICKER, NPC_RING, CHECK_ROW, DELETE_ROW,
-                                        OPEN_MIXIN, GRAPH_MIXIN, SAVE_MIXIN)}
+                                        OPEN_MIXIN, GRAPH_MIXIN, SAVE_MIXIN, TALK)}
         config = json.loads(z.read(CONFIG).decode("utf-8"))
         ru = json.loads(z.read(RU).decode("utf-8"))
         en = json.loads(z.read(EN).decode("utf-8"))
@@ -300,6 +320,66 @@ def main(argv):
                for r in graph_refs):
         return fail("the block palette click does not ask BlockTrigger351 which node a row builds")
 
+    # ---- build 365: Кнопка, Время, Таймер, Катсцена, Цель --------------------------------------
+    # Five rows joined the palette. A row that builds a node nobody fires is worse than no row, so
+    # each new type is checked on the side that makes it real: the two clocks and the zone in the tick
+    # pass, the button in the block window, the scene in the walk.
+    _pass, pass_refs = parse(blobs[TICKER])
+    pass_methods = {_pass["cp"][n][1] for _a, n, _d, _at in _pass["methods"]}
+    for wanted in ("isEventNode", "timeEvents", "timerEvents", "resumeCutscenes", "afterCutscene"):
+        if wanted not in pass_methods:
+            return fail("RadiusPass354 has no %s - that node would be stepped over by the walk and "
+                        "fired by nobody" % wanted)
+    logic_parsed, logic_refs = parse(blobs[LOGIC])
+    if not any(r[1] == "isEventNode" and r[0] and r[0].endswith("npc/RadiusPass354")
+               for r in logic_refs):
+        return fail("the walk does not ask the pass what an event node is - Время, Таймер and Цель "
+                    "would be stepped over in silence")
+    if not any(r[1] == "afterCutscene" and r[0] and r[0].endswith("npc/RadiusPass354")
+               for r in logic_refs):
+        return fail("the walk never hands a started scene back to the pass - the chain after a "
+                    "«Катсцена» would never continue")
+    if not any(r[1] == "isPlaying" for r in pass_refs):
+        return fail("the tick pass never asks whether a scene is still playing - a «Катсцена» "
+                    "would hold its chain for ever")
+    if not any(r[1] == "getDayTime" for r in pass_refs):
+        return fail("the «Время» node does not read the hour of the day - it could not fire at its "
+                    "own time")
+    if 400 not in numeric_consts(_pass):
+        return fail("the 400 tick window of the stock time rule is gone - the node would miss its "
+                    "hour between two passes")
+    if 32 not in numeric_consts(_pass):
+        return fail("no 32 block reach in the pass - a clock would fire for a player at the edge of "
+                    "the world")
+    if not any(r[1] == "isEventNode" and r[0] and r[0].endswith("npc/RadiusPass354")
+               for r in parse(blobs[STORE])[1]):
+        return fail("the store's \"has something to fire\" flag ignores Время and Таймер - a block "
+                    "with only a clock would never be ticked")
+
+    talk_cls, _talk_refs = parse(blobs[TALK])
+    talk_methods = {talk_cls["cp"][n][1] for _a, n, _d, _at in talk_cls["methods"]}
+    if "choices" not in talk_methods:
+        return fail("the block window has no choices() - a «Кнопка» would have nothing to show")
+    if "targets" not in text(talk_cls):
+        return fail("a block window does not keep the target of each button - a click would walk on "
+                    "from node.next instead of the node the author wired")
+    if not any(r[1] == "choices" and r[0] and r[0].endswith("npc/BlockTalk358")
+               for r in logic_refs):
+        return fail("BlockTrigger351 has no button step - the «Кнопка» row would build a node the "
+                    "walk steps over in silence")
+    if not any(r[1] == "play" and r[0] and r[0].endswith("npc/CutsceneCamera")
+               for r in logic_refs):
+        return fail("the walk never plays a scene - the «Катсцена» row would build a node that does "
+                    "nothing")
+
+    menu_cls, _menu_refs = parse(blobs[MENU])
+    if "wheel" not in {menu_cls["cp"][n][1] for _a, n, _d, _at in menu_cls["methods"]}:
+        return fail("the block panel cannot scroll - eleven rows do not fit and the last five could "
+                    "never be clicked")
+    if not any(r[1] == "wheel" and r[0] and r[0].endswith("client/BlockMenu363")
+               for r in parse(blobs[MENU_MIXIN])[1]):
+        return fail("the wheel never reaches the block panel - the stock scroller counts sixteen rows")
+
     client_cls, client_refs = parse(blobs[CLIENT])
     if not any(r[1] == "setScreen" for r in client_refs):
         return fail("the editor is never opened")
@@ -411,10 +491,11 @@ def main(argv):
                             % (name, member))
 
     print("block_trigger_check: OK  %s  (a block keeps its graph in world data, the palette is the "
-          "six nodes it can run and the row map lives in BlockTrigger351#typeForRow, the chain walk "
+          "eleven nodes it can run and the row map lives in BlockTrigger351#typeForRow, the chain walk "
           "is bounded, the picture runs every 2 ticks, the radius event every 8, a body's ring goes "
-          "through the same pass, and both the visibility toggle and the delete button reach the "
-          "server)" % jar)
+          "through the same pass, Время and Таймер fire from that pass, Цель fires in the same pass, "
+          "a «Кнопка» waits for its click and a «Катсцена» for its playback, and both the visibility "
+          "toggle and the delete button reach the server)" % jar)
     return 0
 
 

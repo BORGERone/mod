@@ -7,6 +7,9 @@ public class ServerLevel extends Level {
     public MinecraftServer getServer() { return null; }
     public Iterable<Entity> getAllEntities() { return null; }
     public long getGameTime() { return 0; }
+
+    /** Build 365: the «Время» node of a block reads the hour of the day. */
+    public long getDayTime() { return 0; }
     public ResourceKey<Level> dimension() { return null; }
 
     /** Build 352: the eight-argument call GuideNpc, GuideCorpseNpc and NpcRadiusZone320 make. */

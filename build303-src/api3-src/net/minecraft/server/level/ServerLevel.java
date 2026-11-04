@@ -20,6 +20,9 @@ public class ServerLevel extends Level {
 
     public long getGameTime() { return 0; }
 
+    /** Build 365: the «Время» node of a block reads the hour of the day, as the stock pass does. */
+    public long getDayTime() { return 0; }
+
     public ResourceKey<Level> dimension() { return null; }
 
     public int sendParticles(ParticleOptions particle, double x, double y, double z, int count,

@@ -150,10 +150,11 @@ public final class BlockTriggerStore351 extends SavedData {
     }
 
     /** True when a graph holds a "В радиусе" node that has somewhere to go. */
+    /** True when the block holds a node the tick pass fires (build 365: radius, time and timer). */
     private static boolean hasFiringCheck(NpcDialogueGraph graph) {
         if (graph == null) return false;
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-            if (!RadiusPass354.isRadiusNode(node)) continue;
+            if (!RadiusPass354.isEventNode(node)) continue;
             if (node.next >= 0 || !node.triggers.isEmpty() || (node.action != null
                     && !node.action.isBlank())) {
                 return true;

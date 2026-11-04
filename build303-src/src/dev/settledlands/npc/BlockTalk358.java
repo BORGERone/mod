@@ -1,6 +1,7 @@
 package dev.settledlands.npc;
 
 import java.lang.reflect.Method;
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -66,13 +67,21 @@ public final class BlockTalk358 {
         final int nodeId;
         final Where where;
         final long at;
+        /** Build 365: the node each button of a «Кнопка» goes to; null for a plain line. */
+        final List<Integer> targets;
 
         Open(int id, NpcDialogueGraph graph, int nodeId, Where where, long at) {
+            this(id, graph, nodeId, where, at, null);
+        }
+
+        Open(int id, NpcDialogueGraph graph, int nodeId, Where where, long at,
+                List<Integer> targets) {
             this.id = id;
             this.graph = graph;
             this.nodeId = nodeId;
             this.where = where;
             this.at = at;
+            this.targets = targets;
         }
     }
 
@@ -123,6 +132,57 @@ public final class BlockTalk358 {
     }
 
     /**
+     * Build 365: the «Кнопка» node - the stock buttons of a line, drawn as the rows of the same
+     * block window. Each row goes to the node the author wired it to, so a block can now branch on a
+     * click instead of only walking a chain. Returns true when the window went out; false means the
+     * node has no usable button and the caller treats it like a plain line.
+     */
+    public static boolean choices(ServerPlayer player, NpcDialogueGraph graph,
+            NpcDialogueGraph.Node node, Where where) {
+        if (player == null || graph == null || node == null || where == null
+                || where.level() == null) {
+            return false;
+        }
+        try {
+            List<String> labels = new ArrayList<>();
+            List<Integer> targets = new ArrayList<>();
+            for (int c = 0; c < node.choices.size(); c++) {
+                Integer target = node.choices.get(c);
+                if (target == null || target.intValue() < 0) continue;
+                NpcDialogueGraph.Node body = graph.get(target.intValue());
+                if (body == null) continue;
+                String caption = body.lineFor(0);
+                if (caption == null || caption.isBlank()) caption = body.text;
+                if (caption == null || caption.isBlank()) caption = "…";
+                String label = NpcProfile.fill(caption, player, 0);
+                if (label == null || label.isBlank()) label = caption;
+                labels.add(label);
+                targets.add(target);
+            }
+            if (labels.isEmpty()) return false;
+            String text = NpcProfile.fill(node.lineFor(0), player, 0);
+            if (text == null) text = "";
+            NpcProfile profile = new NpcProfile();
+            profile.blockMouseLook = true;
+            profile.blockMovement = true;
+            profile.nameColor = BlockName359.color(graph);
+            NpcNet.DlgStyle style = style(profile, player);
+            if (style == null) return false;
+            int id = BlockTrigger351.idFor(where.key());
+            prune();
+            NpcNet.sendTo(player, new NpcNet.CfgView(id, marker(where.x(), where.y(), where.z())));
+            NpcNet.sendTo(player, new NpcNet.DlgView(id, BlockName359.name(graph), "", text,
+                    labels, List.of(), 0, 1, false, style));
+            OPEN.put(player.getUUID(), new Open(id, graph, node.id, where,
+                    System.currentTimeMillis(), targets));
+            return true;
+        } catch (Throwable failure) {
+            LOG.warn("a block button list could not be shown in the dialogue window", failure);
+            return false;
+        }
+    }
+
+    /**
      * A row of the block window was picked: close the window and walk on from the node after the line.
      * Returns true when the pick belonged to a block, so the stock handler must not see it.
      */
@@ -133,8 +193,15 @@ public final class BlockTalk358 {
         OPEN.remove(player.getUUID());
         try {
             NpcNet.sendTo(player, new NpcNet.DlgEnd(entityId));
-            // A negative row is a "finish" row: the chain ends with the window.
-            int next = index < 0 ? -1 : next(open.graph, open.nodeId);
+            // A negative row is a "finish" row: the chain ends with the window. A «Кнопка» window
+            // carries its own targets, so a row goes where the author wired it and not to node.next.
+            int next;
+            if (open.targets != null) {
+                next = index >= 0 && index < open.targets.size()
+                        ? open.targets.get(index).intValue() : -1;
+            } else {
+                next = index < 0 ? -1 : next(open.graph, open.nodeId);
+            }
             if (next >= 0) BlockTrigger351.resume(player, open.graph, next, open.where);
         } catch (Throwable failure) {
             LOG.warn("a block window could not be continued", failure);

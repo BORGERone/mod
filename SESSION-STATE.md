@@ -1,32 +1,44 @@
 # SESSION-STATE — SettledLands
 
-Обновлено: 2026-11-03. Ветка: `arena/5618404a-mod` (ранее `arena/99d7691a-mod`).
+Обновлено: 2026-11-04. Ветка: `arena/5618404a-mod` (ранее `arena/99d7691a-mod`).
 
 > **Сначала читать `HANDOFF-NEXT-AI-RU.md`** — там текущая задача, открытый дефект, порядок действий и
 > ловушки. Этот файл — история и хронология.
 
 ## Текущая сборка
 
-`settledlands-0.8.0-build364-block-menu.jar` — **меню ПКМ на графе блока показывает только доступные
-ноды**. До этого в меню были все 16 строк редактора, а 351 лишь *отказывал* в недоступных (клик закрывал
-меню и писал строку в статус) — набор нод блока выяснялся перебором.
-* `BlockMenu363` (новый, клиент): строки берёт из `BlockTrigger351#typeForRow` (кэш), не копия списка —
-  Реплика(0), Триггер(2), Условие If(3), Переменная(4), В радиусе(5), Случайность(13); рисует панель
-  штатными цветами/порядком, высота 20 + 6×22 + 4 = 156 (в 134 влезало 5 строк).
-* `BlockMenu363Mixin` (новый, клиентский): измерение панели на RETURN `settledlands$mouseReleasedOriginal`
-  (там `NpcGraphContextMenu.release` → `show/showForWire`), рисование вместо штатного `drawContextMenu`
-  (HEAD+cancel) для блока, отмена колеса пока меню открыто. Меню «копировать/удалить» ноды (targetNodeId>=0)
-  не тронуто. Если панель не измерена — рисуется штатное меню (fallback).
-* `NpcBlockGraph351Mixin` (заменён): `row` укороченного меню → `BlockMenu363.stockRow(row)` → `typeForRow`.
-**542 записи**, 494 класса, 38 общих / 42 клиентских миксина, 21 гейт зелёный (в `block_trigger_check`
-добавлена проверка меню, включая существование трёх целевых методов экрана), `verify_jar --base 363` PASS,
-`validate_jar` OK. Патч `tools/patch_build364.py` (**база 363**), классы из `build303-src/out364`.
-В игре **не подтверждено**.
-**Доставка 364:** jar `1NixebxWn-UIo2aOR-QeFNgTby0dsANzn`, zip `1X-IGiIK48wp0IcsyUmIUyt2xuBAwNYkm`,
-оба `make_public(reader, allow_file_discovery=true)` + `list_permissions` = `anyone/reader`; коммит
-`cdfba3c` запушен в `arena/5618404a-mod`.
-**Геометрия меню (для следующих сборок):** HEADER_H=20, ROW_H=22, `rowAt = (y - top - 20)/22 + scrollRow`,
-полоса скроллбара в правых 9 px (`left+width-6-3`) при `targetNodeId<0` возвращает -1.
+`settledlands-0.8.0-build365-block-events.jar` — **у графа блока появились Кнопка, Время, Таймер,
+Катсцена и Цель, и все пять работают**. До этого меню блока давало шесть нод (364), а проход по тикам
+умел только «В радиусе».
+* `BlockTrigger351`: `PALETTE_ROWS` 0,1,2,3,4,5,7,8,13,14,15 (11 строк, штатный порядок);
+  `typeForRow` знает 1/7/8/14/15; в `walk` два новых **шага** — «Кнопка» (`BlockTalk358.choices`, ждёт
+  клика) и «Катсцена» (`CutsceneCamera.play` + `RadiusPass354.afterCutscene`, ждёт проигрывания);
+  событийные ноды (Время/Таймер/Цель) — шаг вперёд через `RadiusPass354.isEventNode`.
+* `BlockTalk358`: `choices(player, graph, node, where)` — то же окно, строки = кнопки ноды, в `Open`
+  хранится `List<Integer> targets`; `pick` для такого окна берёт цель кнопки, для реплики — `next`.
+* `RadiusPass354`: `isEventNode` (CHECK/RADIUS/TIME/TIMER), `check` теперь и для RADIUS (тип тела из
+  `radiusTarget`, иначе ANY), `timeEvents` (режим 1..4 → 6000/12000/18000/свои тики, окно 400 тиков,
+  раз в сутки по `level.getDayTime()/24000`), `timerEvents` (интервал сек ×20 тиков, `timerRepeat`
+  заводит заново, иначе `SPENT`), `afterCutscene`/`resumeCutscenes` (опрос `CutsceneCamera.isPlaying`,
+  grace 500 мс, таймаут 300 с), ближайший игрок в 32 блоках, spectator пропускается.
+* `BlockTriggerStore351`: `hasFiringCheck` считает `isEventNode` — блок только с часами тоже тикает.
+* `BlockMenu363`: 11 строк не влезают → `visible`/`firstRow`, `wheel(menu, scrollY)` двигает окно,
+  `fits()`; `BlockMenu363Mixin` отдаёт колесо панели (и гасит его), вместо простой отмены.
+**543 записи**, 495 классов, 38 общих / 42 клиентских миксина, 21 гейт зелёный (`block_line_check`
+переписан под 11 строк: `REFUSED = 6 9 10 11 12`, `EVENTS time/timer/cutscene/target=true`;
+`block_trigger_check` получил раздел 365), `verify_jar --base 364` PASS (**0 новых внешних ссылок**,
+единственная разница — смена сигнатуры `RadiusPass354.findTarget`), `validate_jar` OK.
+sha256 `6462e32acee20357883c2c9569eb4716e0bd7ae5722d4613bda71ef729d89f58`, 3 488 984 B.
+Патч `tools/patch_build365.py` (**база 364**), классы из `build303-src/out365`.
+**В игре не подтверждено.**
+**Доставка 365:** см. блок Drive-ids в конце файла.
+
+## Предыдущая сборка (364, заменена 365)
+
+`settledlands-0.8.0-build364-block-menu.jar` — меню ПКМ на графе блока давало только доступные ноды
+(Реплика, Триггер, Условие If, Переменная, В радиусе, Случайность). `BlockMenu363` +
+`BlockMenu363Mixin`, замена `NpcBlockGraph351Mixin`. **542 записи**, 494 класса, sha256
+`08fdaa76edade023d0784ee5a3ffb8323eeb65f7178fad443da34ce8d71d20b0`.
 
 ## Предыдущая сборка (363, заменена 364)
 
