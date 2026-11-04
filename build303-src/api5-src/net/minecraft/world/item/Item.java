@@ -1,7 +1,7 @@
 package net.minecraft.world.item;
 
 /** Compile-time mirror of the item. Build 368 needs the real constructor: Item(Item.Properties). */
-public class Item {
+public class Item implements net.minecraft.world.level.ItemLike {
     public Item() {}
 
     public Item(Properties properties) {}

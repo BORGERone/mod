@@ -11,6 +11,14 @@ public final class LoggerFactory {
 
     private static final Logger SILENT = new Logger() {
         @Override
+        public void info(String message) {
+        }
+
+        @Override
+        public void info(String message, Object argument) {
+        }
+
+        @Override
         public void warn(String message) {
         }
 
@@ -20,6 +28,10 @@ public final class LoggerFactory {
 
         @Override
         public void warn(String message, Object first, Object second) {
+        }
+
+        @Override
+        public void warn(String message, Object... arguments) {
         }
     };
 

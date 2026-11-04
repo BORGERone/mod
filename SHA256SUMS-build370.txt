@@ -1,0 +1,2 @@
+13fc084a942edd991e1ccbc343fff567cbef8dd440704afd309771b20b6b4c2e  settledlands-0.8.0-build370-door-tab.jar
+f76158f6e30dc464492d8615ca4b3fe06dd418a6fb00a2791f3f9fac3a9b44df  SettledLands-Build370-DoorTab-Source.zip

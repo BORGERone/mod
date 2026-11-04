@@ -163,6 +163,21 @@ def structural(jar):
         if b"destroyBlock" not in z.read(MIX_BREAK):
             problems.append("the break guard is not bound to Level#destroyBlock")
 
+        # Build 370: an item nobody can reach is an item that does not exist for the author. The tab of
+        # the mod is filled by its own hand-written list, so the key has to be added by a listener.
+        tab_found = False
+        for name in names:
+            if not name.startswith("dev/settledlands/door/") or not name.endswith(".class"):
+                continue
+            data = z.read(name)
+            if (b"BuildCreativeModeTabContentsEvent" in data
+                    and b"settledlands:guide" in data
+                    and b"accept" in data):
+                tab_found = True
+        if not tab_found:
+            problems.append("no class adds the key to the mod's creative tab - the item would exist "
+                            "but never be visible (settledlands:guide)")
+
         model = json.loads(z.read(MODEL).decode("utf-8"))
         if model.get("textures", {}).get("layer0") != "settledlands:item/door_key":
             problems.append("the item model does not point at the texture")

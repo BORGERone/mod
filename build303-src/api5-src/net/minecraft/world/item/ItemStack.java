@@ -10,6 +10,11 @@ package net.minecraft.world.item;
 public final class ItemStack {
     public static final ItemStack EMPTY = new ItemStack();
 
+    /** Build 370: the stack a creative tab is handed - {@code new ItemStack(item)}. */
+    public ItemStack(net.minecraft.world.level.ItemLike item) {}
+
+    public ItemStack() {}
+
     public boolean isEmpty() {
         return true;
     }
