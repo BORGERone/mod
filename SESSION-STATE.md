@@ -21,6 +21,9 @@
 **540 записей**, 492 класса, заменено 4 класса, 21 гейт зелёный, `verify_jar --base 362` PASS,
 `validate_jar` OK. Патч `tools/patch_build363.py` (**база 362**), классы из `build303-src/out363`.
 В игре **не подтверждено**.
+**Доставка 363:** jar `1qEgOmyOlUT2UGq-sgd2NkHmh0DeC-xA2`, zip `1xN3cHMTJgS0_VPvOmnrSiyfD7L29V5BZ`,
+оба `make_public(reader, allow_file_discovery=true)` + `list_permissions` = `anyone/reader`; коммит
+`2c451cf` запушен в `arena/5618404a-mod`.
 **Урок 363:** прежде чем писать в чужую модель, найди, как это делает штатная строка — здесь это
 `propertyChange`: undo + dirty. И «правило по геометрии» бьёт по всему, что стоит в той же коробке;
 виджет, который ставит сам мод, надо помечать.
