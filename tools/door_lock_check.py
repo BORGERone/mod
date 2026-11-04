@@ -198,6 +198,16 @@ def structural(jar):
                        for r in guard_refs):
                 problems.append("the guard never closes a door")
 
+        # Build 372: a build that cannot explain itself cannot be fixed. The jar has to be able to say
+        # in the log whether the key registered, whether a click was refused, and what the guard closed.
+        for name, must in ((KEY, b"settledlands:door_key registered"),
+                           (EVENTS, b"was refused"),
+                           (EVENTS, b"is not a DoorBlock"),
+                           ("dev/settledlands/door/DoorGuard371.class", b"the guard closed")):
+            if name not in names or must not in z.read(name):
+                problems.append("%s does not report %r - a report of 'nothing changed' could not be "
+                                "answered from the log" % (name, must.decode()))
+
         model = json.loads(z.read(MODEL).decode("utf-8"))
         if model.get("textures", {}).get("layer0") != "settledlands:item/door_key":
             problems.append("the item model does not point at the texture")

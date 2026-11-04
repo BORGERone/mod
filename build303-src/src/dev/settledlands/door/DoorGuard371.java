@@ -40,6 +40,7 @@ public final class DoorGuard371 {
     private static int cursor;
     private static long builtAt = Long.MIN_VALUE;
     private static boolean failed;
+    private static int closed;
 
     private DoorGuard371() {}
 
@@ -91,6 +92,11 @@ public final class DoorGuard371 {
             if (!Doors368.anyOpen(level, pos)) continue;
             if (NpcDoors368.guideOpened(level, pos)) continue;
             Doors368.setOpen(level, pos, false);
+            if (closed < 3) {
+                closed++;
+                LOG.info("door: the guard closed the locked door at " + pos + " in level "
+                        + level.dimension());
+            }
         }
     }
 

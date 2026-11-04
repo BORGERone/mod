@@ -1,0 +1,1 @@
+920a5b64d395b9c00c9f228e9529faa850dc75a946e7cd21f236aebc4e44a5df  settledlands-0.8.0-build372-door-log.jar

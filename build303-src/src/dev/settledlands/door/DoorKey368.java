@@ -49,10 +49,11 @@ public final class DoorKey368 {
             if (event == null || !Registries.ITEM.equals(event.getRegistryKey())) return;
             item = new Item(new Item.Properties().stacksTo(1));
             event.register(Registries.ITEM, NpcIds368.id(ID), () -> item);
+            LOG.info("door: settledlands:door_key registered");
         } catch (Throwable failure) {
             if (failed) return;
             failed = true;
-            LOG.warn("the door key could not be registered", failure);
+            LOG.warn("the door key could not be registered: " + failure);
         }
     }
 }

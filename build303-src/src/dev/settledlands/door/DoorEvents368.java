@@ -42,7 +42,16 @@ public final class DoorEvents368 {
     private static final String ON = "message.settledlands.door.key_on";
     private static final String OFF = "message.settledlands.door.key_off";
 
+    /** Build 372: how many diagnostic lines this session has written. A report, not a rule. */
+    private static int said;
+
     private DoorEvents368() {}
+
+    private static void note(String line) {
+        if (said >= 8) return;
+        said++;
+        LOG.info(line);
+    }
 
     @SubscribeEvent
     public static void onRightClick(PlayerInteractEvent.RightClickBlock event) {
@@ -51,7 +60,14 @@ public final class DoorEvents368 {
             Level level = event.getLevel();
             BlockPos pos = event.getPos();
             if (!(level instanceof ServerLevel server) || pos == null) return;
-            if (!Doors368.isDoor(server.getBlockState(pos))) return;
+            BlockState here = server.getBlockState(pos);
+            if (!Doors368.isDoor(here)) {
+                if (DoorKey368.isKey(event.getItemStack()) && here != null) {
+                    note("door: the key was used on " + here.getBlock() + " at " + pos
+                            + " - that is not a DoorBlock, so nothing was locked");
+                }
+                return;
+            }
             DoorStore368 store = DoorStore368.get(server);
             if (store == null) return;
             ItemStack stack = event.getItemStack();
@@ -63,6 +79,8 @@ public final class DoorEvents368 {
                 // door that would only teach the player to try again.
                 deny(event);
                 shut(server, pos);
+                note("door: the click on the locked door at " + pos + " was refused (useBlock="
+                        + "DENY), open now=" + Doors368.anyOpen(server, pos));
                 say(event.getEntity());
                 return;
             }
@@ -76,6 +94,8 @@ public final class DoorEvents368 {
                 store.lock(server, pos);
                 nowLocked = true;
             }
+            note("door: the door at " + pos + (nowLocked ? " is locked" : " is unlocked")
+                    + " by the key, " + (store.size()) + " place(s) locked in this world");
             tell(event.getEntity(), Component.translatable(nowLocked ? ON : OFF).getString());
         } catch (Throwable failure) {
             LOG.warn("a door click could not be handled", failure);
