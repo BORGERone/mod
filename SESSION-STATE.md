@@ -1048,3 +1048,4 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - 370: jar `1c1taj-mj1kFX5vk0XWtnQbf4v9Ew-tMk` (public), zip `1mIoHYFmbT3h1vFOU_6CuLMT7b0SWkufM` (public)
 - 371: jar `1P7GecY-8QcNlCWAqZJgCcJKXoEvxcv_6` (public), zip `1IQfkxtt7vpaCu-Wa-o7bJrrxoWRAxY9H` (public)
 - 372: jar `1Tu01-FJ1ajWNJ7H2M4tdEWRp__luvM5l` (public), zip `1z07djo7NRVoHVCVNXhn3g1GdZB2f6Bts` (public)
+- 373: jar `1gM1Y9GOBRCfLdvj0c7JRWzZ4uqxW8PCy` (public), zip `1hZ_fIDCZzeZFARRnCuuDgpg93kKMOUj2` (public)
