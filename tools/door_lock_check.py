@@ -131,7 +131,31 @@ def structural(jar):
         if b"GuideNpc" not in z.read(MIX_PATH):
             problems.append("the answer is not bound to GuideNpc")
 
+        # Build 368 did not start: the guard injected into a method 1.21.1 only has as a default on the
+        # LevelWriter interface, so there was no target and mixin killed the boot. A game-class mixin
+        # therefore has to be optional - `require = 0` - so a signature this exact version lacks is
+        # skipped instead of becoming a failed launch. Mod classes are excluded: they are in the jar and
+        # a mixin on them must never be silent.
+        for name in common:
+            if not name.endswith("368Mixin"):
+                continue
+            data = z.read("dev/settledlands/mixin/%s.class" % name)
+            if b"net/minecraft/" not in data and b"net/neoforged/" not in data:
+                continue
+            if b"require" not in data:
+                problems.append("%s injects into a game class without require = 0 - build 368 is what "
+                                "happens when the target signature is not the one the game has" % name)
+
         mix_break_cls, mix_break_refs = parse(z.read(MIX_BREAK))
+        break_bytes = z.read(MIX_BREAK)
+        for overload in (b"destroyBlock(Lnet/minecraft/core/BlockPos;Z)Z",
+                         b"destroyBlock(Lnet/minecraft/core/BlockPos;ZLnet/minecraft/world/entity/Entity;)Z",
+                         b"destroyBlock(Lnet/minecraft/core/BlockPos;ZLnet/minecraft/world/entity/Entity;I)Z"):
+            if overload not in break_bytes:
+                problems.append("the break guard does not cover %s" % overload.decode())
+        if b"removeBlock(Lnet/minecraft/core/BlockPos;Z)Z" not in break_bytes:
+            problems.append("the break guard does not cover removeBlock - an explosion would still "
+                            "take a locked door")
         if not any(r[1] == "locked" and r[0] and r[0].endswith("door/DoorEvents368")
                    for r in mix_break_refs):
             problems.append("the destroyed block is not checked against the lock - a zombie could "

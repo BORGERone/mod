@@ -1,0 +1,2 @@
+adee219f6acbfdaadad1180736099982952795f0c9c22fbac5d0eb20124d4dcd  settledlands-0.8.0-build369-door-fix.jar
+c9db4d322b531bda376e954fa357c944dc133d0dbaa04a0de1eecdb8be98402a  SettledLands-Build369-DoorFix-Source.zip
