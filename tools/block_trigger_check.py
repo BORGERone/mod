@@ -32,9 +32,15 @@ Build 352 adds the fifth node and the passive work around it, with three ways to
   * the visibility row is offered on an NPC (where build 320 already draws the flag) or on a node that
     has no radius.
 
+  * build 363: the right-click menu of a block's graph still lists the sixteen rows of the stock
+    editor - rows a block cannot run are refused with a line of text instead of being absent, so the
+    author learns the palette by trial. The menu is cut down from BlockTrigger351#typeForRow (never
+    from a copy of it), the stock painter is replaced for a block only, the copy/delete menu of an
+    existing node stays stock, and the click maps the row of the shorter panel back to the stock row;
+
 Exit 0 = the store is world data, the hooks are in the right lists, the palette is the six nodes a
-block can run (build 357 added «Реплика»), the chain walker is bounded, and the periodic work is one
-gated pass over one dimension's entries.
+block can run (build 357 added «Реплика»), the chain walker is bounded, the periodic work is one
+gated pass over one dimension's entries, and the block's right-click menu is the same six nodes.
 """
 import json
 import pathlib
@@ -57,6 +63,10 @@ DELETE_ROW = "dev/settledlands/mixin/NpcBlockDelete355Mixin.class"
 OPEN_MIXIN = "dev/settledlands/mixin/NpcBlockOpen351Mixin.class"
 GRAPH_MIXIN = "dev/settledlands/mixin/NpcBlockGraph351Mixin.class"
 SAVE_MIXIN = "dev/settledlands/mixin/NpcBlockSave351Mixin.class"
+# build 363: the right-click menu of a block's graph carries only the rows a block can run
+MENU = "dev/settledlands/npc/client/BlockMenu363.class"
+MENU_MIXIN = "dev/settledlands/mixin/BlockMenu363Mixin.class"
+SCREEN = "dev/settledlands/npc/client/NpcDialogueGraphScreen.class"
 CONFIG = "settledlands.mixins.json"
 RU = "assets/settledlands/lang/ru_ru.json"
 EN = "assets/settledlands/lang/en_us.json"
@@ -240,6 +250,55 @@ def main(argv):
     if palette_rows(graph_mixin) is not None:
         return fail("the block palette still carries its own switch - the map must live in "
                     "BlockTrigger351#typeForRow, where it can be checked against PALETTE")
+
+    # ---- build 363: the right-click menu shows only the rows a block can run --------------------
+    for name in (MENU, MENU_MIXIN):
+        if name not in names:
+            return fail("build 363 is not in this jar: %s" % name)
+    with zipfile.ZipFile(jar) as extra:
+        blobs[MENU] = extra.read(MENU)
+        blobs[MENU_MIXIN] = extra.read(MENU_MIXIN)
+        screen_bytes = extra.read(SCREEN)
+    if MENU_MIXIN.rsplit("/", 1)[-1][:-6] not in client:
+        return fail("the menu hook is not a client mixin - it paints a screen")
+    menu_cls, menu_refs = parse(blobs[MENU])
+    if not any(r[1] == "typeForRow" and r[0] and r[0].endswith("npc/BlockTrigger351")
+               for r in menu_refs):
+        return fail("the block's menu does not ask BlockTrigger351#typeForRow which rows a block "
+                    "has - a copy of the palette would drift away from it")
+    for wanted in ("drawString", "fill", "pose"):
+        if not any(r[1] == wanted for r in menu_refs):
+            return fail("the block's menu never calls %s - it would paint nothing" % wanted)
+    if not any(r[1] == "translatable" for r in menu_refs):
+        return fail("the block's menu does not translate its labels")
+    if "rows" not in text(menu_cls) or "stockRow" not in text(menu_cls):
+        return fail("the block's menu does not map its own rows back to the stock ones")
+    hook, hook_refs = parse(blobs[MENU_MIXIN])
+    hook_text = text(hook)
+    for wanted in ("drawContextMenu", "settledlands$mouseReleasedOriginal", "mouseScrolled"):
+        if wanted not in hook_text:
+            return fail("the menu hook is not bound to %s" % wanted)
+    if not any(r[1] == "draw" and r[0] and r[0].endswith("client/BlockMenu363")
+               for r in hook_refs):
+        return fail("the menu hook never paints the cut-down panel")
+    if not any(r[1] == "fit" and r[0] and r[0].endswith("client/BlockMenu363")
+               for r in hook_refs):
+        return fail("the menu hook never measures the panel - every row would be drawn at the "
+                    "height of sixteen rows")
+    if "cancel" not in hook_text:
+        return fail("the menu hook does not cancel the stock panel - sixteen rows would be painted "
+                    "under the cut-down ones")
+    for signature in (b"settledlands$mouseReleasedOriginal", b"drawContextMenu", b"mouseScrolled"):
+        if signature not in screen_bytes:
+            return fail("the screen has no %s - the menu hook would silently do nothing"
+                        % signature.decode())
+    if not any(r[1] == "stockRow" and r[0] and r[0].endswith("client/BlockMenu363")
+               for r in graph_refs):
+        return fail("the block palette click never maps the row of the shorter panel back to the "
+                    "stock row - a click would build the node of the wrong row")
+    if not any(r[1] == "typeForRow" and r[0] and r[0].endswith("npc/BlockTrigger351")
+               for r in graph_refs):
+        return fail("the block palette click does not ask BlockTrigger351 which node a row builds")
 
     client_cls, client_refs = parse(blobs[CLIENT])
     if not any(r[1] == "setScreen" for r in client_refs):

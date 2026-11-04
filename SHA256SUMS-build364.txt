@@ -1,0 +1,2 @@
+08fdaa76edade023d0784ee5a3ffb8323eeb65f7178fad443da34ce8d71d20b0  settledlands-0.8.0-build364-block-menu.jar
+1edd06c7e28d3e64e5d715cebe7fc3cccb8b953a1ec609af88ccc2987b104594  SettledLands-Build364-BlockMenu-Source.zip

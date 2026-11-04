@@ -2,6 +2,7 @@ package dev.settledlands.mixin;
 
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.NpcDialogueGraph;
+import dev.settledlands.npc.client.BlockMenu363;
 import dev.settledlands.npc.client.BlockTriggerClient351;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphContextMenu;
@@ -75,7 +76,11 @@ public abstract class NpcBlockGraph351Mixin {
         cir.setReturnValue(Boolean.TRUE);
         if (button != 0 || row < 0) return;
 
-        int type = settledlands$paletteType(row);
+        // Build 363: the menu of a block carries the rows a block can run and nothing else, so the
+        // row of the click is the row of that shorter panel. The stock row behind it is what the
+        // palette map speaks; a click below the last row is not a row at all.
+        int stock = BlockMenu363.stockRow(row);
+        int type = stock < 0 ? -1 : settledlands$paletteType(stock);
         if (type < 0) {
             this.status = BlockTriggerClient351.paletteNote();
             return;
