@@ -40,11 +40,22 @@ import org.slf4j.LoggerFactory;
  * working without one new rule. The two keys the panel reads are pushed to the clients through
  * {@code DoorSync375}, because the panel is opened locally.</p>
  *
- * <p>Where the three values live: a stock graph node has no free fields, so the door node uses three
- * saved fields of the node that nothing else reads for this type -
- * {@code Node#randomMin} (keys), {@code Node#timerInterval} (seconds) and {@code Node#timerRepeat}
- * (sealed). {@link #FIELD_NOTE} keeps that next to the code that depends on it. They survive save,
- * load, undo, copy and the trip to the server with the rest of the graph.</p>
+ * <p>Where the three values live, and why not where build 382 put them. A stock node serialises most
+ * of its fields for every type, but not all of them: {@code NpcDialogueGraph#save} writes
+ * {@code TimerInterval}/{@code TimerRepeat} only {@code if (n.type == TIMER)} and
+ * {@code RandomMin}/{@code RandomMax} only {@code if (n.type == RANDOM)}. Build 382 kept the door's
+ * three controls exactly there, so every save - the editor's own send and the store's write alike -
+ * dropped them: the graph arrived on the server with the field defaults, the door was re-written as
+ * 6 keys / 5 s / sealed and the author's changes were gone the moment he saved. (That is the report
+ * «изменения в графе не сохраняются и вследствие не влияют на дверь».)</p>
+ *
+ * <p>Build 384 therefore keeps them in the three fields the stock serialiser writes and reads for
+ * <b>every</b> node, whatever its type: {@code varValue} (keys), {@code varCompare} (seconds) and
+ * {@code varOp} (sealed, 1/0). Those three belong to «Переменная» nodes; for a door node nothing in
+ * the game reads them, and the editor's own rows for a variable node are never built for our type (see
+ * {@code NpcDoorRows382Mixin}, which parks every stock row). {@link #FIELD_NOTE} keeps the mapping next
+ * to the code that depends on it, and {@code DoorGraph382Test} in {@code tools/tests} pins the round
+ * trip of a saved graph.</p>
  *
  * <p>Cost: one hash lookup per wand click, one per graph read in the panel's open, and nothing at all
  * per tick.</p>
@@ -64,9 +75,17 @@ public final class DoorGraph382 {
      */
     public static final int DOOR_TYPE = 40;
 
-    /** Where the three controls are kept in a node. See the class comment. */
+    /**
+     * Where the three controls are kept in a node. Every one of these three is written and read by the
+     * stock serialiser for every node type; {@code randomMin}/{@code timerInterval}/{@code timerRepeat}
+     * are not (they sit behind {@code if (n.type == ...)}), which is why build 383 lost them. See the
+     * class comment.
+     */
     public static final String FIELD_NOTE =
-            "door node: randomMin = keys, timerInterval = seconds, timerRepeat = sealed";
+            "door node: varValue = keys, varCompare = seconds, varOp = sealed (1/0)";
+
+    /** The three node fields this build stores, in the order {@link #FIELD_NOTE} names them. */
+    public static final String[] FIELDS = {"varValue", "varCompare", "varOp"};
 
     public static final int MIN_KEYS = 4;
     public static final int MAX_KEYS = 10;
@@ -157,30 +176,52 @@ public final class DoorGraph382 {
         return null;
     }
 
+    /** How many keys the hack panel of this door asks for. 0 means "never written" - see {@link #adopt}. */
     public static int keys(NpcDialogueGraph.Node node) {
         if (!isDoorNode(node)) return DEFAULT_KEYS;
-        return clamp(node.randomMin, MIN_KEYS, MAX_KEYS);
+        return node.varValue <= 0 ? DEFAULT_KEYS : clamp(node.varValue, MIN_KEYS, MAX_KEYS);
     }
 
+    /** How often one of those keys changes, in seconds. 0 means "never written". */
     public static int speed(NpcDialogueGraph.Node node) {
         if (!isDoorNode(node)) return DEFAULT_SPEED;
-        return clamp(node.timerInterval, MIN_SPEED, MAX_SPEED);
+        return node.varCompare <= 0 ? DEFAULT_SPEED : clamp(node.varCompare, MIN_SPEED, MAX_SPEED);
     }
 
+    /** True when the door opens only by solving the panel. */
     public static boolean sealed(NpcDialogueGraph.Node node) {
-        return isDoorNode(node) && node.timerRepeat;
+        return isDoorNode(node) && node.varOp != 0;
     }
 
     public static void setKeys(NpcDialogueGraph.Node node, int value) {
-        if (isDoorNode(node)) node.randomMin = clamp(value, MIN_KEYS, MAX_KEYS);
+        if (isDoorNode(node)) node.varValue = clamp(value, MIN_KEYS, MAX_KEYS);
     }
 
     public static void setSpeed(NpcDialogueGraph.Node node, int value) {
-        if (isDoorNode(node)) node.timerInterval = clamp(value, MIN_SPEED, MAX_SPEED);
+        if (isDoorNode(node)) node.varCompare = clamp(value, MIN_SPEED, MAX_SPEED);
     }
 
     public static void setSealed(NpcDialogueGraph.Node node, boolean value) {
-        if (isDoorNode(node)) node.timerRepeat = value;
+        if (isDoorNode(node)) node.varOp = value ? 1 : 0;
+    }
+
+    /**
+     * Build 384: gives a door node that has never been written the three values it should start with.
+     *
+     * <p>Build 382 and 383 stored the controls in fields the graph does not save for our type, so a
+     * graph opened by either of them arrives with nothing in it. Such a node - {@code varValue == 0},
+     * which no written node can be, because the count is 4..10 - is filled with the defaults and with
+     * the lock state the door is in right now, so opening the graph of a door that is already closed
+     * says «Закрыта» instead of unlocking it on the next save. Returns 1 when something was adopted, so
+     * the caller can mark the graph changed.</p>
+     */
+    public static int adopt(NpcDialogueGraph graph, boolean sealed) {
+        NpcDialogueGraph.Node node = doorNode(graph);
+        if (node == null || node.varValue > 0) return 0;
+        setKeys(node, DEFAULT_KEYS);
+        setSpeed(node, DEFAULT_SPEED);
+        setSealed(node, sealed);
+        return 1;
     }
 
     /** The keys and the speed of a door graph, or null when the graph has no door node. */
@@ -199,9 +240,9 @@ public final class DoorGraph382 {
         NpcDialogueGraph graph = new NpcDialogueGraph();
         NpcDialogueGraph.Node node = graph.add(DOOR_TYPE, 120, 120);
         if (node != null) {
-            node.randomMin = DEFAULT_KEYS;
-            node.timerInterval = DEFAULT_SPEED;
-            node.timerRepeat = sealed;
+            setKeys(node, DEFAULT_KEYS);
+            setSpeed(node, DEFAULT_SPEED);
+            setSealed(node, sealed);
             graph.entry = node.id;
         }
         return graph;
@@ -215,9 +256,9 @@ public final class DoorGraph382 {
             NpcDialogueGraph.Node source = doorNode(fresh);
             NpcDialogueGraph.Node made = graph.add(DOOR_TYPE, 120, 120);
             if (made != null && source != null) {
-                made.randomMin = source.randomMin;
-                made.timerInterval = source.timerInterval;
-                made.timerRepeat = sealed;
+                setKeys(made, keys(source));
+                setSpeed(made, speed(source));
+                setSealed(made, sealed);
                 graph.entry = made.id;
             }
             return graph;
@@ -280,6 +321,10 @@ public final class DoorGraph382 {
             } else {
                 graph = withDoorNode(graph, sealed);
                 stripCards(graph);
+                // A graph saved by 382/383 has a door node with nothing in it (the fields it used are
+                // not serialised for this type). Fill it from the defaults and the door's own lock, so
+                // the sliders open on something real and the next save cannot unlock a closed door.
+                adopt(graph, sealed);
             }
             CompoundTag data = new CompoundTag();
             data.put("DialogueGraph", graph.save());
@@ -322,6 +367,7 @@ public final class DoorGraph382 {
             }
             graph = withDoorNode(graph, locked(level, pos));
             stripCards(graph);
+            adopt(graph, locked(level, pos));
             NpcDialogueGraph.Node node = doorNode(graph);
             if (node != null) {
                 setKeys(node, keys(node));
@@ -414,6 +460,6 @@ public final class DoorGraph382 {
 
     /** Unused but kept for the gate: the list of saved fields this class reads. */
     static List<String> fields() {
-        return List.of("randomMin", "timerInterval", "timerRepeat");
+        return List.of(FIELDS[0], FIELDS[1], FIELDS[2]);
     }
 }

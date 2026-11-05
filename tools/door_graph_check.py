@@ -76,7 +76,11 @@ LANG_KEYS = ("gui.settledlands.door.node", "gui.settledlands.door.count",
              "message.settledlands.door.graph_cleared", "message.settledlands.door.graph_full")
 
 # The three fields of a node the door node keeps its controls in, and the types they must have.
-FIELDS = (("randomMin", "I"), ("timerInterval", "I"), ("timerRepeat", "Z"))
+# Build 384: these are the three the stock serialiser writes and reads for EVERY node type. The ones
+# build 382 used - randomMin, timerInterval, timerRepeat - are written only `if (n.type == RANDOM)` /
+# `if (n.type == TIMER)`, so a door node lost them on the first save and the author's numbers never
+# reached the door. tools/door_save_check.py pins the reason.
+FIELDS = (("varValue", "I"), ("varCompare", "I"), ("varOp", "I"))
 
 
 def fail(message):

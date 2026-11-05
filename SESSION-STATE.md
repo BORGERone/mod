@@ -1308,3 +1308,39 @@ graph in 359-362, so 383 is a port, not a new design:
 - **Unconfirmed in game**: the parked tab strip on a door's editor, the three inspector rows' placement
   and scroll height, and the four card lines' pixel positions inside the node box.
 
+
+## Build 384 - why a door's values were never saved (root cause found, fixed)
+
+Author after 383: «Изменения в графе не сохраняются и в следствии не влияют на дверь». Root cause is in
+the base mod's serialiser, `dev/settledlands/npc/NpcDialogueGraph#save()`:
+
+    if (n.type == TIMER)  { v.putInt("TimerInterval", n.timerInterval); v.putBoolean("TimerRepeat", ...); }
+    if (n.type == RANDOM) { v.putInt("RandomMin", n.randomMin); ... }
+
+382/383 kept the door's three controls in exactly those fields; a door node is type 40, so the client's
+`save()` sent a node with the field defaults (randomMin=1, timerInterval=10, timerRepeat=true), the
+server stored that, and every save rewrote the door as 4 keys / 10 s / sealed. Nothing threw.
+
+Fix (no new packet, no new mixin): `keys` -> `Node#varValue`, `speed` -> `Node#varCompare`, `sealed` ->
+`Node#varOp` (1/0) - the three ints written/read for EVERY node type (`v.putInt("VarValue",...)` and
+`n.varValue=v.getInt("VarValue")` are outside all type gates); `Node#copy()` copies all three, so undo,
+copy/paste and the profile copies keep them. `varValue == 0` marks "never written" (a written count is
+4..10) and the new `DoorGraph382#adopt(graph, sealed)` fills it with defaults + the door's real lock,
+called from `open()` and from `save()` so a 382/383 graph is repaired instead of written blank (and a
+closed door is not unlocked by opening its graph). `FIELD_NOTE` now documents the new mapping, and
+`DoorGraph382.FIELDS` holds the three names.
+
+New gate `tools/door_save_check.py`: fails if the door node uses a type-gated field again; re-reads the
+serialiser in `reference/decompiled-build132/.../NpcDialogueGraph.java` (committed) and asserts the three
+tags are written AND read without `if (n.type`, and that `TimerInterval`/`RandomMin` are still gated (if
+that ever changes, the gate says so). Verified: fails on 383, passes on 384. `door_graph_check.FIELDS`
+moved to the new trio.
+
+Ship: `settledlands-0.8.0-build384-door-graph-save.jar` (575 entries, 1 replaced, 43 common / 48 client
+mixins), README `README-Build384-RU.md`, zip `SettledLands-Build384-DoorGraphSave-Source.zip` (486
+entries), `SHA256SUMS-build384.txt`, patch `tools/patch_build384.py` (base 383, `srcdir out384`).
+`verify_jar --base 383` PASS, 0 new external refs, all 24 `*_check.py` green.
+
+**Unconfirmed in game**: that the values now come back after Ctrl+S + reopen and after a world reload
+(steps 3 and 6 of the README). The cause is proven from the shipped decompiled source; the round trip
+itself is not executed anywhere here.
