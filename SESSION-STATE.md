@@ -1049,3 +1049,5 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - 371: jar `1P7GecY-8QcNlCWAqZJgCcJKXoEvxcv_6` (public), zip `1IQfkxtt7vpaCu-Wa-o7bJrrxoWRAxY9H` (public)
 - 372: jar `1Tu01-FJ1ajWNJ7H2M4tdEWRp__luvM5l` (public), zip `1z07djo7NRVoHVCVNXhn3g1GdZB2f6Bts` (public)
 - 373: jar `1gM1Y9GOBRCfLdvj0c7JRWzZ4uqxW8PCy` (public), zip `1hZ_fIDCZzeZFARRnCuuDgpg93kKMOUj2` (public)
+
+- 373 in game: **NOT tested**. `latest-10.log` (2026-11-05 13:46) loaded `settledlands-0.8.0-build373-door-refuse.jar`, then the client died at the loading screen (13:47:09) - zero `door:` lines, no world load, zero `dev.settledlands` frames in the crash. Crash = createdeco 2.1.3 `Catwalks.<clinit>` -> `CTSpriteShifter.getCT` -> ponder `StitchedSprite.<init>` `HashMap.computeIfAbsent` **ConcurrentModificationException** (parallel mod construction race) -> loader "broken mod state" -> keybinds not registered -> Quark `AutoWalkKeybindModule$Client.acceptInput` NPE on the first mouse click -> FATAL. Same shape in `latest-9.log` (369 session) with createrailwaysnavigator instead of createdeco: the loser of the Create/ponder sprite race is a different mod every launch. Not our code.
