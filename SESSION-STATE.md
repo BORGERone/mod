@@ -1208,3 +1208,22 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - Unconfirmed in game: that 381 actually opens the door, that the guard re-closes it after 8 s, and that
   NPC doors now open/close - all three depend on this one call and were dead for the same reason.
 
+## Blocker after 381: the pack's Create addons crash at startup (not our mod)
+
+- `latest-13.log` and `latest-14.log` both die in mod construction, on **different** mods:
+  `createdeco-2.1.3` (`SpriteShifts.<clinit>`) and then
+  `createrailwaysnavigator-1.21.1-beta-0.10.0-C6` (`ModBlocks.<clinit>`), with the **same** stack:
+  `ponder-1.0.82 net.createmod.catnip.render.StitchedSprite.<init>` -> `HashMap.computeIfAbsent` ->
+  `ConcurrentModificationException`. The loser rotates per launch => it is a cross-thread race on
+  catnip's static sprite map, not one bad addon, and not our jar (we replace one door class that is
+  not touched at construction).
+- Mod list is identical in 13 and 14 (220 jars); vs the working 380 run (`latest-12.log`) the only
+  diffs are our jar and `purescale` 1.2 -> 1.3.0. So 380 got lucky, 381 got unlucky twice.
+  **381 is therefore still unverified in game** - no `door:` lines exist in any log yet.
+- Workaround to make the pack launch (verified in FML source, branch 1.21.1):
+  `ModWorkManager.parallelExecutor()` = `new ForkJoinPool(MAX_THREADS, ...)` with threads literally
+  named `modloading-worker-N`, and `MAX_THREADS` = `maxThreads` in `config/fml.toml`
+  (`<= 0 -> Runtime.availableProcessors()`). Setting `maxThreads = 1` serialises mod construction,
+  which makes the race impossible. Revert to `-1` after the test.
+- Do not "fix" this inside Settled Lands: the target class lives in ponder, we have no copy of that
+  jar here, and an untestable mixin into a third-party class is worse than the crash.
