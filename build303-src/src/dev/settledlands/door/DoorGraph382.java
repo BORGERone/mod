@@ -82,10 +82,11 @@ public final class DoorGraph382 {
      * class comment.
      */
     public static final String FIELD_NOTE =
-            "door node: varValue = keys, varCompare = seconds, varOp = sealed (1/0)";
+            "door node: varValue = keys, varCompare = seconds, varOp = sealed (1/0),"
+                    + " checkTarget = difficulty (1..3)";
 
     /** The three node fields this build stores, in the order {@link #FIELD_NOTE} names them. */
-    public static final String[] FIELDS = {"varValue", "varCompare", "varOp"};
+    public static final String[] FIELDS = {"varValue", "varCompare", "varOp", "checkTarget"};
 
     public static final int MIN_KEYS = 4;
     public static final int MAX_KEYS = 10;
@@ -94,6 +95,14 @@ public final class DoorGraph382 {
     public static final int MIN_SPEED = 1;
     public static final int MAX_SPEED = 10;
     public static final int DEFAULT_SPEED = 5;
+
+    /**
+     * Build 385: «Сложность» of the hack panel - which rows of the keyboard its keys come from.
+     * 1: {@code qwertyuiop[]}; 2: those plus {@code asdfghjkl;'}; 3: those plus {@code zxcvbnm,./}.
+     */
+    public static final int MIN_DIFFICULTY = 1;
+    public static final int MAX_DIFFICULTY = 3;
+    public static final int DEFAULT_DIFFICULTY = 1;
 
     /** Outer bound on remembered editor ids; the session map is reset when it grows past this. */
     private static final int MAX_IDS = 8192;
@@ -206,6 +215,22 @@ public final class DoorGraph382 {
     }
 
     /**
+     * Build 385: how hard the panel of this door is. 0 means "never written" - the same convention as
+     * the two numbers, and the reason it is safe: {@code checkTarget} is an int the stock serialiser
+     * writes for every node and reads back with a default, and the only code that range-checks it does
+     * so for «Проверка» nodes, which this one is not.
+     */
+    public static int difficulty(NpcDialogueGraph.Node node) {
+        if (!isDoorNode(node)) return DEFAULT_DIFFICULTY;
+        return node.checkTarget <= 0 ? DEFAULT_DIFFICULTY
+                : clamp(node.checkTarget, MIN_DIFFICULTY, MAX_DIFFICULTY);
+    }
+
+    public static void setDifficulty(NpcDialogueGraph.Node node, int value) {
+        if (isDoorNode(node)) node.checkTarget = clamp(value, MIN_DIFFICULTY, MAX_DIFFICULTY);
+    }
+
+    /**
      * Build 384: gives a door node that has never been written the three values it should start with.
      *
      * <p>Build 382 and 383 stored the controls in fields the graph does not save for our type, so a
@@ -221,13 +246,19 @@ public final class DoorGraph382 {
         setKeys(node, DEFAULT_KEYS);
         setSpeed(node, DEFAULT_SPEED);
         setSealed(node, sealed);
+        setDifficulty(node, DEFAULT_DIFFICULTY);
         return 1;
     }
 
-    /** The keys and the speed of a door graph, or null when the graph has no door node. */
+    /**
+     * The numbers of a door graph - keys, seconds, sealed, difficulty - or null when the graph has no
+     * door node. Build 385 added the fourth; the transport of build 382 carries it as one more field of
+     * the same {@code key=count:seconds:difficulty} pair.
+     */
     public static int[] settings(NpcDialogueGraph graph) {
         NpcDialogueGraph.Node node = doorNode(graph);
-        return node == null ? null : new int[] {keys(node), speed(node), sealed(node) ? 1 : 0};
+        return node == null ? null : new int[] {keys(node), speed(node), sealed(node) ? 1 : 0,
+                difficulty(node)};
     }
 
     /**
@@ -243,6 +274,7 @@ public final class DoorGraph382 {
             setKeys(node, DEFAULT_KEYS);
             setSpeed(node, DEFAULT_SPEED);
             setSealed(node, sealed);
+            setDifficulty(node, DEFAULT_DIFFICULTY);
             graph.entry = node.id;
         }
         return graph;
@@ -259,6 +291,7 @@ public final class DoorGraph382 {
                 setKeys(made, keys(source));
                 setSpeed(made, speed(source));
                 setSealed(made, sealed);
+                setDifficulty(made, DEFAULT_DIFFICULTY);
                 graph.entry = made.id;
             }
             return graph;
@@ -460,6 +493,6 @@ public final class DoorGraph382 {
 
     /** Unused but kept for the gate: the list of saved fields this class reads. */
     static List<String> fields() {
-        return List.of(FIELDS[0], FIELDS[1], FIELDS[2]);
+        return List.of(FIELDS[0], FIELDS[1], FIELDS[2], FIELDS[3]);
     }
 }

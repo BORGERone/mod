@@ -158,7 +158,12 @@ public record DoorSync375(String data) implements CustomPacketPayload {
         }
     }
 
-    /** One or more {@code key=count:seconds} pairs, separated by {@code ;}. */
+    /**
+     * One or more {@code key=count:seconds:difficulty} pairs, separated by {@code ;}.
+     *
+     * <p>Build 385 added the third number. A pair of two numbers - a line from build 382/384 that is
+     * still in flight - is read as difficulty 1, so the panel of an older door is the panel of 378.</p>
+     */
     private static void putSettings(String body) {
         if (body == null || body.isEmpty()) return;
         String[] pairs = body.split(";");
@@ -171,7 +176,9 @@ public record DoorSync375(String data) implements CustomPacketPayload {
             try {
                 int count = Integer.parseInt(values[0].trim());
                 int seconds = Integer.parseInt(values[1].trim());
-                SETTINGS.put(pair.substring(0, eq), new int[] {count, seconds});
+                int difficulty = values.length > 2 ? Integer.parseInt(values[2].trim()) : 1;
+                SETTINGS.put(pair.substring(0, eq), new int[] {count, seconds,
+                        HackPanel377.clampDifficulty(difficulty)});
             } catch (NumberFormatException notANumber) {
                 // a bad pair costs one door its numbers, never the packet
             }
@@ -179,8 +186,8 @@ public record DoorSync375(String data) implements CustomPacketPayload {
     }
 
     /**
-     * Build 382, client side: the numbers the door's graph gives the panel, or null when this door was
-     * never edited. The door is two blocks, so the position asked about and the one above and below it
+     * Build 382/385, client side: the numbers the door's graph gives the panel - {@code count},
+     * {@code seconds}, {@code difficulty} - or null when this door was never edited. The door is two blocks, so the position asked about and the one above and below it
      * are all tried - a click may land on either half.
      */
     public static int[] settings(Level level, BlockPos pos) {
@@ -215,7 +222,7 @@ public record DoorSync375(String data) implements CustomPacketPayload {
                 String key = keys.get(i);
                 int[] settings = DoorGraph382.settings(store.graph(key));
                 if (settings == null) continue;
-                String pair = key + "=" + settings[0] + ":" + settings[1];
+                String pair = key + "=" + settings[0] + ":" + settings[1] + ":" + settings[3];
                 if (chunk.length() + pair.length() + 1 > CHUNK) {
                     broadcast(players, "P|" + chunk);
                     chunk.setLength(0);
@@ -244,7 +251,7 @@ public record DoorSync375(String data) implements CustomPacketPayload {
                 String key = keys.get(i);
                 int[] settings = DoorGraph382.settings(store.graph(key));
                 if (settings == null) continue;
-                String pair = key + "=" + settings[0] + ":" + settings[1];
+                String pair = key + "=" + settings[0] + ":" + settings[1] + ":" + settings[3];
                 if (chunk.length() + pair.length() + 1 > CHUNK) {
                     send(player, "P|" + chunk);
                     chunk.setLength(0);

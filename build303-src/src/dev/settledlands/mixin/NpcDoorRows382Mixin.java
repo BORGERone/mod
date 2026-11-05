@@ -16,7 +16,7 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Build 382/383: the whole inspector of a door node - two sliders and a toggle, and nothing else.
+ * Build 382/383/385: the whole inspector of a door node - three sliders and a toggle, nothing else.
  *
  * <p>The author asked for exactly this: «нода с 2 ползунками (Кол-во чисел, Скорость) и тумблером
  * открыта/закрыта». Build 382 appended those three rows under the stock ones and the screenshot came
@@ -30,6 +30,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * <ul>
  *   <li><b>Кол-во чисел</b> 4..10 - how many keys the hack panel of build 377 asks for at this door;</li>
  *   <li><b>Скорость</b> 1..10 с - how often one of those keys changes (the stock panel used 5);</li>
+ *   <li><b>Сложность</b> 1..3 (build 385) - which rows of the keyboard the panel draws its keys from:
+ *       {@code qwertyuiop[]}, then {@code +asdfghjkl;'}, then {@code +zxcvbnm,./};</li>
  *   <li><b>Закрыта / Открыта</b> - «Закрыта»: the door opens only by solving the panel; «Открыта»:
  *       an ordinary door. The flag is the lock of build 368, so every rule of that build follows.</li>
  * </ul>
@@ -47,8 +49,8 @@ public abstract class NpcDoorRows382Mixin {
     /** One row of the inspector: a slider is 20 px tall, a button 16, the stock gap is 2. */
     private static final int ROW = 22;
 
-    /** What the three rows plus their title take, in the same units the stock rows count in. */
-    private static final int CONTENT = 12 + ROW + ROW + 20;
+    /** What the four rows plus their title take, in the same units the stock rows count in. */
+    private static final int CONTENT = 12 + ROW + ROW + ROW + 20;
 
     @Shadow
     private NpcDialogueGraph graph;
@@ -128,6 +130,7 @@ public abstract class NpcDoorRows382Mixin {
 
             y = settledlands$slider(node, x, y, width, top, bottom, true);
             y = settledlands$slider(node, x, y, width, top, bottom, false);
+            y = settledlands$difficulty(node, x, y, width, top, bottom);
             y = settledlands$seal(node, x, y, width, top, bottom);
         } finally {
             buildingInspector = false;
@@ -167,6 +170,29 @@ public abstract class NpcDoorRows382Mixin {
         // Build 359 lesson: a member inherited from Minecraft is CALLED, never shadowed - Mixin
         // refuses a shadow it cannot find in the target class itself, and every graph screen died on
         // first open. The call site lands inside the merged screen, so the protected access holds.
+        ((NpcDialogueGraphScreen) (Object) this).addRenderableWidget(slider);
+        if (inspectorWidgets != null) inspectorWidgets.add(slider);
+        slider.visible = y >= top && y + 20 <= bottom;
+        return y + ROW;
+    }
+
+    /**
+     * Build 385: «Сложность» of the panel - 1, 2 or 3, one slider step per row of the keyboard that
+     * joins the board ({@code qwertyuiop[]} -> {@code +asdfghjkl;'} -> {@code +zxcvbnm,./}). It is a
+     * slider like the other two, and it commits through the same {@code propertyChange}.
+     */
+    private int settledlands$difficulty(NpcDialogueGraph.Node node, int x, int y, int width,
+            int top, int bottom) {
+        NpcUi.NpcSlider slider = NpcUi.slider(x, y, width,
+                DoorGraph382.MIN_DIFFICULTY, DoorGraph382.MAX_DIFFICULTY,
+                DoorGraph382.difficulty(node), shown ->
+                Component.literal(DoorGraphClient382.safe("gui.settledlands.door.difficulty",
+                        Integer.toString(shown))),
+                shown -> {
+                    if (shown == DoorGraph382.difficulty(node)) return;
+                    propertyChange(() -> DoorGraph382.setDifficulty(node, shown));
+                });
+        if (slider == null) return y;
         ((NpcDialogueGraphScreen) (Object) this).addRenderableWidget(slider);
         if (inspectorWidgets != null) inspectorWidgets.add(slider);
         slider.visible = y >= top && y + 20 <= bottom;

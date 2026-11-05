@@ -1344,3 +1344,33 @@ entries), `SHA256SUMS-build384.txt`, patch `tools/patch_build384.py` (base 383, 
 **Unconfirmed in game**: that the values now come back after Ctrl+S + reopen and after a world reload
 (steps 3 and 6 of the README). The cause is proven from the shipped decompiled source; the round trip
 itself is not executed anywhere here.
+
+## Build 385 - the panel takes the keyboard, and the door node gets a difficulty
+
+Two author requests: «кнопки блокировали пользовательский ввод… блокировать все кроме ESC» and «в ноду
+новый пункт "сложность": 1 - qwertyuiop[], 2 - +asdfghjkl;', 3 - +zxcvbnm,./».
+
+- **Input lock.** `HackPanel377#keyPressed` used to answer `true` only for its own keys and let the rest
+  fall through to `Screen#keyPressed` → the game's key mappings (R reloaded Iris shaders). Now every key
+  but ESC returns `true` on both press and release; ESC goes to `super` (which closes the panel only).
+  Key state is still read with `InputConstants.isKeyDown`, so the lock does not change the minigame.
+  Honest limit: only keys routed through the screen are blocked; a mod reading raw GLFW events would not
+  be.
+- **Difficulty.** Fourth node value, `Node#checkTarget` (written by the stock serialiser for every type,
+  read back with a default; only «Проверка» nodes range-check it). `DoorGraph382.difficulty/setDifficulty`
+  clamp 1..3, `settings()` now returns 4 ints, `DoorSync375` sends `key=count:seconds:difficulty` and
+  parses a missing third field as 1. `HackPanel377` has `ROW_TOP` (81,87,69,82,84,89,85,73,79,80,91,93),
+  `ROW_HOME` (65,83,68,70,71,72,74,75,76,59,39), `ROW_BOTTOM` (90,88,67,86,66,78,77,44,46,47) -
+  `pool(difficulty)` and both `pick(...)` and `roll()` use it. Third inspector slider (`CONTENT` 76 -> 98)
+  and a card line «Сложность: N (qwerty + asdf)»; card lines re-pitched to 28/42/56/70/84 in the 100 px
+  box, and `gui.settledlands.door.hint` now reads «Ввод заблокирован · ESC — выход».
+- Gates: new `tools/hack_input_check.py` (fails on 384, passes here); `door_save_check.GOOD` grew
+  `checkTarget` (+ tag map); `door_screen_check.CARD_KEYS` grew the difficulty/rows keys (digit suffix is
+  checked as its prefix in the class and as three keys in both lang files); `door_lock_check` accepts the
+  three row fields instead of the single `LETTERS`.
+- Ship: `settledlands-0.8.0-build385-door-hack-difficulty.jar` (575 entries, 5 replaced, 43/48 mixins),
+  README `README-Build385-RU.md`, zip `SettledLands-Build385-HackDifficulty-Source.zip` (488 entries),
+  `SHA256SUMS-build385.txt`, patch `tools/patch_build385.py` (base 384, `srcdir out385`).
+  `verify_jar --base 384` PASS, 0 new external refs, all 25 `*_check.py` green.
+- **Unconfirmed in game**: that R/F3/E really do nothing while the panel is up (an Iris version that
+  reads raw GLFW events would still fire), and that difficulty 2/3 visibly widen the board.

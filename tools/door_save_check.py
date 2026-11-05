@@ -50,8 +50,12 @@ NODE = "dev/settledlands/npc/NpcDialogueGraph$Node"
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 REFERENCE = ROOT / "reference/decompiled-build132/dev/settledlands/npc/NpcDialogueGraph.java"
 
-# The three fields the door node keeps its controls in - all of them written for every node type.
-GOOD = ("varValue", "varCompare", "varOp")
+# The fields the door node keeps its controls in - all of them written for every node type.
+GOOD = ("varValue", "varCompare", "varOp", "checkTarget")
+
+# Field name -> the tag the serialiser writes for it.
+TAGS = {"varValue": "VarValue", "varCompare": "VarCompare", "varOp": "VarOp",
+        "checkTarget": "CheckTarget"}
 
 # The three build 382 used and this gate exists because of: written only for TIMER / RANDOM nodes.
 BAD = ("randomMin", "timerInterval", "timerRepeat")
@@ -115,7 +119,7 @@ def main(argv):
 
     # ---- 2. the serialiser writes and reads those three for every node ------------------------
     graph_text = text(parse(blobs[GRAPH])[0])
-    for tag in ("VarValue", "VarCompare", "VarOp"):
+    for tag in (TAGS[f] for f in GOOD):
         if tag not in graph_text:
             return fail("NpcDialogueGraph does not mention %s - the field is not serialised at all"
                         % tag)
@@ -128,7 +132,7 @@ def main(argv):
         end = source.index("public static NpcDialogueGraph load(")
         save_body = source[start:end]
         load_body = source[end:]
-        for tag in ("VarValue", "VarCompare", "VarOp"):
+        for tag in (TAGS[f] for f in GOOD):
             lines = [line.strip() for line in save_body.splitlines() if '"%s"' % tag in line]
             if not lines:
                 return fail("the serialiser does not write %s" % tag)

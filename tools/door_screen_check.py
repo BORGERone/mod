@@ -69,7 +69,10 @@ DOOR = "dev/settledlands/door/DoorGraph382"
 # The three lines of the card and the title - the ones the author read as «Случайность» and clipped.
 CARD_KEYS = ("gui.settledlands.door.node", "gui.settledlands.door.count",
              "gui.settledlands.door.speed", "gui.settledlands.door.sealed",
-             "gui.settledlands.door.unsealed", "gui.settledlands.door.hint")
+             "gui.settledlands.door.unsealed", "gui.settledlands.door.hint",
+             # Build 385: the difficulty and the rows it opens are lines of the same card.
+             "gui.settledlands.door.difficulty", "gui.settledlands.door.rows1",
+             "gui.settledlands.door.rows2", "gui.settledlands.door.rows3")
 
 
 def fail(message):
@@ -235,7 +238,10 @@ def main(argv):
     if not any(m == "fill" for _o, m, _d in card_refs):
         return fail("DoorCard382 paints no box")
     for key in CARD_KEYS:
-        if key not in card_text:
+        # The rows of the difficulty are one prefix and the number of the level ("…rows" + 1..3), so
+        # the class holds the prefix and the three keys are checked in both language files below.
+        needle = key[:-1] if key[-1].isdigit() else key
+        if needle not in card_text:
             return fail("DoorCard382 does not draw %s - a line of the card would be missing" % key)
     if not any(m in ("screenX", "screenY") for _o, m, _d in card_refs):
         return fail("DoorCard382 ignores the canvas transform - the card would be drawn at 0,0")

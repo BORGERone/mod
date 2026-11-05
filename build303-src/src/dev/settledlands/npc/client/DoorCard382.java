@@ -2,6 +2,7 @@ package dev.settledlands.npc.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.settledlands.door.DoorGraph382;
+import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -20,7 +21,9 @@ import net.minecraft.network.chat.Component;
  * stock ones.</p>
  *
  * <p>What it shows is the whole node: the title, the number of keys the hack panel of this door asks
- * for, how often one of them changes, and whether the door is closed to a plain click. The values are
+ * for, how often one of them changes, the difficulty (which rows of the keyboard those keys come from,
+ * build 385), whether the door is closed to a plain click, and one line that says the panel owns the
+ * keyboard but for ESC. The values are
  * read from the node, so the card repaints on the next frame after a slider moves - nothing is cached
  * and nothing is drawn per tick.</p>
  */
@@ -61,18 +64,29 @@ public final class DoorCard382 {
             graphics.fill(0, 19, width, 20, sealed ? SEALED : OPEN);
             graphics.drawString(font, title(), 8, 6, sealed ? SEALED : OPEN, false);
 
+            // Build 385: five lines in the same 100 px box - a 14 px pitch, the last one ends at 93.
             graphics.drawString(font, line("gui.settledlands.door.count",
-                    Integer.toString(DoorGraph382.keys(node))), 8, 30, LABEL, false);
+                    Integer.toString(DoorGraph382.keys(node))), 8, 28, LABEL, false);
             graphics.drawString(font, line("gui.settledlands.door.speed",
-                    Integer.toString(DoorGraph382.speed(node))), 8, 48, LABEL, false);
-            graphics.drawString(font, state(sealed), 8, 66, sealed ? SEALED : OPEN, false);
-            // The one line the stock card never needed: what these two numbers are for.
+                    Integer.toString(DoorGraph382.speed(node))), 8, 42, LABEL, false);
+            // «Сложность: 2 (qwerty + asdf)» - the number and the rows it buys, on one line.
+            graphics.drawString(font, difficulty(node), 8, 56, LABEL, false);
+            graphics.drawString(font, state(sealed), 8, 70, sealed ? SEALED : OPEN, false);
+            // The panel swallows the keyboard but for ESC; the card says so, because a player who
+            // cannot close a panel with anything else deserves to read why.
             graphics.drawString(font, tr("gui.settledlands.door.hint"), 8, 84, EDGE, false);
         } catch (Throwable failure) {
             DoorGraph382.fail(failure);
         } finally {
             pose.popPose();
         }
+    }
+
+    /** «Сложность: 2 (qwerty + asdf)» - the value and the rows of the keyboard it opens. */
+    public static String difficulty(NpcDialogueGraph.Node node) {
+        int level = DoorGraph382.difficulty(node);
+        return line("gui.settledlands.door.difficulty", Integer.toString(level))
+                + " (" + tr("gui.settledlands.door.rows" + level) + ")";
     }
 
     /** The name of the node, in the language the client runs in. */

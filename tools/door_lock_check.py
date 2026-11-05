@@ -339,7 +339,10 @@ def structural(jar):
         if panel in names:
             panel_cls2, _panel_refs2 = parse(z.read(panel))
             fnames = field_names(panel_cls2)
-            if "LETTERS" not in fnames or "DIGITS" in fnames:
+            # Build 385 split the single row of 378 into the three rows of «Сложность»
+            # (ROW_TOP / ROW_HOME / ROW_BOTTOM). What this check guards is unchanged: the keycaps are
+            # letters of the keyboard, never digits.
+            if not ({"LETTERS", "ROW_TOP", "ROW_HOME", "ROW_BOTTOM"} & fnames) or "DIGITS" in fnames:
                 problems.append("the panel still offers digits - the author asked for keys/letters")
             if "ROLL_MS" not in fnames:
                 problems.append("the panel has no rolling key interval - the clock would have to throw "

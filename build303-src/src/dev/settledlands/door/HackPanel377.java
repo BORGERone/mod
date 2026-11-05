@@ -30,13 +30,42 @@ import org.slf4j.LoggerFactory;
  * InputConstants.isKeyDown} answers for real hardware every frame - the same call the base mod's own
  * screens make for the space bar - so a key already held when the panel opened, or released while the
  * window lost focus, cannot lie about its state.</p>
+ *
+ * <p><b>Build 385: the panel owns the keyboard.</b> Build 384 let every key it did not use fall through
+ * to the screen's super method, and a screen that answers {@code false} hands the key to the game's key
+ * mappings - the author pressed R in the panel and reloaded his shaders. Only ESC does anything now: it
+ * closes the panel. Everything else is swallowed, so no key mapping, no hotkey and no mod shortcut can
+ * fire while the panel is up. Reading the hardware directly ({@link InputConstants#isKeyDown}) is
+ * unaffected - that is what the panel measures.</p>
+ *
+ * <p><b>Build 385: «Сложность».</b> The door node has a third slider, and it decides which rows of the
+ * keyboard the keys are drawn from: 1 - {@code qwertyuiop[]}, 2 - those plus {@code asdfghjkl;'},
+ * 3 - those plus {@code zxcvbnm,./}. A harder door does not ask for more keys; it asks for the same
+ * number of keys out of a bigger board, so the same two hands have to search further.</p>
  */
 public class HackPanel377 extends Screen {
 
     private static final Logger LOG = LoggerFactory.getLogger("SettledLands/HackPanel377");
 
-    /** GLFW codes of the letter row Q W E R T Y U I O P. Layout positions, not the characters. */
-    private static final int[] LETTERS = {81, 87, 69, 82, 84, 89, 85, 73, 79, 80};
+    /**
+     * Build 385: the three rows a key can come from. GLFW codes are the layout positions of the keys,
+     * and for these keys the code is the ASCII value - which is why the keycap label can be the code.
+     *
+     * <p>Row 1 is the one the panel used since build 378 ({@code qwertyuiop}) plus the two keys to its
+     * right ({@code [ ]}), because the author named the row as {@code qwertyuiop[]}. Row 2 is
+     * {@code asdfghjkl;'} and row 3 is {@code zxcvbnm,./} - the three rows of a QWERTY keyboard, in the
+     * order a hand reaches them.</p>
+     */
+    private static final int[] ROW_TOP = {81, 87, 69, 82, 84, 89, 85, 73, 79, 80, 91, 93};
+    private static final int[] ROW_HOME = {65, 83, 68, 70, 71, 72, 74, 75, 76, 59, 39};
+    private static final int[] ROW_BOTTOM = {90, 88, 67, 86, 66, 78, 77, 44, 46, 47};
+
+    public static final int MIN_DIFFICULTY = 1;
+    public static final int MAX_DIFFICULTY = 3;
+    public static final int DEFAULT_DIFFICULTY = 1;
+
+    /** The key ESC, and the only key this panel lets through to the screen under it. */
+    private static final int ESC = 256;
 
     private static final int MIN_BUTTONS = 4;
     private static final int MAX_BUTTONS = 10;
@@ -72,6 +101,9 @@ public class HackPanel377 extends Screen {
     private final int count;
     private final int[] keys;
     private final long rollMs;
+    private final int difficulty;
+    /** The rows this panel draws from - fixed for the life of the panel, from the door's difficulty. */
+    private final int[] pool;
 
     private long rolledAt;
     private long flashAt;
@@ -79,12 +111,14 @@ public class HackPanel377 extends Screen {
     private boolean solved;
     private int swaps;
 
-    private HackPanel377(BlockPos pos, int count, int[] keys, long rollMs) {
+    private HackPanel377(BlockPos pos, int count, int[] keys, long rollMs, int difficulty) {
         super(Component.literal("Взлом двери"));
         this.pos = pos;
         this.count = count;
         this.keys = keys;
         this.rollMs = rollMs > 0L ? rollMs : ROLL_MS;
+        this.difficulty = clampDifficulty(difficulty);
+        this.pool = pool(this.difficulty);
     }
 
     /**
@@ -110,12 +144,17 @@ public class HackPanel377 extends Screen {
                     : MIN_BUTTONS + random.nextInt(MAX_BUTTONS - MIN_BUTTONS + 1);
             long rollMs = settings != null && settings[1] > 0
                     ? settings[1] * 1000L : ROLL_MS;
-            int[] keys = pick(random, count);
-            mc.setScreen(new HackPanel377(pos, count, keys, rollMs));
+            // Build 385: the third number of the door's node. A door that was never edited, or one
+            // whose graph predates the difficulty, plays on difficulty 1 - the row of build 378.
+            int difficulty = settings != null && settings.length > 2
+                    ? clampDifficulty(settings[2]) : DEFAULT_DIFFICULTY;
+            int[] keys = pick(random, count, difficulty);
+            mc.setScreen(new HackPanel377(pos, count, keys, rollMs, difficulty));
             // Build 379: a panel that never appeared and a panel nobody could solve look the same in
             // game - the door stays shut either way. This line says which one happened.
             LOG.info("door: the lock panel opened at " + DoorSync375.key(mc.player.level(), pos)
-                    + " with " + count + " keys every " + (rollMs / 1000L) + " s: " + spell(keys));
+                    + " with " + count + " keys every " + (rollMs / 1000L) + " s, difficulty "
+                    + difficulty + ": " + spell(keys));
         } catch (Throwable failure) {
             // A panel that cannot be built must cost the player the panel, not the click.
             LOG.warn("door: the lock panel could not be opened, the door stays locked and silent", failure);
@@ -123,18 +162,42 @@ public class HackPanel377 extends Screen {
         }
     }
 
-    /** {@code count} distinct letters of the row, left to right. */
-    private static int[] pick(Random random, int count) {
-        int[] pool = new int[LETTERS.length];
-        System.arraycopy(LETTERS, 0, pool, 0, LETTERS.length);
+    /** The keys of one difficulty: row 1, rows 1-2, or all three rows. */
+    public static int[] pool(int difficulty) {
+        int level = clampDifficulty(difficulty);
+        int size = ROW_TOP.length + (level >= 2 ? ROW_HOME.length : 0)
+                + (level >= 3 ? ROW_BOTTOM.length : 0);
+        int[] out = new int[size];
+        int at = 0;
+        System.arraycopy(ROW_TOP, 0, out, at, ROW_TOP.length);
+        at += ROW_TOP.length;
+        if (level >= 2) {
+            System.arraycopy(ROW_HOME, 0, out, at, ROW_HOME.length);
+            at += ROW_HOME.length;
+        }
+        if (level >= 3) {
+            System.arraycopy(ROW_BOTTOM, 0, out, at, ROW_BOTTOM.length);
+        }
+        return out;
+    }
+
+    public static int clampDifficulty(int value) {
+        return value < MIN_DIFFICULTY ? MIN_DIFFICULTY
+                : (value > MAX_DIFFICULTY ? MAX_DIFFICULTY : value);
+    }
+
+    /** {@code count} distinct keys of the rows this difficulty allows, left to right. */
+    public static int[] pick(Random random, int count, int difficulty) {
+        int[] pool = pool(difficulty);
         for (int i = pool.length - 1; i > 0; i--) {
             int j = random.nextInt(i + 1);
             int swap = pool[i];
             pool[i] = pool[j];
             pool[j] = swap;
         }
-        int[] out = new int[count];
-        System.arraycopy(pool, 0, out, 0, count);
+        int take = Math.max(1, Math.min(count, pool.length));
+        int[] out = new int[take];
+        System.arraycopy(pool, 0, out, 0, take);
         java.util.Arrays.sort(out);
         return out;
     }
@@ -150,24 +213,26 @@ public class HackPanel377 extends Screen {
         return false;
     }
 
-    /** The keys of this panel are ours: nothing else may read them while the panel is up. */
+    /**
+     * Build 385: the panel owns the keyboard while it is up - every key but one.
+     *
+     * <p>A screen that returns {@code false} hands the key to the game's key mappings, and the author
+     * pressed R in the panel of build 384 and reloaded his shaders. So an answer of {@code true} for
+     * every key that is not ESC: no key mapping, no hotkey, no mod shortcut, no debug combination fires
+     * while the panel is open. ESC goes to the screen's own handler, which closes the panel - and only
+     * the panel: the door is untouched by anything this screen does.</p>
+     */
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (owns(keyCode)) return true;
-        return super.keyPressed(keyCode, scanCode, modifiers);
+        if (keyCode == ESC) return super.keyPressed(keyCode, scanCode, modifiers);
+        return true;
     }
 
+    /** The same rule for a release: the panel hears about every key, the game hears about none. */
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
-        if (owns(keyCode)) return true;
-        return super.keyReleased(keyCode, scanCode, modifiers);
-    }
-
-    private boolean owns(int keyCode) {
-        for (int i = 0; i < keys.length; i++) {
-            if (keys[i] == keyCode) return true;
-        }
-        return false;
+        if (keyCode == ESC) return super.keyReleased(keyCode, scanCode, modifiers);
+        return true;
     }
 
     /** The panel's keys the keyboard is holding right now. 0 when no window is known. */
@@ -203,8 +268,8 @@ public class HackPanel377 extends Screen {
         Random random = new Random();
         int index = random.nextInt(count);
         int fresh = keys[index];
-        for (int tries = 0; tries < LETTERS.length * 4; tries++) {
-            int candidate = LETTERS[random.nextInt(LETTERS.length)];
+        for (int tries = 0; tries < pool.length * 4; tries++) {
+            int candidate = pool[random.nextInt(pool.length)];
             if (!uses(candidate)) {
                 fresh = candidate;
                 break;
@@ -276,7 +341,8 @@ public class HackPanel377 extends Screen {
                 fresh ? SWAP : (down == count ? BTN_ON_EDGE : LABEL));
 
         graphics.drawCenteredString(this.font,
-                Component.literal("каждые " + (this.rollMs / 1000L) + " с одна клавиша меняется"),
+                Component.literal("каждые " + (this.rollMs / 1000L) + " с одна клавиша меняется"
+                        + " · сложность " + this.difficulty),
                 center, panelTop + 108, DIM);
 
         long leftMs = this.rollMs - (now - rolledAt);
@@ -305,7 +371,7 @@ public class HackPanel377 extends Screen {
         return out.toString();
     }
 
-    /** "Q".."P" - the letter on the keycap, whatever the layout makes of the key. */
+    /** "Q", "[", ";" - the character on the keycap; the GLFW code of these keys is its ASCII value. */
     private static String label(int keyCode) {
         return String.valueOf((char) keyCode);
     }
