@@ -1,0 +1,2 @@
+1f65b745e30eff5385ce6183f745a66f02f814eff8b4d154577fb593a350b78a  settledlands-0.8.0-build376-door-sync.jar
+835a4ec5e21810e1d64a44d0b547b4343e6d7f7ed258c0ad839b33390b047b6d  SettledLands-Build376-DoorSync-Source.zip

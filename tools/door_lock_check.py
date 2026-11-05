@@ -236,6 +236,42 @@ def structural(jar):
                        for r in guard_refs):
                 problems.append("the guard never closes a door")
 
+        # Build 376: the client may not refuse every door - that was 375, and the author paid for it with
+        # a round trip on every ordinary door ("the top half opens with a delay"). It has to know which
+        # doors are locked instead: a payload, a registration, and a client that asks both questions.
+        sync = "dev/settledlands/door/DoorSync375.class"
+        net = "dev/settledlands/door/DoorNet375.class"
+        for needed, why in ((sync, "no lock sync class: the client could not tell a locked door from an "
+                                   "ordinary one"),
+                            (net, "no payload registration: the lock list would never reach a client")):
+            if needed not in names:
+                problems.append(why)
+        if sync in names:
+            sync_cls, sync_refs = parse(z.read(sync))
+            if not any(r[0] and r[0].endswith("custom/CustomPacketPayload$Type")
+                       and r[1] == "<init>" for r in sync_refs):
+                problems.append("the lock sync is not a CustomPacketPayload - NeoForge would not send it")
+            if not any(r[0] and r[0].endswith("network/PacketDistributor") for r in sync_refs):
+                problems.append("nothing is ever sent: the lock list stays on the server")
+        if net in names:
+            net_cls, net_refs = parse(z.read(net))
+            if not any(r[1] == "playToClient" and r[0] and r[0].endswith("registration/PayloadRegistrar")
+                       for r in net_refs):
+                problems.append("the payload is never registered - NeoForge refuses unregistered payloads")
+            if not any(r[0] and r[0].endswith("network/event/RegisterPayloadHandlersEvent")
+                       for r in net_refs):
+                problems.append("the registration is not on the mod bus")
+        if not any(r[1] == "synced" and r[0] and r[0].endswith("door/DoorSync375") for r in event_refs):
+            problems.append("the client refuses doors without asking whether it knows the locks - that is "
+                            "build 375, and its cost was a round trip on every door")
+        if not any(r[1] == "isLocked" and r[0] and r[0].endswith("door/DoorSync375") for r in event_refs):
+            problems.append("the client never checks a door against the synced locks")
+        if not any(r[1] == "getEntity"
+                   and r[0] and r[0].endswith("event/entity/player/PlayerEvent$PlayerLoggedInEvent")
+                   for r in event_refs):
+            problems.append("a joining player is never sent the lock list - every door would stay slow "
+                            "until a door is locked or unlocked")
+
         # Build 372: a build that cannot explain itself cannot be fixed. The jar has to be able to say
         # in the log whether the key registered, whether a click was refused, and what the guard closed.
         # Build 374: a guard that never bound and a guard that bound and refused nothing look exactly
@@ -244,7 +280,7 @@ def structural(jar):
                            (EVENTS, b"was refused"),
                            (EVENTS, b"is not a DoorBlock"),
                            (EVENTS, b"useWithoutItem was reached"),
-                           (EVENTS, b"only the server opens doors"),
+                           (EVENTS, b"the lock is known to this client"),
                            ("dev/settledlands/mixin/DoorUse373Mixin.class", b"sawDoorUse"),
                            ("dev/settledlands/door/DoorGuard371.class", b"the guard closed")):
             if name not in names or must not in z.read(name):

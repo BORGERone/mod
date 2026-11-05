@@ -677,6 +677,16 @@ CONFIRMED_EXTERNAL = {
     # Build 373 removed the build-371 entries for setUseBlock/setUseItem: those methods do not exist
     # on PlayerInteractEvent in NeoForge 1.21.1. The wall was not the entry, the entry was the wall -
     # an allowlist that let a non-existent API through is worse than no allowlist.
+    # Build 376, the door lock sync. The base jar already registers payloads of its own
+    # (PlayAudioPayload, CutsceneCamStatePayload: `StreamCodec.composite(ByteBufCodecs.VAR_INT, ...)`,
+    # `PacketDistributor.sendToPlayer`, `PayloadRegistrar`), so the payload machinery is proven by code
+    # that runs in game. The one member it never touched is the string codec used for the lock list;
+    # confirmed in the published 1.21.1 javadoc (lexxie.dev/neoforge/1.21.1):
+    # `ByteBufCodecs.STRING_UTF8` is `static final StreamCodec<ByteBuf, String>`, and the same page
+    # shows VAR_INT, which the base jar composes exactly the same way.
+    ("net/minecraft/network/codec/ByteBufCodecs", "STRING_UTF8",
+     "Lnet/minecraft/network/codec/StreamCodec;"):
+        "Build 376 doors: the single string field of the lock sync payload (1.21.1 javadoc)",
     ("net/minecraft/world/InteractionResult", "FAIL", "Lnet/minecraft/world/InteractionResult;"):
         "Build 373 doors: 'this interaction did nothing' - the same class the base jar already uses "
         "for SUCCESS and PASS (NeoForge 1.21.1 javadoc), and the answer the refusal returns",

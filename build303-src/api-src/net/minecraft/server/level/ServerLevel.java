@@ -18,6 +18,9 @@ public class ServerLevel extends Level {
         return 0;
     }
 
+    /** Build 376: every player in this level - the base mod loops over it to send payloads. */
+    public java.util.List<ServerPlayer> players() { return null; }
+
     /** Build 351: the same call CutsceneStorage and NpcCommonGraphStorage already make. */
     public net.minecraft.world.level.storage.DimensionDataStorage getDataStorage() {
         return null;

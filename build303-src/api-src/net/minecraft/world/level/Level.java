@@ -3,6 +3,8 @@ package net.minecraft.world.level;
 import java.util.List;
 import java.util.function.Predicate;
 import net.minecraft.core.BlockPos;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.server.MinecraftServer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
@@ -32,4 +34,10 @@ public class Level {
      * in the client's hands at once, or the door stays open in that picture for as long as it takes.
      */
     public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {}
+
+    /** Build 376: a client has to name the dimension of a door to look its lock up. */
+    public ResourceKey<Level> dimension() { return null; }
+
+    /** Build 376: null on the client, the integrated or dedicated server on the other side. */
+    public MinecraftServer getServer() { return null; }
 }

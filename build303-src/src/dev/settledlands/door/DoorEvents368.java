@@ -10,6 +10,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.InteractionResult;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
+import net.neoforged.neoforge.event.entity.player.PlayerEvent;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
 import net.neoforged.neoforge.event.level.BlockEvent;
 import org.slf4j.Logger;
@@ -101,6 +102,11 @@ public final class DoorEvents368 {
             if (level == null) return;
             BlockState here = level.getBlockState(pos);
             if (!Doors368.isDoor(here)) return;
+            // Build 376: once the server has told this client where the locks are, only a locked door
+            // is refused and every other door is predicted locally again - the lag of 375 on ordinary
+            // doors was the price of not knowing. Until the first snapshot arrives the strict answer
+            // stays: refuse everything, be slow, never let a locked door open for a tick.
+            if (DoorSync375.synced() && !DoorSync375.isLocked(level, pos)) return;
             event.setCanceled(true);
             try {
                 event.setCancellationResult(InteractionResult.SUCCESS);
@@ -110,7 +116,7 @@ public final class DoorEvents368 {
             if (!sawClient) {
                 sawClient = true;
                 note("door: the client refused to open the door at " + pos
-                        + " on its own - only the server opens doors now (build 375)");
+                        + " on its own - the lock is known to this client (build 376)");
             }
         } catch (Throwable failure) {
             LOG.warn("a door click could not be refused on the client", failure);
@@ -163,11 +169,33 @@ public final class DoorEvents368 {
                 store.lock(server, pos);
                 nowLocked = true;
             }
+            // Build 376: every client that can see this door learns about it now, so from here on a
+            // locked door is refused locally and an unlocked one is predicted locally.
+            DoorSync375.sendDelta(server, pos, nowLocked);
             note("door: the door at " + pos + (nowLocked ? " is locked" : " is unlocked")
                     + " by the key, " + (store.size()) + " place(s) locked in this world");
             tell(event.getEntity(), Component.translatable(nowLocked ? ON : OFF).getString());
         } catch (Throwable failure) {
             LOG.warn("a door click could not be handled", failure);
+        }
+    }
+
+    /**
+     * Build 376: a client that has just joined is told every lock there is.
+     *
+     * <p>Without this the client would fall back to refusing every door click (build 375) - correct,
+     * but laggy. The snapshot is sent before the player can reach a door, so the strict fallback only
+     * covers the gap between joining and this line.</p>
+     */
+    @SubscribeEvent
+    public static void onJoin(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event == null) return;
+        try {
+            if (event.getEntity() instanceof ServerPlayer player) {
+                DoorSync375.sendSnapshot(player);
+            }
+        } catch (Throwable failure) {
+            LOG.warn("a joining player could not be told which doors are locked", failure);
         }
     }
 
