@@ -1112,3 +1112,5 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
   jdk4py` restores `/usr/local/lib/python3.11/dist-packages/jdk4py/java-runtime/bin/java`, and
   `git fetch --depth=1 origin arena/5618404a-mod && git reset --hard FETCH_HEAD` restores the branch tip.
 - Not confirmed in game: panel look, key ergonomics, and the whole C2S path.
+- Drive copies (public): jar `1q4tvRs1Qx0jfqq53fzjc094RSAFCUAdw`, zip `1J28mVCjriZfBP2edP4WdYkwnV-qTwbT7`.
+- Commit `aa375d1` (jar + README + zip + SHA256SUMS-build377.txt + patch script).
