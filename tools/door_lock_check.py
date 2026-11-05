@@ -381,6 +381,20 @@ def structural(jar):
             problems.append("the guard does not know about cracked doors - a solved panel would open a "
                             "door that the next tick closes again")
 
+        # Build 379: "the panel was solved and the door did not open" must never be unanswerable again.
+        # The packet path has to say when it arrived, when it was refused and when the block refused the
+        # open, and the panel has to say when it opened and when it was solved.
+        for name, must in ((hack, "door_hack arrived"),
+                           (hack, "was asked to open and did not"),
+                           (panel, "the lock panel opened"),
+                           (panel, "sending the hack")):
+            if name in names and must.encode("utf-8") not in z.read(name):
+                problems.append("%s does not report %r - a door that stays shut could not be explained "
+                                "from the log" % (name, must))
+        if hack in names and b"use as it is" not in z.read(hack) and b"the position is used" not in z.read(hack):
+            problems.append("the hack still requires the exact dimension spelling - a door inside a "
+                            "sub-level or a pocket dimension would never open")
+
         # Build 372: a build that cannot explain itself cannot be fixed. The jar has to be able to say
         # in the log whether the key registered, whether a click was refused, and what the guard closed.
         # Build 374: a guard that never bound and a guard that bound and refused nothing look exactly

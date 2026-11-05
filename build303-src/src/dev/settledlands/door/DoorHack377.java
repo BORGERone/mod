@@ -92,10 +92,26 @@ public record DoorHack377(String key) implements CustomPacketPayload {
     public static void handle(DoorHack377 payload, IPayloadContext context) {
         try {
             if (payload == null || context == null) return;
-            if (!(context.player() instanceof ServerPlayer player)) return;
-            if (player.level() == null || !(player.level() instanceof ServerLevel server)) return;
+            // Build 379: the first line of this method is a report. A packet that never arrived and a
+            // packet that arrived and was refused look exactly the same from the player's chair - the
+            // door simply does not open - and this line is the difference in the log.
+            if (!(context.player() instanceof ServerPlayer player)) {
+                note("door: door_hack arrived without a player - the packet was ignored");
+                return;
+            }
+            note("door: door_hack arrived from " + player.getName().getString()
+                    + ": key=" + payload.key());
+            if (player.level() == null || !(player.level() instanceof ServerLevel server)) {
+                note("door: door_hack arrived for " + player.getName().getString()
+                        + " but the player is not in a server level - the packet was ignored");
+                return;
+            }
             BlockPos pos = read(server, payload.key());
-            if (pos == null) return;
+            if (pos == null) {
+                note("door: door_hack named " + payload.key()
+                        + " which is not a block position - nothing opened");
+                return;
+            }
             if (!Doors368.isDoor(server.getBlockState(pos))) return;
             DoorStore368 store = DoorStore368.get(server);
             if (store == null || !store.isLocked(server, pos)) {
@@ -110,8 +126,13 @@ public record DoorHack377(String key) implements CustomPacketPayload {
             }
             boolean opened = Doors368.setOpen(server, pos, true);
             remember(server, pos);
+            boolean nowOpen = Doors368.anyOpen(server, pos);
             note("door: the locked door at " + pos + " was cracked by " + player.getName().getString()
-                    + " (opened=" + opened + "), the lock stays");
+                    + " (changed=" + opened + ", open now=" + nowOpen + "), the lock stays");
+            if (!nowOpen) {
+                LOG.warn("door: the door at " + pos + " was asked to open and did not - it is locked by "
+                        + "the store of this level, the click was accepted, but the block refused");
+            }
             player.displayClientMessage(Component.literal("Замок вскрыт - дверь открыта"), true);
         } catch (Throwable failure) {
             LOG.warn("door: a solved panel could not be applied: " + failure);
@@ -119,22 +140,31 @@ public record DoorHack377(String key) implements CustomPacketPayload {
     }
 
     /**
-     * {@code minecraft:overworld@12,64,-30} to a position, or null when the line is not exactly the key
-     * of a block in this level. Comparing the rebuilt key with the sent one checks the dimension too,
-     * so a key from a door in another world can never name one here.
+     * {@code minecraft:overworld@12,64,-30} to a position, or null when the line carries no position.
+     *
+     * <p>Build 379: the position is read on its own, and the dimension half of the key is only
+     * <b>compared</b>, not required. Build 377 threw the whole request away when the two strings differed
+     * - and they can differ without anything being wrong: a door inside a sub-level (Sable, Immersive
+     * Portals) or a pocket dimension is named by one side of the game and found by the other under a
+     * different dimension id. The packet arriving with a key this level would spell differently is not a
+     * reason to leave the door shut; the two checks that matter are the lock and the distance, and both
+     * are applied to the position that was read.</p>
      */
     private static BlockPos read(Level level, String key) {
         if (level == null || key == null) return null;
         try {
             int at = key.indexOf('@');
-            if (at <= 0) return null;
-            String body = key.substring(at + 1);
+            String body = at >= 0 ? key.substring(at + 1) : key;
             String[] parts = body.split(",");
             if (parts.length != 3) return null;
             BlockPos pos = new BlockPos(Integer.parseInt(parts[0].trim()),
                     Integer.parseInt(parts[1].trim()), Integer.parseInt(parts[2].trim()));
             String again = DoorSync375.key(level, pos);
-            return again.equals(key) ? pos : null;
+            if (!again.equals(key)) {
+                note("door: the solved panel named " + key + ", this level calls that block " + again
+                        + " - the position is used as it is");
+            }
+            return pos;
         } catch (Throwable ignored) {
             return null;
         }
@@ -187,7 +217,7 @@ public record DoorHack377(String key) implements CustomPacketPayload {
     }
 
     private static void note(String line) {
-        if (said >= 8) return;
+        if (said >= 12) return;
         said++;
         LOG.info(line);
     }

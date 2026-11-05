@@ -1130,3 +1130,25 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - Gate `door_lock_check` now also requires: `LETTERS` present / `DIGITS` absent, `ROLL_MS` present,
   the swap message present, the old "не успел - кнопки сброшены" reset absent. 377 fails all four.
 - All gates green, `verify_jar --base 377` PASS, 0 new external refs.
+
+## Build 379 - the hack path reports itself (shipped)
+
+- Jar `settledlands-0.8.0-build379-door-hack-report.jar`, sha256
+  `39c09f8ac2f7be588eeb0a187fcf149d62a4dd3d7dfbdd7f366abc6db7293d66`; zip
+  `SettledLands-Build379-DoorHackReport-Source.zip`, sha256
+  `416b5a13ceb3daf2133474e171ec1bc3f38c01f6be7ca9804eea0b40dd1862b9`; README `README-Build379-RU.md`;
+  patch script `tools/patch_build379.py` (base 378).
+- The author reported "in the previous version the door did not open" **without a usable log**: the
+  attached `latest-11.log` crashes at mod loading on `createrailwaysnavigator` (ModBlocks.<clinit>),
+  before any world loads, and no uploaded log contains a single `door:` line.
+- Two changes: (1) `DoorHack377.read` no longer requires the dimension half of the key to match - the
+  position is read on its own and a spelling difference is only logged (doors inside Sable/ImmPtl
+  sub-levels and pocket dimensions would never open before); (2) the whole path is instrumented -
+  `door_hack arrived`, the result of `setOpen` (`changed=`, `open now=`), `was asked to open and did not`,
+  panel `opened` and `sending the hack`.
+- Gate: `door_lock_check` requires those four log strings and forbids the strict dimension check. 378
+  fails all five rules.
+- All gates green, `verify_jar --base 378` PASS, 0 new external refs.
+- Open question for the next turn: which `door:` line appears in the author's log; if the panel never
+  opens, look at "the lock panel could not be opened" (a throw inside `HackPanel377.open`).
+

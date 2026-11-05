@@ -7,6 +7,8 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 /**
  * Build 378: the lock panel - "взлом" - of a locked door.
@@ -30,6 +32,8 @@ import net.minecraft.network.chat.Component;
  * window lost focus, cannot lie about its state.</p>
  */
 public class HackPanel377 extends Screen {
+
+    private static final Logger LOG = LoggerFactory.getLogger("SettledLands/HackPanel377");
 
     /** GLFW codes of the letter row Q W E R T Y U I O P. Layout positions, not the characters. */
     private static final int[] LETTERS = {81, 87, 69, 82, 84, 89, 85, 73, 79, 80};
@@ -92,8 +96,13 @@ public class HackPanel377 extends Screen {
             int count = MIN_BUTTONS + random.nextInt(MAX_BUTTONS - MIN_BUTTONS + 1);
             int[] keys = pick(random, count);
             mc.setScreen(new HackPanel377(pos, count, keys));
+            // Build 379: a panel that never appeared and a panel nobody could solve look the same in
+            // game - the door stays shut either way. This line says which one happened.
+            LOG.info("door: the lock panel opened at " + DoorSync375.key(mc.player.level(), pos)
+                    + " with " + count + " keys: " + spell(keys));
         } catch (Throwable failure) {
             // A panel that cannot be built must cost the player the panel, not the click.
+            LOG.warn("door: the lock panel could not be opened, the door stays locked and silent", failure);
             net.minecraft.client.Minecraft.getInstance().setScreen(null);
         }
     }
@@ -262,9 +271,22 @@ public class HackPanel377 extends Screen {
 
         if (!solved && down == count) {
             solved = true;
+            LOG.info("door: all " + count + " keys of the panel are held - sending the hack for "
+                    + DoorSync375.key(Minecraft.getInstance().player == null ? null
+                            : Minecraft.getInstance().player.level(), pos));
             DoorHack377.send(pos);
             this.onClose();
         }
+    }
+
+    /** The letters of a row as a line of text, for the log. */
+    private static String spell(int[] keys) {
+        StringBuilder out = new StringBuilder();
+        for (int i = 0; i < keys.length; i++) {
+            if (i > 0) out.append(' ');
+            out.append(label(keys[i]));
+        }
+        return out.toString();
     }
 
     /** "Q".."P" - the letter on the keycap, whatever the layout makes of the key. */

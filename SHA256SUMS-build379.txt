@@ -1,0 +1,2 @@
+39c09f8ac2f7be588eeb0a187fcf149d62a4dd3d7dfbdd7f366abc6db7293d66  settledlands-0.8.0-build379-door-hack-report.jar
+416b5a13ceb3daf2133474e171ec1bc3f38c01f6be7ca9804eea0b40dd1862b9  SettledLands-Build379-DoorHackReport-Source.zip
