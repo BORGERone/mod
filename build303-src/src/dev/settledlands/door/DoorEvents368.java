@@ -48,6 +48,9 @@ public final class DoorEvents368 {
     /** Build 374: has the door-side refusal been reached at least once in this session? */
     private static boolean sawUse;
 
+    /** Build 375: has the client refused to open a door on its own at least once in this session? */
+    private static boolean sawClient;
+
     private DoorEvents368() {}
 
     private static void note(String line) {
@@ -77,13 +80,55 @@ public final class DoorEvents368 {
         }
     }
 
+    /**
+     * Build 375: the client is not allowed to open a door by itself.
+     *
+     * <p>This is the tick the author kept seeing. In 1.21.1 the client decides whether a click reaches
+     * the block's own use in {@code MultiPlayerGameMode#performUseItemOn}, and the only thing that stops
+     * it there is a cancelled {@code RightClickBlock} event
+     * ({@code if (event.isCanceled()) return event.getCancellationResult();}). Our handler used to return
+     * on the first line for anything that is not a {@code ServerLevel} - so on the client the event was
+     * never cancelled, the client ran {@code DoorBlock#useWithoutItem} locally, and the door it drew stood
+     * open until the server's answer arrived. The lock cannot be asked on the client (the store lives in
+     * the server's saved data), so the client refuses every door click and lets the server decide: an
+     * unlocked door is opened by the server one tick later, a locked one is never opened at all.</p>
+     *
+     * <p>The answer is {@code InteractionResult.SUCCESS} - a swung arm and no local use. The click still
+     * reaches the server: the packet is sent before the prediction runs.</p>
+     */
+    private static void client(Level level, BlockPos pos, PlayerInteractEvent.RightClickBlock event) {
+        try {
+            if (level == null) return;
+            BlockState here = level.getBlockState(pos);
+            if (!Doors368.isDoor(here)) return;
+            event.setCanceled(true);
+            try {
+                event.setCancellationResult(InteractionResult.SUCCESS);
+            } catch (Throwable missing) {
+                LOG.warn("the client could not refuse a door click: " + missing);
+            }
+            if (!sawClient) {
+                sawClient = true;
+                note("door: the client refused to open the door at " + pos
+                        + " on its own - only the server opens doors now (build 375)");
+            }
+        } catch (Throwable failure) {
+            LOG.warn("a door click could not be refused on the client", failure);
+        }
+    }
+
     @SubscribeEvent
     public static void onRightClick(PlayerInteractEvent.RightClickBlock event) {
         if (event == null) return;
         try {
             Level level = event.getLevel();
             BlockPos pos = event.getPos();
-            if (!(level instanceof ServerLevel server) || pos == null) return;
+            if (pos == null) return;
+            if (!(level instanceof ServerLevel server)) {
+                // Build 375: the client never opens a door on its own guess.
+                client(level, pos, event);
+                return;
+            }
             BlockState here = server.getBlockState(pos);
             if (!Doors368.isDoor(here)) {
                 if (DoorKey368.isKey(event.getItemStack()) && here != null) {

@@ -135,6 +135,14 @@ def structural(jar):
         if not any(r[1] == "FAIL" and r[0] and r[0].endswith("world/InteractionResult")
                    for r in event_refs):
             problems.append("the refused interaction result is not InteractionResult.FAIL")
+        # Build 375: on 1.21.1 the client opens a door itself unless the RightClickBlock event is
+        # cancelled (MultiPlayerGameMode#performUseItemOn returns early only when it is). That local
+        # open is the single tick the author kept walking through, so the client has to refuse doors
+        # outright and leave the decision to the server.
+        if not any(r[1] == "SUCCESS" and r[0] and r[0].endswith("world/InteractionResult")
+                   for r in event_refs):
+            problems.append("the client never refuses a door click - the door opens locally for a tick "
+                            "before the server answers, and that tick is walkable")
         if not any(r[1] == "sendBlockUpdated" for r in event_refs):
             problems.append("the client is never told the door is still closed - that is the door "
                             "that 'opens for a second'")
@@ -236,6 +244,7 @@ def structural(jar):
                            (EVENTS, b"was refused"),
                            (EVENTS, b"is not a DoorBlock"),
                            (EVENTS, b"useWithoutItem was reached"),
+                           (EVENTS, b"only the server opens doors"),
                            ("dev/settledlands/mixin/DoorUse373Mixin.class", b"sawDoorUse"),
                            ("dev/settledlands/door/DoorGuard371.class", b"the guard closed")):
             if name not in names or must not in z.read(name):

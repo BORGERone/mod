@@ -1,0 +1,2 @@
+0d2aaeef4c56846300d70093bb9059b80e26cef21c028e68948d0a15b338114d  settledlands-0.8.0-build375-door-client.jar
+f765f6635722aebac0f4f47f8a55748e3d7a3cfc4f35969cd8577f8e4b618883  SettledLands-Build375-DoorClient-Source.zip
