@@ -1056,4 +1056,5 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - 374 artifacts: jar `settledlands-0.8.0-build374-door-proof.jar` 3 516 995 B / 558 entries, sha256 `cce5bc08efe9c7e75560ec82297a41293cc311c51cd5b299667190f9c79b4332`; source zip `SettledLands-Build374-DoorProof-Source.zip` 437 entries, sha256 `e1ab7f7abe715afad9c83b27ad1276db86322445ca618f71a686e97754dfd28a`; `tools/patch_build374.py` (BASE 373, 3 REPLACED); commit `06d4c4d`.
 - UI screen the author showed in three screenshots (block graph: tabs «Главный/Распорядитель/Общее», «Удалить Граф», node panel, «Создать узел» dropdown) is **not** to be touched: the author answered that the screenshots are only context. Do not touch the base screen's layout.
 - Workspace resets between turns: `git fetch origin && git reset --hard origin/arena/5618404a-mod` restores everything including build303-src, out373/out374 and the built jars (all tracked); `jdk4py` must be re-installed each session.
+- 374 Drive ids (both public): jar `13GcMQg55eh2RXOr7Osz1K8i3OmrBO9ui`, zip `1iR5RPVVuPYPo4wxP13Kv7-rxdQlGN5To`.
 
