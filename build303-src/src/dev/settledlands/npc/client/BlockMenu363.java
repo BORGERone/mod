@@ -99,6 +99,21 @@ public final class BlockMenu363 {
     /** The stock rows a block may create, computed once from the block's own palette. */
     private static int[] rows;
 
+    /**
+     * Build 382: the same panel, with the one row a door has. A door's graph is edited in this very
+     * screen (build 351 taught it to open on a block, build 382 on a door), and a door has exactly one
+     * node - «Дверь» - so the panel is one row tall and there is nothing to scroll. Everything else in
+     * this class (the stock body, the header, the hit test, the wheel, the strip) is shared, because a
+     * second painter for a one-row list would be a second thing to keep in step.
+     */
+    private static boolean door;
+
+    /** The one row of a door panel: a stock row number of its own, above the sixteen of the base. */
+    private static final int DOOR_ROW = 0;
+
+    /** The colour of the door node on the canvas and in the panel - a door brown. */
+    private static final int DOOR_COLOUR = -3725286;
+
     /** Where the open panel is, measured when it appeared. */
     private static int left;
     private static int top;
@@ -112,10 +127,14 @@ public final class BlockMenu363 {
     /** The menu this geometry belongs to: a second measurement of the same open menu keeps the window. */
     private static NpcGraphContextMenu measured;
 
+    /** The single row of a door panel. */
+    private static final int[] DOOR_ROWS = {DOOR_ROW};
+
     private BlockMenu363() {}
 
     /** Stock row numbers a block can create - the rows whose type {@link BlockTrigger351} allows. */
     public static int[] rows() {
+        if (door) return DOOR_ROWS;
         if (rows == null) {
             int[] kept = new int[LABEL_KEYS.length];
             int count = 0;
@@ -134,18 +153,24 @@ public final class BlockMenu363 {
 
     /** Row of this panel -> the stock row behind it, or -1 when there is none. */
     public static int stockRow(int compact) {
+        if (door) return compact == 0 ? DOOR_ROW : -1;
         int[] kept = rows();
         return compact >= 0 && compact < kept.length ? kept[compact] : -1;
     }
 
     /** The stock label of a row of this panel. */
     public static String label(int compact) {
+        if (door) {
+            return compact == 0
+                    ? Component.translatable("gui.settledlands.door.node").getString() : "";
+        }
         int stock = stockRow(compact);
         return stock < 0 ? "" : Component.translatable(LABEL_KEYS[stock]).getString();
     }
 
     /** The stock colour of a row of this panel. */
     public static int colour(int compact) {
+        if (door) return compact == 0 ? DOOR_COLOUR : LABEL;
         int stock = stockRow(compact);
         return stock >= 0 && stock < ROW_COLOUR.length ? ROW_COLOUR[stock] : LABEL;
     }
@@ -169,6 +194,16 @@ public final class BlockMenu363 {
      * existing node is not touched: that one is stock.
      */
     public static void fit(NpcGraphContextMenu menu, NpcGraphCanvas canvas) {
+        fit(menu, canvas, false);
+    }
+
+    /**
+     * Build 382: measure the menu for the editor that asked - a block palette (fifteen rows, cut to the
+     * nodes a block runs) or a door palette (one row). The mode is remembered here, so the painter, the
+     * hit test and the wheel all answer for the same editor without being told again.
+     */
+    public static void fit(NpcGraphContextMenu menu, NpcGraphCanvas canvas, boolean doorMode) {
+        door = doorMode;
         if (menu == null || canvas == null || !menu.open || menu.targetNodeId >= 0) {
             reset();
             return;

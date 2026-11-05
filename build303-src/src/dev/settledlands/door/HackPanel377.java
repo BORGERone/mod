@@ -47,6 +47,13 @@ public class HackPanel377 extends Screen {
      */
     private static final long ROLL_MS = 5000L;
 
+    /**
+     * Build 382: the door's own graph can say how many keys this door asks for and how fast one of
+     * them changes (the two sliders of its node). A door that was never edited in the editor has no
+     * such numbers, and then the panel is exactly the panel of build 378: four to ten keys drawn at
+     * random and this five-second clock.
+     */
+
     private static final int PANEL_BG = 0xE00E1116;
     private static final int PANEL_EDGE = 0xFF6A7A6A;
     private static final int LABEL = 0xFFBFD4BF;
@@ -64,6 +71,7 @@ public class HackPanel377 extends Screen {
     private final BlockPos pos;
     private final int count;
     private final int[] keys;
+    private final long rollMs;
 
     private long rolledAt;
     private long flashAt;
@@ -71,11 +79,12 @@ public class HackPanel377 extends Screen {
     private boolean solved;
     private int swaps;
 
-    private HackPanel377(BlockPos pos, int count, int[] keys) {
+    private HackPanel377(BlockPos pos, int count, int[] keys, long rollMs) {
         super(Component.literal("Взлом двери"));
         this.pos = pos;
         this.count = count;
         this.keys = keys;
+        this.rollMs = rollMs > 0L ? rollMs : ROLL_MS;
     }
 
     /**
@@ -93,13 +102,20 @@ public class HackPanel377 extends Screen {
             if (mc.screen != null) return;
             if (mc.player == null) return;
             Random random = new Random();
-            int count = MIN_BUTTONS + random.nextInt(MAX_BUTTONS - MIN_BUTTONS + 1);
+            // Build 382: the door's graph wins when it has something to say. The key of the door is
+            // the one the store and the sync already use, so the numbers arrive with the locks.
+            int[] settings = DoorSync375.settings(mc.player.level(), pos);
+            int count = settings != null
+                    ? Math.max(MIN_BUTTONS, Math.min(MAX_BUTTONS, settings[0]))
+                    : MIN_BUTTONS + random.nextInt(MAX_BUTTONS - MIN_BUTTONS + 1);
+            long rollMs = settings != null && settings[1] > 0
+                    ? settings[1] * 1000L : ROLL_MS;
             int[] keys = pick(random, count);
-            mc.setScreen(new HackPanel377(pos, count, keys));
+            mc.setScreen(new HackPanel377(pos, count, keys, rollMs));
             // Build 379: a panel that never appeared and a panel nobody could solve look the same in
             // game - the door stays shut either way. This line says which one happened.
             LOG.info("door: the lock panel opened at " + DoorSync375.key(mc.player.level(), pos)
-                    + " with " + count + " keys: " + spell(keys));
+                    + " with " + count + " keys every " + (rollMs / 1000L) + " s: " + spell(keys));
         } catch (Throwable failure) {
             // A panel that cannot be built must cost the player the panel, not the click.
             LOG.warn("door: the lock panel could not be opened, the door stays locked and silent", failure);
@@ -217,7 +233,7 @@ public class HackPanel377 extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
         long now = System.currentTimeMillis();
-        if (!solved && now - rolledAt > ROLL_MS) {
+        if (!solved && now - rolledAt > this.rollMs) {
             roll();
         }
         int down = held();
@@ -260,12 +276,12 @@ public class HackPanel377 extends Screen {
                 fresh ? SWAP : (down == count ? BTN_ON_EDGE : LABEL));
 
         graphics.drawCenteredString(this.font,
-                Component.literal("каждые " + (ROLL_MS / 1000L) + " с одна клавиша меняется"),
+                Component.literal("каждые " + (this.rollMs / 1000L) + " с одна клавиша меняется"),
                 center, panelTop + 108, DIM);
 
-        long leftMs = ROLL_MS - (now - rolledAt);
+        long leftMs = this.rollMs - (now - rolledAt);
         if (leftMs < 0L) leftMs = 0L;
-        int filled = (int) (total * leftMs / ROLL_MS);
+        int filled = (int) (total * leftMs / this.rollMs);
         graphics.fill(left, panelTop + 122, left + total, panelTop + 126, 0xFF20262E);
         graphics.fill(left, panelTop + 122, left + filled, panelTop + 126, fresh ? SWAP : BAR);
 

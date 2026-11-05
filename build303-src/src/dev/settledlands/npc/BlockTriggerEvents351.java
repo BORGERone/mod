@@ -55,6 +55,10 @@ public final class BlockTriggerEvents351 {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         BlockPos pos = event.getPos();
         if (pos == null) return;
+        // Build 382: a door is not a block for this hook. The wand on a door opens the door's own
+        // graph (DoorGraph382Events, which runs first), and a door that is not a door for the block
+        // editor must never grow a block graph it would never run.
+        if (dev.settledlands.door.Doors368.isDoor(level.getBlockState(pos))) return;
         if (alreadyHandled(player, level, pos)) return;
 
         ItemStack stack = event.getItemStack();

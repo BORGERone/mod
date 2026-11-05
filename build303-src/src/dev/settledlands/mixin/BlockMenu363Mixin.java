@@ -1,5 +1,6 @@
 package dev.settledlands.mixin;
 
+import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.client.BlockMenu363;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
@@ -47,15 +48,18 @@ public abstract class BlockMenu363Mixin {
     @Inject(method = "settledlands$mouseReleasedOriginal", at = @At("RETURN"), remap = false)
     private void settledlands$measureBlockMenu(double mouseX, double mouseY, int button,
             CallbackInfoReturnable<Boolean> cir) {
-        if (!settledlands$isBlock()) return;
+        // Build 382: a door's panel is measured too - one row instead of fifteen.
+        boolean door = settledlands$isDoor();
+        if (!door && !settledlands$isBlock()) return;
         if (this.contextMenu == null) return;
-        BlockMenu363.fit(this.contextMenu, ((NpcDialogueGraphScreen) (Object) this).settledlands$canvas());
+        BlockMenu363.fit(this.contextMenu,
+                ((NpcDialogueGraphScreen) (Object) this).settledlands$canvas(), door);
     }
 
     /** Paint the cut-down panel in place of the stock one. A node's copy/delete menu stays stock. */
     @Inject(method = "drawContextMenu", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$drawBlockMenu(GuiGraphics graphics, int mouseX, int mouseY, CallbackInfo ci) {
-        if (!settledlands$isBlock()) return;
+        if (!settledlands$editor()) return;
         if (this.contextMenu == null || !this.contextMenu.open) return;
         if (this.contextMenu.targetNodeId >= 0) return;
         if (!BlockMenu363.ready()) return;
@@ -72,7 +76,7 @@ public abstract class BlockMenu363Mixin {
     @Inject(method = "mouseScrolled", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$blockMenuNoScroll(double mouseX, double mouseY, double scrollX, double scrollY,
             CallbackInfoReturnable<Boolean> cir) {
-        if (!settledlands$isBlock()) return;
+        if (!settledlands$editor()) return;
         if (this.contextMenu == null || !this.contextMenu.open) return;
         if (this.contextMenu.targetNodeId >= 0) return;
         if (!BlockMenu363.ready()) return;
@@ -82,5 +86,15 @@ public abstract class BlockMenu363Mixin {
 
     private boolean settledlands$isBlock() {
         return BlockTrigger351.isBlockEditorId(((NpcDialogueGraphScreen) (Object) this).entityId());
+    }
+
+    /** Build 382: the same panel serves the door editor, with the door's one row. */
+    private boolean settledlands$isDoor() {
+        return DoorGraph382.isDoorEditorId(((NpcDialogueGraphScreen) (Object) this).entityId());
+    }
+
+    /** True for either graph that borrows this panel. */
+    private boolean settledlands$editor() {
+        return settledlands$isBlock() || settledlands$isDoor();
     }
 }

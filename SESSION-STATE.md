@@ -1227,3 +1227,46 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
   which makes the race impossible. Revert to `-1` after the test.
 - Do not "fix" this inside Settled Lands: the target class lives in ponder, we have no copy of that
   jar here, and an untestable mixin into a third-party class is worse than the crash.
+## Build 382 - a door carries its own graph (DoorGraph) - 2026-11-06
+
+- **381 verified in game by the author** ("все прекрасно работает") - the `setValue` descriptor fix holds.
+- Request: "при тапе ПКМом жезлом настройки нпс по двери - создастся собственный граф двери, где по
+  дефолту будет нода с 2 ползунками (Кол-во чисел, Скорость) и тумблером открыта/закрыта".
+  Author's answers: the toggle means «Закрыта» = the door opens **only** by solving the panel,
+  «Открыта» = an ordinary door again; the sliders are keys 4..10 and seconds 1..10; palette = the door
+  node only.
+- Architecture (mirrors build 351's block graph, deliberately): `DoorGraph382Store` (SavedData
+  `settledlands_door_graphs`, key = dimension@lower half, `Doors368#parts` picks the lower half - no
+  state property needed), `DoorGraph382` (id range -2_000_200_000..-2_000_299_999, `DOOR_TYPE = 40`,
+  node fields `randomMin` = keys, `timerInterval` = seconds, `timerRepeat` = sealed, `defaultGraph`,
+  `open`, `save`, `applySeal`), `DoorGraph382Events` (wand on a door, `EventPriority.HIGHEST`,
+  cancels), `DoorGraphClient382` (opens the stock screen, card text), and five mixins:
+  `NpcDoorSave382Mixin` (common, **first**), `NpcDoorOpen382Mixin`, `NpcDoorGraph382Mixin` (one-row
+  palette + one tab), `NpcDoorCard382Mixin` (drawNode RETURN paints «Дверь» + three lines),
+  `NpcDoorRows382Mixin` (widgets RETURN: two `NpcUi#slider` rows + a toggle button).
+- **Sealed == the lock of build 368** (`DoorStore368.lock/unlock`), so refusal, unbreakable door, the
+  8 s guard and `DoorSync375` all follow with no new rule. The panel's two numbers travel over the same
+  `DoorSync375` string payload: `P|key=count:seconds;...` (and `D|` clears), sent on login and after
+  every graph save; `HackPanel377` asks `DoorSync375#settings` and falls back to random 4..10 / 5000 ms.
+- Edits to older builds: `BlockTriggerEvents351` returns early on a door (a door is not a block),
+  `BlockMenu363` gained a `door` mode (one-row panel, `fit(menu, canvas, doorMode)`),
+  `BlockMenu363Mixin` measures/paints for both editors, `DoorEvents368` (a) does not open the panel with
+  the wand in hand, (b) refuses the wand click on the client too (no ghost-open door), (c) ignores an
+  already-cancelled click, (d) sends the settings on join.
+- **Do not shadow inherited Minecraft members.** First attempt shadowed `Screen#addRenderableWidget`;
+  `verify_jar` refused it and the gate's own doc records that build 359 tried exactly that and every
+  graph screen died. Fixed by calling it through the screen (the stub declares it public) - the call
+  site lands inside the merged class.
+- Ladder of lessons that keep repeating: check the emitted descriptor/ref with `tools/disasm.py`, keep
+  `DoorBlock.HALF`/`DoubleBlockHalf`/`BlockPos#below` out of the jar (they are "known from nothing in
+  the base jar" to `verify_jar`), and let `door_graph_check.py` fail first on the previous jar.
+- Ship: `settledlands-0.8.0-build382-door-graph.jar` (572 entries, 6 replaced, 9 added, 43 common /
+  46 client mixins), sha256 `605d477c3b49ffcc390bcf84eaae685fe9ee42a0ba44b2398683bb3fb5a742a4`; zip
+  `SettledLands-Build382-DoorGraph-Source.zip` (479 entries), sha256
+  `e1c76d12842a4bbcb98fb56dd2ae9f4cbb8ebb351990592199c2c6dfc3ffa6c4`; README
+  `README-Build382-RU.md`; gate `tools/door_graph_check.py`; patch `tools/patch_build382.py`
+  (base 381, `srcdir out382`).
+- All gates green, `verify_jar --base 381` PASS (0 new external refs).
+- **Unconfirmed in game**: the three text lines inside the node card (positions), the two sliders in the
+  inspector, the one-row palette, and that a save really lands in the store and re-locks the door.
+

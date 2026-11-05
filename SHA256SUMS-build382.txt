@@ -1,0 +1,2 @@
+605d477c3b49ffcc390bcf84eaae685fe9ee42a0ba44b2398683bb3fb5a742a4  settledlands-0.8.0-build382-door-graph.jar
+e1c76d12842a4bbcb98fb56dd2ae9f4cbb8ebb351990592199c2c6dfc3ffa6c4  SettledLands-Build382-DoorGraph-Source.zip

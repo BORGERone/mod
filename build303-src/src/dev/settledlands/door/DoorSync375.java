@@ -2,8 +2,10 @@ package dev.settledlands.door;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.RegistryFriendlyByteBuf;
@@ -56,6 +58,15 @@ public record DoorSync375(String data) implements CustomPacketPayload {
 
     /** What the client knows. Empty and unused on a server. */
     private static final Set<String> LOCKS = Collections.synchronizedSet(new HashSet<String>());
+
+    /**
+     * Build 382: the two numbers the door's own graph gives the hack panel - how many keys it asks for
+     * and how many seconds one of them stays. The panel is opened locally, so a door whose graph was
+     * edited in the editor has to be known here; a door that is not in this map keeps the panel of
+     * build 378 (a random four to ten keys, five seconds each).
+     */
+    private static final Map<String, int[]> SETTINGS =
+            Collections.synchronizedMap(new HashMap<String, int[]>());
 
     /** False until the first snapshot arrives: until then the client refuses every door click. */
     private static volatile boolean synced;
@@ -119,6 +130,15 @@ public record DoorSync375(String data) implements CustomPacketPayload {
                 if (!body.isEmpty()) LOCKS.add(body);
                 return;
             }
+            if (op == 'D') {
+                SETTINGS.clear();
+                putSettings(body);
+                return;
+            }
+            if (op == 'P') {
+                putSettings(body);
+                return;
+            }
             if (op == 'U') {
                 if (!body.isEmpty()) LOCKS.remove(body);
                 return;
@@ -135,6 +155,113 @@ public record DoorSync375(String data) implements CustomPacketPayload {
         for (int i = 0; i < keys.length; i++) {
             String key = keys[i].trim();
             if (!key.isEmpty()) LOCKS.add(key);
+        }
+    }
+
+    /** One or more {@code key=count:seconds} pairs, separated by {@code ;}. */
+    private static void putSettings(String body) {
+        if (body == null || body.isEmpty()) return;
+        String[] pairs = body.split(";");
+        for (int i = 0; i < pairs.length; i++) {
+            String pair = pairs[i].trim();
+            int eq = pair.lastIndexOf('=');
+            if (eq <= 0 || eq + 1 >= pair.length()) continue;
+            String[] values = pair.substring(eq + 1).split(":");
+            if (values.length < 2) continue;
+            try {
+                int count = Integer.parseInt(values[0].trim());
+                int seconds = Integer.parseInt(values[1].trim());
+                SETTINGS.put(pair.substring(0, eq), new int[] {count, seconds});
+            } catch (NumberFormatException notANumber) {
+                // a bad pair costs one door its numbers, never the packet
+            }
+        }
+    }
+
+    /**
+     * Build 382, client side: the numbers the door's graph gives the panel, or null when this door was
+     * never edited. The door is two blocks, so the position asked about and the one above and below it
+     * are all tried - a click may land on either half.
+     */
+    public static int[] settings(Level level, BlockPos pos) {
+        if (level == null || pos == null || SETTINGS.isEmpty()) return null;
+        int[] direct = SETTINGS.get(key(level, pos));
+        if (direct != null) return direct;
+        int[] above = SETTINGS.get(key(level, new BlockPos(pos.getX(), pos.getY() + 1, pos.getZ())));
+        if (above != null) return above;
+        return SETTINGS.get(key(level, new BlockPos(pos.getX(), pos.getY() - 1, pos.getZ())));
+    }
+
+    /**
+     * Server side, build 382: tell everyone the numbers of every door that has a graph.
+     *
+     * <p>Chunked with the same 7000 characters the lock snapshot uses, and sent as {@code D|} for the
+     * first chunk and {@code A|}... no - a second {@code D} would clear what the first wrote, so every
+     * chunk is a {@code P|} (put), which adds to what is already there.</p>
+     */
+    public static void sendParams(ServerLevel level) {
+        if (level == null) return;
+        try {
+            DoorGraph382Store store = DoorGraph382Store.get(level);
+            List<String> keys = store == null ? new ArrayList<String>() : store.keys();
+            List<ServerPlayer> players = null;
+            MinecraftServer server = level.getServer();
+            if (server != null && server.getPlayerList() != null) {
+                players = server.getPlayerList().getPlayers();
+            }
+            if (players == null || players.isEmpty()) return;
+            StringBuilder chunk = new StringBuilder();
+            for (int i = 0; i < keys.size(); i++) {
+                String key = keys.get(i);
+                int[] settings = DoorGraph382.settings(store.graph(key));
+                if (settings == null) continue;
+                String pair = key + "=" + settings[0] + ":" + settings[1];
+                if (chunk.length() + pair.length() + 1 > CHUNK) {
+                    broadcast(players, "P|" + chunk);
+                    chunk.setLength(0);
+                }
+                if (chunk.length() > 0) chunk.append(';');
+                chunk.append(pair);
+            }
+            if (chunk.length() > 0) broadcast(players, "P|" + chunk);
+            LOG.info("door: sent the settings of " + keys.size() + " door graph(s)");
+        } catch (Throwable failure) {
+            LOG.warn("door: the door settings could not be sent: " + failure);
+        }
+    }
+
+    /** Server side, build 382: the same list for one player that has just joined. */
+    public static void sendParams(ServerPlayer player) {
+        if (player == null) return;
+        try {
+            ServerLevel level = player.level() instanceof ServerLevel server ? server : null;
+            if (level == null) return;
+            DoorGraph382Store store = DoorGraph382Store.get(level);
+            if (store == null) return;
+            List<String> keys = store.keys();
+            StringBuilder chunk = new StringBuilder();
+            for (int i = 0; i < keys.size(); i++) {
+                String key = keys.get(i);
+                int[] settings = DoorGraph382.settings(store.graph(key));
+                if (settings == null) continue;
+                String pair = key + "=" + settings[0] + ":" + settings[1];
+                if (chunk.length() + pair.length() + 1 > CHUNK) {
+                    send(player, "P|" + chunk);
+                    chunk.setLength(0);
+                }
+                if (chunk.length() > 0) chunk.append(';');
+                chunk.append(pair);
+            }
+            if (chunk.length() > 0) send(player, "P|" + chunk);
+        } catch (Throwable failure) {
+            LOG.warn("door: the door settings could not be sent to " + player.getName().getString()
+                    + ": " + failure);
+        }
+    }
+
+    private static void broadcast(List<ServerPlayer> players, String text) {
+        for (int i = 0; i < players.size(); i++) {
+            send(players.get(i), text);
         }
     }
 

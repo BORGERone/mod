@@ -102,6 +102,14 @@ public final class DoorEvents368 {
             if (level == null) return;
             BlockState here = level.getBlockState(pos);
             if (!Doors368.isDoor(here)) return;
+            // Build 382: the wand opens the door's graph on the server. A door this client predicts
+            // open while the server is opening an editor is a door that looks open and is not, so the
+            // click is refused here as well - locked or not.
+            if (DoorGraph382Events.isWand(event.getItemStack())) {
+                event.setCanceled(true);
+                event.setCancellationResult(InteractionResult.SUCCESS);
+                return;
+            }
             // Build 376: once the server has told this client where the locks are, only a locked door
             // is refused and every other door is predicted locally again - the lag of 375 on ordinary
             // doors was the price of not knowing. Until the first snapshot arrives the strict answer
@@ -112,8 +120,12 @@ public final class DoorEvents368 {
             // a row of keys that all have to be held at once. The click is still refused here, so the
             // door does not move while the panel is up, and the panel itself changes no rule: it can
             // only ask the server to open the door it was opened for, and the server checks the lock.
+            // Build 382: the wand is not a pair of hands. A wand click on a door opens the door's
+            // own graph on the server (DoorGraph382Events), so the panel must stay down here - only
+            // an empty hand, or anything that is not the key and not the wand, cracks a lock.
             if (DoorSync375.synced() && DoorSync375.isLocked(level, pos)
-                    && !DoorKey368.isKey(event.getItemStack())) {
+                    && !DoorKey368.isKey(event.getItemStack())
+                    && !DoorGraph382Events.isWand(event.getItemStack())) {
                 HackPanel377.open(pos);
             }
             event.setCanceled(true);
@@ -135,6 +147,10 @@ public final class DoorEvents368 {
     @SubscribeEvent
     public static void onRightClick(PlayerInteractEvent.RightClickBlock event) {
         if (event == null) return;
+        // Build 382: the wand on a door opens the door's graph and cancels the click itself. A click
+        // that was already answered must not also be refused here - the author would read "дверь
+        // заперта" while the editor was opening.
+        if (event.isCanceled()) return;
         try {
             Level level = event.getLevel();
             BlockPos pos = event.getPos();
@@ -202,6 +218,9 @@ public final class DoorEvents368 {
         try {
             if (event.getEntity() instanceof ServerPlayer player) {
                 DoorSync375.sendSnapshot(player);
+                // Build 382: and the numbers of every door that has a graph, so the panel of that door
+                // asks for the count and the speed its author set.
+                DoorSync375.sendParams(player);
             }
         } catch (Throwable failure) {
             LOG.warn("a joining player could not be told which doors are locked", failure);

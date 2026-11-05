@@ -17,6 +17,9 @@ public class PlayerInteractEvent {
     public Level getLevel() { return null; }
     public ItemStack getItemStack() { return null; }
     public void setCanceled(boolean canceled) {}
+
+    /** Build 382: an already answered click (the wand on a door) must not be answered twice. */
+    public boolean isCanceled() { return false; }
     public void setCancellationResult(InteractionResult result) {}
 
     // Build 373 removed setUseBlock/setUseItem from this mirror: NeoForge 1.21.1 does not have them.
