@@ -45,12 +45,36 @@ public final class DoorEvents368 {
     /** Build 372: how many diagnostic lines this session has written. A report, not a rule. */
     private static int said;
 
+    /** Build 374: has the door-side refusal been reached at least once in this session? */
+    private static boolean sawUse;
+
     private DoorEvents368() {}
 
     private static void note(String line) {
         if (said >= 8) return;
         said++;
         LOG.info(line);
+    }
+
+    /**
+     * Build 374: one line the first time the game enters
+     * {@code DoorBlock#useWithoutItem} with this mod's guard in place.
+     *
+     * <p>373 put the refusal inside the door, which is the only place where a click on a door can be
+     * stopped before the door opens - but a mixin that never bound to the method looks exactly like a
+     * mixin that bound and refused nothing. This line is the difference between the two: it is written
+     * from inside the injected handler, so its presence in the log proves the guard is live, and its
+     * {@code locked} value proves whether the lock was found at that position.</p>
+     */
+    public static void sawDoorUse(BlockPos pos, boolean locked) {
+        if (sawUse) return;
+        sawUse = true;
+        try {
+            note("door: DoorBlock#useWithoutItem was reached at " + pos + ", locked=" + locked
+                    + " - the door-side guard of build 374 is live");
+        } catch (Throwable ignored) {
+            // a report must never be the reason a click fails
+        }
     }
 
     @SubscribeEvent

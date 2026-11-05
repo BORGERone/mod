@@ -1,0 +1,2 @@
+cce5bc08efe9c7e75560ec82297a41293cc311c51cd5b299667190f9c79b4332  settledlands-0.8.0-build374-door-proof.jar
+e1ab7f7abe715afad9c83b27ad1276db86322445ca618f71a686e97754dfd28a  SettledLands-Build374-DoorProof-Source.zip

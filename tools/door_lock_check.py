@@ -230,9 +230,13 @@ def structural(jar):
 
         # Build 372: a build that cannot explain itself cannot be fixed. The jar has to be able to say
         # in the log whether the key registered, whether a click was refused, and what the guard closed.
+        # Build 374: a guard that never bound and a guard that bound and refused nothing look exactly
+        # the same from the outside. The refusal inside the door has to say that it ran.
         for name, must in ((KEY, b"settledlands:door_key registered"),
                            (EVENTS, b"was refused"),
                            (EVENTS, b"is not a DoorBlock"),
+                           (EVENTS, b"useWithoutItem was reached"),
+                           ("dev/settledlands/mixin/DoorUse373Mixin.class", b"sawDoorUse"),
                            ("dev/settledlands/door/DoorGuard371.class", b"the guard closed")):
             if name not in names or must not in z.read(name):
                 problems.append("%s does not report %r - a report of 'nothing changed' could not be "

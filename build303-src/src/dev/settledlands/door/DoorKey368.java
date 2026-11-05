@@ -49,7 +49,9 @@ public final class DoorKey368 {
             if (event == null || !Registries.ITEM.equals(event.getRegistryKey())) return;
             item = new Item(new Item.Properties().stacksTo(1));
             event.register(Registries.ITEM, NpcIds368.id(ID), () -> item);
-            LOG.info("door: settledlands:door_key registered");
+            // Build 374: the build tag is part of the line on purpose - a report is only readable if
+            // the log says which jar wrote it.
+            LOG.info("door: settledlands:door_key registered (build 374 door-proof)");
         } catch (Throwable failure) {
             if (failed) return;
             failed = true;

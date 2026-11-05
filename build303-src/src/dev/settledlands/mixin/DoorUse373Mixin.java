@@ -41,6 +41,16 @@ public abstract class DoorUse373Mixin {
             at = @At("HEAD"), cancellable = true, require = 0, remap = false)
     private void settledlands$lockedDoorDoesNotOpen(BlockState state, Level level, BlockPos pos,
             Player player, BlockHitResult hit, CallbackInfoReturnable<InteractionResult> cir) {
-        if (DoorEvents368.locked(level, pos)) cir.setReturnValue(InteractionResult.FAIL);
+        try {
+            boolean locked = DoorEvents368.locked(level, pos);
+            // Build 374: the first entry into this method is written to the log, so the next report
+            // says whether the guard is live and whether the lock was seen - not just "nothing
+            // changed". A guard that never bound and a guard that bound and refused nothing look
+            // identical from the outside, and that ambiguity cost build 371 a whole cycle.
+            DoorEvents368.sawDoorUse(pos, locked);
+            if (locked) cir.setReturnValue(InteractionResult.FAIL);
+        } catch (Throwable ignored) {
+            // never turn a click on a door into a crash
+        }
     }
 }
