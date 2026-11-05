@@ -56,6 +56,7 @@ SAVE_MIXIN = "dev/settledlands/mixin/NpcDoorSave382Mixin.class"
 OPEN_MIXIN = "dev/settledlands/mixin/NpcDoorOpen382Mixin.class"
 GRAPH_MIXIN = "dev/settledlands/mixin/NpcDoorGraph382Mixin.class"
 CARD_MIXIN = "dev/settledlands/mixin/NpcDoorCard382Mixin.class"
+CARD = "dev/settledlands/npc/client/DoorCard382.class"
 ROWS_MIXIN = "dev/settledlands/mixin/NpcDoorRows382Mixin.class"
 PANEL = "dev/settledlands/door/HackPanel377.class"
 SYNC = "dev/settledlands/door/DoorSync375.class"
@@ -220,11 +221,25 @@ def main(argv):
     if "timerRepeat" not in text(rows) and not any(
             m == "setSealed" or m == "sealed" for _o, m, _d in row_refs):
         return fail("NpcDoorRows382Mixin has no «закрыта/открыта» toggle")
+    # Build 383: the card is not written on top of the stock one any more. The stock painter has no
+    # branch for the door's type and fell through to the rows of a «Реплика» - the pink box with clipped
+    # text the author photographed - so the mixin cancels `drawNode` for this type and the whole card is
+    # painted by DoorCard382, in the box the canvas hit-tests a node with.
     card, card_refs = parse(blobs[CARD_MIXIN])
-    if not any(m == "drawString" for _o, m, _d in card_refs):
-        return fail("NpcDoorCard382Mixin draws nothing - the card of a door would be empty")
-    if not any(m in ("screenX", "screenY") for _o, m, _d in card_refs):
-        return fail("NpcDoorCard382Mixin does not use the canvas transform")
+    if not any(m == "cancel" for _o, m, _d in card_refs):
+        return fail("NpcDoorCard382Mixin does not cancel the stock card - a door's node would be"
+                    " painted by the stock painter")
+    card_class = CARD[:-len(".class")]
+    if not any(o == card_class and m == "draw" for o, m, _d in card_refs):
+        return fail("NpcDoorCard382Mixin does not hand the node to DoorCard382")
+    painter, painter_refs = parse(blobs[CARD])
+    if not any(m == "drawString" for _o, m, _d in painter_refs):
+        return fail("DoorCard382 draws nothing - the card of a door would be empty")
+    if not any(m in ("screenX", "screenY") for _o, m, _d in painter_refs):
+        return fail("DoorCard382 does not use the canvas transform")
+    if not any(m == "pushPose" for _o, m, _d in painter_refs) or \
+            not any(m == "popPose" for _o, m, _d in painter_refs):
+        return fail("DoorCard382 does not restore the pose it translated")
 
     # ---- the door's palette is the same panel, one row ---------------------------------------
     menu, menu_refs = parse(blobs[MENU])

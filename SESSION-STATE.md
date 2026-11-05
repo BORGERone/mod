@@ -1270,3 +1270,41 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - **Unconfirmed in game**: the three text lines inside the node card (positions), the two sliders in the
   inspector, the one-row palette, and that a save really lands in the store and re-locks the door.
 
+
+## Build 383 - the door graph, corrected to look like the block graph
+
+The author opened 382 in game and sent a screenshot with «ты допустил точно те же ошибки что и при
+создании графа блока, исправь все сразу». All three failures had already been solved for the block
+graph in 359-362, so 383 is a port, not a new design:
+
+- **Tabs.** `BlockNoTabs360Mixin` gained `settledlands$oneGraph(screen)` = `BlockTrigger351
+  .isBlockEditorId(id) || DoorGraph382.isDoorEditorId(id)`; both injection points (the `@Redirect` on
+  `button(...)` and the `widgets()` RETURN park) now ask it. The strip is parked off the screen, not
+  hidden (`WidgetPark361.park`).
+- **Inspector.** `NpcDoorRows382Mixin` rewritten: at `widgets()` RETURN it parks every stock row
+  (`WidgetPark361.park`) and clears `labels`, sets `sidebarHeight = 0`, builds its own three rows
+  (title «Дверь», two `NpcUi#slider` rows, the seal button) and then `sidebarHeight += CONTENT` (76).
+  Every write is now `propertyChange(...)` - the 382 version wrote the node directly and called
+  `changed()` itself, the exact bug that lost the block's name colour in 362.
+- **Card.** `NpcDoorCard382Mixin` now cancels `drawNode` at HEAD for `DoorGraph382.isDoorNode` and
+  hands the node to the new `npc/client/DoorCard382`, which paints border/body/header and four text
+  lines inside `NpcGraphCanvas.NODE_W x NODE_H`, `pose.translate(canvas.screenX/screenY)` +
+  `scale(zoom)`, wrapped in push/popPose + `DoorGraph382.fail`. Painting over the stock card (382) is
+  what produced the pink «Случайность» box with clipped text.
+- **No body panels.** `NpcDoorNoStats383Mixin` cancels `NpcStatsGraphUi#ensure` for a door and drops
+  types 16/18 via `BlockName359.dropType`; `NpcDoorNoAi383Mixin` cancels `NpcAutoAiGraphUi255
+  #ensure/#draw` and its `mouseClicked` **hands the click on** to `NpcStatsGraphUi.mouseClicked`
+  (never drops it - the 361 lesson).
+- **Server side.** `DoorGraph382.stripCards(graph)` drops types 16/18 and repairs `entry` if it pointed
+  at a dropped node; called in `open()` and in `save()`.
+- Build: `tools/patch_build383.py` (base 382, `srcdir out383`, 4 replaced / 3 added, lang
+  `gui.settledlands.door.hint`, client mixins 46 -> 48). New gate `tools/door_screen_check.py` (fails on
+  382, passes on 383); `door_graph_check.py` updated to the 383 card contract (cancel + `DoorCard382
+  .draw` + painter draws/transform/push-pose); `block_name_check.py` now reads the tabs hook together
+  with `settledlands$oneGraph`.
+- Ship: `settledlands-0.8.0-build383-door-graph-fix.jar` (575 entries, 43 common / 48 client mixins),
+  README `README-Build383-RU.md`, zip `SettledLands-Build383-DoorGraphFix-Source.zip`,
+  `SHA256SUMS-build383.txt`. `verify_jar --base 382` PASS, 0 new external refs, 92 mixins.
+- **Unconfirmed in game**: the parked tab strip on a door's editor, the three inspector rows' placement
+  and scroll height, and the four card lines' pixel positions inside the node box.
+

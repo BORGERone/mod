@@ -1,5 +1,6 @@
 package dev.settledlands.mixin;
 
+import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.WidgetPark361;
@@ -16,7 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Build 360/361/362: a block's graph has no tabs.
+ * Build 360/361/362: a block's graph has no tabs - and build 383: neither has a door's.
  *
  * <p>An NPC's editor is three graphs on three tabs - dialogue, walking, animation. A block has exactly
  * one graph; the two extra tabs could only ever be empty, and they were already refused a click
@@ -74,7 +75,7 @@ public abstract class BlockNoTabs360Mixin {
         Button made = button(key, x, y, width, height, action);
         if (made == null || key == null || !key.startsWith(settledlands$tabPrefix())) return made;
         NpcDialogueGraphScreen screen = (NpcDialogueGraphScreen) (Object) this;
-        if (!BlockTrigger351.isBlockEditorId(screen.entityId())) return made;
+        if (!settledlands$oneGraph(screen)) return made;
         WidgetPark361.park(screen, made);
         return made;
     }
@@ -87,7 +88,7 @@ public abstract class BlockNoTabs360Mixin {
     @Inject(method = "widgets()V", at = @At("RETURN"), remap = false)
     private void settledlands$blockHasNoTabStrip(CallbackInfo ci) {
         NpcDialogueGraphScreen screen = (NpcDialogueGraphScreen) (Object) this;
-        if (!BlockTrigger351.isBlockEditorId(screen.entityId())) return;
+        if (!settledlands$oneGraph(screen)) return;
         List<Object> children = WidgetPark361.children(screen);
         if (children.isEmpty()) return;
         int parked = 0;
@@ -119,6 +120,18 @@ public abstract class BlockNoTabs360Mixin {
             LOG.warn("[settledlands] block graph: " + parked + " tab button(s) taken off the screen of "
                     + children.size() + " widgets");
         }
+    }
+
+    /**
+     * Build 383: the test for "this editor holds one graph", which is now true of two kinds of editor.
+     * A block's graph (build 351) and a door's graph (build 382) both have a single canvas, so both
+     * refuse the two extra tabs, and the strip is taken off the screen of either. The block test stays
+     * the first question - it is the one that shipped and was seen in game.
+     */
+    private static boolean settledlands$oneGraph(NpcDialogueGraphScreen screen) {
+        if (screen == null) return false;
+        int id = screen.entityId();
+        return BlockTrigger351.isBlockEditorId(id) || DoorGraph382.isDoorEditorId(id);
     }
 
     private static String settledlands$tabLabel(int index) {

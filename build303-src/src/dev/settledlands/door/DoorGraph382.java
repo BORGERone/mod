@@ -5,6 +5,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import dev.settledlands.npc.BlockName359;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcNet;
 import net.minecraft.core.BlockPos;
@@ -224,6 +225,33 @@ public final class DoorGraph382 {
         return graph;
     }
 
+    /**
+     * Build 383: a door's graph holds the door and nothing else.
+     *
+     * <p>The body's cards are not palette rows and they are not part of a graph the author built - the
+     * editor and its helpers put them on every graph they open ({@code NpcStatsGraphUi#ensure} in the
+     * screen's constructor is the first of them). Build 382 shipped a door's canvas carrying the stats
+     * card next to the door node, and the author's screenshot showed it. Both sides now refuse them:
+     * the client mixins cancel the calls that create and paint them ({@code NpcDoorNoStats383Mixin},
+     * {@code NpcDoorNoAi383Mixin}), and this method takes any that are still in the file - a graph
+     * opened by an older build, a copied save - off the door's graph before it is handed out, and
+     * again before it is stored, so the file on disk stays a door's file.</p>
+     *
+     * <p>The entry is repaired when it pointed at one of the dropped cards: a graph whose entry is a
+     * node that no longer exists is a graph the editor cannot open, and a door node is the only
+     * sensible entry a door graph has.</p>
+     */
+    public static int stripCards(NpcDialogueGraph graph) {
+        if (graph == null || graph.nodes == null) return 0;
+        int dropped = BlockName359.dropType(graph, BlockName359.STATS_TYPE)
+                + BlockName359.dropType(graph, BlockName359.TYPE);
+        if (graph.entry >= 0 && !graph.nodes.containsKey(graph.entry)) {
+            NpcDialogueGraph.Node node = doorNode(graph);
+            if (node != null) graph.entry = node.id;
+        }
+        return dropped;
+    }
+
     // ---- opening the editor -------------------------------------------------
 
     /**
@@ -251,6 +279,7 @@ public final class DoorGraph382 {
                 if (store != null) store.put(key, graph);
             } else {
                 graph = withDoorNode(graph, sealed);
+                stripCards(graph);
             }
             CompoundTag data = new CompoundTag();
             data.put("DialogueGraph", graph.save());
@@ -292,6 +321,7 @@ public final class DoorGraph382 {
                 return;
             }
             graph = withDoorNode(graph, locked(level, pos));
+            stripCards(graph);
             NpcDialogueGraph.Node node = doorNode(graph);
             if (node != null) {
                 setKeys(node, keys(node));

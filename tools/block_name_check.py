@@ -341,7 +341,12 @@ def structural(jar):
 
         # ---- no tabs on a block's graph -------------------------------------
         _kt2, tabs_cp, tabs_methods, tabs_refs = load_class(zf, TABS)
-        tabs = find_method(tabs_methods, "settledlands$blockHasNoTabs")
+        # Build 383: the "which editor is this" test is now a helper of its own - a door's editor has
+        # one graph too and the same strip has to come off it - so the hook is read together with the
+        # helper it asks. What is guarded is unchanged: the strip is taken off OUR editors only, and a
+        # body's three graphs keep their tabs.
+        tabs = (find_method(tabs_methods, "settledlands$blockHasNoTabs") + "\n"
+                + find_method(tabs_methods, "settledlands$oneGraph"))
         for needle, why in (
                 ("BlockTrigger351.isBlockEditorId", "a body's editor would lose its tabs too"),
                 ("NpcDialogueGraphScreen.entityId", "the hook never asks which screen it is on"),

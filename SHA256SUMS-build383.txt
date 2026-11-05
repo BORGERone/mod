@@ -1,0 +1,2 @@
+55fde2f5e50ceda568ca1804201724aacfb2c5d0b2e8590906966ad02a461625  settledlands-0.8.0-build383-door-graph-fix.jar
+a6dd53cfff6ee23da9d25351a3dce6fc1dc1fbd281f0fa5b5852756855c7a41d  SettledLands-Build383-DoorGraphFix-Source.zip
