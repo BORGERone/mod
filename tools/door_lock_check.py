@@ -79,6 +79,16 @@ def parse(data):
     return parsed, refs
 
 
+def field_names(parsed):
+    """Every declared field name of a class - how a build proves a panel offers letters, not digits."""
+    cp = parsed["cp"]
+    out = set()
+    for _acc, ni, _di, _attrs in parsed["fields"]:
+        if cp[ni] and cp[ni][0] == 1:
+            out.add(cp[ni][1])
+    return out
+
+
 def field_consts(parsed):
     """The int fields of a class that carry a ConstantValue - the only way to read a `static final`."""
     cp = parsed["cp"]
@@ -323,6 +333,23 @@ def structural(jar):
             if consts.get("MIN_BUTTONS") != 4 or consts.get("MAX_BUTTONS") != 10:
                 problems.append("the panel does not offer 4 to 10 buttons as asked (min=%r max=%r)"
                                 % (consts.get("MIN_BUTTONS"), consts.get("MAX_BUTTONS")))
+        # Build 378: the keycaps are letters, and the clock changes a key instead of the attempt. Both
+        # are visible in the class itself: the letter row is a field named LETTERS, the roll interval is
+        # ROLL_MS, the swap says so, and the old "не успел - кнопки сброшены" reset is gone.
+        if panel in names:
+            panel_cls2, _panel_refs2 = parse(z.read(panel))
+            fnames = field_names(panel_cls2)
+            if "LETTERS" not in fnames or "DIGITS" in fnames:
+                problems.append("the panel still offers digits - the author asked for keys/letters")
+            if "ROLL_MS" not in fnames:
+                problems.append("the panel has no rolling key interval - the clock would have to throw "
+                                "the attempt away again")
+            body = z.read(panel)
+            if "клавиша сменилась".encode("utf-8") not in body:
+                problems.append("the panel never reports a changed key - the clock may still be a reset")
+            if "не успел - кнопки сброшены".encode("utf-8") in body:
+                problems.append("the panel still resets the attempt when the clock runs out - the "
+                                "author asked for one key to change instead")
         if hack in names:
             hack_cls, hack_refs = parse(z.read(hack))
             for owner, member, why in (

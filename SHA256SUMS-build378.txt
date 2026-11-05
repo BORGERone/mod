@@ -1,0 +1,2 @@
+1028ec9f6d584e8d06f3a2b5981e5698d0a43b7593584aa4f8c0d9e189118385  settledlands-0.8.0-build378-door-letters.jar
+414721e821c302bc47a9413bde822108217ece51bb3c882b21e0c932708a3998  SettledLands-Build378-DoorLetters-Source.zip

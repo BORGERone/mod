@@ -1114,3 +1114,19 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - Not confirmed in game: panel look, key ergonomics, and the whole C2S path.
 - Drive copies (public): jar `1q4tvRs1Qx0jfqq53fzjc094RSAFCUAdw`, zip `1J28mVCjriZfBP2edP4WdYkwnV-qTwbT7`.
 - Commit `aa375d1` (jar + README + zip + SHA256SUMS-build377.txt + patch script).
+
+## Build 378 - letters and a rolling key (shipped)
+
+- Jar `settledlands-0.8.0-build378-door-letters.jar`, 562 entries, sha256
+  `1028ec9f6d584e8d06f3a2b5981e5698d0a43b7593584aa4f8c0d9e189118385`.
+- Zip `SettledLands-Build378-DoorLetters-Source.zip`, 459 entries, sha256
+  `414721e821c302bc47a9413bde822108217ece51bb3c882b21e0c932708a3998`.
+- README `README-Build378-RU.md`, patch script `tools/patch_build378.py` (base 377, REPLACED 5 classes,
+  ADDED none - note: `srcdir` must point at `out378`).
+- Changes the author asked for: the keycaps are letters (`LETTERS` = Q W E R T Y U I O P, GLFW
+  81/87/69/82/84/89/85/73/79/80) instead of digits; the clock no longer resets the attempt, every
+  `ROLL_MS` = 5000 ms one random key changes to a letter the panel is not showing, and held keys stay
+  held (the replaced button simply goes dark). Bar = time to the next roll, flash "клавиша сменилась".
+- Gate `door_lock_check` now also requires: `LETTERS` present / `DIGITS` absent, `ROLL_MS` present,
+  the swap message present, the old "не успел - кнопки сброшены" reset absent. 377 fails all four.
+- All gates green, `verify_jar --base 377` PASS, 0 new external refs.
