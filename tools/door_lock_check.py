@@ -395,6 +395,35 @@ def structural(jar):
             problems.append("the hack still requires the exact dimension spelling - a door inside a "
                             "sub-level or a pocket dimension would never open")
 
+        # Build 380: a solved panel has to be watched from the client side, and the packet handler has to
+        # run the way the mod's own working payloads run. Without the first, "the door does not open" is
+        # unanswerable; without the second the handler may be running where it cannot touch the world.
+        watch = "dev/settledlands/door/DoorHackWatch380.class"
+        if watch not in names:
+            problems.append("no client watchdog: a door that stays shut would leave no trace at all")
+        else:
+            _w_cls, w_refs = parse(z.read(watch))
+            if not any(r[1] == "watch" and r[0] and r[0].endswith("door/DoorHack377") for r in w_refs):
+                problems.append("the watchdog never calls DoorHack377#watch")
+            _cp = _w_cls["cp"]
+            on_tick = False
+            for _acc, _ni, _di, _attrs in _w_cls["methods"]:
+                if _cp[_ni] and _cp[_ni][0] == 1 and _cp[_ni][1] == "onClientTick":
+                    desc = _cp[_di][1] if _cp[_di] and _cp[_di][0] == 1 else ""
+                    if "client/event/ClientTickEvent$Post" in desc:
+                        on_tick = True
+            if not on_tick:
+                problems.append("the watchdog is not on the client tick (ClientTickEvent$Post)")
+        if net in names and b"enqueueWork" not in z.read(net):
+            problems.append("the hacking handler is not handed to the main thread the way the mod's own "
+                            "payloads do it (context.enqueueWork)")
+        for must in (b"is open - the server answered", b"still closed", b"sending the request"):
+            if hack in names and must not in z.read(hack):
+                problems.append("DoorHack377 does not report %r - a door that stays shut could not be "
+                                "explained" % must.decode())
+        if hack in names and b"- nothing opened" not in z.read(hack):
+            problems.append("the 'not a door on the server' refusal is still silent")
+
         # Build 372: a build that cannot explain itself cannot be fixed. The jar has to be able to say
         # in the log whether the key registered, whether a click was refused, and what the guard closed.
         # Build 374: a guard that never bound and a guard that bound and refused nothing look exactly

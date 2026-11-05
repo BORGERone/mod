@@ -1,0 +1,2 @@
+ae7e057f5fdd215a89407f6a12c2845a2f2b3687073034474734024c58180c7d  settledlands-0.8.0-build380-door-hack-watch.jar
+2ee255aeae773e17d5257aa4843bd825b91e0e9dc34e861b1fd353717f365f13  SettledLands-Build380-DoorHackWatch-Source.zip

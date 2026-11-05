@@ -52,7 +52,12 @@ public final class DoorNet375 {
                     + "door click: " + failure);
         }
         try {
-            registrar.playToServer(DoorHack377.TYPE, DoorHack377.STREAM_CODEC, DoorHack377::handle);
+            // Build 380: the same shape the base mod's own client-to-server payloads use - the work is
+            // handed to the main thread explicitly (GuideNet, NpcNet, CutsceneRecTogglePayload all read
+            // `ctx.enqueueWork(...)` and ask the player inside it). A handler that touches the world from
+            // the network thread is a handler that throws and is never seen again.
+            registrar.playToServer(DoorHack377.TYPE, DoorHack377.STREAM_CODEC,
+                    (payload, context) -> context.enqueueWork(() -> DoorHack377.handle(payload, context)));
         } catch (Throwable failure) {
             LOG.warn("door: the hacking packet could not be registered, a solved panel will change "
                     + "nothing: " + failure);

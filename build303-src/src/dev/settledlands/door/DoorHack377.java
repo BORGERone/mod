@@ -62,6 +62,15 @@ public record DoorHack377(String key) implements CustomPacketPayload {
     /** How long a cracked door is allowed to stand open before the guard may close it again. */
     private static final long OPEN_FOR_MS = 8000L;
 
+    /**
+     * Build 380: panels this client has solved and not yet seen opened - {@code key -> {sentAt, retried,
+     * x, y, z}}. A door that stays shut is indistinguishable from a door nobody asked about unless the
+     * client keeps asking, so it does: the request is repeated once after a second, and if the door is
+     * still closed after four the log says so instead of the player being left to guess.
+     */
+    private static final java.util.Map<String, long[]> PENDING =
+            new java.util.concurrent.ConcurrentHashMap<String, long[]>();
+
     private static int said;
 
     @Override
@@ -82,6 +91,8 @@ public record DoorHack377(String key) implements CustomPacketPayload {
             String key = DoorSync375.key(level, pos);
             if (key.isEmpty()) return;
             PacketDistributor.sendToServer(new DoorHack377(key));
+            PENDING.put(key, new long[] {System.currentTimeMillis(), 0L,
+                    pos.getX(), pos.getY(), pos.getZ()});
             LOG.info("door: the panel at " + key + " was solved - asking the server to open the door");
         } catch (Throwable failure) {
             LOG.warn("door: a solved panel could not be sent to the server: " + failure);
@@ -112,16 +123,27 @@ public record DoorHack377(String key) implements CustomPacketPayload {
                         + " which is not a block position - nothing opened");
                 return;
             }
-            if (!Doors368.isDoor(server.getBlockState(pos))) return;
+            if (!Doors368.isDoor(server.getBlockState(pos))) {
+                note("door: door_hack named " + pos + " in " + server.dimension()
+                        + ", but that block is " + server.getBlockState(pos).getBlock()
+                        + " - nothing opened");
+                player.displayClientMessage(Component.literal(
+                        "Сервер не нашёл дверь в этой точке - смотри строки door: в логе"), true);
+                return;
+            }
             DoorStore368 store = DoorStore368.get(server);
             if (store == null || !store.isLocked(server, pos)) {
                 note("door: a solved panel named " + payload.key()
                         + ", but that door is not locked any more - nothing opened");
+                player.displayClientMessage(Component.literal(
+                        "Взлом прошёл, но дверь уже не заперта - открывать нечего"), true);
                 return;
             }
             if (!near(player, pos)) {
                 note("door: a solved panel named " + payload.key()
                         + ", but the player was too far away - nothing opened");
+                player.displayClientMessage(Component.literal(
+                        "Взлом прошёл, но до двери далеко - подойди и попробуй снова"), true);
                 return;
             }
             boolean opened = Doors368.setOpen(server, pos, true);
@@ -132,6 +154,8 @@ public record DoorHack377(String key) implements CustomPacketPayload {
             if (!nowOpen) {
                 LOG.warn("door: the door at " + pos + " was asked to open and did not - it is locked by "
                         + "the store of this level, the click was accepted, but the block refused");
+                player.displayClientMessage(Component.literal(
+                        "Дверь не поддалась - сервер её не открыл (open now=false)"), true);
             }
             player.displayClientMessage(Component.literal("Замок вскрыт - дверь открыта"), true);
         } catch (Throwable failure) {
@@ -184,6 +208,52 @@ public record DoorHack377(String key) implements CustomPacketPayload {
             }
         } catch (Throwable failure) {
             LOG.warn("door: a cracked door could not be remembered: " + failure);
+        }
+    }
+
+    /**
+     * Build 380: called from the client tick. Watches every request this client has sent and reports what
+     * became of it - opened, refused, or never answered - then drops it. This is the line that turns
+     * "the door does not open" into an answer.
+     */
+    public static void watch() {
+        if (PENDING.isEmpty()) return;
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null || mc.level == null) return;
+            java.util.Iterator<java.util.Map.Entry<String, long[]>> it = PENDING.entrySet().iterator();
+            while (it.hasNext()) {
+                java.util.Map.Entry<String, long[]> entry = it.next();
+                String key = entry.getKey();
+                long[] state = entry.getValue();
+                BlockPos pos = new BlockPos((int) state[2], (int) state[3], (int) state[4]);
+                long age = System.currentTimeMillis() - state[0];
+                if (Doors368.anyOpen(mc.level, pos)) {
+                    LOG.info("door: the door at " + key + " is open - the server answered the panel after "
+                            + age + " ms");
+                    it.remove();
+                    continue;
+                }
+                if (age > 4000L) {
+                    LOG.warn("door: the door at " + key + " is still closed " + age + " ms after the panel "
+                            + "was solved - the server never opened it. The log above says whether the "
+                            + "request arrived (door_hack arrived) and what refused it");
+                    if (mc.player != null) {
+                        mc.player.displayClientMessage(Component.literal(
+                                "Сервер не открыл дверь за 4 с - смотри строки door: в логе"), true);
+                    }
+                    it.remove();
+                    continue;
+                }
+                if (age > 1200L && state[1] == 0L) {
+                    state[1] = 1L;
+                    LOG.warn("door: no answer for " + key + " after " + age + " ms - sending the request "
+                            + "again");
+                    PacketDistributor.sendToServer(new DoorHack377(key));
+                }
+            }
+        } catch (Throwable failure) {
+            LOG.warn("door: the panel watchdog could not run: " + failure);
         }
     }
 

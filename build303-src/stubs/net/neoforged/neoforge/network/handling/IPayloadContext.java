@@ -10,5 +10,10 @@ public interface IPayloadContext {
 
     net.minecraft.world.entity.player.Player player();
 
-    void enqueueWork(Runnable runnable);
+    /**
+     * Build 380: the real return type. The base jar's own handlers call
+     * {@code enqueueWork(Runnable)Ljava/util/concurrent/CompletableFuture;} - a stub that declared
+     * {@code void} compiled an invokeinterface that could never link, and build 380's gate caught it.
+     */
+    java.util.concurrent.CompletableFuture<?> enqueueWork(Runnable runnable);
 }

@@ -1152,3 +1152,26 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - Open question for the next turn: which `door:` line appears in the author's log; if the panel never
   opens, look at "the lock panel could not be opened" (a throw inside `HackPanel377.open`).
 
+## Build 380 - the hack handler on the main thread (shipped)
+
+- Jar `settledlands-0.8.0-build380-door-hack-watch.jar`, sha256
+  `ae7e057f5fdd215a89407f6a12c2845a2f2b3687073034474734024c58180c7d`; zip
+  `SettledLands-Build380-DoorHackWatch-Source.zip`, sha256
+  `2ee255aeae773e17d5257aa4843bd825b91e0e9dc34e861b1fd353717f365f13`; README `README-Build380-RU.md`;
+  patch `tools/patch_build380.py` (base 379, REPLACED 5, ADDED `DoorHackWatch380`).
+- **Hard lesson (do not repeat):** a stub signature that "looks right" compiles a broken invokeinterface.
+  `IPayloadContext#enqueueWork` is `(Ljava/lang/Runnable;)Ljava/util/concurrent/CompletableFuture;`, not
+  `void`. The right way to learn a NeoForge signature: dump the ref from the base jar's constant pool
+  (tools logic in this session's notes: parse_class + CP Methodref scan) instead of trusting the mirror.
+- The author is on 378/379: the panel is what they wanted, the door still does not open, and no log was
+  sent. 380 therefore (a) runs the C2S handler through `context.enqueueWork(...)` exactly like the mod's
+  working payloads, (b) re-sends a solved panel once after 1.2 s and gives up with a message after 4 s,
+  (c) shows every server refusal to the player in the action bar, in Russian, so the failure point is
+  visible without the log.
+- New client-only class `DoorHackWatch380` (`@EventBusSubscriber(modid="settledlands", value={Dist.CLIENT})`,
+  `ClientTickEvent.Post` -> `DoorHack377.watch()`); stubs added: `ClientTickEvent`, `ClientLevel`,
+  `Minecraft#level`.
+- All gates green, `verify_jar --base 379` PASS.
+- Next step if it still fails: the action-bar line names the failing check; if the panel says nothing at
+  all, the panel itself never solved (keyboard ghosting on the number/letter row is the remaining suspect).
+

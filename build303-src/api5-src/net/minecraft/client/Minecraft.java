@@ -20,6 +20,9 @@ public class Minecraft {
     /** Build 377: is a screen already open? The base mod reads this field to ask the same thing. */
     public net.minecraft.client.gui.screens.Screen screen;
 
+    /** Build 380: the level this client is in - the field the base mod reads as {@code mc.level}. */
+    public net.minecraft.client.multiplayer.ClientLevel level;
+
     /** Build 377: the window handle the base mod's screens pass to InputConstants.isKeyDown. */
     public com.mojang.blaze3d.platform.Window getWindow() {
         return null;
