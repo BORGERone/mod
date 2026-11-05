@@ -424,6 +424,22 @@ def structural(jar):
         if hack in names and b"- nothing opened" not in z.read(hack):
             problems.append("the 'not a door on the server' refusal is still silent")
 
+        # Build 381: the one line that decides whether any door in this mod can ever move. StateHolder
+        # publishes setValue(Property, Comparable)Object; builds 368-380 called a variant that returns
+        # BlockState, which does not exist, so every open threw NoSuchMethodError. The jar is checked by
+        # descriptor, not by name, because the name was always right and the shape was not.
+        _doors_cls, doors_refs = parse(z.read(DOORS))
+        writes = [d for (o, n, d) in doors_refs
+                  if o == "net/minecraft/world/level/block/state/BlockState" and n == "setValue"]
+        if not writes:
+            problems.append("Doors368 never writes the OPEN property - nothing could open a door")
+        elif ("(Lnet/minecraft/world/level/block/state/properties/Property;Ljava/lang/Comparable;)"
+              "Ljava/lang/Object;") not in writes:
+            problems.append("BlockState#setValue is called as %r - 1.21.1 publishes "
+                            "(Property, Comparable)Object, and anything else is a NoSuchMethodError on "
+                            "the first door (builds 368-380 never opened a door because of this)"
+                            % (writes,))
+
         # Build 372: a build that cannot explain itself cannot be fixed. The jar has to be able to say
         # in the log whether the key registered, whether a click was refused, and what the guard closed.
         # Build 374: a guard that never bound and a guard that bound and refused nothing look exactly

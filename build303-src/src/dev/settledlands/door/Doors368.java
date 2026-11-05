@@ -59,7 +59,13 @@ public final class Doors368 {
             BlockState state = level.getBlockState(part);
             if (!isDoor(state)) continue;
             if (isOpen(state) == open) continue;
-            level.setBlock(part, state.setValue(DoorBlock.OPEN, Boolean.valueOf(open)), 10);
+            // Build 381: setValue returns Object, not BlockState. StateHolder<O, S> publishes
+            // `<T extends Comparable<T>, V extends T> S setValue(Property<T>, V)`, and S is unbounded -
+            // so the erased return is Object. Builds 368-380 asked for a method returning BlockState,
+            // which the game does not have, and every door opening threw NoSuchMethodError.
+            Object next = state.setValue(DoorBlock.OPEN, Boolean.valueOf(open));
+            if (!(next instanceof BlockState)) continue;
+            level.setBlock(part, (BlockState) next, 10);
             changed = true;
         }
         return changed;

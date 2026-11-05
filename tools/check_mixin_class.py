@@ -660,10 +660,18 @@ CONFIRMED_EXTERNAL = {
     ("net/minecraft/world/level/block/state/BlockState", "getValue",
      "(Lnet/minecraft/world/level/block/state/properties/Property;)Ljava/lang/Comparable;"):
         "Build 368 doors: read the OPEN property of a door (Yarn: BlockState#get(Property))",
+    # Build 381: the descriptor above was WRONG for ten builds. In 1.21.1 setValue is not declared on
+    # BlockState at all: it comes from `net.minecraft.world.level.block.state.StateHolder<O, S>` as
+    # `<T extends Comparable<T>, V extends T> S setValue(Property<T>, V)`, S unbounded, so the erased
+    # return type is Object. Declaring it as BlockState compiled an invokevirtual the game does not have,
+    # and every door this mod opened since 368 died with
+    #   NoSuchMethodError: BlockState.setValue(Property, Comparable)BlockState
+    # (seen verbatim in the author's build-380 log). Evidence: the 1.21.1 javadoc for StateHolder.
     ("net/minecraft/world/level/block/state/BlockState", "setValue",
      "(Lnet/minecraft/world/level/block/state/properties/Property;Ljava/lang/Comparable;)"
-     "Lnet/minecraft/world/level/block/state/BlockState;"):
-        "Build 368 doors: write the OPEN property of a door (Yarn: BlockState#with(Property, value))",
+     "Ljava/lang/Object;"):
+        "Build 381 doors: write the OPEN property of a door - StateHolder#setValue returns S, erased to "
+        "Object",
     ("net/minecraft/world/level/Level", "setBlock",
      "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z"):
         "Build 368 doors: put the changed state back in the world, flag 10 (Yarn: World#setBlockState)",

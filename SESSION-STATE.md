@@ -1175,3 +1175,36 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - Next step if it still fails: the action-bar line names the failing check; if the panel says nothing at
   all, the panel itself never solved (keyboard ghosting on the number/letter row is the remaining suspect).
 
+## Build 381 - the door opens (DoorOpen) - 2026-11-06
+
+- **The bug of builds 368-380 is found and fixed: the `setValue` descriptor.** The author's
+  `logs/latest.log` from 380 finally named it:
+  `NoSuchMethodError: BlockState.setValue(Property, Comparable)` thrown inside `DoorHack377` and logged
+  as `door: a solved panel could not be applied: ...`. In 1.21.1 `setValue` is declared on
+  `net.minecraft.world.level.block.state.StateHolder<O,S>` as
+  `<T extends Comparable<T>, V extends T> S setValue(Property<T>, V)`; `S` is unbounded, so the erased
+  return is **Object**, not BlockState. Our api-src mirror declared `BlockState setValue(Property<T>, T)`
+  and emitted an unresolvable `invokevirtual`. Every door open since 368 threw, and each caller's
+  try/catch swallowed it - hack, NPC guide doors (368) and the guard (371) all go through
+  `Doors368.setOpen`.
+- Fix: `build303-src/api-src/.../block/state/BlockState.java` now declares raw
+  `public Object setValue(Property property, Comparable value)`; `Doors368.setOpen` does
+  `Object next = state.setValue(part, value); if (!(next instanceof BlockState)) continue;` then
+  `level.setBlock(part, (BlockState) next, 10)`. Verified with `tools/disasm.py`: the ref is
+  `setValue (L.../properties/Property;Ljava/lang/Comparable;)Ljava/lang/Object;`.
+- Gate hardening: `door_lock_check` now asserts that descriptor (name-only checking passed for ten
+  builds while the shape was wrong) and it FAILS on the 380 jar as expected; `check_mixin_class`
+  allowlist entry updated to the Object descriptor.
+- Ship: `settledlands-0.8.0-build381-door-open.jar` (563 entries, only `Doors368.class` replaced, 3302 B),
+  version `0.8.0-build381-door-open`, sha256
+  `e0c3ffdbec51e8f42270fed9193bb333d1a61b3d70383c5ba43ae2c3d484d4dd`; zip
+  `SettledLands-Build381-DoorOpen-Source.zip` (465 entries), sha256
+  `92defdaf947d92ecd10aa4c7802313ddc680120f8ac845f7624c2c60832fe7f9`; README
+  `README-Build381-RU.md`; patch `tools/patch_build381.py` (base 380, REPLACED 1, ADDED none).
+- All gates green, `verify_jar --base 380` PASS.
+- **Lesson to keep:** the mod's own bytecode is no reference for vanilla signatures (it never calls
+  `BlockState#setValue`); hand-written mirrors must be checked against the 1.21.1 javadoc
+  (lexxie.dev `StateHolder`) *and* the emitted descriptor dumped with `disasm.py`.
+- Unconfirmed in game: that 381 actually opens the door, that the guard re-closes it after 8 s, and that
+  NPC doors now open/close - all three depend on this one call and were dead for the same reason.
+

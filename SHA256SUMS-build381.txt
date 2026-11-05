@@ -1,0 +1,2 @@
+e0c3ffdbec51e8f42270fed9193bb333d1a61b3d70383c5ba43ae2c3d484d4dd  settledlands-0.8.0-build381-door-open.jar
+92defdaf947d92ecd10aa4c7802313ddc680120f8ac845f7624c2c60832fe7f9  SettledLands-Build381-DoorOpen-Source.zip
