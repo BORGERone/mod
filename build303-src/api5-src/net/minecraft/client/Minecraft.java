@@ -16,6 +16,14 @@ public class Minecraft {
      * class, and this mirror is the one the build classpath sees first, so it has to carry them.
      */
     public KeyboardHandler keyboardHandler;
+
+    /** Build 377: is a screen already open? The base mod reads this field to ask the same thing. */
+    public net.minecraft.client.gui.screens.Screen screen;
+
+    /** Build 377: the window handle the base mod's screens pass to InputConstants.isKeyDown. */
+    public com.mojang.blaze3d.platform.Window getWindow() {
+        return null;
+    }
     public net.minecraft.client.player.LocalPlayer player;
 
     public static Minecraft getInstance() {

@@ -1,0 +1,2 @@
+a827ac8e876848cb7b8b60856d3be648e5b09db13a2edc282b2f35431fe5b020  settledlands-0.8.0-build377-door-hack.jar
+d92a685db7df0919d97a8c0eb1c608cf2cb8547e3d3128b9b9d7d1cc0aac83b2  SettledLands-Build377-DoorHack-Source.zip

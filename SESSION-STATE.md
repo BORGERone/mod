@@ -1089,3 +1089,26 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - 23 gates green, `verify_jar --base 375` PASS (0 removed members, 0 new external refs).
 - Not confirmed in game: the network layer was verified against published NeoForge 1.21.1 sources + 1.21.1
   javadoc, not a running client. Fallback if registration fails is the 375 strict behaviour (safe but laggy).
+
+## Build 377 - the lock panel (shipped)
+
+- Jar `settledlands-0.8.0-build377-door-hack.jar`, 562 entries, sha256
+  `a827ac8e876848cb7b8b60856d3be648e5b09db13a2edc282b2f35431fe5b020`.
+- Zip `SettledLands-Build377-DoorHack-Source.zip`, 458 entries, sha256
+  `d92a685db7df0919d97a8c0eb1c608cf2cb8547e3d3128b9b9d7d1cc0aac83b2`.
+- README `README-Build377-RU.md`, patch script `tools/patch_build377.py` (base 376).
+- Feature: clicking a locked door without the key opens `HackPanel377` (a 1.21.1 `Screen`): 4-10 random
+  number-row keycaps, all must be held at the same moment (`InputConstants.isKeyDown` polled per frame),
+  15 s per attempt, timeout/Esc change nothing. Success sends `settledlands:door_hack` (C2S, single string
+  = the store key) and the server opens the door if it is still locked and the player is within 6 blocks.
+  The lock is not removed; `DoorGuard371` skips a door for 8 s after a crack (`DoorHack377.cracked`).
+- Classes: replaced `DoorEvents368`, `DoorNet375`, `DoorGuard371`; added `DoorHack377`, `HackPanel377`.
+- Stubs widened (compile-only): `Screen` (width/height/font/title/init/render/renderBackground/keyPressed/
+  keyReleased/isPauseScreen/onClose/removed), `GuiGraphics` (Component overloads), `Minecraft#screen`/
+  `getWindow`, `InputConstants`, `Window`, `IPayloadContext#player/enqueueWork`,
+  `PacketDistributor#sendToServer`, `PayloadRegistrar#playToServer`.
+- 23 gates green, `verify_jar --base 376` PASS, 0 new external refs.
+- Sandbox note: this environment had no JDK and an old checkout; `pip install --break-system-packages
+  jdk4py` restores `/usr/local/lib/python3.11/dist-packages/jdk4py/java-runtime/bin/java`, and
+  `git fetch --depth=1 origin arena/5618404a-mod && git reset --hard FETCH_HEAD` restores the branch tip.
+- Not confirmed in game: panel look, key ergonomics, and the whole C2S path.

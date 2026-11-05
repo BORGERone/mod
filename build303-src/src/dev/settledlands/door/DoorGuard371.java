@@ -91,6 +91,9 @@ public final class DoorGuard371 {
             if (!Doors368.isDoor(level.getBlockState(pos))) continue;
             if (!Doors368.anyOpen(level, pos)) continue;
             if (NpcDoors368.guideOpened(level, pos)) continue;
+            // Build 377: a door a player has just cracked open is open on purpose. Without this the
+            // lock panel would work and the door would slam shut on the next tick.
+            if (DoorHack377.cracked(level, pos)) continue;
             Doors368.setOpen(level, pos, false);
             if (closed < 3) {
                 closed++;

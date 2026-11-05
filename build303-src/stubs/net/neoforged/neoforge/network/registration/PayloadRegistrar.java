@@ -11,4 +11,13 @@ public class PayloadRegistrar {
             StreamCodec<? super RegistryFriendlyByteBuf, T> reader, IPayloadHandler<T> handler) {
         return this;
     }
+
+    /**
+     * Build 377: the other direction. The base mod registers its own client-to-server payloads with this
+     * call ({@code CutsceneCamExitPayload}, {@code CutsceneRecTogglePayload}).
+     */
+    public <T extends CustomPacketPayload> PayloadRegistrar playToServer(CustomPacketPayload.Type<T> type,
+            StreamCodec<? super RegistryFriendlyByteBuf, T> reader, IPayloadHandler<T> handler) {
+        return this;
+    }
 }

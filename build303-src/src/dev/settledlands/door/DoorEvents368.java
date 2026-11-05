@@ -107,6 +107,15 @@ public final class DoorEvents368 {
             // doors was the price of not knowing. Until the first snapshot arrives the strict answer
             // stays: refuse everything, be slow, never let a locked door open for a tick.
             if (DoorSync375.synced() && !DoorSync375.isLocked(level, pos)) return;
+            // Build 377: the lock is no longer a wall with nothing behind it. On a door this client
+            // knows to be locked, and without the mod's key in hand, the click opens the hack panel -
+            // a row of keys that all have to be held at once. The click is still refused here, so the
+            // door does not move while the panel is up, and the panel itself changes no rule: it can
+            // only ask the server to open the door it was opened for, and the server checks the lock.
+            if (DoorSync375.synced() && DoorSync375.isLocked(level, pos)
+                    && !DoorKey368.isKey(event.getItemStack())) {
+                HackPanel377.open(pos);
+            }
             event.setCanceled(true);
             try {
                 event.setCancellationResult(InteractionResult.SUCCESS);
@@ -116,7 +125,7 @@ public final class DoorEvents368 {
             if (!sawClient) {
                 sawClient = true;
                 note("door: the client refused to open the door at " + pos
-                        + " on its own - the lock is known to this client (build 376)");
+                        + " on its own - the lock is known to this client (build 377)");
             }
         } catch (Throwable failure) {
             LOG.warn("a door click could not be refused on the client", failure);

@@ -12,5 +12,11 @@ public final class PacketDistributor {
     public static void sendToPlayersInDimension(ServerLevel level, CustomPacketPayload payload,
             CustomPacketPayload... payloads) {}
 
+    /**
+     * Build 377: client to server. The base mod's own payloads send themselves with exactly this call
+     * ({@code GuideNet}, {@code CutsceneRecTogglePayload}).
+     */
+    public static void sendToServer(CustomPacketPayload payload, CustomPacketPayload... payloads) {}
+
     private PacketDistributor() {}
 }

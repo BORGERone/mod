@@ -79,6 +79,25 @@ def parse(data):
     return parsed, refs
 
 
+def field_consts(parsed):
+    """The int fields of a class that carry a ConstantValue - the only way to read a `static final`."""
+    cp = parsed["cp"]
+    out = {}
+    for _acc, ni, _di, attrs in parsed["fields"]:
+        if not cp[ni] or cp[ni][0] != 1:
+            continue
+        name = cp[ni][1]
+        for an, body in attrs:
+            if not cp[an] or cp[an][0] != 1 or cp[an][1] != "ConstantValue":
+                continue
+            if len(body) != 2:
+                continue
+            idx = struct.unpack(">H", body)[0]
+            if cp[idx] and cp[idx][0] == 3:
+                out[name] = struct.unpack(">i", cp[idx][1])[0]
+    return out
+
+
 def structural(jar):
     problems = []
     with zipfile.ZipFile(jar) as z:
@@ -271,6 +290,69 @@ def structural(jar):
                    for r in event_refs):
             problems.append("a joining player is never sent the lock list - every door would stay slow "
                             "until a door is locked or unlocked")
+
+        # Build 377: the lock is no longer a wall with nothing behind it. A click on a locked door opens
+        # the hack panel, and a solved panel asks the server to open that one door. Four things have to
+        # be true of the jar for that to be a feature and not a decoration: the panel exists and is a
+        # real screen, it offers the 4 to 10 keycaps the author asked for, it reads the keyboard itself,
+        # and the door opens only through a packet the server checks against the lock.
+        panel = "dev/settledlands/door/HackPanel377.class"
+        hack = "dev/settledlands/door/DoorHack377.class"
+        if panel not in names:
+            problems.append("no hack panel: a locked door would still answer a click with nothing but "
+                            "a line in the action bar")
+        if hack not in names:
+            problems.append("no solved-panel packet: the panel could never open a door")
+        if panel in names:
+            panel_cls, panel_refs = parse(z.read(panel))
+            cp = panel_cls["cp"]
+            parent = disasm.cls_name(cp, panel_cls["super"]) if cp[panel_cls["super"]] else ""
+            if parent != "net/minecraft/client/gui/screens/Screen":
+                problems.append("the hack panel is not a Screen (%s) - the game would never draw it"
+                                % parent)
+            if not any(r[0] == "com/mojang/blaze3d/platform/InputConstants" and r[1] == "isKeyDown"
+                       for r in panel_refs):
+                problems.append("the panel never reads the keyboard: 'all keys at once' would be a "
+                                "guess about the events it received, not a fact")
+            if not any(r[0] == "net/minecraft/client/gui/GuiGraphics" and r[1] == "drawCenteredString"
+                       for r in panel_refs):
+                problems.append("the panel draws no text - the keycaps would be unlabelled")
+            if b"\xd0\x92\xd0\xb7\xd0\xbb\xd0\xbe\xd0\xbc" not in z.read(panel):
+                problems.append("the panel has no 'Взлом' title string")
+            consts = field_consts(panel_cls)
+            if consts.get("MIN_BUTTONS") != 4 or consts.get("MAX_BUTTONS") != 10:
+                problems.append("the panel does not offer 4 to 10 buttons as asked (min=%r max=%r)"
+                                % (consts.get("MIN_BUTTONS"), consts.get("MAX_BUTTONS")))
+        if hack in names:
+            hack_cls, hack_refs = parse(z.read(hack))
+            for owner, member, why in (
+                    ("net/minecraft/network/protocol/common/custom/CustomPacketPayload$Type", "<init>",
+                     "the solved-panel message is not a payload - NeoForge would not send it"),
+                    ("net/neoforged/neoforge/network/PacketDistributor", "sendToServer",
+                     "nothing is ever sent to the server when the panel is solved"),
+                    ("dev/settledlands/door/Doors368", "setOpen",
+                     "the server never opens the door the panel was solved for"),
+                    ("dev/settledlands/door/DoorStore368", "isLocked",
+                     "the server opens the door without checking the lock - the client would be trusted"),
+                    ("net/neoforged/neoforge/network/handling/IPayloadContext", "player",
+                     "the handler never asks who solved the panel")):
+                if not any(r[0] == owner and r[1] == member for r in hack_refs):
+                    problems.append("%s: %s" % (why, member))
+        if net in names:
+            _net_cls, net_refs = parse(z.read(net))
+            if not any(r[1] == "playToServer" and r[0] and r[0].endswith("registration/PayloadRegistrar")
+                       for r in net_refs):
+                problems.append("the solved-panel payload is never registered for the server - a "
+                                "solved panel would change nothing")
+        if not any(r[1] == "open" and r[0] and r[0].endswith("door/HackPanel377") for r in event_refs):
+            problems.append("the door click never opens the panel - the minigame would be unreachable")
+        # Build 377: the guard of 371 closes every locked door that is open. A door a player has just
+        # cracked open is open on purpose, so the guard has to ask before it slams it shut.
+        _guard_cls, guard_refs2 = parse(z.read("dev/settledlands/door/DoorGuard371.class"))
+        if not any(r[1] == "cracked" and r[0] and r[0].endswith("door/DoorHack377")
+                   for r in guard_refs2):
+            problems.append("the guard does not know about cracked doors - a solved panel would open a "
+                            "door that the next tick closes again")
 
         # Build 372: a build that cannot explain itself cannot be fixed. The jar has to be able to say
         # in the log whether the key registered, whether a click was refused, and what the guard closed.
