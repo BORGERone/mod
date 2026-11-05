@@ -1067,3 +1067,25 @@ True → `say true`, False → `say false`. Кто-то в радиусе — п
 - **Links: Drive `uc?export=download` gave the author a 404 for the 375 jar** even though `get_file` shows `permissions: anyone/reader, allow_file_discovery: true` and the file is untrashed. Drive redirects cannot be tested from the sandbox (`drive.google.com` → curl 000). Standing decision from now on: publish **GitHub raw at the build's commit sha** - `https://github.com/BORGERone/mod/raw/<full-sha>/<file>` (repo is public, `isPrivate: false`; verified: 302 to raw.githubusercontent.com, contents API reports the exact byte size). Keep uploading to Drive as a copy, but the link in the reply is the GitHub one, and state the sha256 next to it.
 - 375 link used: `https://github.com/BORGERone/mod/raw/f59fc44799efd6ed20fc3addd9fd3c28bcde2bf9/settledlands-0.8.0-build375-door-client.jar` (3 517 472 bytes, sha256 `0d2aaeef4c56846300d70093bb9059b80e26cef21c028e68948d0a15b338114d`).
 
+## Build 376 - door sync (shipped)
+
+**Build 376 shipped 2026-11-05, commit `036192e`.**
+
+- Jar `settledlands-0.8.0-build376-door-sync.jar`, 3 524 390 B, sha256
+  `1f65b745e30eff5385ce6183f745a66f02f814eff8b4d154577fb593a350b78a`, Drive `1GW792jzhEcn00UbKFSLSOhAdSW2Q55xf`.
+- Zip `SettledLands-Build376-DoorSync-Source.zip`, 829 244 B, sha256
+  `835a4ec5e21810e1d64a44d0b547b4343e6d7f7ed258c0ad839b33390b047b6d`, Drive `17YOZhBI6gba-BBkbixPO_TS7lCORFQqC`.
+- README `README-Build376-RU.md`.
+- Problem it solves: 375 refused *every* door click on the client, so an unlocked door was opened only by the
+  server's block update and the two halves animated apart ("top half opens late").
+- Mechanism: payload `settledlands:door_sync` (`DoorSync375`), registered client-bound in `DoorNet375`
+  (`playToClient`, mod bus). `C|` clear, `S|k1;k2;` snapshot, `A|...` snapshot chunk (CHUNK=7000), `L|key`/`U|key`
+  delta. Snapshot on `PlayerLoggedInEvent`; delta on lock/unlock to `server.getPlayerList().getPlayers()` via
+  `PacketDistributor.sendToPlayer`. Client refuses a click only when `synced()==false` or `isLocked(level,pos)`
+  (block + ±1 Y); otherwise vanilla predicts.
+- No unproven API: `sendToPlayersInDimension` was dropped for the loop the base mod already uses;
+  `ByteBufCodecs.STRING_UTF8` is the one new member and is allowlisted in `tools/check_mixin_class.py` with the
+  1.21.1 javadoc evidence (`static final StreamCodec<ByteBuf, String>`).
+- 23 gates green, `verify_jar --base 375` PASS (0 removed members, 0 new external refs).
+- Not confirmed in game: the network layer was verified against published NeoForge 1.21.1 sources + 1.21.1
+  javadoc, not a running client. Fallback if registration fails is the 375 strict behaviour (safe but laggy).
