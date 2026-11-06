@@ -1759,3 +1759,45 @@ back across the card, into the pulse's left port). The blue target stood to the 
   delete button (clear = delete all nodes + save, as for a door), no wand sparks (as for a door).
 - **Unconfirmed in game:** the close-detection in a live session (containerMenu transitions), the card's
   look at real GUI scale, the chain's chain start on a wired chest.
+
+## Build 397 - the chest's hack becomes a setting
+
+- **The report:** «в графе сундука я не могу настраивать взлом». Build 396 gave the chest a card that
+  could only be read; a lock the author cannot set is not a lock, so this build is the door card's four
+  settings on the chest card, and the panel on the other side of them.
+- **Where the lock lives:** on the chest node, in stock fields the save already keeps (rule of 384/392/397):
+  `varCompare` = keys 4..10 (0 -> default 6), `varOp` = seconds 1..20 (0 -> 5), `checkTarget` = difficulty
+  1..3 (0 -> 1), `pointsShared` = locked (written for every node). `varValue`/`text` stay 396's memory
+  (opens / last opener) - the chest mapping deliberately differs from the door's. **No second store and no
+  sync:** the card flag IS the lock, so saving the graph locks the chest and clearing it frees it.
+- **New/changed classes:** `chest/ChestLock397` (values, `panel(Level,BlockPos)` -> `int[]{keys,sec,diff}`,
+  `locked(Level,BlockPos)`, `near` with `REACH=6.0`, `applyDefaults`, `stateKey`/`stateKeyShort`, `cardAt`),
+  `chest/ChestNet397` (+`$Panel`, `$Solved`; payloads `settledlands:chest_panel` / `settledlands:chest_hack`,
+  registrar `"1"`, both handlers through `enqueueWork`; `solve()` re-checks lock/block/reach, then
+  `ServerPlayer#openMenu(BlockState#getMenuProvider(...))` and `ChestGraph396Events#remember`),
+  `chest/ChestGraph396` (`applyDefaults` on open/save/new), `chest/ChestGraph396Events` (`panel` refusal in
+  `onUse` with `setCanceled` + `setCancellationResult(FAIL)`, new `onBreak` guard, new public `remember`),
+  `door/HackPanel377` (`openForChest(key,pos,keys,sec,diff)`, `chestKey` field, title/captions switch, win
+  answers `ChestNet397#sendSolved`), `npc/client/ChestCard396` (door card's five lines, state line in the
+  accent colour), `npc/client/ChestGraphClient396#lines` (5 lines), `mixin/NpcChestRows396Mixin` (three
+  sliders 4..10 / 1..20 / 1..3 + lock toggle, all through `propertyChange`, facts moved below).
+- **API mirrors added this build:** `api-src/.../world/MenuProvider.java` (empty interface),
+  `BlockState#getMenuProvider(Level,BlockPos):MenuProvider`, `ServerPlayer#openMenu(MenuProvider):OptionalInt`
+  (both proven against the base jar's descriptors). Lang: 12 RU + 12 EN keys.
+- **Gate:** `tools/chest_graph_check.py` extended (ranges read from `ChestLock397`'s constant pool, the four
+  card fields touched, the inspector calling all four setters + `NpcUi#slider` + `propertyChange`,
+  `applyDefaults` reached, both payloads registered, `openMenu`+`getMenuProvider` + `remember`, the click and
+  break refusals, `openForChest`/`sendSolved`, 12 keys). New probe
+  `tools/harness/ChestHack397Probe.java` -> `DEFAULTS keys=6 sec=5 diff=1 locked=false
+  state=gui.settledlands.chest.state_open`, `SET keys=4 sec=20 diff=3 locked=true
+  state=gui.settledlands.chest.locked`, `RANGE keys=10 sec=1 diff=1`, `RAW keys=6 sec=5 diff=1`,
+  `STOCK untouched=true`, `NOTE fields=6`. The 396 probe still passes.
+- **Ship:** jar `settledlands-0.8.0-build397-chest-hack.jar` (596 entries, 3627413 bytes, sha256
+  `555c650f…e3a019`), zip `SettledLands-Build397-ChestHack-Source.zip` (533 entries, sha256
+  `d3e01a4d…70cb9`), `SHA256SUMS-build397.txt`, `verify_jar --base 396` PASS (0 new external refs), 32 checks
+  green + 5 verify gates.
+- **Not in this build:** the lock does not stop a hopper or an observer under the chest, a double chest is
+  two graphs, another mod's container is not covered.
+- **Unconfirmed in game:** the panel arriving on a live client (title/layout), the vanilla window opening
+  from a server `openMenu` on NeoForge 1.21.1, no hand swing on a refused click, the opener line landing on
+  the card in the same tick as the window close.

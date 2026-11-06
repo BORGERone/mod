@@ -33,6 +33,26 @@ chest's classes:
     the two fields the stock serialiser keeps for every node), and `stripCards` dropping the two cards the
     editor adds.
 
+Build 397 added the lock, and the author's report was one line: «в графе сундука я не могу настраивать
+взлом». So the gate asks the same question of the four settings the card now carries:
+
+  * structurally, the four numbers are the four stock node fields a save keeps - `varCompare` (keys 4..10),
+    `varOp` (seconds 1..20), `checkTarget` (difficulty 1..3) and `pointsShared` (locked) - with the door's
+    ranges read out of `ChestLock397`'s constant pool, so a range cannot drift from the panel it feeds;
+  * structurally, every one of the four can actually be **edited in the graph**: the chest's inspector
+    builds the door's sliders (`NpcUi#slider`) and writes all four setters through `propertyChange` (the
+    stock undo point, the dirty flag and the card - build 362), the graph writes `applyDefaults` on open and
+    on save, and the card reads the state it shows;
+  * structurally, a locked chest is refused where it would have been opened and cannot be broken open:
+    `ChestGraph396Events` calls `setCanceled` + `setCancellationResult` on the click and `setCanceled` on
+    `BlockEvent.BreakEvent`, and asks `ChestLock397#panel` for the numbers it sends;
+  * structurally, the answer opens the chest's **own** window: `ChestNet397` registers both payloads and
+    calls `ServerPlayer#openMenu` with `BlockState#getMenuProvider`, then hands the opening to
+    `ChestGraph396Events#remember` so the chain still runs when that window closes;
+  * behaviourally, `tools/harness/ChestHack397Probe.java` walks the four setters and readers, the clamps, a
+    card written by build 396 (three zeroes read back as the defaults) and a stock node of a chest's graph
+    (never touched), and the twelve language keys are in both files.
+
     python3 tools/chest_graph_check.py settledlands-0.8.0-build396-chest-graph.jar
 
 Exit 0 = a chest has the door's graph: one card, two sockets on it, the stock palette and interpreter.
@@ -63,6 +83,12 @@ GRAPH = "dev/settledlands/chest/ChestGraph396.class"
 STORE = "dev/settledlands/chest/ChestGraph396Store.class"
 EVENTS = "dev/settledlands/chest/ChestGraph396Events.class"
 CARD = "dev/settledlands/npc/client/ChestCard396.class"
+LOCK = "dev/settledlands/chest/ChestLock397.class"
+NET = "dev/settledlands/chest/ChestNet397.class"
+PANEL_PACKET = "dev/settledlands/chest/ChestNet397$Panel.class"
+SOLVED_PACKET = "dev/settledlands/chest/ChestNet397$Solved.class"
+PANEL_SCREEN = "dev/settledlands/door/HackPanel377.class"
+ROWS = "dev/settledlands/mixin/NpcChestRows396Mixin.class"
 CLIENT = "dev/settledlands/npc/client/ChestGraphClient396.class"
 PASS = "dev/settledlands/npc/RadiusPass354.class"
 SPOT = "dev/settledlands/npc/RadiusPass354$ChestSpot.class"
@@ -101,7 +127,35 @@ LANG_KEYS = (
     "message.settledlands.chest.graph_full",
 )
 
+# Build 397: the four settings of the lock and what the panel says when it refuses.
+LANG_KEYS_397 = (
+    "gui.settledlands.chest.keys",
+    "gui.settledlands.chest.speed",
+    "gui.settledlands.chest.difficulty",
+    "gui.settledlands.chest.lock",
+    "gui.settledlands.chest.locked",
+    "gui.settledlands.chest.unlocked",
+    "gui.settledlands.chest.state_locked",
+    "gui.settledlands.chest.state_open",
+    "message.settledlands.chest.locked",
+    "message.settledlands.chest.free",
+    "message.settledlands.chest.far",
+    "message.settledlands.chest.gone",
+)
+
+# The four card fields the lock lives in, and the four setters that write them.
+LOCK_FIELDS = ("varCompare", "varOp", "checkTarget", "pointsShared")
+LOCK_SETTERS = ("setKeys", "setSeconds", "setDifficulty", "setLocked")
+LOCK_READERS = ("keys", "seconds", "difficulty", "locked")
+
+# The ranges of the door's panel, on the chest's card. A number out of range is a panel nobody can solve.
+LOCK_RANGES = (("MIN_KEYS", 4), ("MAX_KEYS", 10), ("DEFAULT_KEYS", 6),
+               ("MIN_SPEED", 1), ("MAX_SPEED", 20), ("DEFAULT_SPEED", 5),
+               ("MIN_DIFFICULTY", 1), ("MAX_DIFFICULTY", 3), ("DEFAULT_DIFFICULTY", 1))
+
 PROBE_CLASS = "ChestGraph396Probe"
+LOCK_PROBE = ROOT / "tools" / "harness" / "ChestHack397Probe.java"
+LOCK_PROBE_CLASS = "ChestHack397Probe"
 
 EXPECT = {
     "TYPE": "own=1 stock=false",
@@ -110,6 +164,16 @@ EXPECT = {
     "MEMORY": "count=3 opener=BORGER long=32",
     "STRIP": "dropped=2 left=3 entry=kept",
     "ID": "in=true back=true stable=true",
+}
+
+# Build 397, from tools/harness/ChestHack397Probe.java - the lock is a setting on the card.
+EXPECT_LOCK = {
+    "DEFAULTS": "keys=6 sec=5 diff=1 locked=false state=gui.settledlands.chest.state_open",
+    "SET": "keys=4 sec=20 diff=3 locked=true state=gui.settledlands.chest.locked",
+    "RANGE": "keys=10 sec=1 diff=1",
+    "RAW": "keys=6 sec=5 diff=1",
+    "STOCK": "untouched=true",
+    "NOTE": "fields=6",
 }
 
 
@@ -307,27 +371,131 @@ def structural(jar):
         # 11. the language keys, in both files.
         for path in ("assets/settledlands/lang/ru_ru.json", "assets/settledlands/lang/en_us.json"):
             strings = json.loads(zf.read(path).decode("utf-8"))
-            for key in LANG_KEYS:
+            for key in LANG_KEYS + LANG_KEYS_397:
                 if key not in strings or not strings[key]:
                     problems.append("%s is missing %s" % (path.rsplit("/", 1)[-1], key))
+
+        # 12. BUILD 397: the lock is a setting, and it lives on the card's stock fields.
+        #     «в графе сундука я не могу настраивать взлом» - a card that shows a lock the author cannot
+        #     set is not a setting, and a lock kept in a second store is a lock that falls out of step with
+        #     the graph. So the four values are the four stock node fields the save already keeps (build
+        #     384: a field a node type does not own is a field the save drops), written by four setters.
+        lock_bytes = zf.read(LOCK)
+        lock_cf = classfile.parse(lock_bytes, LOCK)
+        lock, lock_refs = refs_of(lock_bytes)
+        lock_methods = methods_of(lock)
+        for name, want in LOCK_RANGES:
+            got = int_constant(lock_cf, name)
+            if got != want:
+                problems.append("ChestLock397.%s is %r, expected %d - the panel of a chest would ask a"
+                                " number the door's panel never asks" % (name, got, want))
+        for name in LOCK_FIELDS:
+            if not any(r[1] == name and r[0] == "dev/settledlands/npc/NpcDialogueGraph$Node"
+                       for r in lock_refs):
+                problems.append("ChestLock397 never touches Node#%s - one of the four settings of the"
+                                " lock would be a value nothing in the save keeps" % name)
+        for name in LOCK_READERS + LOCK_SETTERS + ("panel", "applyDefaults", "stateKey",
+                                                   "stateKeyShort", "locked"):
+            if name not in lock_methods:
+                problems.append("ChestLock397 has no %s()" % name)
+
+        # 13. the card is where those settings are set: the graph writes the defaults, the inspector writes
+        #     the values through the same commit the stock rows use, and the card shows the state.
+        if not any(r[1] == "applyDefaults" and r[0] == "dev/settledlands/chest/ChestLock397"
+                   for r in graph_refs):
+            problems.append("ChestGraph396 never calls ChestLock397#applyDefaults - a chest that was"
+                            " never edited would open with three zeroes where the panel's numbers are")
+        rows, rows_refs = refs_of(zf.read(ROWS))
+        for name in LOCK_SETTERS:
+            if not any(r[1] == name and r[0] == "dev/settledlands/chest/ChestLock397"
+                       for r in rows_refs):
+                problems.append("the chest's inspector never calls ChestLock397#%s - that setting cannot"
+                                " be edited in the graph, which is the whole of build 397's report" % name)
+        if not any(r[1] == "slider" and r[0] == "dev/settledlands/npc/client/NpcUi"
+                   for r in rows_refs):
+            problems.append("the chest's inspector builds no slider - the three numbers of the lock have"
+                            " no control")
+        if "propertyChange" not in methods_of(rows):
+            problems.append("the chest's inspector does not commit through propertyChange - the stock"
+                            " undo point, the dirty flag and the card would not see the change (362)")
+        card_397, card_refs_397 = refs_of(zf.read(CARD))
+        if not any(r[0] == "dev/settledlands/chest/ChestLock397" for r in card_refs_397):
+            problems.append("ChestCard396 does not read the lock - the card would show anything but the"
+                            " state of its own chest")
+
+        # 14. the two packets are registered, and the answer opens the CHEST'S OWN window.
+        net, net_refs = refs_of(zf.read(NET))
+        for name in ("playToClient", "playToServer"):
+            if not any(r[1] == name and r[0] == "net/neoforged/neoforge/network/registration/PayloadRegistrar"
+                       for r in net_refs):
+                problems.append("ChestNet397 does not register %s - one half of the lock panel would never"
+                                " arrive" % name)
+        for wanted, why in (("openMenu", "the chest's own window"),
+                            ("getMenuProvider", "the window vanilla would have opened")):
+            if not any(r[1] == wanted and r[0] == "net/minecraft/server/level/ServerPlayer"
+                       or r[1] == wanted and r[0] == "net/minecraft/world/level/block/state/BlockState"
+                       for r in net_refs):
+                problems.append("ChestNet397 never calls %s - a solved panel must open %s, not a"
+                                " stand-in" % (wanted, why))
+        if not any(r[1] == "remember" and r[0] == "dev/settledlands/chest/ChestGraph396Events"
+                   for r in net_refs):
+            problems.append("ChestNet397 does not hand a cracked chest to ChestGraph396Events#remember -"
+                            " the chain of a chest opened by a solved panel would never run")
+        for name in (PANEL_PACKET, SOLVED_PACKET):
+            if name not in names:
+                problems.append("the jar has no %s" % name)
+        for packet, needle in ((PANEL_PACKET, b"chest_panel"), (SOLVED_PACKET, b"chest_hack")):
+            if packet in names and needle not in zf.read(packet):
+                problems.append("%s does not declare %s" % (packet, needle.decode()))
+        screen, screen_refs = refs_of(zf.read(PANEL_SCREEN))
+        if "openForChest" not in methods_of(screen):
+            problems.append("HackPanel377 has no openForChest() - a locked chest would have no panel,"
+                            " and this mod would grow a second lock screen instead of reusing this one")
+        if not any(r[1] == "sendSolved" and r[0] == "dev/settledlands/chest/ChestNet397"
+                   for r in screen_refs):
+            problems.append("a solved panel never answers a chest - the door's packet would open nothing")
+
+        # 15. a locked chest is refused where it would have been opened, and cannot be broken open either.
+        event_refs_397 = {(r[1], r[0]) for r in event_refs}
+        for name, owner in (("setCanceled", "net/neoforged/neoforge/event/entity/player/"
+                                            "PlayerInteractEvent$RightClickBlock"),
+                            ("setCancellationResult", "net/neoforged/neoforge/event/entity/player/"
+                                                      "PlayerInteractEvent$RightClickBlock"),
+                            ("setCanceled", "net/neoforged/neoforge/event/level/BlockEvent$BreakEvent")):
+            if (name, owner) not in event_refs_397:
+                problems.append("ChestGraph396Events never calls %s on %s - a locked chest could be opened"
+                                " or broken open, and the lock would be a decoration"
+                                % (name, owner.rsplit("/", 1)[-1]))
+        if not any(r[1] == "sendPanel" and r[0] == "dev/settledlands/chest/ChestNet397"
+                   for r in event_refs):
+            problems.append("ChestGraph396Events never sends the panel - a locked chest would refuse the"
+                            " click and stay silent")
+        if not any(r[1] == "panel" and r[0] == "dev/settledlands/chest/ChestLock397"
+                   for r in event_refs):
+            problems.append("ChestGraph396Events never asks ChestLock397#panel - the numbers on the card"
+                            " would not reach the player")
     return problems
 
 
 def run_probe(jar):
-    if not PROBE.is_file():
-        return None, ["the probe %s is missing" % PROBE]
+    return run_one(jar, PROBE, PROBE_CLASS)
+
+
+def run_one(jar, source, cls):
+    if not source.is_file():
+        return None, ["the probe %s is missing" % source]
     with tempfile.TemporaryDirectory() as tmp:
         tmpdir = pathlib.Path(tmp)
         classpath = ":".join([str(jar)] + STUBS)
         compiled = subprocess.run(
             [str(JAVA), "-jar", str(ECJ), "-21", "-nowarn", "-cp", classpath,
-             "-d", str(tmpdir), str(PROBE)],
+             "-d", str(tmpdir), str(source)],
             capture_output=True, text=True)
-        if compiled.returncode != 0 or not (tmpdir / (PROBE_CLASS + ".class")).is_file():
+        if compiled.returncode != 0 or not (tmpdir / (cls + ".class")).is_file():
             return None, ["the probe did not compile: %s"
                           % (compiled.stdout + compiled.stderr).strip()[-400:]]
         result = subprocess.run(
-            [str(JAVA), "-cp", ":".join([str(tmpdir), str(jar)] + STUBS), PROBE_CLASS],
+            [str(JAVA), "-cp", ":".join([str(tmpdir), str(jar)] + STUBS), cls],
             capture_output=True, text=True)
         output = (result.stdout + result.stderr).strip()
         if result.returncode != 0:
@@ -355,13 +523,21 @@ def main(argv):
         for key, want in EXPECT.items():
             if got.get(key) != want:
                 problems.append("%s is %r, expected %r" % (key, got.get(key), want))
+    lock, more_lock = run_one(jar, LOCK_PROBE, LOCK_PROBE_CLASS)
+    problems += more_lock
+    if lock is not None:
+        for key, want in EXPECT_LOCK.items():
+            if lock.get(key) != want:
+                problems.append("lock %s is %r, expected %r" % (key, lock.get(key), want))
     if problems:
         print("chest_graph_check: FAIL  %s" % jar.name)
         for line in problems:
             print("  - " + line)
         return 1
-    print("chest_graph_check: OK  %s  (a chest has the door's graph: one card of this mod, its two"
-          " outputs as sockets on it, the stock palette and the stock interpreter)" % jar.name)
+    print("chest_graph_check: OK  %s  (a chest has the door's graph - one card of this mod, its two"
+          " outputs as sockets on it, the stock palette and the stock interpreter - and the lock of that"
+          " card is a setting: three sliders and a toggle the graph can edit, honoured by the chest's own"
+          " panel)" % jar.name)
     return 0
 
 

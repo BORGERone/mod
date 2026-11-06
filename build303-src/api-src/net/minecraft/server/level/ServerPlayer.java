@@ -12,4 +12,11 @@ public class ServerPlayer extends Player {
     public boolean isSpectator() { return false; }
 
     public MinecraftServer getServer() { return null; }
+
+    /**
+     * Build 397: open a menu for this player - a chest's window, after the panel that locks it was
+     * cracked. Returns the menu id, which this mod does not use; the descriptor (including
+     * {@code OptionalInt}) is the base jar's own reference to this very method.
+     */
+    public java.util.OptionalInt openMenu(net.minecraft.world.MenuProvider provider) { return null; }
 }

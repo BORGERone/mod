@@ -2,22 +2,28 @@ package dev.settledlands.npc.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.settledlands.chest.ChestGraph396;
+import dev.settledlands.chest.ChestLock397;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 /**
- * Build 396: the card of the chest itself - the one node of a chest's graph this mod draws.
+ * Build 396/397: the card of the chest itself - the one node of a chest's graph this mod draws.
  *
- * <p>The author's words: «Все прекрасно, теперь я хочу сделать такой-же граф для сундуков». So this is the
- * door's card ({@code DoorCard382}) with the chest's facts in it, in the same box, with the same header,
- * the same accent line, the same muted grey body and the same two sockets on the right edge. A door's card
- * shows the hack panel's settings; a chest has no settings, so the card shows what a chest knows: how many
- * times it was opened, who opened it last, and the moment its chain runs.</p>
+ * <p>The author's words for the build that made it: «Все прекрасно, теперь я хочу сделать такой-же граф для
+ * сундуков». So this is the door's card ({@code DoorCard382}) with the chest's facts in it, in the same box,
+ * with the same header, the same accent line, the same muted grey body and the same two sockets on the right
+ * edge.</p>
+ *
+ * <p><b>Build 397: the card carries the lock.</b> The author's next words were «в графе сундука я не могу
+ * настраивать взлом» - build 396's card could only be read. It now shows the door card's five settings, in
+ * the door card's own places: how many keys the lock panel asks for, how often one of them changes, the
+ * difficulty and the rows it buys, whether the chest is locked, and who opened it last. The number of
+ * openings moved to the inspector, where the other facts live.</p>
  *
  * <p><b>The two outputs are sockets of this card, not nodes beside it</b> - the rule of build 392, which
- * applies to the chest by the same words, and which the door has kept since:</p>
+ * applies to the chest by the same words:</p>
  *
  * <ul>
  *   <li><b>the execution socket</b> - the round amber dot on the right edge, on the row the canvas gives
@@ -27,9 +33,6 @@ import net.minecraft.network.chat.Component;
  *   <li><b>the blue socket</b> - the blue diamond one row under it, the value output every card of this mod
  *       has ({@code PursuitGraphNode272}). It hands over the player who opened the chest.</li>
  * </ul>
- *
- * <p>Both sockets are drawn where their wires really start, and the labels («открытие», «кто открыл») sit in
- * the strip on the right that is kept free of text for them.</p>
  */
 public final class ChestCard396 {
 
@@ -40,6 +43,8 @@ public final class ChestCard396 {
     private static final int HEADER = -15658735;
     private static final int EDGE = -5723992;
     private static final int LABEL = -5592406;
+    private static final int LOCKED = -35328;
+    private static final int OPEN = -1179650;
 
     /** The brown of the chest card - the accent the door card has used since build 382. */
     private static final int ACCENT = -3725286;
@@ -68,6 +73,8 @@ public final class ChestCard396 {
         int width = NpcGraphCanvas.NODE_W;
         int height = NpcGraphCanvas.NODE_H;
         boolean selected = screen.settledlands$isSelected(node.id);
+        boolean locked = ChestLock397.locked(node);
+        int accent = locked ? LOCKED : OPEN;
         int textWidth = width - 16 - LABEL_STRIP;
 
         PoseStack pose = graphics.pose();
@@ -81,19 +88,23 @@ public final class ChestCard396 {
             graphics.fill(0, 19, width, 20, ACCENT);
             graphics.drawString(font, tr(ChestGraph396.TITLE_KEY), 8, 6, ACCENT, false);
 
+            // The five settings, in the door card's own rows and pitch: a 14 px step, the last line ends at
+            // 93. Everything stops before the label strip, so no line can run under a socket label.
             String[] lines = ChestGraphClient396.lines(node);
-            graphics.drawString(font, clip(font, lines[0], textWidth), 8, 30, LABEL, false);
-            // Who opened the chest last - the value the blue socket hands out. Empty until somebody does,
-            // and the card says so in the same muted grey the rest of the graph uses for "nothing here yet".
+            graphics.drawString(font, clip(font, lines[0], textWidth), 8, 28, LABEL, false);
+            graphics.drawString(font, clip(font, lines[1], textWidth), 8, 42, LABEL, false);
+            graphics.drawString(font, clip(font, lines[2], textWidth), 8, 56, LABEL, false);
+            graphics.drawString(font, clip(font, lines[3], textWidth), 8, 70, accent, false);
+            // The reference the blue socket hands out, as the card keeps it: the last player who opened
+            // this chest. Empty until somebody does, and the card says so in the muted grey of "nothing
+            // here yet" - the door card's own last line.
             boolean nobody = ChestGraph396.opener(node).isEmpty();
-            graphics.drawString(font, clip(font, lines[1], textWidth), 8, 48, nobody ? EDGE : LABEL, false);
-            // The moment: a chest's chain runs when the chest is closed, and the card says it plainly so
-            // that nothing about it is a surprise.
-            graphics.drawString(font, clip(font, lines[2], textWidth), 8, 66, AMBER, false);
+            graphics.drawString(font, clip(font, lines[4], textWidth), 8, 84, nobody ? EDGE : LABEL, false);
 
             // The two labels of the sockets, right-aligned in the strip that was kept free.
             String outLabel = tr("gui.settledlands.chest.pin_out");
-            graphics.drawString(font, outLabel, width - 8 - font.width(outLabel), OUT_ROW - 4, AMBER, false);
+            graphics.drawString(font, outLabel, width - 8 - font.width(outLabel),
+                    OUT_ROW - 4, AMBER, false);
             String whoLabel = tr("gui.settledlands.chest.pin_who");
             graphics.drawString(font, whoLabel, width - 8 - font.width(whoLabel), VALUE_ROW - 4,
                     PursuitGraphNode272.COL_VALUE, false);

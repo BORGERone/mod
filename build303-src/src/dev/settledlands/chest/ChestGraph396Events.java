@@ -7,6 +7,7 @@ import java.util.Iterator;
 import java.util.Map;
 import java.util.UUID;
 import net.minecraft.core.BlockPos;
+import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
@@ -16,6 +17,7 @@ import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.player.PlayerInteractEvent;
+import net.neoforged.neoforge.event.level.BlockEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,8 +48,17 @@ import org.slf4j.LoggerFactory;
  * back to two seconds, so a click never leaves a pending chain behind for ever. A player who logs out or
  * changes dimension drops his entry - the chain of a chest belongs to the player standing at it.</p>
  *
- * <p>Cost: one range check and one map lookup per right-click on a chest, and one map walk per tick that is
- * skipped at once while nobody has a pending chest open.</p>
+ * <p><b>Build 397: the lock.</b> The card of a chest carries the door's four settings - keys, seconds,
+ * difficulty and «Закрыта/Открыта» - so a click on a <b>locked</b> chest is refused here where the chest
+ * would have been opened, and what the player gets instead is the very same lock panel a door opens, with
+ * this chest's numbers ({@link ChestNet397}). A solved panel comes back as a packet, the server re-checks
+ * the lock and the distance, and then opens the chest's own window - which is the opening this class was
+ * already about, so the chain still runs when that window closes. {@link #onBreak} closes the other way in:
+ * a locked chest cannot be broken open, or the lock would be a decoration.</p>
+ *
+ * <p>Cost: one range check and one map lookup per right-click on a chest, one graph lookup more when that
+ * chest is locked, and one map walk per tick that is skipped at once while nobody has a pending chest
+ * open.</p>
  */
 @EventBusSubscriber(modid = "settledlands")
 public final class ChestGraph396Events {
@@ -126,10 +137,69 @@ public final class ChestGraph396Events {
             ChestGraph396Store store = ChestGraph396Store.get(level.getServer());
             NpcDialogueGraph graph = store == null ? null : store.graph(key);
             if (graph == null) return;                       // an ordinary chest: nothing of ours here
-            // The card keeps the opener and the count from this moment - it is what the graph shows the
-            // next time it is opened, whether or not the chain has anywhere to go.
+            // Build 397: a chest whose card says «Закрыта» does not open for a plain click. The click is
+            // refused where the chest would have been opened - not undone a tick later - so a locked
+            // chest never stands open for a single tick (the rule of builds 371/376). What opens instead
+            // is the very same panel a locked door opens, with this chest's four numbers.
+            int[] panel = ChestLock397.panel(level, pos);
+            if (panel != null) {
+                event.setCanceled(true);
+                try {
+                    event.setCancellationResult(InteractionResult.FAIL);
+                } catch (Throwable missing) {
+                    ChestGraph396.fail(missing);
+                }
+                player.displayClientMessage(
+                        Component.translatable("message.settledlands.chest.locked"), true);
+                ChestNet397.sendPanel(player, level, pos, key, panel);
+                return;                                  // the chain does not run: nothing was opened
+            }
+            remember(player, level, pos, key);
+        } catch (Throwable failure) {
+            ChestGraph396.fail(failure);
+        }
+    }
+
+    /**
+     * Build 397: the two facts a real opening leaves on the card - who opened it, how many times - and the
+     * chain that runs when the window closes.
+     *
+     * <p>One place for both ways in: a plain click on an unlocked chest ({@link #onUse}) and a locked chest
+     * whose panel was solved ({@code ChestNet397#solve}, which opens the chest itself). Whatever opened the
+     * chest, the graph of that chest behaves the same.</p>
+     */
+    public static void remember(ServerPlayer player, ServerLevel level, BlockPos pos, String key) {
+        if (player == null || level == null || pos == null) return;
+        try {
             ChestGraph396.noteOpened(player, level, pos, key);
             PENDING.put(player.getUUID(), new Pending(level, pos, key, now(level.getServer())));
+        } catch (Throwable failure) {
+            ChestGraph396.fail(failure);
+        }
+    }
+
+    /**
+     * Build 397: a locked chest cannot be broken open either.
+     *
+     * <p>The lock would be a decoration if it could be: a locked chest broken in one swing drops its whole
+     * contents. The door has the same guard since build 368, with the same line in the action bar, and the
+     * lock of a chest comes off the same way it goes on - in the editor, on the card, by whoever may open
+     * the graph.</p>
+     */
+    @SubscribeEvent
+    public static void onBreak(BlockEvent.BreakEvent event) {
+        if (event == null) return;
+        try {
+            if (!(event.getLevel() instanceof ServerLevel level)) return;
+            BlockPos pos = event.getPos();
+            if (pos == null) return;
+            if (!ChestGraph396.isChestAt(level, pos)) return;
+            if (!ChestLock397.locked(level, pos)) return;
+            event.setCanceled(true);
+            if (event.getPlayer() instanceof ServerPlayer player) {
+                player.displayClientMessage(
+                        Component.translatable("message.settledlands.chest.locked"), true);
+            }
         } catch (Throwable failure) {
             ChestGraph396.fail(failure);
         }

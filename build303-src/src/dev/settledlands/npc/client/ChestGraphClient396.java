@@ -1,6 +1,7 @@
 package dev.settledlands.npc.client;
 
 import dev.settledlands.chest.ChestGraph396;
+import dev.settledlands.chest.ChestLock397;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcNet;
 import dev.settledlands.npc.NpcProfile;
@@ -77,17 +78,25 @@ public final class ChestGraphClient396 {
     }
 
     /**
-     * The three lines inside the card of a chest, in the order the author reads them: how many times the
-     * chest was opened, who opened it last, and the moment the chain runs.
+     * The five lines inside the card of a chest, in the order the author reads them - the door card's own
+     * five, with the chest's facts in them (build 397): how many keys the lock panel asks for, how often
+     * one of them changes, the difficulty and the rows of the keyboard it buys, whether the chest is
+     * locked, and who opened it last. The count of openings moved to the inspector when the settings took
+     * the card, because a card shows what the author sets there - the door's card has done so since 382.
      */
     public static String[] lines(NpcDialogueGraph.Node node) {
-        String count = safe("gui.settledlands.chest.count", Integer.toString(ChestGraph396.count(node)));
+        String keys = safe("gui.settledlands.chest.keys", Integer.toString(ChestLock397.keys(node)));
+        String speed = safe("gui.settledlands.chest.speed", Integer.toString(ChestLock397.seconds(node)));
+        String difficulty = safe("gui.settledlands.chest.difficulty",
+                Integer.toString(ChestLock397.difficulty(node)))
+                + " (" + Component.translatable("gui.settledlands.door.rows"
+                        + ChestLock397.difficulty(node)).getString() + ")";
+        String state = Component.translatable(ChestLock397.stateKeyShort(node)).getString();
         String who = ChestGraph396.opener(node);
         String opener = who.isEmpty()
                 ? Component.translatable("gui.settledlands.chest.opener_none").getString()
                 : safe("gui.settledlands.chest.opener_last", who);
-        String moment = Component.translatable("gui.settledlands.chest.trigger").getString();
-        return new String[] {count, opener, moment};
+        return new String[] {keys, speed, difficulty, state, opener};
     }
 
     /** A translated line with one argument, never a throw. */

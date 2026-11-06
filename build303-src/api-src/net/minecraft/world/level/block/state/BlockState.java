@@ -32,4 +32,14 @@ public class BlockState {
     public boolean is(Block block) { return false; }
 
     public boolean hasProperty(Property<?> property) { return false; }
+
+    /**
+     * Build 397: the menu of the block at this position - a chest's own window, and the way this mod
+     * opens it once its lock was cracked. The descriptor is the base jar's own reference to this very
+     * method, so nothing here is a guess.
+     */
+    public net.minecraft.world.MenuProvider getMenuProvider(net.minecraft.world.level.Level level,
+            net.minecraft.core.BlockPos pos) {
+        return null;
+    }
 }

@@ -1,0 +1,2 @@
+555c650f6e1ce881c62537c50521d121abeceabfdad709f984d9d325c8e3a019  settledlands-0.8.0-build397-chest-hack.jar
+d3e01a4d56567e500965e6518524f1b1e6d04dd68a3891c6f7625e1644470cb9  SettledLands-Build397-ChestHack-Source.zip

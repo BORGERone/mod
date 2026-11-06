@@ -223,6 +223,8 @@ public final class ChestGraph396 {
         NpcDialogueGraph.Node node = graph.add(CHEST_TYPE, 120, 120);
         if (node != null) {
             setCount(node, 0);
+            // Build 397: the four numbers of the lock panel, at the door's defaults (6 / 5 s / 1, open).
+            ChestLock397.applyDefaults(node);
             graph.entry = node.id;
         }
         return graph;
@@ -233,11 +235,15 @@ public final class ChestGraph396 {
         if (graph == null) return defaultGraph();
         if (graph.nodes == null || graph.nodes.isEmpty() || chestNode(graph) == null) {
             NpcDialogueGraph.Node made = graph.add(CHEST_TYPE, 120, 120);
-            if (made != null && (graph.entry < 0 || graph.get(graph.entry) == null)) {
-                graph.entry = made.id;
+            if (made != null) {
+                ChestLock397.applyDefaults(made);
+                if (graph.entry < 0 || graph.get(graph.entry) == null) graph.entry = made.id;
             }
             return graph;
         }
+        // Build 397: a card written by build 396 has no panel numbers yet - it gets the door's defaults
+        // here, so the sliders of the inspector start where the panel does.
+        ChestLock397.applyDefaults(chestNode(graph));
         return graph;
     }
 
@@ -311,6 +317,9 @@ public final class ChestGraph396 {
             }
             graph = withChestNode(graph);
             stripCards(graph);
+            // Build 397: the panel numbers are written back before the graph is stored, so a card that
+            // carried nothing but the build-396 fields saves as a chest with a working lock panel.
+            ChestLock397.applyDefaults(chestNode(graph));
             ChestGraph396Store store = ChestGraph396Store.get(player.getServer());
             if (store == null) return;
             if (!store.put(key, graph)) {

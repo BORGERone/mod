@@ -1,6 +1,7 @@
 package dev.settledlands.door;
 
 import com.mojang.blaze3d.platform.InputConstants;
+import dev.settledlands.chest.ChestNet397;
 import java.util.Random;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -12,6 +13,13 @@ import org.slf4j.LoggerFactory;
 
 /**
  * Build 378: the lock panel - "взлом" - of a locked door.
+ *
+ * <p><b>Build 397: a locked chest opens this very panel too.</b> The author's line was «в графе сундука я
+ * не могу настраивать взлом» - and a setting needs something on the other side of it. So the chest card
+ * carries the same four numbers as the door card, the server hands them to this panel when a locked chest is
+ * clicked ({@link #openForChest}), and a solved panel answers with the chest's own packet instead of the
+ * door's. There is still one lock panel in this mod, not two: a second board would be a second set of keys to
+ * get wrong.</p>
  *
  * <p>A locked door used to answer a click with a line in the action bar and nothing else. It now opens
  * this panel: a row of four to ten letters, and the door opens only when <b>every</b> button is held
@@ -136,14 +144,72 @@ public class HackPanel377 extends Screen {
     /** When ESC went down after the hack was accepted - the escape hatch needs a deliberate hold. */
     private long escDownAt;
 
+    /**
+     * Build 397: this panel is the <b>door's</b> panel, and a chest opens the very same one. One screen,
+     * one keyboard rule, one way out of it - the flag only decides the three words that name the thing
+     * being cracked and which packet carries the win back.
+     */
+    private final boolean chest;
+
+    /** Build 397: the key of the chest this panel was opened for - the string the server compares. */
+    private final String chestKey;
+
     private HackPanel377(BlockPos pos, int count, int[] keys, long rollMs, int difficulty) {
-        super(Component.literal("Взлом двери"));
+        this(pos, count, keys, rollMs, difficulty, null);
+    }
+
+    private HackPanel377(BlockPos pos, int count, int[] keys, long rollMs, int difficulty,
+            String chestKey) {
+        super(title(chestKey));
         this.pos = pos;
         this.count = count;
         this.keys = keys;
         this.rollMs = rollMs > 0L ? rollMs : ROLL_MS;
         this.difficulty = clampDifficulty(difficulty);
         this.pool = pool(this.difficulty);
+        this.chestKey = chestKey;
+        this.chest = chestKey != null && !chestKey.isEmpty();
+    }
+
+    /**
+     * Build 397: opens the panel for a locked <b>chest</b>, with the numbers its card carries.
+     *
+     * <p>The four numbers arrive from the server with the click ({@code ChestNet397}), so a chest's panel is
+     * decided by the chest's node and not by this client - two players clicking the same chest see the same
+     * keys. Everything else is the door's: the same board, the same hold, the same ESC, the same rule that
+     * the panel leaves only when every key has come back up.</p>
+     */
+    public static void openForChest(String chestKey, BlockPos pos, int keys, int seconds,
+            int difficulty) {
+        try {
+            if (pos == null || chestKey == null || chestKey.isEmpty()) return;
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null || mc.screen != null || mc.player == null) return;
+            int count = clamp(keys, MIN_BUTTONS, MAX_BUTTONS);
+            long rollMs = clamp(seconds, 1, 20) * 1000L;
+            int level = clampDifficulty(difficulty);
+            int[] board = pick(new Random(), count, level);
+            mc.setScreen(new HackPanel377(pos, count, board, rollMs, level, chestKey));
+            // Build 379's rule: a panel that never appeared and one nobody solved look the same in game -
+            // the chest stays shut either way. This line says which one happened.
+            LOG.info("chest: the lock panel of the chest at " + pos + " opened with " + count
+                    + " keys every " + (rollMs / 1000L) + " s, difficulty " + level + ": "
+                    + spell(board));
+        } catch (Throwable failure) {
+            LOG.warn("chest: the lock panel could not be opened, the chest stays locked and silent",
+                    failure);
+            net.minecraft.client.Minecraft.getInstance().setScreen(null);
+        }
+    }
+
+    /** The name of the thing being cracked - the only word this panel changes between a door and a chest. */
+    private static Component title(String chestKey) {
+        return Component.literal(chestKey == null || chestKey.isEmpty()
+                ? "Взлом двери" : "Взлом сундука");
+    }
+
+    private static int clamp(int value, int min, int max) {
+        return value < min ? min : (value > max ? max : value);
     }
 
     /**
@@ -393,10 +459,12 @@ public class HackPanel377 extends Screen {
 
         if (!solved && down == count) {
             solved = true;
-            LOG.info("door: all " + count + " keys of the panel are held - sending the hack for "
-                    + DoorSync375.key(Minecraft.getInstance().player == null ? null
-                            : Minecraft.getInstance().player.level(), pos));
-            DoorHack377.send(pos);
+            LOG.info((chest ? "chest" : "door") + ": all " + count + " keys of the panel are held - "
+                    + "sending the hack for " + (chest ? String.valueOf(pos)
+                            : DoorSync375.key(Minecraft.getInstance().player == null ? null
+                                    : Minecraft.getInstance().player.level(), pos)));
+            if (chest) ChestNet397.sendSolved(chestKey);
+            else DoorHack377.send(pos);
             // Build 387: and the panel does NOT close here. The door is open on the server, but the
             // hands are still on the keys - closing now is exactly how a win used to press W, drop the
             // held item or open the inventory. It closes when every key has come back up.
@@ -416,7 +484,8 @@ public class HackPanel377 extends Screen {
             int still = stillDown();
             graphics.drawCenteredString(this.font, Component.literal("ВЗЛОМ ПРИНЯТ"),
                     center, panelTop + 16, BTN_ON_EDGE);
-            graphics.drawCenteredString(this.font, Component.literal("замок снят, дверь открыта"),
+            graphics.drawCenteredString(this.font,
+                    Component.literal(chest ? "замок снят, сундук открыт" : "замок снят, дверь открыта"),
                     center, panelTop + 36, LABEL);
             graphics.drawCenteredString(this.font,
                     Component.literal("отпусти все клавиши - и панель уйдёт сама"),
@@ -432,7 +501,8 @@ public class HackPanel377 extends Screen {
             return;
         }
 
-        graphics.drawCenteredString(this.font, Component.literal("ВЗЛОМ ДВЕРИ"), center, panelTop + 10, LABEL);
+        graphics.drawCenteredString(this.font,
+                Component.literal(chest ? "ВЗЛОМ СУНДУКА" : "ВЗЛОМ ДВЕРИ"), center, panelTop + 10, LABEL);
 
         int top = panelTop + 30;
         boolean fresh = !flash.isEmpty() && now - flashAt < 1200L;
