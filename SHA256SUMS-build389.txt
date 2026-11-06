@@ -1,0 +1,2 @@
+e7d925156ec914e69a0aca83e0a9c97b83af0093df27213b9303a58baf962c2d  settledlands-0.8.0-build389-door-signal-target.jar
+7f953e217a1b18654e51cbf21daa72b05fbefeae97ef85cc3c03ab75c90432aa  SettledLands-Build389-SignalTarget-Source.zip

@@ -175,15 +175,10 @@ public final class DoorEvents368 {
             boolean locked = store.isLocked(server, pos);
             if (!key) {
                 if (!locked) {
-                    // Build 386/388: an ordinary door. Vanilla opens it on this same click, so this is the
-                    // moment to tell the door's own graph about it: an empty hand (that is the hand
-                    // vanilla opens a door with) and a door that is shut right now (a click on an open
-                    // door closes it). The click arrives once per hand; DoorGraph386 keeps the second
-                    // one of the same opening from running the chain twice.
-                    if (stack.isEmpty() && !Doors368.anyOpen(server, pos)
-                            && event.getEntity() instanceof ServerPlayer opener) {
-                        DoorSignal388.fire(opener, server, pos);
-                    }
+                    // Build 389: an ordinary door does not pulse. The signal of a door's graph is its
+                    // hack - a solved lock panel (DoorHack377) - and an unlocked door has no panel to
+                    // solve, so a plain click stays a plain click: vanilla opens the door and the graph
+                    // is not touched at all.
                     return;
                 }
                 // A locked door is not a door for a player: no opening, no closing, no sound of a

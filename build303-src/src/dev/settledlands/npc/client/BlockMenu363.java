@@ -1,5 +1,6 @@
 package dev.settledlands.npc.client;
 
+import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.BlockTrigger351;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -144,8 +145,16 @@ public final class BlockMenu363 {
         return rows;
     }
 
-    /** How many rows a block's menu has. */
+    /**
+     * How many rows this menu has. A block's menu is the stock list; a door's is the same list with the
+     * two nodes of the door itself after it - «Импульс» and «Цель» ({@link DoorGraph382#PALETTE_EXTRA}).
+     */
     public static int count() {
+        return rows().length + (door ? DoorGraph382.PALETTE_EXTRA.length : 0);
+    }
+
+    /** The number of stock rows in this menu, whatever extra rows follow them. */
+    private static int stockCount() {
         return rows().length;
     }
 
@@ -155,10 +164,13 @@ public final class BlockMenu363 {
      * panel, the stock row behind it, the type the stock palette gives that row.
      */
     public static int doorType(int compact) {
-        return BlockTrigger351.typeForRow(stockRow(compact));
+        int stock = stockRow(compact);
+        if (stock >= 0) return BlockTrigger351.typeForRow(stock);
+        // Build 389: the rows after the stock ones are the door's own two nodes.
+        return door ? DoorGraph382.extraType(compact - stockCount()) : -1;
     }
 
-    /** Row of this panel -> the stock row behind it, or -1 when there is none. */
+    /** Row of this panel -> the stock row behind it, or -1 when there is none (an extra row, or none). */
     public static int stockRow(int compact) {
         int[] kept = rows();
         return compact >= 0 && compact < kept.length ? kept[compact] : -1;
@@ -167,13 +179,21 @@ public final class BlockMenu363 {
     /** The stock label of a row of this panel - the stock one, for a block and for a door alike. */
     public static String label(int compact) {
         int stock = stockRow(compact);
-        return stock < 0 ? "" : Component.translatable(LABEL_KEYS[stock]).getString();
+        if (stock < 0) {
+            int type = doorType(compact);
+            return type < 0 ? "" : Component.translatable(DoorGraph382.labelKey(type)).getString();
+        }
+        return Component.translatable(LABEL_KEYS[stock]).getString();
     }
 
     /** The stock colour of a row of this panel - the colour the same node has in an NPC graph. */
     public static int colour(int compact) {
         int stock = stockRow(compact);
-        return stock >= 0 && stock < ROW_COLOUR.length ? ROW_COLOUR[stock] : LABEL;
+        if (stock < 0) {
+            int type = doorType(compact);
+            return type < 0 ? LABEL : DoorGraph382.colour(type);
+        }
+        return stock < ROW_COLOUR.length ? ROW_COLOUR[stock] : LABEL;
     }
 
     /** True once the open panel has been measured and may be painted. */

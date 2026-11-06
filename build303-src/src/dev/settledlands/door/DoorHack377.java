@@ -158,9 +158,11 @@ public record DoorHack377(String key) implements CustomPacketPayload {
                         "Дверь не поддалась - сервер её не открыл (open now=false)"), true);
             }
             player.displayClientMessage(Component.literal("Замок вскрыт - дверь открыта"), true);
-            // Build 386/388: a door opened through its panel is opened by a player like any other, so the
-            // signal of the door's graph runs here too - after the door is really open.
-            if (nowOpen) DoorSignal388.fire(player, server, pos);
+            // Build 389: this is the hack - the lock panel was solved by this player - so this is where
+            // the door's graph pulses: every «Импульс» node fires and every blue «Цель» node is stamped
+            // with the name of the player who did it. An ordinary click on a door that is not sealed is
+            // not a hack and pulses nothing (see DoorEvents368).
+            if (nowOpen) DoorSignal388.hack(player, server, pos);
         } catch (Throwable failure) {
             LOG.warn("door: a solved panel could not be applied: " + failure);
         }

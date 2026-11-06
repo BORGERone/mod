@@ -80,6 +80,9 @@ public abstract class NpcDoorGraph382Mixin {
         }
         NpcDialogueGraph.Node created = this.addAt(type, worldX, worldY);
         if (created != null) {
+            // Build 389: a stock node keeps the stock defaults; the two nodes of the door get theirs
+            // (the card its four values, the blue target an empty name).
+            DoorGraph382.applyDefaults(created);
             this.changed();
             this.status = Component.translatable("gui.settledlands.door.added_node",
                     Component.literal(BlockMenu363.label(row))).getString();

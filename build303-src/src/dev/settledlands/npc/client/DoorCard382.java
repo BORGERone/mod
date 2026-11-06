@@ -31,9 +31,14 @@ import net.minecraft.network.chat.Component;
  * ESC. The values are read from the node, so the card repaints on the next frame after a slider moves -
  * nothing is cached and nothing is drawn per tick.</p>
  *
- * <p><b>Build 388: this card is the only node type a door owns.</b> Everything else in a door's graph is
- * a stock node, drawn by the stock painter, because a door now runs the stock interpreter a block does
- * ({@code BlockTrigger351}). Build 386's three extra types are gone - see {@code DoorGraph382#migrate}.</p>
+ * <p><b>Build 388: every other node of a door's graph is a stock node</b>, drawn by the stock painter,
+ * because a door runs the stock interpreter a block does ({@code BlockTrigger351}).</p>
+ *
+ * <p><b>Build 389: three cards are ours now</b> - the door (brown), its output «Импульс» (amber) and the
+ * blue «Цель» that carries the reference to the player who hacked the door. They are the two nodes the
+ * author asked for, and they exist as types of this mod only because the stock graph has no node for
+ * "this door was hacked" and none that holds a player reference. Everything about them - the box, the
+ * hit test, the selection, the drag, the wires - is the stock canvas; only the words are ours.</p>
  */
 public final class DoorCard382 {
 
@@ -71,21 +76,47 @@ public final class DoorCard382 {
         try {
             graphics.fill(-2, -2, width + 2, height + 2, selected ? SELECTED : IDLE);
             graphics.fill(0, 0, width, height, BODY);
+            int type = node.type;
             graphics.fill(0, 0, width, 20, HEADER);
-            graphics.fill(0, 19, width, 20, accent);
-            graphics.drawString(font, tr(DoorGraph382.TITLE_KEY), 8, 6, accent, false);
+            graphics.fill(0, 19, width, 20, type == DoorGraph382.DOOR_TYPE ? accent
+                    : DoorGraph382.colour(type));
+            graphics.drawString(font, tr(DoorGraph382.labelKey(type)), 8, 6,
+                    type == DoorGraph382.DOOR_TYPE ? accent : DoorGraph382.colour(type), false);
 
-            // Five lines in the same 100 px box - a 14 px pitch, the last one ends at 93.
-            graphics.drawString(font, clip(font, line("gui.settledlands.door.count",
-                    Integer.toString(DoorGraph382.keys(node))), width - 16), 8, 28, LABEL, false);
-            graphics.drawString(font, clip(font, line("gui.settledlands.door.speed",
-                    Integer.toString(DoorGraph382.speed(node))), width - 16), 8, 42, LABEL, false);
-            // «Сложность: 2 (qwerty + asdf)» - the number and the rows it buys, on one line.
-            graphics.drawString(font, clip(font, difficulty(node), width - 16), 8, 56, LABEL, false);
-            graphics.drawString(font, state(sealed), 8, 70, sealed ? SEALED : OPEN, false);
-            // The panel swallows the keyboard but for ESC; the card says so, because a player who
-            // cannot close a panel with anything else deserves to read why.
-            graphics.drawString(font, tr("gui.settledlands.door.hint"), 8, 84, EDGE, false);
+            if (type == DoorGraph382.SIGNAL_TYPE) {
+                // The output of the door card: what a pulse is and when it comes.
+                graphics.drawString(font, clip(font, tr("gui.settledlands.door.signal_line1"),
+                        width - 16), 8, 28, LABEL, false);
+                graphics.drawString(font, clip(font, tr("gui.settledlands.door.signal_line2"),
+                        width - 16), 8, 46, LABEL, false);
+                graphics.drawString(font, clip(font, tr("gui.settledlands.door.signal_line3"),
+                        width - 16), 8, 64, EDGE, false);
+                graphics.drawString(font, clip(font, tr("gui.settledlands.door.signal_line4"),
+                        width - 16), 8, 82, EDGE, false);
+            } else if (type == DoorGraph382.TARGET_TYPE) {
+                // The blue output: the reference to the player who hacked the door, as the graph keeps it.
+                graphics.drawString(font, clip(font, tr("gui.settledlands.door.target_line1"),
+                        width - 16), 8, 28, LABEL, false);
+                String who = DoorGraph382.opener(node);
+                graphics.drawString(font, clip(font, who.isEmpty()
+                                ? tr("gui.settledlands.door.target_none")
+                                : line("gui.settledlands.door.target_last", who), width - 16),
+                        8, 46, who.isEmpty() ? EDGE : accent, false);
+                graphics.drawString(font, clip(font, tr("gui.settledlands.door.target_line3"),
+                        width - 16), 8, 64, EDGE, false);
+            } else {
+                // Five lines in the same 100 px box - a 14 px pitch, the last one ends at 93.
+                graphics.drawString(font, clip(font, line("gui.settledlands.door.count",
+                        Integer.toString(DoorGraph382.keys(node))), width - 16), 8, 28, LABEL, false);
+                graphics.drawString(font, clip(font, line("gui.settledlands.door.speed",
+                        Integer.toString(DoorGraph382.speed(node))), width - 16), 8, 42, LABEL, false);
+                // «Сложность: 2 (qwerty + asdf)» - the number and the rows it buys, on one line.
+                graphics.drawString(font, clip(font, difficulty(node), width - 16), 8, 56, LABEL, false);
+                graphics.drawString(font, state(sealed), 8, 70, sealed ? SEALED : OPEN, false);
+                // The panel swallows the keyboard but for ESC; the card says so, because a player who
+                // cannot close a panel with anything else deserves to read why.
+                graphics.drawString(font, tr("gui.settledlands.door.hint"), 8, 84, EDGE, false);
+            }
         } catch (Throwable failure) {
             DoorGraph382.fail(failure);
         } finally {

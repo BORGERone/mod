@@ -77,6 +77,54 @@ public final class DoorGraph382 {
     public static final int DOOR_TYPE = 40;
 
     /**
+     * Build 389: the door's own signal and the blue target - the two nodes the author asked for out of
+     * the door card: «сделай теперь из ноды "дверь" один выходной узел сигнала и синий узел цели».
+     *
+     * <ul>
+     *   <li>{@link #SIGNAL_TYPE} «Импульс» (amber) - the output of the door: the doors's chain starts
+     *       here, and it starts <b>only</b> when the door is hacked (the lock panel is solved). The wire
+     *       from the door card to this node is drawn by the stock canvas, and the pulse leaves through
+     *       the node's own output;</li>
+     *   <li>{@link #TARGET_TYPE} «Цель» (blue) - carries the reference to the player who hacked the door:
+     *       the name is written into the node, and the chain that leaves it runs <b>as</b> that player, so
+     *       {@code %player%} in any node after it is the hacker.</li>
+     * </ul>
+     *
+     * <p>Why these two are ours while everything else in a door's graph is stock: no stock node means
+     * "this door was hacked", and a reference to a player is not a number either. They follow the rule
+     * build 388 set for the door card - a type of this mod is allowed only where the stock graph has no
+     * node for the meaning, and then it is drawn and edited the way the stock cards are.</p>
+     */
+    public static final int SIGNAL_TYPE = 41;
+    public static final int TARGET_TYPE = 42;
+
+    /** The language key of the title of a node type of this mod. */
+    public static String labelKey(int type) {
+        if (type == SIGNAL_TYPE) return "gui.settledlands.door.signal";
+        if (type == TARGET_TYPE) return "gui.settledlands.door.target";
+        return TITLE_KEY;
+    }
+
+    /**
+     * The colour of one of our cards. The door keeps its brown, the signal is amber (the colour a pulse
+     * has had in this mod since build 386) and the target is the blue the author asked for - the same
+     * blue the stock screen uses for a wire to a target.
+     */
+    public static int colour(int type) {
+        if (type == SIGNAL_TYPE) return -3177856;
+        if (type == TARGET_TYPE) return -12973611;
+        return -3725286;
+    }
+
+    /** The two extra rows of a door's create menu, after the stock ones. */
+    public static final int[] PALETTE_EXTRA = {SIGNAL_TYPE, TARGET_TYPE};
+
+    /** The type made by an extra row of a door's create menu, or -1 when the row does not exist. */
+    public static int extraType(int extra) {
+        return extra >= 0 && extra < PALETTE_EXTRA.length ? PALETTE_EXTRA[extra] : -1;
+    }
+
+    /**
      * Build 388: a door's graph is a stock graph - the node types of a door are the node types of every
      * other graph.
      *
@@ -121,7 +169,8 @@ public final class DoorGraph382 {
 
     /** True when this node type may live in a door's graph. */
     public static boolean allowed(int type) {
-        return type == DOOR_TYPE || BlockTrigger351.allowed(type);
+        return type == DOOR_TYPE || type == SIGNAL_TYPE || type == TARGET_TYPE
+                || BlockTrigger351.allowed(type);
     }
 
     /** The card of the door itself: title, accent and the four lines of its settings. */
@@ -231,9 +280,83 @@ public final class DoorGraph382 {
         return node != null && node.type == DOOR_TYPE;
     }
 
-    /** True for the nodes this mod owns in a door's graph - the card of the door itself. */
+    /** The signal node of a door - the output of the door card. */
+    public static boolean isSignalNode(NpcDialogueGraph.Node node) {
+        return node != null && node.type == SIGNAL_TYPE;
+    }
+
+    /** The blue target node - the reference to the player who hacked the door. */
+    public static boolean isTargetNode(NpcDialogueGraph.Node node) {
+        return node != null && node.type == TARGET_TYPE;
+    }
+
+    /** True for the nodes this mod owns in a door's graph: the card, the signal and the target. */
     public static boolean isDoorGraphNode(NpcDialogueGraph.Node node) {
-        return isDoorNode(node);
+        return isDoorNode(node) || isSignalNode(node) || isTargetNode(node);
+    }
+
+    /** Longest name a target node keeps. */
+    private static final int MAX_OPENER = 32;
+
+    /** The player who last hacked this door, as the blue target node keeps him. */
+    public static String opener(NpcDialogueGraph.Node node) {
+        if (!isTargetNode(node) || node.text == null) return "";
+        return node.text.trim();
+    }
+
+    /** Records the hacker in a target node. One name, trimmed, bounded. */
+    public static void setOpener(NpcDialogueGraph.Node node, String name) {
+        if (!isTargetNode(node) || name == null) return;
+        String trimmed = name.trim();
+        node.text = trimmed.length() <= MAX_OPENER ? trimmed : trimmed.substring(0, MAX_OPENER);
+    }
+
+    /**
+     * Every signal node of a graph, lowest id first. The chain of a hack starts at each of them, so a
+     * door can have more than one output and each is its own pulse.
+     */
+    public static java.util.List<NpcDialogueGraph.Node> signalNodes(NpcDialogueGraph graph) {
+        java.util.List<NpcDialogueGraph.Node> out = new java.util.ArrayList<>();
+        if (graph == null || graph.nodes == null) return out;
+        for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+            if (isSignalNode(node)) out.add(node);
+        }
+        out.sort((left, right) -> Integer.compare(left.id, right.id));
+        return out;
+    }
+
+    /**
+     * Wires the starter graph of a door: the card, then its signal, then the blue target - the shape the
+     * author drew in words («из ноды "дверь" один выходной узел сигнала и синий узел цели»).
+     *
+     * <p>Only the wires that are missing are made, so calling this on a graph the author has already
+     * edited never rewires his work.</p>
+     */
+    public static void wireStarter(NpcDialogueGraph graph) {
+        if (graph == null) return;
+        NpcDialogueGraph.Node door = doorNode(graph);
+        if (door == null) return;
+        NpcDialogueGraph.Node signal = signalNodes(graph).isEmpty() ? null
+                : signalNodes(graph).get(0);
+        if (signal == null) {
+            signal = graph.add(SIGNAL_TYPE, door.x + 280, door.y);
+            if (signal == null) return;
+        }
+        if (door.next < 0) door.next = signal.id;
+        NpcDialogueGraph.Node target = null;
+        for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+            if (isTargetNode(node)) {
+                target = node;
+                break;
+            }
+        }
+        if (target == null) {
+            target = graph.add(TARGET_TYPE, signal.x + 280, signal.y);
+            if (target == null) return;
+        }
+        if (signal.next < 0) signal.next = target.id;
+        // The pulse starts at the signal, so «Начало» belongs there and not on the settings card.
+        if (graph.entry == door.id && signal.id >= 0) graph.entry = signal.id;
     }
 
     /**
@@ -241,18 +364,23 @@ public final class DoorGraph382 {
      * first open of a door's graph; a node added by any other path is left alone.
      */
     public static void applyDefaults(NpcDialogueGraph.Node node) {
-        if (!isDoorNode(node)) return;
-        setKeys(node, DEFAULT_KEYS);
-        setSpeed(node, DEFAULT_SPEED);
-        setSealed(node, true);
-        setDifficulty(node, DEFAULT_DIFFICULTY);
+        if (node == null) return;
+        if (isDoorNode(node)) {
+            setKeys(node, DEFAULT_KEYS);
+            setSpeed(node, DEFAULT_SPEED);
+            setSealed(node, true);
+            setDifficulty(node, DEFAULT_DIFFICULTY);
+        } else if (isTargetNode(node)) {
+            node.text = "";   // nobody has hacked this door yet
+        }
     }
 
     /**
-     * Build 388: the three types of build 386 - 41 «Открытие», 42 «Кто открыл», 43 «В радиусе» - are
-     * gone, because a door runs the stock nodes now. A graph made by that build still holds them, and a
-     * node that cannot run must not sit in the graph pretending it might: they are dropped the first
-     * time the door's graph is opened, with one line in the log.
+     * Build 388 removed the three types of build 386; build 389 brings two of those numbers back with a
+     * new meaning (41 is «Импульс», 42 is «Цель»), so the only type left that cannot run is 43
+     * «В радиусе» - a gate of the old hand-written walk. A graph made by that build still holds it, and a
+     * node that cannot run must not sit in the graph pretending it might: it is dropped the first time
+     * the door's graph is opened, with one line in the log.
      *
      * @return true when something was dropped
      */
@@ -260,14 +388,14 @@ public final class DoorGraph382 {
         if (graph == null || graph.nodes == null) return false;
         java.util.List<Integer> stale = new java.util.ArrayList<>();
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-            if (node != null && (node.type == 41 || node.type == 42 || node.type == 43)) stale.add(node.id);
+            if (node != null && node.type == 43) stale.add(node.id);
         }
         for (Integer id : stale) {
             if (id != null) graph.remove(id.intValue());
         }
         if (!stale.isEmpty()) {
-            LOG.info("door: dropped " + stale.size() + " node(s) of the build-386 types - a door runs the"
-                    + " stock nodes now, and a node that cannot run must not stay in the graph");
+            LOG.info("door: dropped " + stale.size() + " node(s) of the build-386 «В радиусе» type - the"
+                    + " stock «Проверка» node is the radius gate now");
         }
         return !stale.isEmpty();
     }
@@ -373,8 +501,10 @@ public final class DoorGraph382 {
             setSpeed(node, DEFAULT_SPEED);
             setSealed(node, sealed);
             setDifficulty(node, DEFAULT_DIFFICULTY);
-            graph.entry = node.id;
         }
+        // Build 389: a fresh door is drawn the way the author described it - the card, its signal and
+        // the blue target, wired left to right.
+        wireStarter(graph);
         return graph;
     }
 
@@ -390,10 +520,14 @@ public final class DoorGraph382 {
                 setSpeed(made, speed(source));
                 setSealed(made, sealed);
                 setDifficulty(made, DEFAULT_DIFFICULTY);
-                graph.entry = made.id;
             }
+            wireStarter(graph);
             return graph;
         }
+        // Build 389: a graph the author already has is left exactly as it is. If it was made by build 388
+        // it has no signal node, and the hack then starts at its «Начало» - so nothing it does stops
+        // working; the two outputs of the card are added from the menu when the author wants them, and
+        // deleted ones never come back on the next open.
         return graph;
     }
 

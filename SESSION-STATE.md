@@ -1493,3 +1493,43 @@ because the two halves share the same files.
   speaker name (the stock code reads a block's «Имя» card, type 18, which a door has none of); event nodes
   are stepped over by a walk exactly as in a block graph; the blue "who opened" node is now the stock
   `Триггер` with `%player%`.
+
+## Build 389 - the door card's two outputs: «Импульс» (pulse on a hack) and blue «Цель» (shipped)
+
+**User ask:** «сделай теперь из ноды "дверь" один выходной узел сигнала и синий узел цели. Узел сигнала
+будет давать импульс если дверь взломать, синий будет передавать ссылку на того кто взломал дверь».
+
+- **Types back, with a new meaning** (388's removals were reverted for 41/42, 43 stays dead):
+  `SIGNAL_TYPE = 41` «Импульс» (amber -3177856), `TARGET_TYPE = 42` «Цель» (blue -12973611),
+  `labelKey(type)`, `colour(type)`, `PALETTE_EXTRA = {41,42}`, `extraType(i)`, `isSignalNode`,
+  `isTargetNode`, `isDoorGraphNode` = card|signal|target, `opener/setOpener` on `node.text` (≤32),
+  `signalNodes(graph)` (id-sorted), `wireStarter(graph)` (card → signal → target, only missing wires),
+  `MAX_OPENER = 32`.
+- **Starter shape**: `defaultGraph` now produces card → pulse → target wired left to right, and sets
+  `graph.entry = signal.id`. `withDoorNode` wires the starter **only** when it had to create the card in an
+  empty graph; an existing graph is left alone (so a deleted «Цель» never comes back; 388-era graphs keep
+  working because the hack falls back to `startNode`).
+- **Pulse = hack only**: `DoorSignal388#hack(player, level, pos)` (renamed from `fire`) stamps the name into
+  every target node, then fires `BlockTrigger351.fire` for **each** signal node (fallback: `startNode`), and
+  `store.put(key, graph)` when it stamped anything (so the name survives the save). `DoorHack377` (solved
+  panel) calls `hack`; `DoorEvents368` (plain click on an unlocked door) **no longer calls anything**.
+- **Menu**: `BlockMenu363` door mode = the stock rows **plus** the two extra rows at the end
+  (`count() = rows().length + (door ? 2 : 0)`, `doorType` → `DoorGraph382.extraType(compact - stockCount)`,
+  label/colour from `DoorGraph382`). Block menus unchanged.
+- **Cards**: `DoorCard382` draws the card (5 lines), «Импульс» (4 lines) and «Цель» (3 lines, name or
+  «Ещё никто не взламывал»). `NpcDoorRows382Mixin` builds rows for all three: sliders for the card,
+  read-only for signal and target (the target row shows the hacker).
+- **Lang (ru+en)**: `door.signal`, `door.target`, `door.signal_line1..4`, `door.target_line1`,
+  `door.target_last`, `door.target_none`, `door.target_line3`.
+- **Gates**: `door_stock_check.py` extended (menu = block rows + exactly two own types; `hack` called from
+  the solved panel and never from `DoorEvents368`; `setOpener` + `DoorGraph382Store#put`; `wireStarter` pushes
+  41/42; cards read `labelKey`/`opener`; six new lang keys in both files). All 27 `*_check.py` green,
+  `verify_jar --base 388` PASS (576 entries, 8 replaced, 43/48 mixins, 0 new external refs, 0 dangling).
+- Ship: `settledlands-0.8.0-build389-door-signal-target.jar`, README `README-Build389-RU.md`, zip
+  `SettledLands-Build389-SignalTarget-Source.zip` (495 entries), `SHA256SUMS-build389.txt`, patch
+  `tools/patch_build389.py` (base 388, `srcdir out389`).
+- **Unconfirmed in game**: the look of the two new cards in 100 px, that the starter shape does not overlap
+  nodes of an old door (old doors are not touched), and that the target refreshes in an *open* editor.
+- **Stated gaps**: pulse is hack-only (one line to add plain-open), 388-era graphs start at «Начало» until
+  the author adds a pulse node, event nodes are stepped over, and a door's «Реплика» still has a blank
+  speaker name (needs a door «Имя» card - offered as its own build).

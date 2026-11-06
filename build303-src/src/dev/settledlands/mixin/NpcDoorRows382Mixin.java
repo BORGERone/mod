@@ -114,7 +114,7 @@ public abstract class NpcDoorRows382Mixin {
         // graph - «Триггер», «Условие If», «Переменная», «В радиусе» and the rest - keeps the stock
         // inspector, because it is the stock node with the stock fields: the door runs the same
         // interpreter a block does, so there is nothing for this mod to draw or to hide.
-        if (!DoorGraph382.isDoorNode(node)) return;
+        if (!DoorGraph382.isDoorGraphNode(node)) return;
 
         // The rows the stock switch built for a type it does not know: parked, and their labels with
         // them. Both lists were cleared at the start of this same widgets() call, so everything in
@@ -130,13 +130,33 @@ public abstract class NpcDoorRows382Mixin {
 
         buildingInspector = true;
         try {
-            label(DoorGraph382.TITLE_KEY, x, y);
+            label(DoorGraph382.labelKey(node.type), x, y);
             y += 12;
-            y = settledlands$slider(node, x, y, width, top, bottom, true);
-            y = settledlands$slider(node, x, y, width, top, bottom, false);
-            y = settledlands$difficulty(node, x, y, width, top, bottom);
-            y = settledlands$seal(node, x, y, width, top, bottom);
-            sidebarHeight += CONTENT;
+
+            if (DoorGraph382.isDoorNode(node)) {
+                y = settledlands$slider(node, x, y, width, top, bottom, true);
+                y = settledlands$slider(node, x, y, width, top, bottom, false);
+                y = settledlands$difficulty(node, x, y, width, top, bottom);
+                y = settledlands$seal(node, x, y, width, top, bottom);
+                sidebarHeight += CONTENT;
+            } else if (DoorGraph382.isTargetNode(node)) {
+                // The blue output has nothing to edit: the door writes the name of the player who hacked
+                // it. The panel shows that name, which is also the only way to see the chain reach here.
+                String who = DoorGraph382.opener(node);
+                label(who.isEmpty()
+                        ? Component.translatable("gui.settledlands.door.target_none").getString()
+                        : Component.translatable("gui.settledlands.door.target_last",
+                                Component.literal(who)).getString(), x, y);
+                y += 12;
+                label(Component.translatable("gui.settledlands.door.target_line3").getString(), x, y);
+                sidebarHeight += 12 + 12;
+            } else {
+                // The signal has nothing to edit either: it is the output of the door card.
+                label(Component.translatable("gui.settledlands.door.signal_line1").getString(), x, y);
+                y += 12;
+                label(Component.translatable("gui.settledlands.door.signal_line3").getString(), x, y);
+                sidebarHeight += 12 + 12;
+            }
         } finally {
             buildingInspector = false;
         }

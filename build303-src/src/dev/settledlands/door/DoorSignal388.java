@@ -16,41 +16,37 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Build 388: what runs when a door is opened - the door's graph, through the interpreter every other
+ * Build 388/389: what runs when a door is hacked - the door's graph, through the interpreter every other
  * graph uses.
  *
- * <p>Build 386 had written its own three-node walk for the door («Открытие» -> «Кто open» -> «В радиусе»)
- * and the author's answer was «сделай реализацию как в других графах». This class is that answer: it
- * starts the chain and hands it to {@link BlockTrigger351#fire}, exactly as the block's own click does
- * (build 351), so every stock node in a door's graph behaves the way it behaves in a block's graph or an
- * NPC's:</p>
+ * <p>Build 388 had made a door's graph a stock graph: the chain starts at «Начало» and
+ * {@link BlockTrigger351#fire} runs it, so every stock node behaves the way it does in a block's graph or
+ * an NPC's. Build 389 gives that chain the start the author drew in words: «один выходной узел сигнала и
+ * синий узел цели ... даёт импульс если дверь взломать ... передаёт ссылку на того кто взломал дверь».</p>
  *
  * <ul>
- *   <li>a <b>«Триггер»</b> runs its action with {@code %player%} filled in - and that player is the one
- *       who opened the door, which is the «кто открыл» the author asked for, in the stock placeholder
- *       instead of in a type of our own;</li>
- *   <li><b>«Реплика»</b> and <b>«Кнопка»</b> speak through the stock dialogue window with the door as the
- *       speaker, and the chain waits for the window;</li>
- *   <li><b>«Условие If»</b>, <b>«Переменная»</b> and <b>«Случайность»</b> do what they do everywhere
- *       else, against the same {@code NpcPoints} the NPCs use;</li>
- *   <li><b>«Катсцена»</b> plays its scene for the opener;</li>
- *   <li>the event nodes («В радиусе», «Время», «Таймер», «Цель») are the stock ones; a walk steps over
- *       them, as it does in a block's graph - their tick pass is the stock one, not ours.</li>
+ *   <li><b>the pulse</b> - every «Импульс» node ({@link DoorGraph382#SIGNAL_TYPE}) of the graph is fired,
+ *       once, and <b>only</b> when the door is hacked: the lock panel of the door was solved. An ordinary
+ *       click on a door that is not sealed does not pulse - that is not a hack;</li>
+ *   <li><b>the reference</b> - the player is the source of the whole chain, so {@code %player%} in a
+ *       «Триггер» or a «Реплика» after the pulse is the hacker himself; and every blue «Цель» node
+ *       ({@link DoorGraph382#TARGET_TYPE}) of the graph is stamped with his name, which is the reference
+ *       the author can see on the card and that the graph keeps in the world file.</li>
  * </ul>
  *
- * <p>The chain starts where every other graph starts: at the node marked <b>«Начало»</b>. If the door's
- * graph has no start node, the chain starts at the lowest-numbered stock node; a graph with nothing but
- * the door card does nothing at all, which is what a door that was never edited should do.</p>
+ * <p>A graph built by build 388 has no «Импульс» node - it starts at «Начало». Such a graph is still run
+ * on a hack, from that start node, so nothing that worked yesterday stops working today.</p>
  *
- * <p>Cost, because this runs inside a door click: one store lookup, one walk, and nothing per tick. The
- * walk itself is bounded by the interpreter (256 nodes, a visited set), so a loop drawn by hand cannot
- * hang a tick, and the same opening cannot run the chain twice - one click arrives once per hand.</p>
+ * <p>Cost, because this runs inside a door click: one store lookup, one stamp per target node, one walk
+ * per signal node, and nothing per tick. The walk itself is bounded by the interpreter (256 nodes, a
+ * visited set), so a loop drawn by hand cannot hang a tick, and the same hack cannot run the chain twice -
+ * the panel sends once.</p>
  */
 public final class DoorSignal388 {
 
     private static final Logger LOG = LoggerFactory.getLogger("SettledLands/DoorSignal388");
 
-    /** One click arrives once per hand, and one opening must run the chain once. */
+    /** One click arrives once per hand, and one hack must run the chain once. */
     private static final Map<String, Long> RECENT = new HashMap<>();
     private static final long GUARD_MS = 400L;
 
@@ -59,11 +55,12 @@ public final class DoorSignal388 {
     private DoorSignal388() {}
 
     /**
-     * Runs the door's graph for the player who opened it.
+     * Runs the door's graph for the player who hacked it: stamps him into every blue target node and
+     * pulses every signal node.
      *
-     * @return true when a chain was started
+     * @return true when at least one chain was started
      */
-    public static boolean fire(ServerPlayer player, ServerLevel level, BlockPos pos) {
+    public static boolean hack(ServerPlayer player, ServerLevel level, BlockPos pos) {
         if (player == null || level == null || pos == null) return false;
         try {
             DoorGraph382Store store = DoorGraph382Store.get(level.getServer());
@@ -72,8 +69,6 @@ public final class DoorSignal388 {
             if (key == null || key.isEmpty()) return false;
             NpcDialogueGraph graph = store.graph(key);
             if (graph == null) return false;
-            NpcDialogueGraph.Node start = startNode(graph);
-            if (start == null) return false;
 
             String name = player.getName().getString();
             String stamp = key + "@" + name;
@@ -83,13 +78,45 @@ public final class DoorSignal388 {
             if (RECENT.size() > 256) RECENT.clear();
             RECENT.put(stamp, now);
 
-            // The door stands where the block stands in a block's graph: the window of a «Реплика»
-            // aims its camera at these coordinates, and the store key names the door in the log.
+            // The reference: the player who hacked this door, written into every blue target node of the
+            // graph. Written before the chain runs, so a node of the chain can already read it back.
+            boolean recorded = false;
+            if (graph.nodes != null) {
+                for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+                    if (DoorGraph382.isTargetNode(node)) {
+                        DoorGraph382.setOpener(node, name);
+                        recorded = true;
+                    }
+                }
+            }
+
+            // The door stands where a block stands in a block's graph: the window of a «Реплика» aims
+            // its camera at these coordinates, and the store key names the door in the log.
             BlockTalk358.Where where = new BlockTalk358.Where(level, key,
                     pos.getX(), pos.getY(), pos.getZ());
-            boolean ran = BlockTrigger351.fire(player, graph, start, where);
-            LOG.info("door: the graph of " + key + " ran for " + name + " from node #" + start.id
-                    + (ran ? "" : " - the interpreter declined it"));
+
+            List<NpcDialogueGraph.Node> starts = DoorGraph382.signalNodes(graph);
+            boolean legacy = starts.isEmpty();
+            if (legacy) {
+                NpcDialogueGraph.Node start = startNode(graph);
+                if (start != null) starts.add(start);
+            }
+
+            boolean ran = false;
+            for (NpcDialogueGraph.Node start : starts) {
+                if (start == null) continue;
+                ran |= BlockTrigger351.fire(player, graph, start, where);
+            }
+
+            if (recorded) {
+                // The name has to survive the session: the graph is the store's own, saved by put().
+                store.put(key, graph);
+            }
+            LOG.info("door: " + key + " was hacked by " + name + " - "
+                    + (starts.isEmpty() ? "no signal node, nothing to pulse"
+                            : starts.size() + " pulse(s) from " + (legacy ? "«Начало» (a graph of build 388 "
+                                    + "or older)" : "the signal node(s)"))
+                    + (recorded ? ", and the target holds his name" : ", and there is no target node"));
             return ran;
         } catch (Throwable failure) {
             fail(failure);
@@ -98,19 +125,16 @@ public final class DoorSignal388 {
     }
 
     /**
-     * The node the chain starts at: the «Начало» of the graph, like every other graph.
-     *
-     * <p>A door's graph created by build 382 holds the door card and nothing else, and the card is not
-     * the start of anything - it is the door's settings. So the card is never the start node, and a graph
-     * with nothing but the card does nothing when the door opens.</p>
+     * The node a graph of build 388 starts at when it has no signal node: the «Начало» of the graph,
+     * never the door card (the card is the door's settings, not a step of any chain).
      */
     public static NpcDialogueGraph.Node startNode(NpcDialogueGraph graph) {
         if (graph == null || graph.nodes == null || graph.nodes.isEmpty()) return null;
         NpcDialogueGraph.Node entry = graph.get(graph.entry);
-        if (entry != null && entry.type != DoorGraph382.DOOR_TYPE) return entry;
+        if (entry != null && !DoorGraph382.isDoorNode(entry)) return entry;
         List<NpcDialogueGraph.Node> rest = new ArrayList<>();
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-            if (node != null && node.type != DoorGraph382.DOOR_TYPE) rest.add(node);
+            if (node != null && !DoorGraph382.isDoorNode(node)) rest.add(node);
         }
         if (rest.isEmpty()) return null;
         rest.sort((left, right) -> Integer.compare(left.id, right.id));
