@@ -208,3 +208,36 @@ https://github.com/BORGERone/mod/releases/download/untagged-b5f7753d75b5af526ff8
 https://github.com/BORGERone/mod/releases/download/untagged-237db96c92a5c96ee046/voxy-0.2.9-alpha.jar
 Варианты PR #38 и TheNofis/voxy-neoforge-iris-support собираются, но требуют Sodium
 0.6.13 -> сломали бы Sable 2.0.5 / Create Aeronautics 1.3.2 / Iris 1.8.14 (не годятся).
+
+=== ПОДЛАГИВАНИЯ С VOXY (лог latest-2.log, 06.11.2026) ===
+Сборка 0.2.15-beta встала, Iris-конвейер работает: "Creating voxy iris render pipeline",
+pipeline 'IrisVoxyRenderPipeline', renderer 'MDICSectionRenderer',
+"IrisShaderPatch: External opaque/translucent shader patch applied".
+Главная причина лагов - ОДНОВРЕМЕННО стоят два LOD-мода:
+  DistantHorizons-3.3.3-1.21.1-fabric-neoforge.jar + voxy-0.2.15-beta.jar
+Iris при этом биндится к DH ("Queuing DH event binding", "DH Ready, binding Iris event
+handlers"), а Voxy отдельно патчит те же шейдеры. DH вешает серверные миксины
+MixinChunkGenerator/MixinChunkMap и генерит фейковые чанки на серверном потоке.
+Лаг в логе - серверный, не рендерный:
+  [ipl-server-watchdog/ERROR] SERVER THREAD STALLED ~11s (state=TIMED_WAITING)
+  3x "Can't keep up! Is the server overloaded? Running 8629ms / 172 ticks behind"
+Стек ста́лла: BlockableEventLoop.managedBlock <- ServerChunkCache.getChunk <-
+Level.getBlockState <- teallib VariantHolderBlockEntity.sync (блокирующая догрузка чанка).
+Вторая проблема: Immersive Portals x Sable 0.5.0 официально несовместим с Voxy
+(сообщение в чате, iPortalTeam/ImmersivePortalsMod#1524) - "удалите один из двух модов".
+Конфиг Voxy: config/voxy-config.json (FMLPaths.CONFIGDIR + "voxy-config.json"),
+gson LOWER_CASE_WITH_UNDERSCORES. Поля и дефолты (VoxyConfig.java, PR #45):
+  enabled=true, enable_rendering=true, ingest_enabled=true,
+  section_render_distance=16  (LOD = 16 * sub_division_size 64 = 1024 блока),
+  service_threads=coreCount/1.5 (на 8C/16T ~ 10; в логе пул 5, у второго инстанса 1),
+  sub_division_size=64, sky_fog_distance=96, fog_intensity=1.0, fog_density=0.0,
+  adapt_cloud_distance=true, cloud_distance=0,
+  dont_use_sodium_builder_threads=false, ssao_mode=null(=AUTO)
+Что крутить при лагах: section_render_distance 16->8; service_threads 10->6;
+dont_use_sodium_builder_threads=true; ssao_mode="disabled".
+VRAM: Voxy держит sparse-буфер геометрии 4 294 966 272 байт (NVIDIA workaround
+"sparse buffer allocation"), свободной VRAM было 8731 Мб -> 8236 Мб.
+Полёт над новой местностью дорогой по определению: в логе ChunkBoundRenderer растёт
+6144 -> 9216 -> 13824 -> 20736 -> 31104 ровно в окнах фризов (инджест новых секций).
+Железо: Ryzen 7 5700X (16 потоков), RTX 5080 (616.92), Win11, Java 21.0.7 Microsoft,
+шейдерпак Eclipse-Shader-Unstable.zip (+ Bliss 2.1.1/2.1.2 в паке), ~200 модов.
