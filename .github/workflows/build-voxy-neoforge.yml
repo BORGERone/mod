@@ -12,20 +12,12 @@ jobs:
   build:
     runs-on: ubuntu-latest
     continue-on-error: true
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: pr45-sodium0812-iris
-            repo: j-shelfwood/voxy-neoforge
-            ref: refs/pull/45/head
-            desc: "PR #45: voxy 0.2.15-beta + Sodium 0.8.12 + Iris 1.8.14"
     steps:
-      - name: Checkout Voxy sources
+      - name: Checkout Voxy sources (PR #45 head)
         uses: actions/checkout@v4
         with:
-          repository: ${{ matrix.repo }}
-          ref: ${{ matrix.ref }}
+          repository: j-shelfwood/voxy-neoforge
+          ref: refs/pull/45/head
           path: voxy
 
       - name: Setup Java 21
@@ -34,7 +26,41 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Gradle build (capture log, do not fail job yet)
+      - name: Fetch Sodium + Iris NeoForge jars into libs/
+        working-directory: voxy
+        run: |
+          set -e
+          mkdir -p libs
+          exec > >(tee /tmp/probe.log) 2>&1
+
+          echo "== resolving Sodium NeoForge 1.21.1 =="
+          SOD_JSON=$(curl -sG 'https://api.modrinth.com/v2/project/sodium/version' \
+            --data-urlencode 'game_versions=["1.21.1"]' --data-urlencode 'loaders=["neoforge"]')
+          SOD_URL=$(echo "$SOD_JSON" | jq -r '[.[] | select(.version_number|test("0\\.8\\.13"))][0].files[0].url // empty')
+          [ -z "$SOD_URL" ] && SOD_URL=$(echo "$SOD_JSON" | jq -r '[.[] | select(.version_number|test("0\\.8\\.12"))][0].files[0].url // empty')
+          echo "sodium url: $SOD_URL"
+          curl -sL -o 'libs/sodium-neoforge-0.8.12-beta.2-mod.jar' "$SOD_URL"
+
+          echo "== resolving Iris NeoForge 1.21.1 =="
+          IRIS_JSON=$(curl -sG 'https://api.modrinth.com/v2/project/iris/version' \
+            --data-urlencode 'game_versions=["1.21.1"]' --data-urlencode 'loaders=["neoforge"]')
+          IRIS_URL=$(echo "$IRIS_JSON" | jq -r '[.[] | select(.version_number|test("1\\.8\\.14"))][0].files[0].url // empty')
+          [ -z "$IRIS_URL" ] && IRIS_URL=$(echo "$IRIS_JSON" | jq -r '[.[] | select(.version_number|test("1\\.8\\."))][0].files[0].url // empty')
+          echo "iris url: $IRIS_URL"
+          curl -sL -o 'libs/iris-neoforge-1.8.14-beta.1.jar' "$IRIS_URL"
+
+          echo "== what we got =="
+          ls -l libs
+          for f in libs/*.jar; do
+            echo "--- $f"
+            unzip -l "$f" | tail -1
+            echo "ShaderParser.class: $(unzip -l "$f" | grep -c 'sodium/client/gl/shader/ShaderParser.class' || true)"
+            echo "SodiumWorldRenderer.class: $(unzip -l "$f" | grep -c 'SodiumWorldRenderer.class' || true)"
+            echo "iris/Iris.class: $(unzip -l "$f" | grep -c 'net/irisshaders/iris/Iris.class' || true)"
+            echo "IrisApi/ShaderPack: $(unzip -l "$f" | grep -cE 'net/irisshaders/iris/' || true)"
+          done
+
+      - name: Gradle build (capture log)
         working-directory: voxy
         run: |
           chmod +x ./gradlew
@@ -44,44 +70,58 @@ jobs:
           echo "GRADLE_EXIT=$code" >> "$GITHUB_ENV"
           echo "gradle exit code: $code"
 
-      - name: Publish BUILD LOG as draft release (on failure)
+      - name: Publish BUILD LOG (on failure)
         if: env.GRADLE_EXIT != '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo "BUILD FAILED (gradle exit ${{ env.GRADLE_EXIT }}) for ${{ matrix.name }}"
-            echo "Source: ${{ matrix.repo }} @ ${{ matrix.ref }}"
+            echo "BUILD FAILED (gradle exit ${{ env.GRADLE_EXIT }}) - pr45 with libs/ populated"
             echo ""
-            echo "Gradle output tail:"
+            echo "== PROBE (libs/ contents) =="
             echo '```'
-            tail -c 60000 /tmp/build.log
+            cat /tmp/probe.log
+            echo '```'
+            echo ""
+            echo "== compile errors (filtered) =="
+            echo '```'
+            grep -aE "error:|FAILURE|What went wrong|Execution failed|Could not resolve|> Task .* FAILED" /tmp/build.log | head -60
+            echo '```'
+            echo ""
+            echo "== gradle log tail =="
+            echo '```'
+            tail -c 30000 /tmp/build.log
             echo '```'
           } > lognotes.md
-          gh release create "voxy-buildlog-${{ matrix.name }}-${GITHUB_RUN_ID}" \
-            --repo "${GITHUB_REPOSITORY}" \
-            --draft \
-            --title "BUILDLOG ${{ matrix.name }} (DRAFT)" \
-            --notes-file lognotes.md
+          gh release create "voxy-buildlog-pr45-libs-${GITHUB_RUN_ID}" \
+            --repo "${GITHUB_REPOSITORY}" --draft \
+            --title "BUILDLOG pr45+libs (DRAFT)" --notes-file lognotes.md
 
-      - name: Publish jars as a DRAFT release (on success)
+      - name: Publish jars (on success)
         if: env.GRADLE_EXIT == '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           ls -l voxy/build/libs
-          sha256sum voxy/build/libs/*.jar
+          sha256sum voxy/build/libs/*.jar | tee /tmp/sha.txt
           {
-            echo "Variant: ${{ matrix.name }}"
-            echo "Source: ${{ matrix.repo }} @ ${{ matrix.ref }}"
-            echo "${{ matrix.desc }}"
-            echo "JDK 21, Minecraft 1.21.1, NeoForge."
+            echo "Variant: pr45-sodium0812-iris WITH libs/ (Sodium 0.8.13-neoforge + Iris 1.8.14-beta.1-neoforge)"
+            echo "Source: j-shelfwood/voxy-neoforge @ refs/pull/45/head (voxy 0.2.15-beta)"
+            echo "Iris shader integration compiled in - LOD terrain renders under shaderpacks."
             echo ""
-            echo "Install: put the voxy-*.jar (without -sources/-dev suffix) into the instance mods folder."
-            echo "Voxy is All Rights Reserved by MCRcortex. Private personal build: delete the draft after downloading."
+            echo "== probe log =="
+            echo '```'
+            cat /tmp/probe.log
+            echo '```'
+            echo "== checksums =="
+            echo '```'
+            cat /tmp/sha.txt
+            echo '```'
+            echo ""
+            echo "Install: voxy-*.jar (without -sources/-dev) into the instance mods folder."
+            echo "Needs: Sodium 0.8.12+ neoforge, Iris 1.8.14 neoforge, Forgified Fabric API."
+            echo "Voxy is ARR by MCRcortex. Private personal build: delete the draft after downloading."
           } > notes.md
-          gh release create "voxy-${{ matrix.name }}-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
-            --repo "${GITHUB_REPOSITORY}" \
-            --draft \
-            --title "Voxy NeoForge 1.21.1 - ${{ matrix.name }} (DRAFT)" \
-            --notes-file notes.md
+          gh release create "voxy-pr45-iris-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
+            --repo "${GITHUB_REPOSITORY}" --draft \
+            --title "Voxy 0.2.15-beta NeoForge + Iris (DRAFT)" --notes-file notes.md
