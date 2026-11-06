@@ -1649,3 +1649,34 @@ back across the card, into the pulse's left port). The blue target stood to the 
 - **Unconfirmed in game**: that the «Реплика» window really opens (and over/after the hack panel — the
   window is sent on the hack, the panel closes on all-keys-up; `GuideDialogueScreen#open` sets its screen
   unconditionally, so whichever frame wins the window is on top), the camera aim on the door, `%target%`.
+
+## Build 394 — `0.8.0-build394-door-event-pass` (commit `eb09234`)
+
+- Report on 393: «у меня к примеру теперь не работает нода в радиусе, проверь и остальные ноды».
+- Audit: `fire` is byte-identical to 392 (only a `pop` for walk's new return), so a block's «В радиусе» did
+  not regress. The hole is the **door's graph**: since 392 it offers a block's whole palette, but the only
+  thing that ran a door's graph was the card's hack (a chain from the socket). The four event nodes
+  («В радиусе», «Цель», «Время», «Таймер») are not steps of a chain — they fire on their own — and
+  `RadiusPass354` walked block graphs only. Dead on a door since 392.
+- Fix: a place with a graph is a `Spot` — `BlockTriggerStore351.Entry` implements it, new
+  `RadiusPass354$DoorSpot` is a door (key, position from `DoorStore368.positionOf`, `isDoorAt` check).
+  `pass`/`check`/`timeEvents`/`timerEvents`/`rings`/`findTarget`/`nearestPlayer` take `Spot`; one copy of
+  the rules for both. Tick no longer stands down when a world has no block graphs; `DoorGraph382Store#ofDimension`
+  (linear, replaces sorted `keys()` ten times a second). A door failure is logged once and does not disable
+  the block half (`doorFailureSeen`). `fired()` logs a door's event firing; blocks stay silent.
+  `BlockTrigger351#isStep` (7 types) + `allowed = isStep || RadiusPass354.isEventType` (4 event types).
+- Gate `tools/door_event_check.py`: structural (pass calls DoorGraph382Store#ofDimension/#graph/#isDoorAt +
+  DoorStore368#positionOf/#dimensionOf, block path still `ofDimension`, `allowed` asks `isEventType`) +
+  behavioural probe `tools/harness/DoorEvent394Probe.java`:
+  `PALETTE rows=11 step=7 event=4 unknown=0`, `ALLOWED card=yes step=yes event=yes junk=no`,
+  `EVENT radius=yes time=yes line=no card=no`, `UNWIRED event=no`, `DOOR event=yes`, `CHAIN start=1`,
+  `FIRE event=yes`, `RING off=no on=yes`. 394 passes; 393 fails.
+- `block_trigger_check.py` relaxed precisely: the store's "has something to fire" flag now lives in
+  `$Entry` and is `RadiusPass354#hasFiringEvent` — the gate accepts either class, `isEventNode` or
+  `hasFiringEvent`.
+- 30 gates green; `verify_jar --base 393` PASS (578 entries, 0 new external refs; removed members are
+  private methods whose signature widened `Entry`→`Spot`). Jar sha256 `120a57a6…2620`, 3587684 bytes.
+- Source zip `SettledLands-Build394-DoorEvents-Source.zip` (506 entries, sha256 `7f833f6a…f879`).
+- **Unconfirmed in game**: the tick itself (no world in the probe), the door ring's look, and whether his
+  broken «В радиусе» was on a door at all (if on a block, the graph is the suspect: wire, radius,
+  target kind, visibility toggle).
