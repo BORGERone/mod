@@ -46,7 +46,7 @@ public final class BlockTriggerStore351 extends SavedData {
     private static final String GRAPH = "G";
 
     /** One block: where it is, its graph, and the two flags the tick pass asks about. */
-    public static final class Entry {
+    public static final class Entry implements RadiusPass354.Spot {
         public final String key;
         public final String dimension;
         public final int x;
@@ -63,8 +63,46 @@ public final class BlockTriggerStore351 extends SavedData {
             this.y = y;
             this.z = z;
             this.graph = graph;
-            this.check = hasFiringCheck(graph);
-            this.ring = hasRing(graph);
+            // Build 394: the two questions are the pass's own now, so a door and a block answer them
+            // the same way.
+            this.check = RadiusPass354.hasFiringEvent(graph);
+            this.ring = RadiusPass354.hasVisibleRadius(graph);
+        }
+
+        /** Build 394: the same place, seen through {@link RadiusPass354.Spot}. */
+        @Override
+        public String key() {
+            return key;
+        }
+
+        @Override
+        public int x() {
+            return x;
+        }
+
+        @Override
+        public int y() {
+            return y;
+        }
+
+        @Override
+        public int z() {
+            return z;
+        }
+
+        @Override
+        public NpcDialogueGraph graph() {
+            return graph;
+        }
+
+        @Override
+        public boolean check() {
+            return check;
+        }
+
+        @Override
+        public boolean ring() {
+            return ring;
         }
 
         public double centerX() {
@@ -151,27 +189,6 @@ public final class BlockTriggerStore351 extends SavedData {
 
     /** True when a graph holds a "В радиусе" node that has somewhere to go. */
     /** True when the block holds a node the tick pass fires (build 365: radius, time and timer). */
-    private static boolean hasFiringCheck(NpcDialogueGraph graph) {
-        if (graph == null) return false;
-        for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-            if (!RadiusPass354.isEventNode(node)) continue;
-            if (node.next >= 0 || !node.triggers.isEmpty() || (node.action != null
-                    && !node.action.isBlank())) {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    /** True when a "В радиусе" node has its visibility toggle on. */
-    private static boolean hasRing(NpcDialogueGraph graph) {
-        if (graph == null) return false;
-        for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-            if (RadiusPass354.isRadiusNode(node) && RadiusPass354.visible(node)) return true;
-        }
-        return false;
-    }
-
     /** The graph of that block, or null while the block has none yet. */
     public NpcDialogueGraph graph(String key) {
         Entry entry = key == null ? null : byKey.get(key);

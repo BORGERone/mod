@@ -1,0 +1,2 @@
+120a57a6d4f83c3a8f84ff0ed7fd4e5ae42536246fe975156dad5faa2e332620  settledlands-0.8.0-build394-door-event-pass.jar
+7f833f6ac5fde09c152995e450562ebb2a4d0b635d397d86f956fc19f1b6f879  SettledLands-Build394-DoorEvents-Source.zip

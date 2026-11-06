@@ -6,6 +6,9 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import dev.settledlands.door.DoorGraph382Store;
+import dev.settledlands.door.DoorStore368;
+import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -50,6 +53,14 @@ import org.slf4j.LoggerFactory;
  * <p>Nothing runs when the store is empty or nobody is online, the block walk stays per dimension,
  * and a failure is reported once and disables the pass for the session instead of taking the server
  * down (build 349 rule).</p>
+ *
+ * <p><b>Build 394: a door's graph is a graph too.</b> The editor of a door offers the whole palette of a
+ * block ({@link dev.settledlands.door.DoorGraph382#paletteRows()}), so a door's graph can hold «В радиусе»,
+ * «Цель», «Время» and «Таймер» - the four nodes that fire on their own and are run by nothing else. Until
+ * this build the pass walked block graphs only, so an event node on a door was placed, wired, and never
+ * fired - the author's report «теперь не работает нода в радиусе». A door is now a {@link Spot} like a
+ * block is: same rules, same cooldowns, same ring, and the same interpreter behind it
+ * ({@link dev.settledlands.npc.BlockTrigger351#fire}).</p>
  */
 @EventBusSubscriber(modid = "settledlands")
 public final class RadiusPass354 {
@@ -88,6 +99,9 @@ public final class RadiusPass354 {
     private static boolean disabled;
     private static boolean reported;
 
+    /** Build 394: the door's half is reported once, and only it is stopped. */
+    private static boolean doorReported;
+
     private RadiusPass354() {}
 
     // ---- the node's flag ----------------------------------------------------
@@ -106,8 +120,17 @@ public final class RadiusPass354 {
      * 365, together with the five new palette rows of a block. A walk steps over all four.
      */
     public static boolean isEventNode(NpcDialogueGraph.Node node) {
-        return isRadiusNode(node) || (node != null && (node.type == NpcDialogueGraph.TIME
-                || node.type == NpcDialogueGraph.TIMER));
+        return node != null && isEventType(node.type);
+    }
+
+    /**
+     * Build 394: the four types this pass fires, and the only types in a block's or a door's palette that
+     * are <b>not</b> steps of a chain. Together with {@link BlockTrigger351#isStep} this is the whole
+     * promise a graph's create menu makes - every node the menu offers is run by someone.
+     */
+    public static boolean isEventType(int type) {
+        return type == NpcDialogueGraph.CHECK || type == NpcDialogueGraph.RADIUS
+                || type == NpcDialogueGraph.TIME || type == NpcDialogueGraph.TIMER;
     }
 
     /** The radius the node actually fires with, and the one its ring must show. */
@@ -139,6 +162,143 @@ public final class RadiusPass354 {
         if (isRadiusNode(node)) node.timerRepeat = false;
     }
 
+    // ---- places -------------------------------------------------------------
+
+    /**
+     * Build 394: one place whose graph this pass runs - a block that carries a graph, or a door that does.
+     *
+     * <p>Everything this pass does is about a place and its graph, never about the block: which node fires,
+     * what its ring is drawn around, which key the cooldowns belong to. {@code BlockTriggerStore351.Entry}
+     * is one such place; {@link DoorSpot} is the other. The two numbers a place is measured from are the
+     * block or the door itself, and both are one block wide, so nothing in the rules changes.</p>
+     */
+    public interface Spot {
+        /** The key of the place - what the cooldowns, the day and the timer are remembered under. */
+        String key();
+
+        int x();
+
+        int y();
+
+        int z();
+
+        NpcDialogueGraph graph();
+
+        /** True when the graph holds an event node with somewhere to go. */
+        boolean check();
+
+        /** True when a «В радиусе» node has its visibility toggle on. */
+        boolean ring();
+
+        /** True for a door: only used to say so in the log. */
+        default boolean door() {
+            return false;
+        }
+
+        default double centerX() {
+            return x() + 0.5D;
+        }
+
+        default double centerY() {
+            return y();
+        }
+
+        default double centerZ() {
+            return z() + 0.5D;
+        }
+
+        /** Squared distance from a point to the middle of the place's face, in blocks. */
+        default double distanceSqr(double px, double py, double pz) {
+            double dx = centerX() - px;
+            double dy = (y() + 0.5D) - py;
+            double dz = centerZ() - pz;
+            return dx * dx + dy * dy + dz * dz;
+        }
+    }
+
+    /** Build 394: the graph of one door, seen by this pass as one more place. */
+    static final class DoorSpot implements Spot {
+        private final String key;
+        private final int x;
+        private final int y;
+        private final int z;
+        private final NpcDialogueGraph graph;
+        private final boolean check;
+        private final boolean ring;
+
+        DoorSpot(String key, int x, int y, int z, NpcDialogueGraph graph) {
+            this.key = key;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.graph = graph;
+            this.check = hasFiringEvent(graph);
+            this.ring = hasVisibleRadius(graph);
+        }
+
+        @Override
+        public String key() {
+            return key;
+        }
+
+        @Override
+        public int x() {
+            return x;
+        }
+
+        @Override
+        public int y() {
+            return y;
+        }
+
+        @Override
+        public int z() {
+            return z;
+        }
+
+        @Override
+        public NpcDialogueGraph graph() {
+            return graph;
+        }
+
+        @Override
+        public boolean check() {
+            return check;
+        }
+
+        @Override
+        public boolean ring() {
+            return ring;
+        }
+
+        @Override
+        public boolean door() {
+            return true;
+        }
+    }
+
+    /** True when a graph holds an event node that has somewhere to go (block and door alike). */
+    public static boolean hasFiringEvent(NpcDialogueGraph graph) {
+        if (graph == null || graph.nodes == null) return false;
+        for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+            if (!isEventNode(node)) continue;
+            if (node.next >= 0 || !node.triggers.isEmpty()
+                    || (node.action != null && !node.action.isBlank())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** True when a graph holds a «В радиусе»/«Цель» node whose ring is switched on. */
+    public static boolean hasVisibleRadius(NpcDialogueGraph graph) {
+        if (graph == null || graph.nodes == null) return false;
+        for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+            if (isRadiusNode(node) && visible(node)) return true;
+        }
+        return false;
+    }
+
     // ---- the tick -----------------------------------------------------------
 
     @SubscribeEvent
@@ -154,61 +314,128 @@ public final class RadiusPass354 {
         if (!visual && !check) return;
         try {
             BlockTriggerStore351 store = BlockTriggerStore351.get(server);
-            if (store == null || store.size() == 0) return;
+            DoorGraph382Store doors = null;
+            try {
+                doors = DoorGraph382Store.get(server);
+            } catch (Throwable doorFailure) {
+                doorFailureSeen(doorFailure);
+            }
+            boolean anyBlocks = store != null && store.size() > 0;
+            boolean anyDoor = doors != null && doors.size() > 0;
+            // Build 394: a world with doors and no block graphs is a world this pass still has work in.
+            if (!anyBlocks && !anyDoor) return;
             List<ServerPlayer> players = server.getPlayerList().getPlayers();
             if (players.isEmpty()) return;
             for (ServerLevel level : server.getAllLevels()) {
-                List<BlockTriggerStore351.Entry> blocks =
-                        store.ofDimension(BlockTriggerStore351.dimensionOf(level));
-                if (blocks.isEmpty()) continue;
-                pass(level, blocks, players, now, visual, check);
+                String dimension = BlockTriggerStore351.dimensionOf(level);
+                List<BlockTriggerStore351.Entry> blocks = anyBlocks
+                        ? store.ofDimension(dimension) : new ArrayList<BlockTriggerStore351.Entry>();
+                List<Spot> spots = new ArrayList<Spot>(blocks);
+                if (anyDoor) {
+                    // Build 394: a door that cannot be read costs the doors of that pass, never the
+                    // blocks - a block's radius node has worked for twenty builds and a door's file is
+                    // the new thing here.
+                    try {
+                        addDoors(level, dimension, doors, spots);
+                    } catch (Throwable doorFailure) {
+                        doorFailureSeen(doorFailure);
+                    }
+                }
+                if (spots.isEmpty()) continue;
+                pass(level, blocks, spots, players, now, visual, check);
             }
         } catch (Throwable failure) {
             fail(failure);
         }
     }
 
+    /**
+     * Build 394: the graphs of the doors of one dimension, as places this pass watches.
+     *
+     * <p>A door's editor offers the whole palette of a block, so a door's graph can hold the four event
+     * nodes - and until this build nothing walked a door's graph at all except the hack of the card. A node
+     * that is placed, wired and never fired is the author's «теперь не работает нода в радиусе». The key of a
+     * door is the same string the lock store and the sync use ({@code minecraft:overworld@12,64,-30}), so the
+     * dimension and the position come from it and nothing else is stored twice.</p>
+     */
+    private static void addDoors(ServerLevel level, String dimension, DoorGraph382Store doors,
+            List<Spot> spots) {
+        List<String> keys = doors.ofDimension(dimension);
+        for (int i = 0; i < keys.size(); i++) {
+            String key = keys.get(i);
+            if (key == null || key.isEmpty()) continue;
+            if (!dimension.equals(DoorStore368.dimensionOf(key))) continue;  // the key carries it too
+            BlockPos pos = DoorStore368.positionOf(key);
+            if (pos == null) continue;
+            // A door that was broken is not a place any more: its graph waits for the block to come back.
+            if (!DoorGraph382Store.isDoorAt(level, pos)) continue;
+            NpcDialogueGraph graph = doors.graph(key);
+            if (graph == null || graph.nodes == null || graph.nodes.isEmpty()) continue;
+            spots.add(new DoorSpot(key, pos.getX(), pos.getY(), pos.getZ(), graph));
+        }
+    }
+
     private static void pass(ServerLevel level, List<BlockTriggerStore351.Entry> blocks,
-            List<ServerPlayer> players, long now, boolean visual, boolean check) {
+            List<Spot> spots, List<ServerPlayer> players, long now, boolean visual, boolean check) {
         List<ServerPlayer> here = new ArrayList<>();
         for (int i = 0; i < players.size(); i++) {
             ServerPlayer player = players.get(i);
             if (player != null && player.level() == level) here.add(player);
         }
         if (here.isEmpty()) return;
-        // Build 365: a scene started by a block is resumed from here too, before the blocks walk on.
+        // Build 365: a scene started by a block or a door is resumed from here too, before the places
+        // walk on.
         if (check) resumeCutscenes(here);
         int lit = 0;
 
-        for (int i = 0; i < blocks.size(); i++) {
-            BlockTriggerStore351.Entry block = blocks.get(i);
-            NpcDialogueGraph graph = block.graph;
-            if (graph == null) continue;
-
-            if (visual) {
-                // One walk over the nearby players answers both questions: is a ring worth sending,
-                // and is a wand holder close enough to light this block up.
-                boolean near = false;
+        // Build 354's highlight is the wand's answer to "which blocks have a graph", and that is still
+        // a question about blocks: eight sparks around a door would point at its editor, which a wand
+        // click already opens (DoorGraph382Events, build 382).
+        if (visual) {
+            for (int i = 0; i < blocks.size(); i++) {
+                BlockTriggerStore351.Entry block = blocks.get(i);
+                if (lit >= MAX_HIGHLIGHT) break;
                 boolean wand = false;
                 for (int p = 0; p < here.size(); p++) {
                     ServerPlayer player = here.get(p);
                     double distance = block.distanceSqr(player.getX(), player.getY(), player.getZ());
-                    if (distance <= RING_RANGE * RING_RANGE) near = true;
-                    if (distance <= HIGHLIGHT_RANGE * HIGHLIGHT_RANGE && holdingWand(player)) wand = true;
-                    if (near && wand) break;
+                    if (distance <= HIGHLIGHT_RANGE * HIGHLIGHT_RANGE && holdingWand(player)) {
+                        wand = true;
+                        break;
+                    }
                 }
-                if (near && block.ring) rings(level, block, graph, now);
-                if (wand && lit < MAX_HIGHLIGHT) {
+                if (wand) {
                     highlight(level, block);
                     lit++;
                 }
             }
-            if (check && block.check) {
-                check(level, block, graph, here, now);
-                timeEvents(level, block, graph, here);
-                timerEvents(level, block, graph, here);
+        }
+
+        for (int i = 0; i < spots.size(); i++) {
+            Spot spot = spots.get(i);
+            NpcDialogueGraph graph = spot.graph();
+            if (graph == null) continue;
+
+            if (visual && spot.ring() && near(spot, here)) rings(level, spot, graph, now);
+            if (check && spot.check()) {
+                check(level, spot, graph, here, now);
+                timeEvents(level, spot, graph, here);
+                timerEvents(level, spot, graph, here);
             }
         }
+    }
+
+    /** True when a player stands close enough to a place for its ring to be worth sending. */
+    private static boolean near(Spot spot, List<ServerPlayer> players) {
+        for (int i = 0; i < players.size(); i++) {
+            ServerPlayer player = players.get(i);
+            if (player == null) continue;
+            if (spot.distanceSqr(player.getX(), player.getY(), player.getZ())
+                    <= RING_RANGE * RING_RANGE) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** True when the wand of NPC settings is in either hand - the author's own "show me the blocks". */
@@ -241,12 +468,11 @@ public final class RadiusPass354 {
 
     // ---- the rings ----------------------------------------------------------
 
-    /** Every visible radius node of a block graph. */
-    private static void rings(ServerLevel level, BlockTriggerStore351.Entry block,
-            NpcDialogueGraph graph, long now) {
+    /** Every visible radius node of a place's graph - a block's or a door's. */
+    private static void rings(ServerLevel level, Spot spot, NpcDialogueGraph graph, long now) {
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
             if (!isRadiusNode(node) || !visible(node)) continue;
-            ring(level, block.centerX(), block.y, block.centerZ(), radius(node), now);
+            ring(level, spot.centerX(), spot.y(), spot.centerZ(), radius(node), now);
         }
     }
 
@@ -311,7 +537,7 @@ public final class RadiusPass354 {
 
     // ---- the check node -----------------------------------------------------
 
-    private static void check(ServerLevel level, BlockTriggerStore351.Entry block,
+    private static void check(ServerLevel level, Spot block,
             NpcDialogueGraph graph, List<ServerPlayer> players, long now) {
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
             if (!isRadiusNode(node)) continue;
@@ -323,7 +549,7 @@ public final class RadiusPass354 {
             // A radius node has no cooldown control of its own in every tab; never let it fire more
             // than once a second, or a body standing in the zone would run the chain non-stop.
             long cooldownTicks = Math.max(1, node.checkCooldown) * 20L;
-            Map<UUID, Long> seen = cooldowns(block.key, node.id, now, cooldownTicks);
+            Map<UUID, Long> seen = cooldowns(block.key(), node.id, now, cooldownTicks);
             Entity matched = findTarget(level, block, kind(node), radius, seen, now, cooldownTicks);
             if (matched == null) continue;
             seen.put(matched.getUUID(), now);
@@ -331,7 +557,8 @@ public final class RadiusPass354 {
             ServerPlayer source = matched instanceof ServerPlayer player ? player
                     : nearestPlayer(level, block, radius + 32.0D, players);
             BlockTrigger351.fire(source, graph, node,
-                    new BlockTalk358.Where(level, block.key, block.x, block.y, block.z));
+                    new BlockTalk358.Where(level, block.key(), block.x(), block.y(), block.z()));
+            fired(block, node, source);
         }
     }
 
@@ -437,7 +664,7 @@ public final class RadiusPass354 {
      * node fires once a day, inside a 400 tick window after that hour, for the nearest player within
      * 32 blocks.
      */
-    private static void timeEvents(ServerLevel level, BlockTriggerStore351.Entry block,
+    private static void timeEvents(ServerLevel level, Spot block,
             NpcDialogueGraph graph, List<ServerPlayer> players) {
         long dayTime = level.getDayTime();
         long day = dayTime / 24000L;
@@ -455,14 +682,15 @@ public final class RadiusPass354 {
             else if (node.timeMode == 4) start = Math.max(0L, Math.min(23999L, node.timeTicks));
             else start = 0L;
             if (tod < start || tod >= start + TIME_WINDOW) continue;
-            String key = block.key + "#" + node.id;
+            String key = block.key() + "#" + node.id;
             Long seen = TIME_DAY.get(key);
             if (seen != null && seen.longValue() == day) continue;
             ServerPlayer source = nearestPlayer(level, block, EVENT_RANGE, players);
             if (source == null || source.isSpectator()) continue;
             TIME_DAY.put(key, day);
             BlockTrigger351.fire(source, graph, node,
-                    new BlockTalk358.Where(level, block.key, block.x, block.y, block.z));
+                    new BlockTalk358.Where(level, block.key(), block.x(), block.y(), block.z()));
+            fired(block, node, source);
         }
     }
 
@@ -471,7 +699,7 @@ public final class RadiusPass354 {
      * interval is in seconds and counts from the moment the node was first seen; a repeating node
      * restarts from the moment it fired, a one-shot node is spent and never fires again.
      */
-    private static void timerEvents(ServerLevel level, BlockTriggerStore351.Entry block,
+    private static void timerEvents(ServerLevel level, Spot block,
             NpcDialogueGraph graph, List<ServerPlayer> players) {
         long now = level.getGameTime();
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
@@ -481,7 +709,7 @@ public final class RadiusPass354 {
                 continue;
             }
             long period = Math.max(1, node.timerInterval) * 20L;
-            String key = block.key + "#" + node.id;
+            String key = block.key() + "#" + node.id;
             Long last = TIMER_AT.get(key);
             if (last == null) {
                 if (TIMER_AT.size() > 4096) TIMER_AT.clear();
@@ -497,7 +725,8 @@ public final class RadiusPass354 {
             }
             TIMER_AT.put(key, node.timerRepeat ? now : SPENT);
             BlockTrigger351.fire(source, graph, node,
-                    new BlockTalk358.Where(level, block.key, block.x, block.y, block.z));
+                    new BlockTalk358.Where(level, block.key(), block.x(), block.y(), block.z()));
+            fired(block, node, source);
         }
     }
 
@@ -520,12 +749,30 @@ public final class RadiusPass354 {
         return seen;
     }
 
+    /**
+     * Build 394: one line when a <b>door's</b> event node fires, and nothing for a block.
+     *
+     * <p>A block's event node fires in a graph the author has watched work for twenty builds; a door's has
+     * never fired before this build, and "the door's node does nothing" is the picture whether the pass did
+     * not see the door, the rule did not match, or the chain went nowhere. One line per firing answers it
+     * without drowning the log: doors that carry events fire rarely.</p>
+     */
+    private static void fired(Spot spot, NpcDialogueGraph.Node node, ServerPlayer source) {
+        if (!spot.door()) return;
+        String kind = node.type == NpcDialogueGraph.RADIUS ? "В радиусе"
+                : node.type == NpcDialogueGraph.CHECK ? "Цель"
+                : node.type == NpcDialogueGraph.TIME ? "Время" : "Таймер";
+        LOG.info("door: a «" + kind + "» node of " + spot.key() + " fired for "
+                + (source == null ? "nobody" : source.getName().getString())
+                + " - the chain of that door starts here");
+    }
+
     /** The node's own rules, copied from {@code GuideDialogue#findCheckTarget}. */
-    private static Entity findTarget(ServerLevel level, BlockTriggerStore351.Entry block,
+    private static Entity findTarget(ServerLevel level, Spot block,
             int kind, int radius, Map<UUID, Long> seen, long now, long cooldownTicks) {
         double r = radius;
-        AABB box = new AABB(block.x, block.y, block.z, block.x + 1.0D, block.y + 1.0D,
-                block.z + 1.0D).inflate(r);
+        AABB box = new AABB(block.x(), block.y(), block.z(), block.x() + 1.0D, block.y() + 1.0D,
+                block.z() + 1.0D).inflate(r);
 
         if (kind == NpcDialogueGraph.TARGET_MONSTER) {
             return first(level, box, r, block, seen, now, cooldownTicks, body -> body instanceof Enemy);
@@ -546,7 +793,7 @@ public final class RadiusPass354 {
     }
 
     private static Entity first(ServerLevel level, AABB box, double radius,
-            BlockTriggerStore351.Entry block, Map<UUID, Long> seen, long now, long cooldownTicks,
+            Spot block, Map<UUID, Long> seen, long now, long cooldownTicks,
             java.util.function.Predicate<Entity> kind) {
         List<Entity> bodies = level.getEntitiesOfClass(Entity.class, box,
                 body -> body != null && body.isAlive() && !body.isRemoved() && kind.test(body)
@@ -560,7 +807,7 @@ public final class RadiusPass354 {
         return null;
     }
 
-    private static ServerPlayer nearestPlayer(ServerLevel level, BlockTriggerStore351.Entry block,
+    private static ServerPlayer nearestPlayer(ServerLevel level, Spot block,
             double range, List<ServerPlayer> players) {
         ServerPlayer best = null;
         double bestDistance = range * range;
@@ -574,6 +821,21 @@ public final class RadiusPass354 {
             }
         }
         return best;
+    }
+
+    /**
+     * Build 394: a failure of the door's half is reported once and the pass keeps its blocks.
+     *
+     * <p>{@link #fail} switches the whole pass off for the session, which is right for a failure of the pass
+     * itself (build 349: a broken tick loop must not take the server down) and wrong for one bad door file:
+     * the author's radius nodes are on blocks and doors at once, and one of the two must not be lost to the
+     * other.</p>
+     */
+    private static void doorFailureSeen(Throwable failure) {
+        if (doorReported) return;
+        doorReported = true;
+        LOG.warn("radius pass: the door graphs could not be read, blocks keep their events: {}",
+                String.valueOf(failure));
     }
 
     private static void fail(Throwable failure) {

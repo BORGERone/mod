@@ -351,8 +351,15 @@ def main(argv):
     if 32 not in numeric_consts(_pass):
         return fail("no 32 block reach in the pass - a clock would fire for a player at the edge of "
                     "the world")
-    if not any(r[1] == "isEventNode" and r[0] and r[0].endswith("npc/RadiusPass354")
-               for r in parse(blobs[STORE])[1]):
+    # Build 394: the flag itself moved into the Entry of the store (the place a pass watches is an
+    # Entry), and the counting is now RadiusPass354#hasFiringEvent - which is isEventNode over the four
+    # event types, i.e. exactly what this check has always been about. Look in both classes.
+    store_parts = [STORE] + [name for name in blobs if name.startswith(STORE[:-len(".class")] + "$")]
+    store_fire_refs = set()
+    for name in store_parts:
+        store_fire_refs |= parse(blobs[name])[1]
+    if not any(r[1] in ("isEventNode", "hasFiringEvent") and r[0]
+               and r[0].endswith("npc/RadiusPass354") for r in store_fire_refs):
         return fail("the store's \"has something to fire\" flag ignores Время and Таймер - a block "
                     "with only a clock would never be ticked")
 

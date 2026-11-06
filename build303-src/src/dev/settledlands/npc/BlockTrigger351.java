@@ -115,12 +115,30 @@ public final class BlockTrigger351 {
         return id >= ID_MIN && id <= ID_MAX;
     }
 
-    /** True when this node type may live in a block graph. */
+    /**
+     * Build 394: true when a node of this type is a <b>step</b> of a chain - exactly the types
+     * {@link #walk} runs, node for node. The other half of a graph's palette is the four event nodes
+     * ({@code В радиусе}, {@code Цель}, {@code Время}, {@code Таймер}), which are not steps: they fire on
+     * their own and a chain starts at their {@code next} ({@link RadiusPass354#isEventType}).
+     */
+    public static boolean isStep(int type) {
+        return type == NpcDialogueGraph.LINE || type == NpcDialogueGraph.BUTTON
+                || type == NpcDialogueGraph.TRIGGER || type == NpcDialogueGraph.IF
+                || type == NpcDialogueGraph.VARIABLE || type == NpcDialogueGraph.RANDOM
+                || type == NpcDialogueGraph.CUTSCENE;
+    }
+
+    /**
+     * True when this node type may live in a block graph - and, since build 392, in a door's graph, which
+     * offers the same rows.
+     *
+     * <p>Build 394: the answer is "someone runs it" and nothing else. A step is run by {@link #walk}, an
+     * event node is fired by {@link RadiusPass354} - for a block's graph and, since this build, for a
+     * door's. A type that is neither would be a node the author can place and watch do nothing, which is
+     * the report this build answers.</p>
+     */
     public static boolean allowed(int type) {
-        for (int candidate : PALETTE) {
-            if (candidate == type) return true;
-        }
-        return false;
+        return isStep(type) || RadiusPass354.isEventType(type);
     }
 
     /** The id the editor uses for this block; stable for the session, so a re-open keeps the same one. */

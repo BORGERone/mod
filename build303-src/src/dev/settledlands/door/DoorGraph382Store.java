@@ -136,6 +136,22 @@ public final class DoorGraph382Store extends SavedData {
         return byKey.size() >= MAX_DOORS;
     }
 
+    /**
+     * Build 394: the keys of the doors of one dimension, unsorted and unfiltered - what the event pass
+     * walks. {@link #keys()} sorts a copy for the sync, which is fine twice on login and wrong ten times a
+     * second, so the pass asks this instead: one linear read of the index the store already keeps.
+     */
+    public List<String> ofDimension(String dimension) {
+        List<String> out = new ArrayList<>();
+        if (dimension == null || dimension.isEmpty()) return out;
+        for (Map.Entry<String, NpcDialogueGraph> entry : byKey.entrySet()) {
+            if (entry.getValue() == null || entry.getKey() == null) continue;
+            if (!dimension.equals(byDimension.get(entry.getKey()))) continue;
+            out.add(entry.getKey());
+        }
+        return out;
+    }
+
     /** Every key this store knows, sorted - the sync of build 382 walks it. */
     public List<String> keys() {
         List<String> keys = new ArrayList<>(byKey.keySet());
