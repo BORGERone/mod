@@ -22,6 +22,12 @@ public class PlayerInteractEvent {
     public boolean isCanceled() { return false; }
     public void setCancellationResult(InteractionResult result) {}
 
+    /**
+     * Build 396: which hand made the click. The base mod calls this on the same event class
+     * ({@code NpcStatsInteraction#specific} and {@code #generic}), so the shape is proven by the jar.
+     */
+    public net.minecraft.world.InteractionHand getHand() { return null; }
+
     // Build 373 removed setUseBlock/setUseItem from this mirror: NeoForge 1.21.1 does not have them.
     // 371 called them, threw NoSuchMethodError at the click, and quietly refused nothing.
 

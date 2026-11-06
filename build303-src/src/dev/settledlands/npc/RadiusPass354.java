@@ -6,6 +6,8 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import dev.settledlands.chest.ChestGraph396;
+import dev.settledlands.chest.ChestGraph396Store;
 import dev.settledlands.door.DoorGraph382Store;
 import dev.settledlands.door.DoorStore368;
 import net.minecraft.core.BlockPos;
@@ -102,6 +104,9 @@ public final class RadiusPass354 {
     /** Build 394: the door's half is reported once, and only it is stopped. */
     private static boolean doorReported;
 
+    /** Build 396: the same courtesy for the chests - one report, blocks and doors keep theirs. */
+    private static boolean chestReported;
+
     private RadiusPass354() {}
 
     // ---- the node's flag ----------------------------------------------------
@@ -190,9 +195,17 @@ public final class RadiusPass354 {
         /** True when a «В радиусе» node has its visibility toggle on. */
         boolean ring();
 
-        /** True for a door: only used to say so in the log. */
+        /** True for a door: kept because the door's half is the one that reports itself. */
         default boolean door() {
             return false;
+        }
+
+        /**
+         * Build 396: what this place is, for the one line the log gets when its event fires - «door» or
+         * «chest». A block's firing has never been logged and stays unlogged.
+         */
+        default String place() {
+            return "block";
         }
 
         default double centerX() {
@@ -275,6 +288,79 @@ public final class RadiusPass354 {
         public boolean door() {
             return true;
         }
+
+        @Override
+        public String place() {
+            return "door";
+        }
+    }
+
+    /**
+     * Build 396: the graph of one chest, seen by this pass as one more place.
+     *
+     * <p>The same reason the doors joined in build 394: the chest's create menu is the block's menu, so a
+     * chest's graph can hold «В радиусе», «Цель», «Время» and «Таймер» - the four nodes that fire on their own
+     * and are run by nothing else. A node that is placed, wired and never fired is the author's «не работает
+     * нода в радиусе», and it must not happen a second time, on a second kind of graph.</p>
+     */
+    static final class ChestSpot implements Spot {
+        private final String key;
+        private final int x;
+        private final int y;
+        private final int z;
+        private final NpcDialogueGraph graph;
+        private final boolean check;
+        private final boolean ring;
+
+        ChestSpot(String key, int x, int y, int z, NpcDialogueGraph graph) {
+            this.key = key;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.graph = graph;
+            this.check = hasFiringEvent(graph);
+            this.ring = hasVisibleRadius(graph);
+        }
+
+        @Override
+        public String key() {
+            return key;
+        }
+
+        @Override
+        public int x() {
+            return x;
+        }
+
+        @Override
+        public int y() {
+            return y;
+        }
+
+        @Override
+        public int z() {
+            return z;
+        }
+
+        @Override
+        public NpcDialogueGraph graph() {
+            return graph;
+        }
+
+        @Override
+        public boolean check() {
+            return check;
+        }
+
+        @Override
+        public boolean ring() {
+            return ring;
+        }
+
+        @Override
+        public String place() {
+            return "chest";
+        }
     }
 
     /** True when a graph holds an event node that has somewhere to go (block and door alike). */
@@ -320,10 +406,18 @@ public final class RadiusPass354 {
             } catch (Throwable doorFailure) {
                 doorFailureSeen(doorFailure);
             }
+            ChestGraph396Store chests = null;
+            try {
+                chests = ChestGraph396Store.get(server);
+            } catch (Throwable chestFailure) {
+                chestFailureSeen(chestFailure);
+            }
             boolean anyBlocks = store != null && store.size() > 0;
             boolean anyDoor = doors != null && doors.size() > 0;
+            boolean anyChest = chests != null && chests.size() > 0;
             // Build 394: a world with doors and no block graphs is a world this pass still has work in.
-            if (!anyBlocks && !anyDoor) return;
+            // Build 396: and a world with chest graphs only is a third such world.
+            if (!anyBlocks && !anyDoor && !anyChest) return;
             List<ServerPlayer> players = server.getPlayerList().getPlayers();
             if (players.isEmpty()) return;
             for (ServerLevel level : server.getAllLevels()) {
@@ -339,6 +433,15 @@ public final class RadiusPass354 {
                         addDoors(level, dimension, doors, spots);
                     } catch (Throwable doorFailure) {
                         doorFailureSeen(doorFailure);
+                    }
+                }
+                if (anyChest) {
+                    // Build 396: and a chest that cannot be read costs the chests, never the blocks or
+                    // the doors.
+                    try {
+                        addChests(level, dimension, chests, spots);
+                    } catch (Throwable chestFailure) {
+                        chestFailureSeen(chestFailure);
                     }
                 }
                 if (spots.isEmpty()) continue;
@@ -372,6 +475,30 @@ public final class RadiusPass354 {
             NpcDialogueGraph graph = doors.graph(key);
             if (graph == null || graph.nodes == null || graph.nodes.isEmpty()) continue;
             spots.add(new DoorSpot(key, pos.getX(), pos.getY(), pos.getZ(), graph));
+        }
+    }
+
+    /**
+     * Build 396: the graphs of the chests of one dimension, as places this pass watches.
+     *
+     * <p>Written the way {@link #addDoors} is written, because a chest is a place exactly as a door is: the key
+     * carries the dimension and the position, the chest must still be a chest in the world (a broken chest's
+     * graph waits for the block to come back) and a graph without nodes is not a place.</p>
+     */
+    private static void addChests(ServerLevel level, String dimension, ChestGraph396Store chests,
+            List<Spot> spots) {
+        List<String> keys = chests.ofDimension(dimension);
+        for (int i = 0; i < keys.size(); i++) {
+            String key = keys.get(i);
+            if (key == null || key.isEmpty()) continue;
+            if (!dimension.equals(ChestGraph396Store.dimensionOf(key))) continue;  // the key carries it too
+            BlockPos pos = ChestGraph396Store.positionOf(key);
+            if (pos == null) continue;
+            // A chest that was broken is not a place any more: its graph waits for the block to come back.
+            if (!ChestGraph396.isChestAt(level, pos)) continue;
+            NpcDialogueGraph graph = chests.graph(key);
+            if (graph == null || graph.nodes == null || graph.nodes.isEmpty()) continue;
+            spots.add(new ChestSpot(key, pos.getX(), pos.getY(), pos.getZ(), graph));
         }
     }
 
@@ -758,13 +885,14 @@ public final class RadiusPass354 {
      * without drowning the log: doors that carry events fire rarely.</p>
      */
     private static void fired(Spot spot, NpcDialogueGraph.Node node, ServerPlayer source) {
-        if (!spot.door()) return;
+        // Build 396: a chest's event node has never fired either, so the same one line is owed to it.
+        if (!spot.door() && !"chest".equals(spot.place())) return;
         String kind = node.type == NpcDialogueGraph.RADIUS ? "В радиусе"
                 : node.type == NpcDialogueGraph.CHECK ? "Цель"
                 : node.type == NpcDialogueGraph.TIME ? "Время" : "Таймер";
-        LOG.info("door: a «" + kind + "» node of " + spot.key() + " fired for "
+        LOG.info(spot.place() + ": a «" + kind + "» node of " + spot.key() + " fired for "
                 + (source == null ? "nobody" : source.getName().getString())
-                + " - the chain of that door starts here");
+                + " - the chain of that " + spot.place() + " starts here");
     }
 
     /** The node's own rules, copied from {@code GuideDialogue#findCheckTarget}. */
@@ -835,6 +963,14 @@ public final class RadiusPass354 {
         if (doorReported) return;
         doorReported = true;
         LOG.warn("radius pass: the door graphs could not be read, blocks keep their events: {}",
+                String.valueOf(failure));
+    }
+
+    /** Build 396: the chest's half reports itself once, and only it is stopped. */
+    private static void chestFailureSeen(Throwable failure) {
+        if (chestReported) return;
+        chestReported = true;
+        LOG.warn("radius pass: the chest graphs could not be read, blocks and doors keep their events: {}",
                 String.valueOf(failure));
     }
 

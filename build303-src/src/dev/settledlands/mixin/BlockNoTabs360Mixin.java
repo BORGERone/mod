@@ -123,15 +123,16 @@ public abstract class BlockNoTabs360Mixin {
     }
 
     /**
-     * Build 383: the test for "this editor holds one graph", which is now true of two kinds of editor.
-     * A block's graph (build 351) and a door's graph (build 382) both have a single canvas, so both
-     * refuse the two extra tabs, and the strip is taken off the screen of either. The block test stays
-     * the first question - it is the one that shipped and was seen in game.
+     * Build 383: the test for "this editor holds one graph", which is now true of three kinds of editor.
+     * A block's graph (build 351), a door's graph (build 382) and a chest's graph (build 396) all have a
+     * single canvas, so all three refuse the two extra tabs, and the strip is taken off the screen of any
+     * of them. The block test stays the first question - it is the one that shipped and was seen in game.
      */
     private static boolean settledlands$oneGraph(NpcDialogueGraphScreen screen) {
         if (screen == null) return false;
         int id = screen.entityId();
-        return BlockTrigger351.isBlockEditorId(id) || DoorGraph382.isDoorEditorId(id);
+        return BlockTrigger351.isBlockEditorId(id) || DoorGraph382.isDoorEditorId(id)
+                || dev.settledlands.chest.ChestGraph396.isChestEditorId(id);
     }
 
     private static String settledlands$tabLabel(int index) {

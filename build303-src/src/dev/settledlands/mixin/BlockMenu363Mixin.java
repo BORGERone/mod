@@ -1,5 +1,6 @@
 package dev.settledlands.mixin;
 
+import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.client.BlockMenu363;
@@ -48,9 +49,10 @@ public abstract class BlockMenu363Mixin {
     @Inject(method = "settledlands$mouseReleasedOriginal", at = @At("RETURN"), remap = false)
     private void settledlands$measureBlockMenu(double mouseX, double mouseY, int button,
             CallbackInfoReturnable<Boolean> cir) {
-        // Build 382: a door's panel is measured too - one row instead of fifteen.
+        // Build 382: a door's panel is measured too - one row instead of fifteen. Build 396: a chest's
+        // panel is the block's panel as well, so it is measured the same way.
         boolean door = settledlands$isDoor();
-        if (!door && !settledlands$isBlock()) return;
+        if (!door && !settledlands$isBlock() && !settledlands$isChest()) return;
         if (this.contextMenu == null) return;
         BlockMenu363.fit(this.contextMenu,
                 ((NpcDialogueGraphScreen) (Object) this).settledlands$canvas(), door);
@@ -93,8 +95,13 @@ public abstract class BlockMenu363Mixin {
         return DoorGraph382.isDoorEditorId(((NpcDialogueGraphScreen) (Object) this).entityId());
     }
 
-    /** True for either graph that borrows this panel. */
+    /** Build 396: the chest editor borrows the very same panel - the stock rows of a block, no card row. */
+    private boolean settledlands$isChest() {
+        return ChestGraph396.isChestEditorId(((NpcDialogueGraphScreen) (Object) this).entityId());
+    }
+
+    /** True for every graph that borrows this panel. */
     private boolean settledlands$editor() {
-        return settledlands$isBlock() || settledlands$isDoor();
+        return settledlands$isBlock() || settledlands$isDoor() || settledlands$isChest();
     }
 }

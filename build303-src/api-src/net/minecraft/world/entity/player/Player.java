@@ -17,4 +17,13 @@ public class Player extends LivingEntity {
         return null;
     }
 
+
+    /**
+     * Build 396: the window a player has open, and his own inventory window - both declared on
+     * {@code Player} in 1.21.1 and both read by the base mod itself ({@code NpcEscort} compares them,
+     * {@code NpcShop} and {@code NpcQuests} call {@code containerMenu.broadcastChanges()}). A chest's
+     * chain runs when the chest's window closes, and this pair is how that moment is known.
+     */
+    public net.minecraft.world.inventory.AbstractContainerMenu containerMenu;
+    public net.minecraft.world.inventory.InventoryMenu inventoryMenu;
 }
