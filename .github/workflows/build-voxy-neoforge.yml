@@ -1,0 +1,54 @@
+name: Build Voxy NeoForge 1.21.1
+
+on:
+  push:
+    branches: ['arena/94d4d401-mod']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Voxy NeoForge sources (compile-fix fork)
+        uses: actions/checkout@v4
+        with:
+          repository: NormalCortisolLevels/Voxy-NeoForge-Compile-Fix
+          ref: 'neoforge-1.21.1-(compile-fixes)'
+          path: voxy
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Gradle build
+        working-directory: voxy
+        run: |
+          chmod +x ./gradlew
+          ./gradlew build --console=plain --stacktrace
+        env:
+          GITHUB_ACTIONS: true
+
+      - name: Show built jars
+        run: |
+          ls -l voxy/build/libs
+          sha256sum voxy/build/libs/*.jar
+
+      - name: Publish jars as a DRAFT release (not public until published)
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "voxy-build-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
+            --repo "${GITHUB_REPOSITORY}" \
+            --draft \
+            --title "Voxy NeoForge 1.21.1 - personal build (DRAFT)" \
+            --notes "Built from NormalCortisolLevels/Voxy-NeoForge-Compile-Fix @ branch neoforge-1.21.1-(compile-fixes) (upstream j-shelfwood/voxy-neoforge + compile fixes), JDK 21, NeoForge 21.1.217, Minecraft 1.21.1.
+
+Runtime deps: Sodium mc1.21.1-0.6.13-neoforge (NOT 0.8.x) and Forgified Fabric API 0.116.7+2.2.0+1.21.1.
+Install: put the voxy-*.jar (the one without -sources/-dev suffix) into the instance mods folder.
+
+Voxy is All Rights Reserved by MCRcortex; this draft release is a private personal build. Delete the draft after downloading."
