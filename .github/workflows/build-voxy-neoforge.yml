@@ -9,12 +9,29 @@ permissions:
 jobs:
   build:
     runs-on: ubuntu-latest
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: pr50-sodium08
+            repo: dontflipmybits/voxy-neoforge
+            ref: MC1.21.1-NeoForge21.1.228-Sodium-0.8.12
+            desc: "PR #50 (NeoForge 21.1.228 + Sodium 0.8.12+)"
+          - name: pr51-sodium08-compat
+            repo: VoX/voxy-neoforge
+            ref: sodium-0.8-compat
+            desc: "PR #51 (Sodium 0.8 support alongside 0.6.13)"
+          - name: compilefix-sodium0613
+            repo: NormalCortisolLevels/Voxy-NeoForge-Compile-Fix
+            ref: 'neoforge-1.21.1-(compile-fixes)'
+            desc: "Compile-fix fork (Sodium 0.6.13 only)"
     steps:
-      - name: Checkout Voxy NeoForge sources (compile-fix fork)
+      - name: Checkout Voxy sources
         uses: actions/checkout@v4
         with:
-          repository: NormalCortisolLevels/Voxy-NeoForge-Compile-Fix
-          ref: 'neoforge-1.21.1-(compile-fixes)'
+          repository: ${{ matrix.repo }}
+          ref: ${{ matrix.ref }}
           path: voxy
 
       - name: Setup Java 21
@@ -41,16 +58,19 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
-            echo "Built from NormalCortisolLevels/Voxy-NeoForge-Compile-Fix, branch neoforge-1.21.1-(compile-fixes)."
-            echo "Upstream: j-shelfwood/voxy-neoforge + compile fixes. JDK 21, NeoForge 21.1.217, Minecraft 1.21.1."
+            echo "Variant: ${{ matrix.name }}"
+            echo "Source: ${{ matrix.repo }} @ ${{ matrix.ref }} - ${{ matrix.desc }}"
+            echo "JDK 21, Minecraft 1.21.1."
             echo ""
-            echo "Runtime deps: Sodium mc1.21.1-0.6.13-neoforge (NOT 0.8.x) and Forgified Fabric API 0.116.7+2.2.0+1.21.1."
-            echo "Install: put the voxy-*.jar (the one without -sources or -dev suffix) into the instance mods folder."
+            echo "pr50 / pr51 variants target Sodium 0.8.x on NeoForge."
+            echo "compilefix variant targets Sodium 0.6.13-neoforge only."
+            echo "Also needs Forgified Fabric API (0.116.7+2.2.0+1.21.1 or newer)."
+            echo "Install: put the voxy-*.jar (without -sources/-dev suffix) into the instance mods folder."
             echo ""
-            echo "Voxy is All Rights Reserved by MCRcortex. This draft release is a private personal build: delete it after downloading."
+            echo "Voxy is All Rights Reserved by MCRcortex. Private personal build: delete the draft after downloading."
           } > notes.md
-          gh release create "voxy-build-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
+          gh release create "voxy-${{ matrix.name }}-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
             --repo "${GITHUB_REPOSITORY}" \
             --draft \
-            --title "Voxy NeoForge 1.21.1 - personal build (DRAFT)" \
+            --title "Voxy NeoForge 1.21.1 - ${{ matrix.name }} (DRAFT)" \
             --notes-file notes.md
