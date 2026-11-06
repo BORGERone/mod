@@ -17,14 +17,13 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /**
  * Build 382: the door editor's palette has exactly one row - «Дверь».
  *
- * <p>The author asked for one node for now: «Для начала только ноду двери». A palette of fifteen rows
- * where fourteen create a node a door cannot run would be a lie, so the create menu of a door's graph
- * is cut to the one row and everything else keeps the stock behaviour of {@code BlockMenu363} - the
- * stock panel, five rows and a scrollbar, the stock hit test counted from the window.</p>
- *
- * <p>The click creates the node the door is made of ({@link DoorGraph382#DOOR_TYPE}) and fills its
- * three saved fields with the defaults, so a node added by hand is exactly the node a fresh door gets.
- * The copy/delete menu of an existing node stays stock; so does every other canvas gesture.</p>
+ * <p>Build 382 cut the menu to one row («Для начала только ноду двери»); build 386 gives the door the
+ * four nodes it can run - «Дверь», «Открытие», «Кто открыл» и «В радиусе» - because the author asked for
+ * more, and the rest of the stock rows would still be a lie: a door cannot run a line of dialogue. The
+ * row that was clicked names the type through {@code BlockMenu363#doorType}, and the node gets the
+ * defaults of its type, so a node added by hand is exactly the node a fresh door gets. Everything else
+ * keeps the stock behaviour of {@code BlockMenu363} - the stock panel, five rows and a scrollbar, the
+ * stock hit test counted from the window - and the copy/delete menu of an existing node stays stock.</p>
  *
  * <p>One tab, like a block (build 351): a door has one graph, and the second and third tabs would be
  * saved and never run.</p>
@@ -72,13 +71,17 @@ public abstract class NpcDoorGraph382Mixin {
         cir.setReturnValue(Boolean.TRUE);
         if (button != 0 || row < 0) return;
 
-        NpcDialogueGraph.Node created = this.addAt(DoorGraph382.DOOR_TYPE, worldX, worldY);
+        int type = BlockMenu363.doorType(row);
+        if (type < 0) {
+            this.status = DoorGraphClient382.paletteNote();
+            return;
+        }
+        NpcDialogueGraph.Node created = this.addAt(type, worldX, worldY);
         if (created != null) {
-            DoorGraph382.setKeys(created, DoorGraph382.DEFAULT_KEYS);
-            DoorGraph382.setSpeed(created, DoorGraph382.DEFAULT_SPEED);
-            DoorGraph382.setSealed(created, true);
+            DoorGraph382.applyDefaults(created);
             this.changed();
-            this.status = Component.translatable("gui.settledlands.door.added").getString();
+            this.status = Component.translatable("gui.settledlands.door.added_node",
+                    Component.translatable(DoorGraph382.labelKey(type))).getString();
             return;
         }
         this.status = DoorGraphClient382.paletteNote();

@@ -158,6 +158,9 @@ public record DoorHack377(String key) implements CustomPacketPayload {
                         "Дверь не поддалась - сервер её не открыл (open now=false)"), true);
             }
             player.displayClientMessage(Component.literal("Замок вскрыт - дверь открыта"), true);
+            // Build 386: a door opened through its panel is opened by a player like any other, so the
+            // signal of the door's graph runs here too - after the door is really open.
+            if (nowOpen) DoorGraph386.fire(player, server, pos);
         } catch (Throwable failure) {
             LOG.warn("door: a solved panel could not be applied: " + failure);
         }

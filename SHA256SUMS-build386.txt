@@ -1,0 +1,2 @@
+4cd2c73817dbdb2ae621b363617a5c311b696ad16669d88b8380cb3b40edd225  settledlands-0.8.0-build386-door-nodes.jar
+0fb76d932de02c41ab45d46f24e46ccdc1af57a3052f870fa6ea6859232ef320  SettledLands-Build386-DoorNodes-Source.zip

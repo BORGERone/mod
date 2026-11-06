@@ -1,5 +1,6 @@
 package dev.settledlands.npc.client;
 
+import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.BlockTrigger351;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -100,19 +101,21 @@ public final class BlockMenu363 {
     private static int[] rows;
 
     /**
-     * Build 382: the same panel, with the one row a door has. A door's graph is edited in this very
-     * screen (build 351 taught it to open on a block, build 382 on a door), and a door has exactly one
-     * node - «Дверь» - so the panel is one row tall and there is nothing to scroll. Everything else in
+     * Build 382: the same panel, with the rows a door has. A door's graph is edited in this very screen
+     * (build 351 taught it to open on a block, build 382 on a door); build 382 gave a door one row,
+     * build 386 gives it four - «Дверь», «Открытие», «Кто открыл» and «В радиусе». Everything else in
      * this class (the stock body, the header, the hit test, the wheel, the strip) is shared, because a
-     * second painter for a one-row list would be a second thing to keep in step.
+     * second painter for a short list would be a second thing to keep in step.
      */
     private static boolean door;
 
-    /** The one row of a door panel: a stock row number of its own, above the sixteen of the base. */
-    private static final int DOOR_ROW = 0;
-
-    /** The colour of the door node on the canvas and in the panel - a door brown. */
-    private static final int DOOR_COLOUR = -3725286;
+    /**
+     * Build 386: the door's palette is four rows - «Дверь», «Открытие», «Кто открыл», «В радиусе» -
+     * which is what the author asked for after having one («хочу добавить больше нод в граф двери»).
+     * The rows are numbered in the panel's own space (0..3) and mapped to node types by
+     * {@link DoorGraph382#typeForRow}, so the painter, the hit test and the click cannot disagree.
+     */
+    private static final int[] DOOR_ROW_NUMBERS = {0, 1, 2, 3};
 
     /** Where the open panel is, measured when it appeared. */
     private static int left;
@@ -127,8 +130,8 @@ public final class BlockMenu363 {
     /** The menu this geometry belongs to: a second measurement of the same open menu keeps the window. */
     private static NpcGraphContextMenu measured;
 
-    /** The single row of a door panel. */
-    private static final int[] DOOR_ROWS = {DOOR_ROW};
+    /** The rows of a door panel. */
+    private static final int[] DOOR_ROWS = DOOR_ROW_NUMBERS;
 
     private BlockMenu363() {}
 
@@ -151,9 +154,14 @@ public final class BlockMenu363 {
         return rows().length;
     }
 
+    /** The node type a row of the door's panel creates, or -1 for a row that does not exist. */
+    public static int doorType(int compact) {
+        return DoorGraph382.typeForRow(compact);
+    }
+
     /** Row of this panel -> the stock row behind it, or -1 when there is none. */
     public static int stockRow(int compact) {
-        if (door) return compact == 0 ? DOOR_ROW : -1;
+        if (door) return compact >= 0 && compact < DOOR_ROWS.length ? DOOR_ROWS[compact] : -1;
         int[] kept = rows();
         return compact >= 0 && compact < kept.length ? kept[compact] : -1;
     }
@@ -161,8 +169,8 @@ public final class BlockMenu363 {
     /** The stock label of a row of this panel. */
     public static String label(int compact) {
         if (door) {
-            return compact == 0
-                    ? Component.translatable("gui.settledlands.door.node").getString() : "";
+            int type = doorType(compact);
+            return type < 0 ? "" : Component.translatable(DoorGraph382.labelKey(type)).getString();
         }
         int stock = stockRow(compact);
         return stock < 0 ? "" : Component.translatable(LABEL_KEYS[stock]).getString();
@@ -170,7 +178,10 @@ public final class BlockMenu363 {
 
     /** The stock colour of a row of this panel. */
     public static int colour(int compact) {
-        if (door) return compact == 0 ? DOOR_COLOUR : LABEL;
+        if (door) {
+            int type = doorType(compact);
+            return type < 0 ? LABEL : DoorGraph382.colour(type);
+        }
         int stock = stockRow(compact);
         return stock >= 0 && stock < ROW_COLOUR.length ? ROW_COLOUR[stock] : LABEL;
     }

@@ -1374,3 +1374,49 @@ Two author requests: «кнопки блокировали пользовате�
   `verify_jar --base 384` PASS, 0 new external refs, all 25 `*_check.py` green.
 - **Unconfirmed in game**: that R/F3/E really do nothing while the panel is up (an Iris version that
   reads raw GLFW events would still fire), and that difficulty 2/3 visibly widen the board.
+
+## Build 386 - четыре ноды у графа двери, сигнал «Открытие», скорость до 20 с (shipped)
+
+- **Speed.** `DoorGraph382.MAX_SPEED` 10 -> 20; nothing else moved (the panel, the log line and the store
+  take the seconds as they come).
+- **Four node types of the door graph**: `DOOR_TYPE` 40 (brown -3725286), `EVENT_TYPE` 41 «Открытие»
+  (amber -3177856), `WHO_TYPE` 42 «Кто открыл» (blue -12973611), `RADIUS_TYPE` 43 «В радиусе» (green
+  -13315175). `PALETTE = {40,41,42,43}`, `labelKey(type)`, `colour(type)`, `isDoorGraphNode`,
+  `typeForRow`/`rowForType`, `isEventNode/isWhoNode/isRadiusNode`, `applyDefaults(node)`,
+  `radius/setRadius` on `checkRadius` (1..32 via `MIN/MAX_RADIUS`, default 8; 0 = never written),
+  `opener/setOpener` on `node.text` (trim 32), `eventNode(graph)` = the first «Открытие» node.
+- **Palette.** `BlockMenu363` door mode is four rows (`DOOR_ROW_NUMBERS = {0,1,2,3}`, old `DOOR_COLOUR`
+  gone): `doorType(compact)` -> `DoorGraph382.typeForRow`, label/colour/stockRow delegate by type, stock
+  rows still parked for every door-graph type. `NpcDoorGraph382Mixin` resolves the type from the row,
+  calls `applyDefaults`, writes `gui.settledlands.door.added_node` with the type name.
+- **Painting/inspecting.** `DoorCard382` paints all four types (own title, accent, per-type lines; the
+  door keeps the five old lines at 28/42/56/70/84). `NpcDoorCard382Mixin` hooks `isDoorGraphNode`.
+  `NpcDoorRows382Mixin` builds per-type rows: door = 4 stock rows, radius = new slider
+  `settledlands$radius`, who/event = read-only labels.
+- **The signal - `door/DoorGraph386`** (new class): `fire(player, level, pos)` reads the door's graph from
+  `DoorGraph382Store`, starts at `eventNode`, walks the stock `next` links with `MAX_STEPS = 32`, a
+  visited set (a node met twice ends the walk), a 400 ms per door+player guard (one click per hand),
+  writes the name into every «Кто открыл» node (`setOpener` + `store.put`, so build 384's save path
+  carries it) and **stops** at a «В радиусе» node the opener does not pass. `within()` measures from the
+  player to the door's lower half. Every failure is swallowed with one line per class - the door is
+  already open.
+- **Both real openings call it**: `DoorEvents368.onRightClick` (unlocked, empty hand, door shut right
+  now) and `DoorHack377.handle` (`if (nowOpen) DoorGraph386.fire(...)`).
+- **Serialisation**: nothing to add - the stock `save()` writes `Text`, `CheckRadius` and `Next` for
+  every node type unconditionally, so the opener and the radius survive save -> server -> world file.
+- **Lang (ru+en)**: `door.event|who|radius|event_line1..4|who_line1|who_line3|who_none|who_last|
+  radius_line|radius_line2|radius_line3|added_node`, palette line re-pitched to the four nodes.
+- Gates: new `tools/door_signal_check.py` (fails on 385, passes here: constant values 40..43 and 1..20,
+  palette asks the row for its type and applies defaults, `fire` called from both open paths, bounded
+  walk + visited set + radius gate + opener write, card and inspector know all four types, every line in
+  both lang files). All other 25 `*_check.py` unchanged and green.
+- Ship: `settledlands-0.8.0-build386-door-nodes.jar` (576 entries, 1 added + 8 replaced, 43/48 mixins),
+  README `README-Build386-RU.md`, zip `SettledLands-Build386-DoorNodes-Source.zip` (491 entries),
+  `SHA256SUMS-build386.txt`, patch `tools/patch_build386.py` (base 385, `srcdir out386`).
+  `verify_jar --base 385` PASS, 0 new external refs.
+- **Unconfirmed in game**: the four-row menu geometry, the height of the three new cards, the blue node
+  refreshing in an *open* editor (the graph is saved on the server; reopening shows it), and sneak+click
+  not firing the signal (no sneak test exists in the compile mirror, so the signal is tied to «empty hand
+  + door shut right now»).
+- **Not built on purpose**: a stock «if» for a door - there is nothing for it to compare yet (see the
+  README's last section).

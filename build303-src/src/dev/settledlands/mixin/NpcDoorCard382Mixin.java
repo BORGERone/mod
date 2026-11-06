@@ -20,8 +20,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
  * block and answered it the same way: the stock painter is cancelled for that one type and the card is
  * painted in full by {@link DoorCard382}, in the box the canvas hit-tests a node with.</p>
  *
- * <p>It is a door graph only: an NPC or block graph never holds this type, and if one ever arrived
- * with it (a copied file) it would draw as a door card rather than as a random node - which is the
+ * <p>It is a door graph only: an NPC or block graph never holds these types, and if one ever arrived
+ * with one (a copied file) it would draw as a door card rather than as a random node - which is the
  * honest answer, the type says door.</p>
  */
 @Mixin(targets = "dev.settledlands.npc.client.NpcDialogueGraphScreen", remap = false)
@@ -31,7 +31,9 @@ public abstract class NpcDoorCard382Mixin {
             at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$doorCard(GuiGraphics graphics, NpcDialogueGraph.Node node,
             CallbackInfo ci) {
-        if (!DoorGraph382.isDoorNode(node) || graphics == null) return;
+        // Build 386: all four node types of a door's graph are painted by DoorCard382 - the door, the
+        // opener signal, the blue «Кто открыл» output and the radius gate.
+        if (!DoorGraph382.isDoorGraphNode(node) || graphics == null) return;
         ci.cancel();
         DoorCard382.draw((NpcDialogueGraphScreen) (Object) this, graphics, node);
     }

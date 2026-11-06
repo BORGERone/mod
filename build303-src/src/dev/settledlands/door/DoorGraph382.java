@@ -28,8 +28,8 @@ import org.slf4j.LoggerFactory;
  *
  * <ul>
  *   <li><b>Кол-во чисел</b> - how many keys the hack panel asks for at this door (4..10);</li>
- *   <li><b>Скорость</b> - how often one of those keys changes, in seconds (1..10, the build-377
- *       panel always used 5);</li>
+ *   <li><b>Скорость</b> - how often one of those keys changes, in seconds (1..20 - build 386 raised
+ *       the ceiling of build 382's ten, which the author asked for; the build-377 panel always used 5);</li>
  *   <li><b>открыта / закрыта</b> - the author's own rule: «Закрыта» means the door is opened
  *       <b>only</b> by solving the panel, «Открыта» means it is an ordinary door again.</li>
  * </ul>
@@ -76,6 +76,56 @@ public final class DoorGraph382 {
     public static final int DOOR_TYPE = 40;
 
     /**
+     * Build 386: the rest of a door's graph.
+     *
+     * <p>The author asked for more nodes in a door's graph, and named the one he needs first: a node
+     * that <b>fires when somebody opens this door</b> and a <b>blue output node carrying the player who
+     * opened it</b>. They are two types of this mod's own, because no stock node means "this door was
+     * opened", and they are wired with the stock {@code next}/{@code falseNext} fields the editor
+     * already draws, moves and saves.</p>
+     *
+     * <ul>
+     *   <li>{@link #EVENT_TYPE} «Открытие» - the signal: the server walks the chain from this node every
+     *       time the door is opened by a player;</li>
+     *   <li>{@link #WHO_TYPE} «Кто открыл» - the blue output: it yields the player, and the name is
+     *       written into the node so the author can see in the editor that the chain ran;</li>
+     *   <li>{@link #RADIUS_TYPE} «В радиусе» - a gate: the chain stops unless the opener stands within
+     *       N blocks of the door (1..32, default 8), which is the one condition a door can check
+     *       without an NPC.</li>
+     * </ul>
+     */
+    public static final int EVENT_TYPE = 41;
+    public static final int WHO_TYPE = 42;
+    public static final int RADIUS_TYPE = 43;
+
+    /** The language key of a node type of the door graph - the card, the palette and the status use it. */
+    public static String labelKey(int type) {
+        if (type == EVENT_TYPE) return "gui.settledlands.door.event";
+        if (type == WHO_TYPE) return "gui.settledlands.door.who";
+        if (type == RADIUS_TYPE) return "gui.settledlands.door.radius";
+        return "gui.settledlands.door.node";
+    }
+
+    /**
+     * The colour of a node type of the door graph. The door keeps the brown of build 382, the signal is
+     * amber, the opener is the blue the author asked for, and the radius reuses the colour the stock
+     * menu gives «В радиусе», so a door's node and the same node in an NPC's graph agree.
+     */
+    public static int colour(int type) {
+        if (type == EVENT_TYPE) return -3177856;
+        if (type == WHO_TYPE) return -12973611;
+        if (type == RADIUS_TYPE) return -13315175;
+        return -3725286;
+    }
+
+    /** The palette of a door's graph, in the order the create menu shows it. */
+    public static final int[] PALETTE = {DOOR_TYPE, EVENT_TYPE, WHO_TYPE, RADIUS_TYPE};
+
+    public static final int MIN_RADIUS = 1;
+    public static final int MAX_RADIUS = 32;
+    public static final int DEFAULT_RADIUS = 8;
+
+    /**
      * Where the three controls are kept in a node. Every one of these three is written and read by the
      * stock serialiser for every node type; {@code randomMin}/{@code timerInterval}/{@code timerRepeat}
      * are not (they sit behind {@code if (n.type == ...)}), which is why build 383 lost them. See the
@@ -83,7 +133,8 @@ public final class DoorGraph382 {
      */
     public static final String FIELD_NOTE =
             "door node: varValue = keys, varCompare = seconds, varOp = sealed (1/0),"
-                    + " checkTarget = difficulty (1..3)";
+                    + " checkTarget = difficulty (1..3); the signal nodes: checkRadius = blocks (1..32),"
+                    + " text = the opener written by DoorGraph386";
 
     /** The three node fields this build stores, in the order {@link #FIELD_NOTE} names them. */
     public static final String[] FIELDS = {"varValue", "varCompare", "varOp", "checkTarget"};
@@ -92,8 +143,13 @@ public final class DoorGraph382 {
     public static final int MAX_KEYS = 10;
     public static final int DEFAULT_KEYS = 6;
 
+    /**
+     * Build 386: the clock of the panel goes up to 20 seconds. Ten was the ceiling the author picked
+     * with the first slider; twenty is the one he asked for next, and the panel, the log line and the
+     * store all take the number as it comes, so only the bound moves.
+     */
     public static final int MIN_SPEED = 1;
-    public static final int MAX_SPEED = 10;
+    public static final int MAX_SPEED = 20;
     public static final int DEFAULT_SPEED = 5;
 
     /**
@@ -103,6 +159,9 @@ public final class DoorGraph382 {
     public static final int MIN_DIFFICULTY = 1;
     public static final int MAX_DIFFICULTY = 3;
     public static final int DEFAULT_DIFFICULTY = 1;
+
+    /** Longest name a «Кто открыл» node keeps. */
+    private static final int MAX_OPENER = 32;
 
     /** Outer bound on remembered editor ids; the session map is reset when it grows past this. */
     private static final int MAX_IDS = 8192;
@@ -172,6 +231,95 @@ public final class DoorGraph382 {
 
     public static boolean isDoorNode(NpcDialogueGraph.Node node) {
         return node != null && node.type == DOOR_TYPE;
+    }
+
+    /** True for every node type this mod owns in a door's graph. */
+    public static boolean isDoorGraphNode(NpcDialogueGraph.Node node) {
+        if (node == null) return false;
+        return node.type == DOOR_TYPE || node.type == EVENT_TYPE || node.type == WHO_TYPE
+                || node.type == RADIUS_TYPE;
+    }
+
+    /** The type behind a row of the door's create menu, or -1 for a row that does not exist. */
+    public static int typeForRow(int row) {
+        return row >= 0 && row < PALETTE.length ? PALETTE[row] : -1;
+    }
+
+    /** The row of the create menu of a type, or -1 when the type is not in the door's palette. */
+    public static int rowForType(int type) {
+        for (int row = 0; row < PALETTE.length; row++) {
+            if (PALETTE[row] == type) return row;
+        }
+        return -1;
+    }
+
+    /** True for the node the chain starts at: the one that fires when the door is opened. */
+    public static boolean isEventNode(NpcDialogueGraph.Node node) {
+        return node != null && node.type == EVENT_TYPE;
+    }
+
+    public static boolean isWhoNode(NpcDialogueGraph.Node node) {
+        return node != null && node.type == WHO_TYPE;
+    }
+
+    public static boolean isRadiusNode(NpcDialogueGraph.Node node) {
+        return node != null && node.type == RADIUS_TYPE;
+    }
+
+    /**
+     * Gives a node created from the door's palette the values it should start with, the same values a
+     * fresh door gets. Called by the palette click; a node added by any other path is left alone.
+     */
+    public static void applyDefaults(NpcDialogueGraph.Node node) {
+        if (node == null) return;
+        if (node.type == DOOR_TYPE) {
+            setKeys(node, DEFAULT_KEYS);
+            setSpeed(node, DEFAULT_SPEED);
+            setSealed(node, true);
+            setDifficulty(node, DEFAULT_DIFFICULTY);
+        } else if (node.type == RADIUS_TYPE) {
+            setRadius(node, DEFAULT_RADIUS);
+        }
+    }
+
+    /**
+     * The radius of a «В радиусе» node, in blocks. Kept in {@code checkRadius} - another int the stock
+     * serialiser writes for every node (the only range check on it belongs to «Проверка» nodes, which
+     * this is not), and 0 means "never written", which no written radius can be because the minimum is
+     * one block.
+     */
+    public static int radius(NpcDialogueGraph.Node node) {
+        if (!isRadiusNode(node)) return DEFAULT_RADIUS;
+        return node.checkRadius <= 0 ? DEFAULT_RADIUS
+                : clamp(node.checkRadius, MIN_RADIUS, MAX_RADIUS);
+    }
+
+    public static void setRadius(NpcDialogueGraph.Node node, int value) {
+        if (isRadiusNode(node)) node.checkRadius = clamp(value, MIN_RADIUS, MAX_RADIUS);
+    }
+
+    /** The name of the player who last opened the door, as the «Кто открыл» node keeps it. */
+    public static String opener(NpcDialogueGraph.Node node) {
+        if (!isWhoNode(node) || node.text == null) return "";
+        return node.text.trim();
+    }
+
+    /** Records the opener in a «Кто открыл» node. One name, trimmed, bounded. */
+    public static void setOpener(NpcDialogueGraph.Node node, String name) {
+        if (!isWhoNode(node) || name == null) return;
+        String trimmed = name.trim();
+        node.text = trimmed.length() <= MAX_OPENER ? trimmed : trimmed.substring(0, MAX_OPENER);
+    }
+
+    /** The event node of a graph: the entry when it is one, else the first one. */
+    public static NpcDialogueGraph.Node eventNode(NpcDialogueGraph graph) {
+        if (graph == null || graph.nodes == null) return null;
+        NpcDialogueGraph.Node entry = graph.get(graph.entry);
+        if (isEventNode(entry)) return entry;
+        for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+            if (isEventNode(node)) return node;
+        }
+        return null;
     }
 
     /** The door node of a graph: the entry node when it is one, else the first door node. */

@@ -41,7 +41,15 @@ public final class DoorCard382 {
 
     private DoorCard382() {}
 
-    /** Paints one door node. Never throws: a card that cannot be drawn costs the card, not the frame. */
+    /**
+     * Paints one node of a door's graph. Never throws: a card that cannot be drawn costs the card, not
+     * the frame.
+     *
+     * <p>Build 386: four types share this card - «Дверь» (brown), «Открытие» (amber), «Кто открыл»
+     * (blue, the colour the author asked for) and «В радиусе». Each has its own title, its own accent
+     * line under the header and its own two to four lines of text; the box, the hit test, the selection
+     * and the drag stay the stock ones.</p>
+     */
     public static void draw(NpcDialogueGraphScreen screen, GuiGraphics graphics, Node node) {
         if (screen == null || graphics == null || node == null) return;
         NpcGraphCanvas canvas = screen.settledlands$canvas();
@@ -51,7 +59,10 @@ public final class DoorCard382 {
         int width = NpcGraphCanvas.NODE_W;
         int height = NpcGraphCanvas.NODE_H;
         boolean selected = screen.settledlands$isSelected(node.id);
-        boolean sealed = DoorGraph382.sealed(node);
+        int type = node.type;
+        boolean sealed = type == DoorGraph382.DOOR_TYPE && DoorGraph382.sealed(node);
+        int accent = type == DoorGraph382.DOOR_TYPE
+                ? (sealed ? SEALED : OPEN) : DoorGraph382.colour(type);
 
         PoseStack pose = graphics.pose();
         pose.pushPose();
@@ -61,20 +72,40 @@ public final class DoorCard382 {
             graphics.fill(-2, -2, width + 2, height + 2, selected ? SELECTED : IDLE);
             graphics.fill(0, 0, width, height, BODY);
             graphics.fill(0, 0, width, 20, HEADER);
-            graphics.fill(0, 19, width, 20, sealed ? SEALED : OPEN);
-            graphics.drawString(font, title(), 8, 6, sealed ? SEALED : OPEN, false);
+            graphics.fill(0, 19, width, 20, accent);
+            graphics.drawString(font, tr(DoorGraph382.labelKey(type)), 8, 6, accent, false);
 
-            // Build 385: five lines in the same 100 px box - a 14 px pitch, the last one ends at 93.
-            graphics.drawString(font, line("gui.settledlands.door.count",
-                    Integer.toString(DoorGraph382.keys(node))), 8, 28, LABEL, false);
-            graphics.drawString(font, line("gui.settledlands.door.speed",
-                    Integer.toString(DoorGraph382.speed(node))), 8, 42, LABEL, false);
-            // «Сложность: 2 (qwerty + asdf)» - the number and the rows it buys, on one line.
-            graphics.drawString(font, difficulty(node), 8, 56, LABEL, false);
-            graphics.drawString(font, state(sealed), 8, 70, sealed ? SEALED : OPEN, false);
-            // The panel swallows the keyboard but for ESC; the card says so, because a player who
-            // cannot close a panel with anything else deserves to read why.
-            graphics.drawString(font, tr("gui.settledlands.door.hint"), 8, 84, EDGE, false);
+            // Five lines in the same 100 px box - a 14 px pitch, the last one ends at 93.
+            if (type == DoorGraph382.DOOR_TYPE) {
+                graphics.drawString(font, line("gui.settledlands.door.count",
+                        Integer.toString(DoorGraph382.keys(node))), 8, 28, LABEL, false);
+                graphics.drawString(font, line("gui.settledlands.door.speed",
+                        Integer.toString(DoorGraph382.speed(node))), 8, 42, LABEL, false);
+                // «Сложность: 2 (qwerty + asdf)» - the number and the rows it buys, on one line.
+                graphics.drawString(font, difficulty(node), 8, 56, LABEL, false);
+                graphics.drawString(font, state(sealed), 8, 70, sealed ? SEALED : OPEN, false);
+                // The panel swallows the keyboard but for ESC; the card says so, because a player who
+                // cannot close a panel with anything else deserves to read why.
+                graphics.drawString(font, tr("gui.settledlands.door.hint"), 8, 84, EDGE, false);
+            } else if (type == DoorGraph382.EVENT_TYPE) {
+                graphics.drawString(font, tr("gui.settledlands.door.event_line1"), 8, 28, LABEL, false);
+                graphics.drawString(font, tr("gui.settledlands.door.event_line2"), 8, 42, LABEL, false);
+                graphics.drawString(font, tr("gui.settledlands.door.event_line3"), 8, 56, EDGE, false);
+                graphics.drawString(font, tr("gui.settledlands.door.event_line4"), 8, 70, EDGE, false);
+            } else if (type == DoorGraph382.WHO_TYPE) {
+                graphics.drawString(font, tr("gui.settledlands.door.who_line1"), 8, 28, LABEL, false);
+                String last = DoorGraph382.opener(node);
+                graphics.drawString(font,
+                        last.isEmpty() ? tr("gui.settledlands.door.who_none")
+                                : line("gui.settledlands.door.who_last", last),
+                        8, 42, last.isEmpty() ? EDGE : accent, false);
+                graphics.drawString(font, tr("gui.settledlands.door.who_line3"), 8, 56, EDGE, false);
+            } else if (type == DoorGraph382.RADIUS_TYPE) {
+                graphics.drawString(font, line("gui.settledlands.door.radius_line",
+                        Integer.toString(DoorGraph382.radius(node))), 8, 28, LABEL, false);
+                graphics.drawString(font, tr("gui.settledlands.door.radius_line2"), 8, 42, LABEL, false);
+                graphics.drawString(font, tr("gui.settledlands.door.radius_line3"), 8, 56, EDGE, false);
+            }
         } catch (Throwable failure) {
             DoorGraph382.fail(failure);
         } finally {
@@ -89,7 +120,7 @@ public final class DoorCard382 {
                 + " (" + tr("gui.settledlands.door.rows" + level) + ")";
     }
 
-    /** The name of the node, in the language the client runs in. */
+    /** The name of the door node, in the language the client runs in. */
     public static String title() {
         return tr("gui.settledlands.door.node");
     }

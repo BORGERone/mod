@@ -174,7 +174,18 @@ public final class DoorEvents368 {
             boolean key = DoorKey368.isKey(stack);
             boolean locked = store.isLocked(server, pos);
             if (!key) {
-                if (!locked) return;
+                if (!locked) {
+                    // Build 386: an ordinary door. Vanilla opens it on this same click, so this is the
+                    // moment to tell the door's own graph about it: an empty hand (that is the hand
+                    // vanilla opens a door with) and a door that is shut right now (a click on an open
+                    // door closes it). The click arrives once per hand; DoorGraph386 keeps the second
+                    // one of the same opening from running the chain twice.
+                    if (stack.isEmpty() && !Doors368.anyOpen(server, pos)
+                            && event.getEntity() instanceof ServerPlayer opener) {
+                        DoorGraph386.fire(opener, server, pos);
+                    }
+                    return;
+                }
                 // A locked door is not a door for a player: no opening, no closing, no sound of a
                 // door that would only teach the player to try again.
                 deny(event);
