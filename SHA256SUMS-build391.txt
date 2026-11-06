@@ -1,0 +1,2 @@
+d96c97c4aac999c50f5588ea27be5b6629f56da8ebdd5ddc27d6deee64ae76a2  settledlands-0.8.0-build391-door-neat-row.jar
+818c6ea1a2f0494293a9d49712f19919779537ce50b253d15fdd704d899a827e  SettledLands-Build391-NeatRow-Source.zip

@@ -342,7 +342,7 @@ public final class DoorGraph382 {
         java.util.List<NpcDialogueGraph.Node> signals = signalNodes(graph);
         NpcDialogueGraph.Node signal = signals.isEmpty() ? null : signals.get(0);
         if (signal == null) {
-            int[] spot = freeSpot(graph, door.x, door.y);
+            int[] spot = rowSpot(graph, door, 1);
             signal = graph.add(SIGNAL_TYPE, spot[0], spot[1]);
             if (signal == null) return changed;
             changed = true;
@@ -357,22 +357,23 @@ public final class DoorGraph382 {
             }
         }
         if (target == null) {
-            int x = signal.x + 260;
-            for (int i = 0; i < 8 && occupied(graph, x, signal.y); i++) {
-                x += 260;
-            }
-            target = graph.add(TARGET_TYPE, x, signal.y);
+            int[] spot = rowSpot(graph, door, 2);
+            target = graph.add(TARGET_TYPE, spot[0], spot[1]);
             if (target == null) return changed;
             changed = true;
         }
 
         // ---- the wires ---------------------------------------------------------------
-        // The chain the author already had now leaves the pulse: the card points at the signal, and
-        // whatever the card pointed at continues after it. That is the shape the author drew in words -
-        // the door, its output, and the blue target beside it - without losing his work.
+        // Everything reads left to right, the way the canvas draws a wire: the card's output goes to the
+        // pulse, and the pulse goes on to whatever the card pointed at before. A brand-new door has
+        // nothing after the card yet, so the pulse goes to the blue target - card -> pulse -> target in
+        // one clean line, which is the shape the author drew in words.
         int after = door.next;
         if (after >= 0 && after != signal.id && signal.id >= 0) {
             signal.next = after;
+            changed = true;
+        } else if (after < 0 && target != null && target.id >= 0 && signal.next < 0) {
+            signal.next = target.id;
             changed = true;
         }
         if (door.next != signal.id && signal.id >= 0) {
@@ -388,17 +389,49 @@ public final class DoorGraph382 {
     }
 
     /**
-     * A free spot for a new node near the door card: right under it first, then beside it, then below
-     * that - so the two outputs never land on top of a node the author already has.
+     * Build 391: build 390 put the pulse <b>right under</b> the card, and the stock canvas then draws the
+     * card's wire looping down and around it - the author's screenshot was exactly that tangle. The two
+     * nodes are moved once, to the row on the right, and never again: a node the author has dragged
+     * himself is somewhere else and is left alone.
+     *
+     * @return true when something was moved
      */
-    private static int[] freeSpot(NpcDialogueGraph graph, int baseX, int baseY) {
-        int[][] candidates = {{0, 160}, {260, 160}, {-260, 160}, {0, 300}, {260, 0}, {-260, 0}};
-        for (int[] spot : candidates) {
-            if (!occupied(graph, baseX + spot[0], baseY + spot[1])) {
-                return new int[] {baseX + spot[0], baseY + spot[1]};
-            }
+    public static boolean relayoutStarter(NpcDialogueGraph graph) {
+        if (graph == null || graph.nodes == null) return false;
+        NpcDialogueGraph.Node door = doorNode(graph);
+        if (door == null) return false;
+        boolean moved = false;
+        for (NpcDialogueGraph.Node node : new java.util.ArrayList<>(graph.nodes.values())) {
+            if (node == null) continue;
+            boolean oldPulse = isSignalNode(node) && near(node.x, door.x) && near(node.y, door.y + 160);
+            boolean oldTarget = isTargetNode(node) && near(node.x, door.x + 260)
+                    && near(node.y, door.y + 160);
+            if (!oldPulse && !oldTarget) continue;
+            int[] spot = rowSpot(graph, door, oldPulse ? 1 : 2);
+            node.x = spot[0];
+            node.y = spot[1];
+            moved = true;
         }
-        return new int[] {baseX, baseY + 160};
+        return moved;
+    }
+
+    /** Within a few pixels of a remembered spot - the canvas moves nodes in whole pixels. */
+    private static boolean near(int value, int wanted) {
+        return Math.abs(value - wanted) <= 8;
+    }
+
+    /**
+     * The {@code index}-th place of the row to the right of the door card: level with the card, one node
+     * width and a gap apart, and moved down only when that place is already taken. A wire drawn from a
+     * node to the node on its right is the one shape the stock canvas draws without a loop.
+     */
+    private static int[] rowSpot(NpcDialogueGraph graph, NpcDialogueGraph.Node door, int index) {
+        int x = door.x + 280 * index;
+        int y = door.y;
+        for (int i = 0; i < 10 && occupied(graph, x, y); i++) {
+            y += 140;
+        }
+        return new int[] {x, y};
     }
 
     /** True when a node already stands at this spot (the canvas box is 220 x 100). */
@@ -648,8 +681,13 @@ public final class DoorGraph382 {
             // whose graph was made before they existed. Once drawn, the door is remembered as done, so a
             // node he deletes afterwards stays deleted.
             if (store != null && !store.starterDone(key)) {
-                if (wireStarter(graph) || graph != null) store.put(key, graph);
+                wireStarter(graph);
+                store.put(key, graph);
                 store.markStarter(key);
+            } else if (relayoutStarter(graph) && store != null) {
+                // Build 391: a door wired by build 390 has the pulse under the card and a wire looping
+                // round it. It is moved to the row on the right once, here, and never touched again.
+                store.put(key, graph);
             }
             CompoundTag data = new CompoundTag();
             data.put("DialogueGraph", graph.save());

@@ -1561,3 +1561,30 @@ the two nodes, and in a 13-row palette they were hidden at the bottom of the scr
   `SHA256SUMS-build390.txt`, patch `tools/patch_build390.py` (base 389, `srcdir out390`).
 - **Unconfirmed in game**: that the auto-placed pulse spot is free on the author's door, that the two cards
   do not clip their lines, and that the stock editor's error check says nothing about «Начало» on our node.
+
+## Build 391 - the two outputs sit in a clean row (shipped)
+
+**User report (screenshot of a brand-new door):** «создал новую дверь, у нее какие-то непонятные ноды».
+The nodes existed; the **layout** was the problem - 390 placed the pulse directly under the card, and the
+stock canvas draws a wire between two boxes in the same column as a loop (out of the card's right port, down,
+back across the card, into the pulse's left port). The blue target stood to the right with no wire at all.
+
+- `DoorGraph382#rowSpot(graph, door, index)` replaces `freeSpot`: x = door.x + 280*index, y = door.y, moved
+  down 140 per collision, so the pulse (index 1) and the target (index 2) form the row the canvas draws
+  left-to-right without a loop.
+- `wireStarter`: `signal.next = door.next` when the card already pointed somewhere (author's chain kept,
+  after the pulse), otherwise `signal.next = target.id` - a brand-new door reads card → pulse → target in one
+  line, so the blue target is visibly part of the chain. `door.next = signal`, `entry = signal` as before.
+- `relayoutStarter(graph)`: a door wired by 390 (pulse at `(door.x, door.y+160)`, target at
+  `(door.x+260, door.y+160)`, tolerance 8 px) is moved to the row **once**, on the next open; a node the
+  author dragged elsewhere is never touched. `DoorGraph382.open()` calls it when `starterDone` is already
+  true and saves if it moved anything.
+- Gates: `door_stock_check` now also requires `rowSpot` + `relayoutStarter` and **forbids** `freeSpot` (fails
+  on 390 with «no rowSpot()»). All 27 `*_check.py` green; `verify_jar --base 390` PASS (576 entries, 1
+  replaced, 43/48 mixins, 0 new refs).
+- Ship: `settledlands-0.8.0-build391-door-neat-row.jar` (sha256 d96c97c4…76a2), README
+  `README-Build391-RU.md`, zip `SettledLands-Build391-NeatRow-Source.zip` (497 entries),
+  `SHA256SUMS-build391.txt`, patch `tools/patch_build391.py` (base 390, `srcdir out391`).
+- **Unconfirmed in game**: that the right-to-left wire really draws straight for this door, that the one-time
+  move did not catch a node the author had nudged by <8 px, and that the target standing after the pulse is
+  what he wants when his own chain already existed.

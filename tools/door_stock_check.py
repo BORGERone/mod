@@ -208,6 +208,16 @@ def main(argv):
     for member in ("wireStarter", "signalNodes", "setOpener", "extraType"):
         if member not in methods(logic):
             return fail("DoorGraph382 has no %s() - the two outputs of the card are not built" % member)
+    # Build 391: the two nodes stand in the row to the right, where the stock canvas draws a wire without
+    # a loop, and a door wired under the card is moved there once. `freeSpot` was the under-the-card
+    # placement that made the tangle; it must not come back.
+    for member in ("rowSpot", "relayoutStarter"):
+        if member not in methods(logic):
+            return fail("DoorGraph382 has no %s() - the outputs of a new door would not sit in a clean row"
+                        % member)
+    if "freeSpot" in methods(logic):
+        return fail("DoorGraph382 still has freeSpot() - that placement put the pulse under the card and the"
+                    " canvas drew the wire looping round it")
     wired = code_ints(logic, "wireStarter")
     for wanted in (41, 42):
         if wanted not in wired:
