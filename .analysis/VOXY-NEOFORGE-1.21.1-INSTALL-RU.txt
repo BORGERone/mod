@@ -1,0 +1,210 @@
+VOXY НА NEOFORGE 1.21.1 - КАК СТАВИТЬ (разбор по фактам на 2026-11-06)
+
+=========================================================
+0. ГЛАВНОЕ, ЧТО НАДО ЗНАТЬ
+=========================================================
+Официального Voxy под Minecraft 1.21.1 НЕ СУЩЕСТВУЕТ - ни на Fabric, ни на NeoForge.
+
+Проверено:
+- Modrinth API, проект voxy (id fxxUqruK, автор cortex/MCRcortex):
+  запрос версий с фильтром game_versions=["1.21.1"] вернул пустой массив [].
+- Категории загрузчиков у Voxy: только "fabric".
+- Поддерживаемые версии Voxy: 1.20.4, 1.21.6, 1.21.7, 1.21.8, 1.21.9, 1.21.10,
+  1.21.11, 26.1, 26.1.1, 26.1.2, 26.2, 26.3. Версии 1.21.1 в списке нет.
+- На CurseForge Voxy не выложен (страница mc-mods/voxy отдаёт 404).
+- В README NeoForge-порта прямо сказано: автор оригинала бэкпортировать на 1.21.1 не будет.
+
+Значит для связки NeoForge 1.21.1 + PureScale Modern есть три пути. Ниже все три.
+
+=========================================================
+ПУТЬ A. НАТИВНЫЙ NEOFORGE-ПОРТ (собирать из исходников)
+=========================================================
+Репозиторий: https://github.com/j-shelfwood/voxy-neoforge
+Версия порта: 0.2.9-alpha (mod_version из gradle.properties), статус по README: Alpha
+Ветка по умолчанию: neoforge-1.21.1
+Звёзды: 243 | открытых issues: 40
+
+ПОЧЕМУ НУЖНО СОБИРАТЬ САМОМУ
+- Релизов: 0. Тегов: 0.
+- Артефактов GitHub Actions: 0 (успешные сборки были 4-5 января 2026, но
+  retention 30 дней - всё истекло).
+- Цитата из README: "Due to Voxy's ARR (All Rights Reserved) license, compiled JARs
+  are not distributed. You must build from source."
+  То есть готовый jar не выкладывают сознательно: оригинальный Voxy под лицензией
+  All Rights Reserved, порт распространяет только исходники.
+
+СОСТОЯНИЕ ПРОЕКТА (честно)
+- Последний содержательный коммит: 2026-01-05.
+- pushed_at репозитория: 2026-08-27 - это WIP-снапшот в ветке embeddium-compat
+  ("wip: snapshot of uncommitted local changes ... preserved before workstation ...").
+- Последние CI-запуски (2026-08-27 и 2026-09-02): conclusion = failure.
+- Показательные issues:
+  #49 "No work in 6 months, dead project?"
+  #48 "'Successful Build' isn't actually successful"
+  #47, #46, #37 "Build error" / "build failed with exception"
+  #35, #53 "Build fails because of validateMixins and validateMixinConfig"
+  #34 "Build failed due to 'unsupported class file major version 70'"  (= собирали Java 26, нужна 21)
+  #44 "Crash with Sodium 0.8.12+ (NoSuchMethodError / NullPointerException in ShaderLoader)"
+  #39 "Sodium in neoforge 1.21.1 is updated to v0.8.12+, as a result, Voxy can't run now"
+  #43 "LODs Flickering/Going Black at a certain distance"
+
+ЗАВИСИМОСТИ (из README порта и gradle.properties)
+  Minecraft              1.21.1
+  NeoForge               21.1.x   (в gradle.properties зашито 21.1.217)
+  Sodium                 mc1.21.1-0.6.13-neoforge   <-- ИМЕННО 0.6.13, не 0.8.x!
+                         https://modrinth.com/mod/sodium/version/mc1.21.1-0.6.13-neoforge
+  Forgified Fabric API   0.116.7+2.2.0+1.21.1
+                         https://modrinth.com/mod/forgified-fabric-api/version/0.116.7+2.2.0+1.21.1
+  JDK                    21 (Temurin 21). Не новее - иначе "unsupported class file major version 70"
+  Рекомендуемые          Reese's Sodium Options (удобный доступ к настройкам Voxy), Lithium
+
+СБОРКА
+  git clone https://github.com/j-shelfwood/voxy-neoforge.git
+  cd voxy-neoforge
+  gradlew.bat build          (Windows)
+  ./gradlew build            (Linux/macOS)
+  Результат: build/libs/voxy-0.2.9-alpha.jar  ->  положить в mods/ инстанса
+
+ВАЖНО ПРО ВАШУ СВЯЗКУ С PURESCALE MODERN
+- В прошлой инструкции я советовал Sodium 0.8.13-neoforge (его требует PureScale:
+  в neoforge.mods.toml стоит sodium [0.6,)).
+- С Sodium 0.8.12+ этот порт Voxy НЕ запускается (issues #39 и #44:
+  NoSuchMethodError / NullPointerException в ShaderLoader).
+- Нужен Sodium mc1.21.1-0.6.13-neoforge. Хорошая новость: PureScale Modern
+  требует sodium [0.6,), а 0.6.13 этому условию удовлетворяет.
+- Итоговая рабочая комбинация:
+    PureScale Modern 1.3.0 (NeoForge 1.21.1)
+  + Sodium mc1.21.1-0.6.13-neoforge
+  + Forgified Fabric API 0.116.7+2.2.0+1.21.1
+  + voxy-0.2.9-alpha.jar (собранный вами)
+
+ЕСЛИ ХОТИТЕ ОСТАТЬСЯ НА SODIUM 0.8.x
+Есть два ОТКРЫТЫХ (не влитых) PR с поддержкой Sodium 0.8:
+  PR #50 "Add support for NeoForge 21.1.228, Sodium 0.8.12+, and latest Create Aeronautics"
+         обновлён 2026-09-16, mergeable_state: clean, head: dontflipmybits:MC1.21.1-NeoForge21.1.228-Sodium-0.8.12
+         https://github.com/j-shelfwood/voxy-neoforge/pull/50
+  PR #51 "Support Sodium 0.8 alongside 0.6.13 (Create 6 / Sable 2.x packs)"
+         обновлён 2026-08-15, mergeable_state: clean, head: VoX:sodium-0.8-compat
+         https://github.com/j-shelfwood/voxy-neoforge/pull/51
+Сборка из PR (на примере #50):
+  git clone https://github.com/j-shelfwood/voxy-neoforge.git
+  cd voxy-neoforge
+  git fetch origin pull/50/head:sodium08
+  git checkout sodium08
+  gradlew.bat build
+Это неофициальные изменения, стабильность не гарантирована.
+
+=========================================================
+ПУТЬ B. SINYTRA CONNECTOR + FABRIC-СБОРКА VOXY 1.21.1
+=========================================================
+Идея: Connector + Forgified Fabric API позволяют запускать Fabric-моды на NeoForge.
+Проблема: официальной Fabric-сборки Voxy для 1.21.1 нет (см. пункт 0).
+
+Что есть вместо неё - форк с бэкпортом:
+  https://github.com/m3t4f1v3/voxy  (форк официального MCRcortex/voxy, 548 звёзд)
+  ветка mc_1211-sodium0.8.12  - Fabric, Minecraft 1.21.1, Sodium 0.8.12, voxy 0.2.15-beta
+  На неё ссылаются в issue #49 порта как на живую альтернативу.
+  Коммиты ветки: до 2026-06-15, сам репозиторий пушался 2026-10-21.
+  Релизов: 0 - jar тоже надо собирать.
+
+Подводный камень: в gradle.properties этой ветки лежит НЕРАЗРЕШЁННЫЙ КОНФЛИКТ СЛИЯНИЯ:
+  <<<<<<< HEAD
+  minecraft_version=26.1.2
+  loader_version=0.18.6
+  loom_version=1.15-SNAPSHOT
+  =======
+  minecraft_version=1.21.1
+  loader_version=0.17.2
+  loom_version=1.11-SNAPSHOT
+  >>>>>>> 014c494a (backport to 1.21.1)
+  fabric_api_version=0.116.6+1.21.1
+  mod_version = 0.2.15-beta
+То есть перед сборкой файл нужно поправить руками: оставить блок 1.21.1
+(loader_version=0.17.2, loom_version=1.11-SNAPSHOT) и удалить маркеры конфликта.
+
+Минус пути: это Fabric-мод через слой трансляции. Для LOD-мода, который живёт
+в рендер-потоке, README нативного порта прямо не рекомендует такой вариант
+(накладные расходы + FFAPI-эмуляция Fabric API).
+
+=========================================================
+ПУТЬ C. ПРАКТИЧНЫЙ: DISTANT HORIZONS (готовый jar, официальный NeoForge)
+=========================================================
+Это не Voxy, но тот же класс модов (LOD, дальняя прорисовка) и ЕДИНСТВЕННЫЙ вариант,
+который ставится без Gradle. Поддерживает NeoForge 1.21.1 официально.
+
+Distant Horizons 3.3.3 - 1.21.1 (единый jar для Fabric и NeoForge)
+  страница версии: https://modrinth.com/mod/distanthorizons/version/9w34y8ai
+  прямая ссылка:
+  https://cdn.modrinth.com/data/uCdwusMi/versions/9w34y8ai/DistantHorizons-3.3.3-1.21.1-fabric-neoforge.jar
+  имя файла: DistantHorizons-3.3.3-1.21.1-fabric-neoforge.jar
+  размер:    28289212 байт (~27 MB)
+  SHA-1:     4357b4d19fab818780c94f0e43dad1cc931634b2
+  SHA-512:   d14b32d3fd143a06514d6ad388eee11e9d657c84e1a937aaf8d033b1137fb43e
+             f8b05cff1011a994cc42f3106823c51234f8bc18d72bb05bc317a20ea83c50ed
+  опубликован: 2026-09-29 | скачиваний: 342923
+  страница мода: https://modrinth.com/mod/distanthorizons
+  зависимости по API Modrinth: не объявлены (jar самодостаточный)
+
+ДВЕ ОГОВОРКИ ИМЕННО ДЛЯ ВАШЕЙ СВЯЗКИ
+1. В changelog PureScale 1.3.0 в разделе "Known issues" прямо написано:
+   "Distant Horizons flicker, invisible name tags and the integrated-GPU artifacts
+    are on my list but not fixed in this release."
+   То есть мерцание DH при работающем PureScale автор признаёт и в 1.3.0 НЕ починил.
+2. DH 3.3.3 поднимает версию конфига 4 -> 5, и это СБРАСЫВАЕТ ваш конфиг DH
+   (цитата из changelog: "This will clear your config"). Если DH уже стоял -
+   настройки придётся задать заново.
+
+Как уменьшить мерцание: в DH 3.3.0+ добавлен Temporal Antialiasing
+("Add Temporal Antialiasing to fix flicking/noise in distant terrain") - включите его.
+И на время проверки держите Frame Gen выключенным (см. предыдущий разбор зависания).
+
+=========================================================
+ИТОГОВАЯ РЕКОМЕНДАЦИЯ
+=========================================================
+- Хотите Voxy именно на NeoForge 1.21.1 -> только путь A: JDK 21, Sodium 0.6.13-neoforge,
+  Forgified Fabric API, сборка gradlew build. Закладывайте время: проект полуживой,
+  сборка на HEAD может упасть (issues #34/#35/#47/#48), при проблемах берите ветку из PR #50/#51.
+- Хотите дальнюю прорисовку без плясок с Gradle -> путь C (Distant Horizons 3.3.3),
+  но помните про признанное мерцание в паре с PureScale 1.3.0.
+- Путь B (Connector) не рекомендую для LOD-мода:Fabric-сборку под 1.21.1 всё равно
+  придётся собирать из форка с конфликтом слияния в gradle.properties.
+
+Собрать jar за вас в этой песочнице не могу: здесь нет JDK, а сеть ограничена
+хостами github.com / api.github.com / npmjs / pypi - Gradle не сможет выкачать
+Minecraft, NeoForge и зависимости из maven-репозиториев.
+
+=========================================================
+ПРОВЕНОЧНЫЕ ССЫЛКИ
+=========================================================
+Оригинальный Voxy:      https://github.com/MCRcortex/voxy
+Voxy на Modrinth:       https://modrinth.com/mod/voxy
+NeoForge-порт:          https://github.com/j-shelfwood/voxy-neoforge
+Issues порта:           https://github.com/j-shelfwood/voxy-neoforge/issues
+Формат сборки порта:    https://github.com/j-shelfwood/voxy-neoforge/blob/neoforge-1.21.1/TESTING.md
+Форк с бэкпортом 1.21.1: https://github.com/m3t4f1v3/voxy/tree/mc_1211-sodium0.8.12
+Sinytra Connector:      https://github.com/Sinytra/Connector
+Distant Horizons:       https://modrinth.com/mod/distanthorizons
+
+=== ОБНОВЛЕНИЕ: СЕРЫЕ LOD-ЧАНКИ ПОД ШЕЙДЕРАМИ (Eclipse) ===
+Причина: в NeoForge-порте интеграция с Iris ОТКЛЮЧЕНА (iris-исходники исключены из
+компиляции, миксины не зарегистрированы) -> LOD рисуется вне конвейера шейдер-пака.
+Открытые issues порта: #5 (автор пробовал Photon/Eclipse/Helian), #6. Сам Eclipse Voxy
+поддерживает, так что дело не в паке.
+Решение: сборка PR #45 (закрыт, не влит) = voxy 0.2.15-beta, compileOnly против
+Sodium NeoForge 0.8.13 и Iris NeoForge 1.8.14-beta.1, все 11 iris-миксинов активны.
+Важно для повторной сборки: PR #45 ждёт в gitignored libs/ три jar'а
+  libs/sodium-neoforge-0.8.12-beta.2-mod.jar
+  libs/iris-neoforge-1.8.14-beta.1.jar
+  libs/voxyworldgen-neoforge-2.3.1.jar  (опционально)
+Modrinth-артефакт Sodium NeoForge - ТОНКИЙ jar (113 файлов, без классов
+net.caffeinemc.mods.sodium.client.*): настоящие классы лежат внутри него в
+META-INF/jarjar/net.caffeinemc.sodium-neoforge-0.8.13+mc1.21.1-mod.jar (1016 файлов,
+ShaderParser.class есть). CI извлекает вложенный jar и кладёт его под ожидаемым именем.
+Iris берётся с Modrinth: project=iris, loaders=["neoforge"], version ~1.8.14.
+Готовый jar: voxy-0.2.15-beta.jar, 89 345 555 байт,
+sha256 80a000c9fb70312a869daea11344cb7460f29931d1da6a918ff88892acdd29fb
+https://github.com/BORGERone/mod/releases/download/untagged-b5f7753d75b5af526ff8/voxy-0.2.15-beta.jar
+Запасной вариант без Iris (Sodium 0.8, краш починен):
+https://github.com/BORGERone/mod/releases/download/untagged-237db96c92a5c96ee046/voxy-0.2.9-alpha.jar
+Варианты PR #38 и TheNofis/voxy-neoforge-iris-support собираются, но требуют Sodium
+0.6.13 -> сломали бы Sable 2.0.5 / Create Aeronautics 1.3.2 / Iris 1.8.14 (не годятся).
