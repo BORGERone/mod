@@ -19,7 +19,7 @@ import org.slf4j.LoggerFactory;
  * Build 388/389/392: what runs when a door is hacked - the door's graph, through the interpreter every
  * other graph uses.
  *
- * <p>Build 388 had made a door's graph a stock graph: {@link BlockTrigger351#fire} runs it, so every stock
+ * <p>Build 388 had made a door's graph a stock graph: {@link BlockTrigger351#start} runs it, so every stock
  * node behaves the way it does in a block's graph or an NPC's. Build 389 gave the chain the start the
  * author drew in words («один выходной узел сигнала и синий узел цели ... даёт импульс если дверь
  * взломать»), and did it with two nodes. Build 392 keeps the meaning and drops the nodes: both outputs are
@@ -28,7 +28,9 @@ import org.slf4j.LoggerFactory;
  * <ul>
  *   <li><b>the pulse</b> - the chain that leaves the card's execution socket, and it leaves it <b>only</b>
  *       when the door is hacked: the lock panel of the door was solved. An ordinary click on a door that
- *       is not sealed does not pulse - that is not a hack;</li>
+ *       is not sealed does not pulse - that is not a hack. The node the socket points at is the first step
+ *       of that chain ({@link BlockTrigger351#start}), so a «Реплика» wired straight to the card speaks -
+ *       build 392 skipped it and the author saw nothing happen;</li>
  *   <li><b>the reference</b> - the player is the source of the whole chain, so {@code %player%} in a
  *       «Триггер» or a «Реплика» after the socket is the hacker himself; the card also keeps his name
  *       ({@link DoorGraph382#setOpener}), which is what its blue socket hands to every node wired to it -
@@ -110,10 +112,18 @@ public final class DoorSignal388 {
                 if (start != null) starts.add(start);
             }
 
+            // Build 393: the node the socket points at IS a step of the chain and has to be run as one - a
+            // «Реплика» opens its window, a «Триггер» runs its commands. Build 392 handed it to
+            // BlockTrigger351#fire, the entry of the event nodes, which runs a node's action and walks on
+            // from its «next»: the node itself was skipped, so a graph wired карточка -> Реплика said
+            // nothing at all - the author's report «ожидал, что после взлома начнётся диалог, но ничего не
+            // произошло». #start walks from that node and counts what it stepped over.
             boolean ran = false;
+            int stepped = 0;
             for (NpcDialogueGraph.Node start : starts) {
                 if (start == null) continue;
-                ran |= BlockTrigger351.fire(player, graph, start, where);
+                stepped += BlockTrigger351.start(player, graph, start.id, where);
+                ran = true;
             }
 
             if (recorded || folded) {
@@ -122,7 +132,8 @@ public final class DoorSignal388 {
             }
             LOG.info("door: " + key + " was hacked by " + name + " - "
                     + (starts.isEmpty() ? "nothing is wired to the card's output socket, nothing to pulse"
-                            : "the chain runs from " + (legacy ? "«Начало» (a graph of build 388 or older)"
+                            : stepped + " node(s) stepped from "
+                                    + (legacy ? "«Начало» (a graph of build 388 or older)"
                                     : "the card's output socket"))
                     + (recorded ? ", and the card holds his name" : ", and the card did not take his name"));
             return ran;

@@ -1,0 +1,2 @@
+e79341ab30b44d8deac47f6956e545b19c28e61e314cd06d36761feb617939b0  settledlands-0.8.0-build393-door-chain-runs.jar
+d82aa6b095bf4ccdc53232e9f8de2dbf69ada367cac058007ae5864253561a0b  SettledLands-Build393-ChainRuns-Source.zip

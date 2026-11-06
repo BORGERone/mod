@@ -268,10 +268,30 @@ public final class BlockTrigger351 {
     }
 
     /**
-     * The chain itself, node for node the semantics of the NPC graph: a trigger action is run with the
-     * player as source, a variable moves its points, an If compares and picks a branch, a random node
-     * picks one of its ports. Trigger lists attached to a node fire too, like they do for an NPC.
+     * Build 393: run a chain <b>from its first node</b> - the node itself is a step, with everything a step
+     * of a chain means: a «Реплика» opens its window, a «Триггер» runs its commands, an «Условие» branches.
+     *
+     * <p>{@link #fire} is the event-node entry of build 352 ({@code В радиусе}, {@code Время},
+     * {@code Таймер}, {@code Цель}): it runs that node's own action and then walks on from its
+     * {@code next}, because the event node is not a step of a chain. A caller that has a node to
+     * <b>execute</b> must not use it - build 392's door did, and a graph wired
+     * {@code карточка -> Реплика} said nothing at all: the «Реплика» was skipped as if it had already
+     * been run. That is the whole of the author's report «ожидал, что после взлома начнётся диалог, но
+     * ничего не произошло».</p>
+     *
+     * @return how many nodes were stepped over - 0 when there was nothing to run
      */
+    public static int start(ServerPlayer player, NpcDialogueGraph graph, int startId,
+            BlockTalk358.Where where) {
+        if (graph == null || startId < 0) return 0;
+        try {
+            return walk(player, graph, startId, new HashSet<>(), where);
+        } catch (Throwable failure) {
+            fail(failure);
+            return 0;
+        }
+    }
+
     /**
      * Build 358: continue a chain the player has just closed the block's window on - the click in the
      * window is the "next" of that line, exactly like a click in a body's dialogue.
@@ -286,18 +306,28 @@ public final class BlockTrigger351 {
         }
     }
 
-    private static void walk(ServerPlayer player, NpcDialogueGraph graph, int start,
+    /**
+     * The chain itself, node for node the semantics of the NPC graph: a trigger action is run with the
+     * player as source, a variable moves its points, an If compares and picks a branch, a random node
+     * picks one of its ports. Trigger lists attached to a node fire too, like they do for an NPC.
+     *
+     * <p>Build 393: it returns how many nodes it stepped over, so a caller can say whether a chain had
+     * anything to do - {@link #start} hands that number back to the door.</p>
+     */
+    private static int walk(ServerPlayer player, NpcDialogueGraph graph, int start,
             Set<Integer> visited, BlockTalk358.Where where) {
         int curId = start;
+        int steps = 0;
         while (curId >= 0 && visited.size() < MAX_STEPS && visited.add(curId)) {
             NpcDialogueGraph.Node cur = graph.get(curId);
-            if (cur == null) return;
+            if (cur == null) return steps;
+            steps++;
 
             if (cur.type == NpcDialogueGraph.LINE) {
                 // The block's voice: the stock dialogue window with the camera on the block, and the
                 // chain waits for that window to be closed (BlockTalk358#pick continues it). The chat
                 // below is only the fallback for when no window can be shown at all.
-                if (BlockTalk358.say(player, graph, cur, where)) return;
+                if (BlockTalk358.say(player, graph, cur, where)) return steps;
                 say(player, graph, cur);
                 act(player, cur);
                 fireTriggers(player, graph, cur, visited);
@@ -310,7 +340,7 @@ public final class BlockTrigger351 {
                 // stops here; a node with no usable button is only a step of the chain.
                 act(player, cur);
                 fireTriggers(player, graph, cur, visited);
-                if (BlockTalk358.choices(player, graph, cur, where)) return;
+                if (BlockTalk358.choices(player, graph, cur, where)) return steps;
                 curId = cur.next;
                 continue;
             }
@@ -319,7 +349,7 @@ public final class BlockTrigger351 {
                 // waits for the playback to finish - RadiusPass354 polls it and walks on from next.
                 act(player, cur);
                 fireTriggers(player, graph, cur, visited);
-                if (playCutscene(player, graph, cur, where)) return;
+                if (playCutscene(player, graph, cur, where)) return steps;
                 curId = cur.next;
                 continue;
             }
@@ -375,6 +405,7 @@ public final class BlockTrigger351 {
             warnOnce(cur.type);
             curId = cur.next;
         }
+        return steps;
     }
 
     /** The variable an If node reads: its own name, or the name of the variable node wired into it. */

@@ -17,10 +17,10 @@ What this gate asks of the jar:
     `BlockTrigger351#typeForRow`, a door's menu has exactly the stock rows, and no extra row, no door
     palette field and no `DoorGraph382` reference survives in the menu;
   * the chain is run by the stock interpreter: `DoorSignal388#hack` starts at the node the card's output
-    socket points at (`DoorGraph382#chainStart`) and calls `BlockTrigger351#fire` with the door as the
+    socket points at (`DoorGraph382#chainStart`) and runs it through `BlockTrigger351#start` - the node
+    itself is the first step, so a «Реплика» wired straight to the card speaks - with the door as the
     speaker (`BlockTalk358$Where`), so «Триггер» with `%player%` is the «кто открыл», «Переменная» moves
-    the same `NpcPoints` the NPCs use, «Условие If» compares and branches, «Реплика» speaks in the stock
-    window;
+    the same `NpcPoints` the NPCs use, «Условие If» compares and branches;
   * the two outputs are sockets of the card: the execution socket is the card's own `next` (the stock
     output port row), the blue socket is the value output of `PursuitGraphNode272#isValueSourceNode`, which
     now includes the door card (`isDoorValueNode` → `DoorGraph382#isDoorNode`), so the diamond, its hit
@@ -230,9 +230,13 @@ def main(argv):
                     " graph is opened again would run nothing")
     if not calls(signal_refs, "dev/settledlands/door/DoorGraph382Store", "put"):
         return fail("DoorSignal388 does not save the graph - the name of the hacker would be lost")
-    if not calls(signal_refs, TRIGGER, "fire"):
-        return fail("DoorSignal388 does not hand the chain to BlockTrigger351#fire - the door would run a"
+    if not calls(signal_refs, TRIGGER, "start"):
+        return fail("DoorSignal388 does not hand the chain to BlockTrigger351#start - the door would run a"
                     " walk of its own again")
+    if calls(signal_refs, TRIGGER, "fire"):
+        return fail("DoorSignal388 still starts the chain with BlockTrigger351#fire - that entry runs a"
+                    " node's action and walks on from its next, so the «Реплика» wired to the card's socket"
+                    " would be skipped and say nothing (build 392's report)")
     if not calls(signal_refs, TALK_WHERE, "<init>"):
         return fail("DoorSignal388 never builds the speaker of the chain (BlockTalk358$Where)")
     if not calls(signal_refs, DOOR, "isDoorNode"):

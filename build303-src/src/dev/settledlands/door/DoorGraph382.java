@@ -122,7 +122,7 @@ public final class DoorGraph382 {
      * with their own painter, their own rows and their own walk. The author's answer was the right one:
      * «сделай реализацию как в других графах». So a door now offers the very same palette the block
      * graph offers ({@link BlockTrigger351#PALETTE_ROWS}) and runs it through the very same interpreter
-     * ({@link BlockTrigger351#fire}), which means every stock node in a door's graph behaves exactly as
+     * ({@link BlockTrigger351#start}), which means every stock node in a door's graph behaves exactly as
      * it does in a block's graph:</p>
      *
      * <ul>
