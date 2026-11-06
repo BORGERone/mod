@@ -1680,3 +1680,34 @@ back across the card, into the pulse's left port). The blue target stood to the 
 - **Unconfirmed in game**: the tick itself (no world in the probe), the door ring's look, and whether his
   broken «В радиусе» was on a door at all (if on a block, the graph is the suspect: wire, radius,
   target kind, visibility toggle).
+
+## Build 395 — `0.8.0-build395-door-stays-open` (commit `14d2f5e`)
+
+- Report on 394: «чето немного странное происходит, дверь после взлома сама закрывается через секунд 5-10»,
+  with `latest-15.log`. The log shows it twice to the millisecond: `door_hack` 14:52:57.623 → `the guard
+  closed the locked door` 14:53:05.666; again 14:53:16.414 → 14:53:24.463 (8.04 / 8.05 s) = build 377's
+  `OPEN_FOR_MS = 8000L` grace. Nothing wrong with 393/394 (log: `1 node(s) stepped from the card's output
+  socket`, and 394's door event node fires: `a «Цель» node of minecraft:overworld@43,64,-248 fired for
+  BORGER` every 10 s = his `checkCooldown` setting).
+- Fix: `DoorHack377.CRACKED` is a `Set<String>` (no timestamps); `cracked()` (timestamped) **removed**, new
+  `crackedOpen(Level, BlockPos)` = marked && isDoor && anyOpen && someoneNear(16 blocks), with `forget()`
+  taking the mark of both halves back the moment the rule stops holding; the rule itself is the pure
+  `keepOpen(marked, door, open, near)`. `KEEP_OPEN = 16.0D`. `DoorGuard371` calls `crackedOpen` instead of
+  `cracked`; its promise (no locked door open in an empty room) and `NpcDoors368.guideOpened` untouched.
+- Gate `tools/door_cracked_check.py`: no `OPEN_FOR_MS`/`8000` in DoorHack377, `crackedOpen` refs
+  `Doors368#isDoor`/`#anyOpen` and `PlayerList#getPlayers`, guard asks `crackedOpen` and still
+  `guideOpened`; probe `tools/harness/DoorCracked395Probe.java` walks all 16 combinations of `keepOpen`
+  (`RULE keeps=1 of=16`, `TIMER keep=yes close=no`, `NULL doors=false`). 394 fails it.
+  `door_lock_check.py` needle accepts `crackedOpen` or `cracked` (intent unchanged).
+- 31 gates green; `verify_jar --base 394` PASS (578 entries, 0 new refs; removed: `cracked`, `OPEN_FOR_MS`,
+  `CRACKED` as Map). Jar sha256 `89ad3247…1102`, 3588360 bytes. Zip
+  `SettledLands-Build395-DoorStaysOpen-Source.zip` (509 entries, sha256 `1276f0bc…de34`).
+- **Unconfirmed in game**: the server tick seeing the player (16 blocks), the door closing when the room is
+  emptied. Offered: if he wants a hacked door to stay open even with nobody around, drop the "empty room"
+  half next build.
+- **Env note:** the sandbox was re-provisioned mid-session — the local checkout had been reset to `c72f0a3`
+  and `/home/user/.venv-jdk` + `/tmp/venv` were gone. Recovered with
+  `git fetch origin arena/5618404a-mod:refs/remotes/origin/arena/5618404a-mod && git reset --hard
+  origin/arena/5618404a-mod` (remote was at afb8487, everything was pushed), and
+  `python3 -m venv /home/user/.venv-jdk && .venv-jdk/bin/pip install jdk4py` re-created the JDK. `out*`
+  dirs are untracked/gitignored and must be recompiled after such a reset.
