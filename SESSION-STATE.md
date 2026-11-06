@@ -1711,3 +1711,51 @@ back across the card, into the pulse's left port). The blue target stood to the 
   origin/arena/5618404a-mod` (remote was at afb8487, everything was pushed), and
   `python3 -m venv /home/user/.venv-jdk && .venv-jdk/bin/pip install jdk4py` re-created the JDK. `out*`
   dirs are untracked/gitignored and must be recompiled after such a reset.
+
+## Build 396 — a chest gets the door's graph (shipped, `f7dc543`)
+
+- The author: «Все прекрасно, теперь я хочу сделать такой-же граф для сундуков». «Такой же» = the door stack,
+  moved onto a chest. Nothing invented: same editor, same canvas, same save, same palette, same interpreter.
+- **New classes:** `dev/settledlands/chest/ChestGraph396` (own node type `CHEST_TYPE = 50`, own id range
+  `ID_MAX = -2_000_300_000` / `ID_MIN = -2_000_399_999` - blocks are `-2_000_100_000..-2_000_199_999`, doors
+  `-2_000_200_000..-2_000_299_999`; `defaultGraph`/`withChestNode`/`stripCards` = the 383 rule; two sockets:
+  `chainStart` off the card's `next`, the opener in `Node#text`, the count in `Node#varValue` - the two fields
+  the stock serialiser writes for every node, the 384 lesson), `ChestGraph396Store` (`SavedData`
+  `settledlands_chest_graphs`, key `dimension@x,y,z`, `MAX_CHESTS = 4096`), `ChestGraph396Events`
+  (wand at `HIGHEST` opens the editor before the 351 block hook; a main-hand click records the opener and
+  counts the open, then the chain runs **when the chest's window closes** - `player.containerMenu !=
+  player.inventoryMenu`, the pair `NpcEscort` compares; `OPEN_GRACE = 2`, `NO_WINDOW = 40`, `EXPIRE = 12000`),
+  `npc/client/ChestCard396` (reuses `DoorCard382.socket`/`diamond`; three lines: count / opener / trigger),
+  `npc/client/ChestGraphClient396` (stock `NpcDialogueGraphScreen`, the door's `openEditor` shape).
+- **Mixins:** common `NpcChestSave396Mixin` (`GuideNpc.applyConfig`); client `NpcChestOpen396Mixin`
+  (`NpcConfigScreen.open`), `NpcChestNoStats396Mixin`, `NpcChestNoAi396Mixin`, `NpcChestCard396Mixin`
+  (`drawNode`), `NpcChestRows396Mixin` (five label lines, stock rows parked with `WidgetPark361`),
+  `NpcChestPalette396Mixin` (stock rows, stock types, `pendingWireFrom` reconnect, one tab).
+- **Edited (and why):** `RadiusPass354` + `$Spot`/`$DoorSpot` (+ new `$ChestSpot`, `addChests`,
+  `chestFailureSeen`, `Spot#place()` so the log says `chest:`), `BlockMenu363Mixin` (`isChest` in
+  measure/paint/wheel), `BlockNoTabs360Mixin` (`oneGraph` includes the chest - the tab strip must be gone,
+  not just refused).
+- **Stub work this build needed** (all mirrors proven by the base jar's own bytecode, not memory):
+  `api-src/.../Player.java` + `containerMenu:Lnet/minecraft/world/inventory/AbstractContainerMenu;` and
+  `inventoryMenu:Lnet/minecraft/world/inventory/InventoryMenu;` (the base jar's `ServerPlayer` refs give the
+  exact descriptors), new `AbstractContainerMenu`/`InventoryMenu` mirrors, `PlayerList#getPlayer(UUID)`,
+  `PlayerInteractEvent#getHand()`, and `stubs396-src` with `ChestBlock`/`BarrelBlock` (a chest is a chest).
+  No `BlockEntity`/`MenuProvider` work was needed in the end - the chest's own window never has to be opened
+  by this mod.
+- **Wasm/no-new-API:** `verify_jar --base 395` PASS, 0 new external API refs (the first attempt used
+  `ServerPlayer#inventoryMenu:AbstractContainerMenu` - gate D caught it; the real descriptor is `InventoryMenu`).
+- Gate `tools/chest_graph_check.py`: id ranges disjoint from the door's, `CHEST_TYPE` outside 0..14 and != 40,
+  `ChestGraph396` never calls `NpcDialogueGraph#connect` (outputs are sockets, not nodes), the card draws
+  `DoorCard382.socket`+`diamond` in `PursuitGraphNode272.COL_VALUE` (inlined int - read from the pin class),
+  `BlockTrigger351#start` + `NpcNet#sendRaw` reached, `ServerPlayer#containerMenu`/`#inventoryMenu` read,
+  `RadiusPass354#addChests`, menus know the chest, 7 mixins registered, 15 lang keys in both files. Probe
+  `tools/harness/ChestGraph396Probe.java` → `TYPE own=1 stock=false`, `CARD nodes=1 card=true entry=true`,
+  `CHAIN unwired=none wired=1 stop=none`, `MEMORY count=3 opener=BORGER long=32`, `STRIP dropped=2 left=3
+  entry=kept`, `ID in=true back=true stable=true`.
+- **Ship:** jar `settledlands-0.8.0-build396-chest-graph.jar` (592 entries, 3613383 bytes, sha256
+  `4927f6fb…8d07`), zip `SettledLands-Build396-ChestGraph-Source.zip` (528 entries, sha256 `0e30afc5…4dee`),
+  `SHA256SUMS-build396.txt`, commit `f7dc543`, 32/32 gates green.
+- **Not in this build (also in the README):** containers from other mods, a double chest = two graphs, no
+  delete button (clear = delete all nodes + save, as for a door), no wand sparks (as for a door).
+- **Unconfirmed in game:** the close-detection in a live session (containerMenu transitions), the card's
+  look at real GUI scale, the chain's chain start on a wired chest.
