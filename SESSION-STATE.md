@@ -1624,3 +1624,28 @@ back across the card, into the pulse's left port). The blue target stood to the 
   strip 74 px), that the diamond does not cover the blue wire start (same point by construction), that the fold
   did not remove a node he had dragged and that was a 41/42 by type, and that `%target%` really shows the
   hacker's name in the dialogue window.
+
+## Build 393 — `0.8.0-build393-door-chain-runs` (commit `6dcc960`)
+
+- Report on 392: door card → «Реплика #1», card's blue socket → that line's value input, panel hacked
+  (card said «Взломал: BORGER»), **no dialogue**: «ожидал, что после взлома (и после отпускания всех
+  кнопок) начнется диалог, но ничего не произошло».
+- Cause: `DoorSignal388#hack` handed the wired node to `BlockTrigger351#fire`, the **event-node** entry
+  («В радиусе», «Время», «Таймер», «Цель»): it runs the node's own action and then walks on from its
+  `next`. A «Реплика» is nothing but its step, so it was skipped — silently, nothing in the log.
+- Fix: `BlockTrigger351#walk` returns the number of steps; new `BlockTrigger351#start(player, graph,
+  startId, where)` walks from that node (0 on null / `startId < 0` / exception). `DoorSignal388#hack`
+  uses `start`, accumulates `stepped`, logs `N node(s) stepped from the card's output socket` (or
+  `«Начало»` for a graph of 388 or older). `fire` untouched (the 352 event pass needs it as it was).
+- Gate `tools/door_chain_check.py`: structural (`start` called, `fire` not called from DoorSignal388,
+  `start`+`walk` present) + behavioural — compiles `tools/harness/DoorChain393Probe.java` and requires
+  `SINGLE steps=1 / CHAIN steps=3 / NOTHING steps=0 / SOCKET start=3 socket=line / EVENT fire=after`.
+  393 jar passes, 392 jar fails (no `start`). `door_stock_check.py` needle moved to `start`.
+- 29 gates green; `verify_jar --base 392` PASS (576 entries, 2 replaced, 0 new refs, walk listed as the
+  one changed member — `void` → `int`). Jar sha256 `e79341ab…39b0`, 3583736 bytes on GitHub.
+- Ship: README `README-Build393-RU.md`, zip `SettledLands-Build393-ChainRuns-Source.zip` (503 entries,
+  sha256 `d82aa6b0…1a0b`), `SHA256SUMS-build393.txt`, patch `tools/patch_build393.py` (base 392,
+  `srcdir out393`, 2 entries).
+- **Unconfirmed in game**: that the «Реплика» window really opens (and over/after the hack panel — the
+  window is sent on the hack, the panel closes on all-keys-up; `GuideDialogueScreen#open` sets its screen
+  unconditionally, so whichever frame wins the window is on top), the camera aim on the door, `%target%`.
