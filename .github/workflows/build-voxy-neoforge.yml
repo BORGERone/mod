@@ -42,13 +42,17 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          {
+            echo "Built from NormalCortisolLevels/Voxy-NeoForge-Compile-Fix, branch neoforge-1.21.1-(compile-fixes)."
+            echo "Upstream: j-shelfwood/voxy-neoforge + compile fixes. JDK 21, NeoForge 21.1.217, Minecraft 1.21.1."
+            echo ""
+            echo "Runtime deps: Sodium mc1.21.1-0.6.13-neoforge (NOT 0.8.x) and Forgified Fabric API 0.116.7+2.2.0+1.21.1."
+            echo "Install: put the voxy-*.jar (the one without -sources or -dev suffix) into the instance mods folder."
+            echo ""
+            echo "Voxy is All Rights Reserved by MCRcortex. This draft release is a private personal build: delete it after downloading."
+          } > notes.md
           gh release create "voxy-build-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
             --repo "${GITHUB_REPOSITORY}" \
             --draft \
             --title "Voxy NeoForge 1.21.1 - personal build (DRAFT)" \
-            --notes "Built from NormalCortisolLevels/Voxy-NeoForge-Compile-Fix @ branch neoforge-1.21.1-(compile-fixes) (upstream j-shelfwood/voxy-neoforge + compile fixes), JDK 21, NeoForge 21.1.217, Minecraft 1.21.1.
-
-Runtime deps: Sodium mc1.21.1-0.6.13-neoforge (NOT 0.8.x) and Forgified Fabric API 0.116.7+2.2.0+1.21.1.
-Install: put the voxy-*.jar (the one without -sources/-dev suffix) into the instance mods folder.
-
-Voxy is All Rights Reserved by MCRcortex; this draft release is a private personal build. Delete the draft after downloading."
+            --notes-file notes.md
