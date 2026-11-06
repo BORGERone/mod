@@ -1,6 +1,8 @@
 name: Build Voxy NeoForge 1.21.1
 
 on:
+  push:
+    branches: ['arena/94d4d401-mod']
   workflow_dispatch:
 
 permissions:
@@ -14,18 +16,18 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - name: pr50-sodium08
-            repo: dontflipmybits/voxy-neoforge
-            ref: MC1.21.1-NeoForge21.1.228-Sodium-0.8.12
-            desc: "PR #50 (NeoForge 21.1.228 + Sodium 0.8.12+)"
-          - name: pr51-sodium08-compat
-            repo: VoX/voxy-neoforge
-            ref: sodium-0.8-compat
-            desc: "PR #51 (Sodium 0.8 support alongside 0.6.13)"
-          - name: compilefix-sodium0613
-            repo: NormalCortisolLevels/Voxy-NeoForge-Compile-Fix
-            ref: 'neoforge-1.21.1-(compile-fixes)'
-            desc: "Compile-fix fork (Sodium 0.6.13 only)"
+          - name: pr45-sodium0812-iris
+            repo: j-shelfwood/voxy-neoforge
+            ref: refs/pull/45/head
+            desc: "PR #45: voxy 0.2.15-beta + Sodium 0.8.12 + Iris 1.8.14 (all 11 iris mixins active)"
+          - name: pr38-iris-sodium0613
+            repo: j-shelfwood/voxy-neoforge
+            ref: refs/pull/38/head
+            desc: "PR #38: Iris 1.8.1 shader integration, Sodium 0.6.13 baseline"
+          - name: irisfork-sodium0613
+            repo: TheNofis/voxy-neoforge-iris-support
+            ref: neoforge-1.21.1
+            desc: "TheNofis iris-support fork, Sodium 0.6.13 baseline"
     steps:
       - name: Checkout Voxy sources
         uses: actions/checkout@v4
@@ -59,12 +61,13 @@ jobs:
         run: |
           {
             echo "Variant: ${{ matrix.name }}"
-            echo "Source: ${{ matrix.repo }} @ ${{ matrix.ref }} - ${{ matrix.desc }}"
-            echo "JDK 21, Minecraft 1.21.1."
+            echo "Source: ${{ matrix.repo }} @ ${{ matrix.ref }}"
+            echo "${{ matrix.desc }}"
+            echo "JDK 21, Minecraft 1.21.1, NeoForge."
             echo ""
-            echo "pr50 / pr51 variants target Sodium 0.8.x on NeoForge."
-            echo "compilefix variant targets Sodium 0.6.13-neoforge only."
-            echo "Also needs Forgified Fabric API (0.116.7+2.2.0+1.21.1 or newer)."
+            echo "pr45 variant: Sodium 0.8.12+ and Iris 1.8.14 (LOD renders under shaderpacks)."
+            echo "pr38 / irisfork variants: Sodium 0.6.13-neoforge and Iris 1.8.1 only."
+            echo "Also needs Forgified Fabric API."
             echo "Install: put the voxy-*.jar (without -sources/-dev suffix) into the instance mods folder."
             echo ""
             echo "Voxy is All Rights Reserved by MCRcortex. Private personal build: delete the draft after downloading."
