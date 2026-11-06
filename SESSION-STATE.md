@@ -1420,3 +1420,36 @@ Two author requests: «кнопки блокировали пользовате�
   + door shut right now»).
 - **Not built on purpose**: a stock «if» for a door - there is nothing for it to compare yet (see the
   README's last section).
+
+## Build 387 - the panel's input block ends when the hands do, not when the door does (shipped)
+
+- **The bug**: build 377/378 did `solved = true; DoorHack377.send(pos); this.onClose();` on the solve
+  frame - the door opened and the 4..10 keys still held fell through to the game, which is the accident
+  the blocking existed to prevent.
+- **The fix** (`door/HackPanel377`): solving only *accepts* the hack. `send(pos)` still goes out at once
+  (the door opens when the lock is solved); the panel repaints to «ВЗЛОМ ПРИНЯТ · замок снят, дверь
+  открыта», keeps swallowing every key, shows «ещё зажато: N», and closes on the frame nothing is held.
+- **How "nothing is held" is known** (two sources, each alone lies): field
+  `pressed = new LinkedHashSet<Integer>()` filled in `keyPressed`, cleared in `keyReleased`;
+  `allReleased()` prunes that set against `InputConstants.isKeyDown` every frame (a release while the
+  window is unfocused may never arrive) and also requires `held() == 0`, which covers a key already down
+  when the panel opened (never sends a press). `stillDown()` counts pool keys once (via `held()`) plus
+  the extra pressed ones.
+- **ESC**: before the hack it is `super.keyPressed` as before (immediate close, door stays shut); after
+  it, swallowed unless held `ESC_HOLD_MS = 1200` ms (`escDownAt`), so a tap cannot undo the block and a
+  stuck key cannot trap the player. `keyReleased(ESC)` resets `escDownAt`.
+- **Clock**: `roll()` still runs only while `!solved`, so a solved panel no longer swaps keys.
+- Gates: new `tools/panel_release_check.py` (fails on 386 with «HackPanel377 has no allReleased()»,
+  passes here: `pressed` is a `java.util.Set`, add in keyPressed / remove in keyReleased, `allReleased`
+  calls `isKeyDown` + `Set.isEmpty` + `held`, and in `render` the `onClose` comes **after**
+  `DoorHack377.send` **and after** `allReleased`; ESC timed through `escDownAt`; the two Russian lines
+  exist). All other 26 `*_check.py` green.
+- Ship: `settledlands-0.8.0-build387-panel-release.jar` (576 entries, 1 replaced: HackPanel377,
+  43/48 mixins), README `README-Build387-RU.md`, zip `SettledLands-Build387-PanelRelease-Source.zip`
+  (493 entries), `SHA256SUMS-build387.txt`, patch `tools/patch_build387.py` (base 386, `srcdir out387`).
+  `verify_jar --base 386` PASS.
+- **Unconfirmed in game**: the centred «ВЗЛОМ ПРИНЯТ» layout inside the unchanged 138 px panel, the
+  accuracy of the «ещё зажато» counter against real fingers, and that no release reaches the game after
+  the panel closes.
+- **Not done on purpose**: mouse buttons are not blocked (the panel never blocked them; a screen already
+  keeps clicks out of the world). Offered to add if asked.

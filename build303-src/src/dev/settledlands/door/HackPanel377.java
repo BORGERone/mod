@@ -38,6 +38,14 @@ import org.slf4j.LoggerFactory;
  * fire while the panel is up. Reading the hardware directly ({@link InputConstants#isKeyDown}) is
  * unaffected - that is what the panel measures.</p>
  *
+ * <p><b>Build 387: the panel leaves only when the hands do.</b> Until now the panel closed on the same
+ * frame the last key went down - the door was open, and the six or eight keys the player was still
+ * holding were suddenly nobody's business, so they fell straight through to the game. Solving now only
+ * <b>accepts</b> the hack: the panel keeps the keyboard, says so, and closes when <b>every</b> held key
+ * has come back up, so a win can never press W, drop the item in hand or open the inventory by
+ * accident. A deliberate escape stays: ESC held for a moment still closes it, so a stuck key cannot
+ * trap the player in a panel.</p>
+ *
  * <p><b>Build 385: «Сложность».</b> The door node has a third slider, and it decides which rows of the
  * keyboard the keys are drawn from: 1 - {@code qwertyuiop[]}, 2 - those plus {@code asdfghjkl;'},
  * 3 - those plus {@code zxcvbnm,./}. A harder door does not ask for more keys; it asks for the same
@@ -66,6 +74,13 @@ public class HackPanel377 extends Screen {
 
     /** The key ESC, and the only key this panel lets through to the screen under it. */
     private static final int ESC = 256;
+
+    /**
+     * Build 387: how long ESC has to be held before a <b>solved</b> panel closes anyway. A tap must not
+     * do it - that is the whole point of the build - but a key that is stuck down in hardware must not
+     * leave the player locked inside a panel either.
+     */
+    private static final long ESC_HOLD_MS = 1200L;
 
     private static final int MIN_BUTTONS = 4;
     private static final int MAX_BUTTONS = 10;
@@ -110,6 +125,16 @@ public class HackPanel377 extends Screen {
     private String flash = "";
     private boolean solved;
     private int swaps;
+
+    /**
+     * Build 387: the keys this panel saw go down and has not seen come up. A key that was already held
+     * when the panel opened sends no press here, which is why the panel's own keys are measured on the
+     * hardware as well ({@link #held()}); between the two, every key the player is holding is known.
+     */
+    private final java.util.Set<Integer> pressed = new java.util.LinkedHashSet<>();
+
+    /** When ESC went down after the hack was accepted - the escape hatch needs a deliberate hold. */
+    private long escDownAt;
 
     private HackPanel377(BlockPos pos, int count, int[] keys, long rollMs, int difficulty) {
         super(Component.literal("Взлом двери"));
@@ -224,15 +249,64 @@ public class HackPanel377 extends Screen {
      */
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == ESC) return super.keyPressed(keyCode, scanCode, modifiers);
+        if (keyCode == ESC) {
+            // Build 387: before the hack is in, ESC is the player's way out - it closes the panel and
+            // nothing else; the door stays shut. After it, the panel has to leave the player free of
+            // the keyboard before it goes, so ESC is swallowed unless it is held on purpose.
+            if (!solved) return super.keyPressed(keyCode, scanCode, modifiers);
+            if (escDownAt == 0L) escDownAt = System.currentTimeMillis();
+            if (System.currentTimeMillis() - escDownAt >= ESC_HOLD_MS) this.onClose();
+            return true;
+        }
+        if (keyCode >= 0) pressed.add(Integer.valueOf(keyCode));
         return true;
     }
 
     /** The same rule for a release: the panel hears about every key, the game hears about none. */
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
-        if (keyCode == ESC) return super.keyReleased(keyCode, scanCode, modifiers);
+        if (keyCode == ESC) {
+            escDownAt = 0L;
+            if (!solved) return super.keyReleased(keyCode, scanCode, modifiers);
+            return true;
+        }
+        pressed.remove(Integer.valueOf(keyCode));
         return true;
+    }
+
+    /**
+     * Build 387: true when nothing the player pressed is still down.
+     *
+     * <p>Two sources, because neither alone is enough. {@link #pressed} knows every key the panel was
+     * told about - but a key that was already held when the panel opened never sends a press, and a
+     * release that happens while the window is unfocused may never arrive. So the set is pruned against
+     * the hardware every frame ({@code isKeyDown} is the truth, the same call the keys are read with),
+     * and the panel's own keys are checked on the hardware as well.</p>
+     */
+    private boolean allReleased() {
+        Minecraft mc = Minecraft.getInstance();
+        long window = mc == null || mc.getWindow() == null ? 0L : mc.getWindow().getWindow();
+        if (window != 0L && !pressed.isEmpty()) {
+            java.util.Iterator<Integer> it = pressed.iterator();
+            while (it.hasNext()) {
+                Integer code = it.next();
+                if (code != null && !InputConstants.isKeyDown(window, code.intValue())) it.remove();
+            }
+        }
+        return pressed.isEmpty() && held() == 0;
+    }
+
+    /**
+     * How many keys are still down, as the player has to be told. The panel's own keys are counted once,
+     * through {@link #held()} - a key can be both in the set and down, and telling the player "2" for
+     * one finger would look like a bug in the counter rather than in his hands.
+     */
+    private int stillDown() {
+        int extra = 0;
+        for (Integer code : pressed) {
+            if (code != null && !uses(code.intValue())) extra++;
+        }
+        return extra + held();
     }
 
     /** The panel's keys the keyboard is holding right now. 0 when no window is known. */
@@ -298,6 +372,7 @@ public class HackPanel377 extends Screen {
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
         long now = System.currentTimeMillis();
+        // Build 387: a solved panel has no clock - the keys are the only thing left to watch.
         if (!solved && now - rolledAt > this.rollMs) {
             roll();
         }
@@ -315,6 +390,47 @@ public class HackPanel377 extends Screen {
         graphics.fill(panelLeft, panelBottom - 1, panelRight, panelBottom, PANEL_EDGE);
         graphics.fill(panelLeft, panelTop, panelLeft + 1, panelBottom, PANEL_EDGE);
         graphics.fill(panelRight - 1, panelTop, panelRight, panelBottom, PANEL_EDGE);
+
+        if (!solved && down == count) {
+            solved = true;
+            LOG.info("door: all " + count + " keys of the panel are held - sending the hack for "
+                    + DoorSync375.key(Minecraft.getInstance().player == null ? null
+                            : Minecraft.getInstance().player.level(), pos));
+            DoorHack377.send(pos);
+            // Build 387: and the panel does NOT close here. The door is open on the server, but the
+            // hands are still on the keys - closing now is exactly how a win used to press W, drop the
+            // held item or open the inventory. It closes when every key has come back up.
+            LOG.info("door: the panel stays up and keeps the keyboard until every held key is released");
+        }
+
+        if (solved) {
+            // Build 387: the frame every key is up is the frame the panel goes - nowhere left to cover,
+            // and nothing left to explain.
+            if (allReleased()) {
+                LOG.info("door: every key is up - the panel closes, the door is already open");
+                this.onClose();
+                return;
+            }
+            // The whole inner panel is repainted: a solved panel has nothing left to press.
+            graphics.fill(panelLeft + 1, panelTop + 1, panelRight - 1, panelBottom - 1, PANEL_BG);
+            int still = stillDown();
+            graphics.drawCenteredString(this.font, Component.literal("ВЗЛОМ ПРИНЯТ"),
+                    center, panelTop + 16, BTN_ON_EDGE);
+            graphics.drawCenteredString(this.font, Component.literal("замок снят, дверь открыта"),
+                    center, panelTop + 36, LABEL);
+            graphics.drawCenteredString(this.font,
+                    Component.literal("отпусти все клавиши - и панель уйдёт сама"),
+                    center, panelTop + 60, LABEL);
+            graphics.drawCenteredString(this.font, Component.literal("ещё зажато: " + still),
+                    center, panelTop + 80, SWAP);
+            graphics.drawCenteredString(this.font,
+                    Component.literal("пока панель здесь, клавиатура заблокирована"),
+                    center, panelTop + 100, DIM);
+            graphics.drawCenteredString(this.font,
+                    Component.literal("ESC удержи ~1 с, если клавиша залипла"),
+                    center, panelTop + 118, DIM);
+            return;
+        }
 
         graphics.drawCenteredString(this.font, Component.literal("ВЗЛОМ ДВЕРИ"), center, panelTop + 10, LABEL);
 
@@ -350,15 +466,6 @@ public class HackPanel377 extends Screen {
         int filled = (int) (total * leftMs / this.rollMs);
         graphics.fill(left, panelTop + 122, left + total, panelTop + 126, 0xFF20262E);
         graphics.fill(left, panelTop + 122, left + filled, panelTop + 126, fresh ? SWAP : BAR);
-
-        if (!solved && down == count) {
-            solved = true;
-            LOG.info("door: all " + count + " keys of the panel are held - sending the hack for "
-                    + DoorSync375.key(Minecraft.getInstance().player == null ? null
-                            : Minecraft.getInstance().player.level(), pos));
-            DoorHack377.send(pos);
-            this.onClose();
-        }
     }
 
     /** The letters of a row as a line of text, for the log. */

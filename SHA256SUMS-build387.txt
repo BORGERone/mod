@@ -1,0 +1,2 @@
+7fdadedce23d07629ddabe2d03380ef8a660540570d1c6f98576f8c1a12a4096  settledlands-0.8.0-build387-panel-release.jar
+e089ba9b356409fdf8cb1623d1174903f91efac88f1639804fa00e7f123ab94d  SettledLands-Build387-PanelRelease-Source.zip
