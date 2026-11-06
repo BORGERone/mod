@@ -1533,3 +1533,31 @@ because the two halves share the same files.
 - **Stated gaps**: pulse is hack-only (one line to add plain-open), 388-era graphs start at «Начало» until
   the author adds a pulse node, event nodes are stepped over, and a door's «Реплика» still has a blank
   speaker name (needs a door «Имя» card - offered as its own build).
+
+## Build 390 - the pulse and the blue target really appear on every door (shipped)
+
+**User report (with screenshot):** «сейчас визуально не видно узлы, так-же я не смог нащупать синий узел».
+The screenshot showed a door card wired straight to «Реплика #1» with «НАЧАЛО» on it - because build 389
+wired the starter shape **only for a brand-new graph**; a door whose graph existed since 382-388 never got
+the two nodes, and in a 13-row palette they were hidden at the bottom of the scroll.
+
+- `DoorGraph382#wireStarter` is now `boolean` and works on an existing chain: it puts the pulse in a free
+  spot near the card (`freeSpot` tries (0,160), (260,160), (-260,160), (0,300), (260,0), (-260,0), with
+  `occupied()` testing the 220x100 box), the blue target 260 px right of it (skipping occupied spots), then
+  `signal.next = door.next`, `door.next = signal`, `graph.entry = signal.id` - the author's chain keeps
+  running, after the pulse, and «Начало» moves onto it.
+- **Drawn once per door, and remembered**: `DoorGraph382Store` persists a new `S` list of keys
+  (`starterDone/markStarter`, `java.util.Set<String> starter`, saved in `save()` and read in `load()`), and
+  `DoorGraph382.open()` calls `wireStarter` + `store.put` + `markStarter` when the flag is absent. A node the
+  author deletes afterwards stays deleted.
+- Verified in bytecode that `NpcDoorCard382Mixin` cancels on `DoorGraph382.isDoorGraphNode` (card|signal|
+  target) and `DoorCard382` reads `labelKey`/`colour`/`opener` - so the three cards are painted; the problem
+  was never the painter.
+- Gates: no new gate needed (390 changes when the starter runs, not what it makes); `door_stock_check`
+  still passes because `wireStarter` still pushes 41/42, and now also references `starterDone/markStarter`.
+  All 27 `*_check.py` green, `verify_jar --base 389` PASS (576 entries, 2 replaced, 43/48 mixins).
+- Ship: `settledlands-0.8.0-build390-door-outputs-visible.jar` (sha256 6a9633ad…92a485), README
+  `README-Build390-RU.md`, zip `SettledLands-Build390-OutputsVisible-Source.zip` (496 entries),
+  `SHA256SUMS-build390.txt`, patch `tools/patch_build390.py` (base 389, `srcdir out390`).
+- **Unconfirmed in game**: that the auto-placed pulse spot is free on the author's door, that the two cards
+  do not clip their lines, and that the stock editor's error check says nothing about «Начало» on our node.

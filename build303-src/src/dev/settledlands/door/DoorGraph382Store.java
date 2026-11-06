@@ -41,8 +41,16 @@ public final class DoorGraph382Store extends SavedData {
     private static final String KEY = "K";
     private static final String GRAPH = "G";
 
+    /**
+     * Build 390: the doors whose starter shape - card, pulse, blue target - has already been drawn. A
+     * door is wired once, so a node the author deletes stays deleted instead of coming back on the next
+     * open. Persisted with the graphs, because it has to survive a restart exactly as long.
+     */
+    private static final String STARTER = "S";
+
     private final Map<String, NpcDialogueGraph> byKey = new LinkedHashMap<>();
     private final Map<String, String> byDimension = new HashMap<>();
+    private final java.util.Set<String> starter = new java.util.HashSet<>();
 
     public static DoorGraph382Store get(MinecraftServer server) {
         if (server == null) return null;
@@ -72,7 +80,25 @@ public final class DoorGraph382Store extends SavedData {
             if (key.isEmpty() || !one.contains(GRAPH, 10)) continue;
             data.remember(key, NpcDialogueGraph.load(one.getCompound(GRAPH)));
         }
+        if (tag.contains(STARTER, 9)) {
+            ListTag done = tag.getList(STARTER, 10);
+            for (int i = 0; i < done.size() && data.starter.size() < MAX_DOORS; i++) {
+                String key = done.getCompound(i).getString(KEY);
+                if (!key.isEmpty()) data.starter.add(key);
+            }
+        }
         return data;
+    }
+
+    /** True when the starter shape of this door has already been wired once. */
+    public boolean starterDone(String key) {
+        return key != null && !key.isEmpty() && starter.contains(key);
+    }
+
+    /** Remembers that the starter shape of this door is drawn - and saves the file. */
+    public void markStarter(String key) {
+        if (key == null || key.isEmpty()) return;
+        if (starter.add(key)) setDirty();
     }
 
     @Override
@@ -86,6 +112,14 @@ public final class DoorGraph382Store extends SavedData {
             list.add(one);
         }
         tag.put(DOORS, list);
+        ListTag done = new ListTag();
+        for (String key : starter) {
+            if (key == null || key.isEmpty()) continue;
+            CompoundTag one = new CompoundTag();
+            one.putString(KEY, key);
+            done.add(one);
+        }
+        tag.put(STARTER, done);
         return tag;
     }
 

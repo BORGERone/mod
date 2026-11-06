@@ -332,17 +332,23 @@ public final class DoorGraph382 {
      * <p>Only the wires that are missing are made, so calling this on a graph the author has already
      * edited never rewires his work.</p>
      */
-    public static void wireStarter(NpcDialogueGraph graph) {
-        if (graph == null) return;
+    public static boolean wireStarter(NpcDialogueGraph graph) {
+        if (graph == null || graph.nodes == null) return false;
         NpcDialogueGraph.Node door = doorNode(graph);
-        if (door == null) return;
-        NpcDialogueGraph.Node signal = signalNodes(graph).isEmpty() ? null
-                : signalNodes(graph).get(0);
+        if (door == null) return false;
+        boolean changed = false;
+
+        // ---- the pulse ---------------------------------------------------------------
+        java.util.List<NpcDialogueGraph.Node> signals = signalNodes(graph);
+        NpcDialogueGraph.Node signal = signals.isEmpty() ? null : signals.get(0);
         if (signal == null) {
-            signal = graph.add(SIGNAL_TYPE, door.x + 280, door.y);
-            if (signal == null) return;
+            int[] spot = freeSpot(graph, door.x, door.y);
+            signal = graph.add(SIGNAL_TYPE, spot[0], spot[1]);
+            if (signal == null) return changed;
+            changed = true;
         }
-        if (door.next < 0) door.next = signal.id;
+
+        // ---- the blue target ---------------------------------------------------------
         NpcDialogueGraph.Node target = null;
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
             if (isTargetNode(node)) {
@@ -351,12 +357,58 @@ public final class DoorGraph382 {
             }
         }
         if (target == null) {
-            target = graph.add(TARGET_TYPE, signal.x + 280, signal.y);
-            if (target == null) return;
+            int x = signal.x + 260;
+            for (int i = 0; i < 8 && occupied(graph, x, signal.y); i++) {
+                x += 260;
+            }
+            target = graph.add(TARGET_TYPE, x, signal.y);
+            if (target == null) return changed;
+            changed = true;
         }
-        if (signal.next < 0) signal.next = target.id;
-        // The pulse starts at the signal, so «Начало» belongs there and not on the settings card.
-        if (graph.entry == door.id && signal.id >= 0) graph.entry = signal.id;
+
+        // ---- the wires ---------------------------------------------------------------
+        // The chain the author already had now leaves the pulse: the card points at the signal, and
+        // whatever the card pointed at continues after it. That is the shape the author drew in words -
+        // the door, its output, and the blue target beside it - without losing his work.
+        int after = door.next;
+        if (after >= 0 && after != signal.id && signal.id >= 0) {
+            signal.next = after;
+            changed = true;
+        }
+        if (door.next != signal.id && signal.id >= 0) {
+            door.next = signal.id;
+            changed = true;
+        }
+        // The pulse is where a chain of a door starts, so «Начало» belongs on it and not on the card.
+        if (signal.id >= 0 && graph.entry != signal.id) {
+            graph.entry = signal.id;
+            changed = true;
+        }
+        return changed;
+    }
+
+    /**
+     * A free spot for a new node near the door card: right under it first, then beside it, then below
+     * that - so the two outputs never land on top of a node the author already has.
+     */
+    private static int[] freeSpot(NpcDialogueGraph graph, int baseX, int baseY) {
+        int[][] candidates = {{0, 160}, {260, 160}, {-260, 160}, {0, 300}, {260, 0}, {-260, 0}};
+        for (int[] spot : candidates) {
+            if (!occupied(graph, baseX + spot[0], baseY + spot[1])) {
+                return new int[] {baseX + spot[0], baseY + spot[1]};
+            }
+        }
+        return new int[] {baseX, baseY + 160};
+    }
+
+    /** True when a node already stands at this spot (the canvas box is 220 x 100). */
+    private static boolean occupied(NpcDialogueGraph graph, int x, int y) {
+        if (graph == null || graph.nodes == null) return false;
+        for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+            if (node == null) continue;
+            if (Math.abs(node.x - x) < 200 && Math.abs(node.y - y) < 90) return true;
+        }
+        return false;
     }
 
     /**
@@ -590,6 +642,14 @@ public final class DoorGraph382 {
                 // not serialised for this type). Fill it from the defaults and the door's own lock, so
                 // the sliders open on something real and the next save cannot unlock a closed door.
                 adopt(graph, sealed);
+            }
+            // Build 390: the two outputs of the card are drawn once per door, on the first open after
+            // this build - the author sees the pulse and the blue target he asked for even on a door
+            // whose graph was made before they existed. Once drawn, the door is remembered as done, so a
+            // node he deletes afterwards stays deleted.
+            if (store != null && !store.starterDone(key)) {
+                if (wireStarter(graph) || graph != null) store.put(key, graph);
+                store.markStarter(key);
             }
             CompoundTag data = new CompoundTag();
             data.put("DialogueGraph", graph.save());
