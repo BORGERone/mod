@@ -9,7 +9,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 /**
- * Build 383/388: the card of the door itself - the one node of a door's graph this mod draws.
+ * Build 383/388/392: the card of the door itself - the one node of a door's graph this mod draws.
  *
  * <p>Build 382 only wrote the text of the card on top of the stock one, and the stock painter has no
  * branch for a node type it does not know: it drew the colour of the last row of its table (a pink
@@ -25,20 +25,28 @@ import net.minecraft.network.chat.Component;
  * owns is the only thing that should look different. Same header, same accent line, same body, same
  * colours, same box.</p>
  *
- * <p>What it shows is the whole settings of the door: how many keys the hack panel asks for, how often
- * one of them changes, the difficulty (build 385 - which rows of the keyboard those keys come from),
- * whether the door is closed to a plain click, and one line that says the panel owns the keyboard but for
- * ESC. The values are read from the node, so the card repaints on the next frame after a slider moves -
- * nothing is cached and nothing is drawn per tick.</p>
+ * <p>What it shows is the settings of the door: how many keys the hack panel asks for, how often one of
+ * them changes, the difficulty (build 385 - which rows of the keyboard those keys come from), whether the
+ * door is closed to a plain click, and who hacked it last. The values are read from the node, so the card
+ * repaints on the next frame after a slider moves - nothing is cached and nothing is drawn per tick.</p>
  *
- * <p><b>Build 388: every other node of a door's graph is a stock node</b>, drawn by the stock painter,
- * because a door runs the stock interpreter a block does ({@code BlockTrigger351}).</p>
+ * <p><b>Build 392: the two outputs of the door are sockets of this card, not nodes beside it.</b> The
+ * author's words after two builds of separate cards: «я хотел чтобы ты создал не ноды, а УЗЛЫ на ноде
+ * \"дверь\"». So the card now carries:</p>
  *
- * <p><b>Build 389: three cards are ours now</b> - the door (brown), its output «Импульс» (amber) and the
- * blue «Цель» that carries the reference to the player who hacked the door. They are the two nodes the
- * author asked for, and they exist as types of this mod only because the stock graph has no node for
- * "this door was hacked" and none that holds a player reference. Everything about them - the box, the
- * hit test, the selection, the drag, the wires - is the stock canvas; only the words are ours.</p>
+ * <ul>
+ *   <li><b>the execution socket</b> - a round amber dot on the right edge, on the row the canvas gives
+ *       every node's output port ({@code NODE_H / 2}). It is where the wire to the rest of the chain
+ *       starts, and it is the pulse of the door: the chain runs when the door is hacked. Round on
+ *       purpose - the value socket next to it is a diamond, and the two must never be confused;</li>
+ *   <li><b>the blue socket</b> - the blue diamond on the right edge one row under it, the value output
+ *       every card of this mod has ({@code PursuitGraphNode272}). It hands over the reference to the
+ *       player who hacked the door.</li>
+ * </ul>
+ *
+ * <p>Both sockets are drawn where their wires really start - the row and the edge the canvas uses - so
+ * what the author grabs is what the cable leaves from. The two labels («взлом», «кто взломал») sit on the
+ * right of the settings, in the strip that is kept free of text for exactly that.</p>
  */
 public final class DoorCard382 {
 
@@ -51,6 +59,18 @@ public final class DoorCard382 {
     private static final int LABEL = -5592406;
     private static final int SEALED = -35328;
     private static final int OPEN = -1179650;
+
+    /** The amber of the door's signal, the colour a pulse has had in this mod since build 386. */
+    private static final int AMBER = -3177856;
+
+    /** The row of the execution port: the middle of the card, where the canvas draws every output. */
+    private static final int OUT_ROW = NpcGraphCanvas.NODE_H / 2;
+
+    /** The row of the blue socket: the row every value pin of this mod sits on. */
+    private static final int VALUE_ROW = NpcGraphCanvas.NODE_H - 8;
+
+    /** The strip on the right that belongs to the two socket labels; settings text stops before it. */
+    private static final int LABEL_STRIP = 74;
 
     private DoorCard382() {}
 
@@ -68,6 +88,7 @@ public final class DoorCard382 {
         boolean selected = screen.settledlands$isSelected(node.id);
         boolean sealed = DoorGraph382.sealed(node);
         int accent = sealed ? SEALED : OPEN;
+        int textWidth = width - 16 - LABEL_STRIP;
 
         PoseStack pose = graphics.pose();
         pose.pushPose();
@@ -76,47 +97,42 @@ public final class DoorCard382 {
         try {
             graphics.fill(-2, -2, width + 2, height + 2, selected ? SELECTED : IDLE);
             graphics.fill(0, 0, width, height, BODY);
-            int type = node.type;
             graphics.fill(0, 0, width, 20, HEADER);
-            graphics.fill(0, 19, width, 20, type == DoorGraph382.DOOR_TYPE ? accent
-                    : DoorGraph382.colour(type));
-            graphics.drawString(font, tr(DoorGraph382.labelKey(type)), 8, 6,
-                    type == DoorGraph382.DOOR_TYPE ? accent : DoorGraph382.colour(type), false);
+            graphics.fill(0, 19, width, 20, accent);
+            graphics.drawString(font, tr(DoorGraph382.TITLE_KEY), 8, 6, accent, false);
 
-            if (type == DoorGraph382.SIGNAL_TYPE) {
-                // The output of the door card: what a pulse is and when it comes.
-                graphics.drawString(font, clip(font, tr("gui.settledlands.door.signal_line1"),
-                        width - 16), 8, 28, LABEL, false);
-                graphics.drawString(font, clip(font, tr("gui.settledlands.door.signal_line2"),
-                        width - 16), 8, 46, LABEL, false);
-                graphics.drawString(font, clip(font, tr("gui.settledlands.door.signal_line3"),
-                        width - 16), 8, 64, EDGE, false);
-                graphics.drawString(font, clip(font, tr("gui.settledlands.door.signal_line4"),
-                        width - 16), 8, 82, EDGE, false);
-            } else if (type == DoorGraph382.TARGET_TYPE) {
-                // The blue output: the reference to the player who hacked the door, as the graph keeps it.
-                graphics.drawString(font, clip(font, tr("gui.settledlands.door.target_line1"),
-                        width - 16), 8, 28, LABEL, false);
-                String who = DoorGraph382.opener(node);
-                graphics.drawString(font, clip(font, who.isEmpty()
-                                ? tr("gui.settledlands.door.target_none")
-                                : line("gui.settledlands.door.target_last", who), width - 16),
-                        8, 46, who.isEmpty() ? EDGE : accent, false);
-                graphics.drawString(font, clip(font, tr("gui.settledlands.door.target_line3"),
-                        width - 16), 8, 64, EDGE, false);
-            } else {
-                // Five lines in the same 100 px box - a 14 px pitch, the last one ends at 93.
-                graphics.drawString(font, clip(font, line("gui.settledlands.door.count",
-                        Integer.toString(DoorGraph382.keys(node))), width - 16), 8, 28, LABEL, false);
-                graphics.drawString(font, clip(font, line("gui.settledlands.door.speed",
-                        Integer.toString(DoorGraph382.speed(node))), width - 16), 8, 42, LABEL, false);
-                // «Сложность: 2 (qwerty + asdf)» - the number and the rows it buys, on one line.
-                graphics.drawString(font, clip(font, difficulty(node), width - 16), 8, 56, LABEL, false);
-                graphics.drawString(font, state(sealed), 8, 70, sealed ? SEALED : OPEN, false);
-                // The panel swallows the keyboard but for ESC; the card says so, because a player who
-                // cannot close a panel with anything else deserves to read why.
-                graphics.drawString(font, tr("gui.settledlands.door.hint"), 8, 84, EDGE, false);
-            }
+            // The settings, five lines in the same 100 px box - a 14 px pitch, the last one ends at 93.
+            // Everything stops before the label strip, so no line can ever run under a socket label.
+            graphics.drawString(font, clip(font, line("gui.settledlands.door.count",
+                    Integer.toString(DoorGraph382.keys(node))), textWidth), 8, 28, LABEL, false);
+            graphics.drawString(font, clip(font, line("gui.settledlands.door.speed",
+                    Integer.toString(DoorGraph382.speed(node))), textWidth), 8, 42, LABEL, false);
+            // «Сложность: 2 (qwerty + asdf)» - the number and the rows it buys, on one line.
+            graphics.drawString(font, clip(font, difficulty(node), textWidth), 8, 56, LABEL, false);
+            graphics.drawString(font, clip(font, state(sealed), textWidth), 8, 70,
+                    sealed ? SEALED : OPEN, false);
+            // The reference the blue socket hands out, as the card keeps it: the last player who hacked
+            // this door. Empty until somebody does, and the card says so in the same muted grey the rest
+            // of the graph uses for "nothing here yet".
+            String who = DoorGraph382.opener(node);
+            graphics.drawString(font, clip(font, who.isEmpty()
+                            ? tr("gui.settledlands.door.target_none")
+                            : line("gui.settledlands.door.hacked_last", who), textWidth),
+                    8, 84, who.isEmpty() ? EDGE : accent, false);
+
+            // Build 392: the two labels of the sockets, right-aligned in the strip that was kept free.
+            String outLabel = tr("gui.settledlands.door.pin_out");
+            graphics.drawString(font, outLabel, width - 8 - font.width(outLabel),
+                    OUT_ROW - 4, AMBER, false);
+            String whoLabel = tr("gui.settledlands.door.pin_who");
+            graphics.drawString(font, whoLabel, width - 8 - font.width(whoLabel),
+                    VALUE_ROW - 4, PursuitGraphNode272.COL_VALUE, false);
+
+            // The sockets themselves, where their wires start: the round execution port of the canvas,
+            // and the blue diamond of every value output of this mod. Drawn last, so a label can never
+            // paint over them.
+            socket(graphics, width, OUT_ROW, AMBER);
+            diamond(graphics, width, VALUE_ROW, 5, PursuitGraphNode272.COL_VALUE);
         } catch (Throwable failure) {
             DoorGraph382.fail(failure);
         } finally {
@@ -134,6 +150,34 @@ public final class DoorCard382 {
     /** The name of the door card, in the language the client runs in. */
     public static String title() {
         return tr(DoorGraph382.TITLE_KEY);
+    }
+
+    /**
+     * The round execution socket: a dark ring and an amber dot, centred on the card's right edge at
+     * {@code row}. Round on purpose - a value socket is a diamond, and the author must never have to guess
+     * which of the two he is grabbing.
+     */
+    public static void socket(GuiGraphics graphics, int x, int row, int colour) {
+        if (graphics == null) return;
+        graphics.fill(x - 6, row - 6, x + 6, row + 6, EDGE);
+        graphics.fill(x - 4, row - 4, x + 4, row + 4, colour);
+    }
+
+    /**
+     * A diamond in card units - the shape of a value pin. The same size the wire pass uses as a start,
+     * a little larger than the 2 px stock dot so a socket on the door card is easy to find and to grab.
+     */
+    public static void diamond(GuiGraphics graphics, int x, int row, int radius, int colour) {
+        if (graphics == null || radius <= 0) return;
+        for (int dy = -radius - 1; dy <= radius + 1; dy++) {
+            int half = radius + 1 - Math.abs(dy);
+            if (half < 0) continue;
+            graphics.fill(x - half, row + dy, x + half + 1, row + dy + 1, EDGE);
+        }
+        for (int dy = -radius; dy <= radius; dy++) {
+            int half = radius - Math.abs(dy);
+            graphics.fill(x - half, row + dy, x + half + 1, row + dy + 1, colour);
+        }
     }
 
     /** {@code Кол-во чисел: 6} - a key with one argument, never a throw. */

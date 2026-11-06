@@ -137,10 +137,16 @@ def structural(jar):
                     ("NpcNet$CfgView", "the aim packet is not sent"),
                     ("NpcNet$DlgView", "the dialogue window is not sent"),
                     ("NpcNet.sendTo", "nothing reaches the player"),
-                    ("NpcProfile.fill", "the line does not fill the stock placeholders"),
+                    # Build 392: `say` fills the line through BlockTalk358#line, which is the one
+                    # place that fills the stock placeholders and then the body a door card's blue
+                    # socket hands over (%target%). Either call satisfies the rule - what must not
+                    # happen is a window with the raw text in it.
+                    (("NpcProfile.fill", "BlockTalk358.line"),
+                     "the line does not fill the stock placeholders"),
                     ("BlockTrigger351.idFor", "the window carries no block id - the client would "
                                               "hand a block view to the entity screen")):
-                if needle not in say:
+                options = (needle,) if isinstance(needle, str) else needle
+                if not any(option in say for option in options):
                     problems.append("say() is wrong: %s" % why)
             field_of = "NpcProfile.blockMouseLook"
             if field_of not in say:

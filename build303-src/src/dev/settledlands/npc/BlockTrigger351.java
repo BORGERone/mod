@@ -298,7 +298,7 @@ public final class BlockTrigger351 {
                 // chain waits for that window to be closed (BlockTalk358#pick continues it). The chat
                 // below is only the fallback for when no window can be shown at all.
                 if (BlockTalk358.say(player, graph, cur, where)) return;
-                say(player, cur);
+                say(player, graph, cur);
                 act(player, cur);
                 fireTriggers(player, graph, cur, visited);
                 curId = cur.next;
@@ -423,10 +423,12 @@ public final class BlockTrigger351 {
      * radius event may fire for a body that is not a player) - the chain still goes on, because a
      * silent line is a line, not a stop.</p>
      */
-    private static void say(ServerPlayer player, NpcDialogueGraph.Node node) {
+    private static void say(ServerPlayer player, NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
         if (player == null || node == null || node.text == null || node.text.isBlank()) return;
         try {
-            String line = NpcProfile.fill(node.text, player, 0);
+            // Build 392: the same fill the window uses, so a line wired to the blue socket of a door card
+            // says the name of the player who hacked it here too (%target%).
+            String line = BlockTalk358.withBody(NpcProfile.fill(node.text, player, 0), player, graph, node);
             if (line == null || line.isBlank()) return;
             player.displayClientMessage(Component.literal(line), false);
         } catch (Throwable failure) {

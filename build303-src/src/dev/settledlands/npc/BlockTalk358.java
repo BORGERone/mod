@@ -1,5 +1,6 @@
 package dev.settledlands.npc;
 
+import dev.settledlands.door.DoorGraph382;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -87,6 +88,41 @@ public final class BlockTalk358 {
 
     private BlockTalk358() {}
 
+    /**
+     * Build 392: the text of one line with every placeholder filled, including the body the blue socket of
+     * a door card hands over.
+     *
+     * <p>Since build 392 the two outputs of a door are sockets of its card, and the blue one carries the
+     * player who hacked the door. A «Реплика» wired to that socket therefore reads <b>him</b>:
+     * {@code %target%} is his name, {@code %target_kind%} is {@code player} and {@code %target_uuid%} is
+     * his uuid - the same three tokens the NPC graphs use for the body of «В радиусе» and «Урон»
+     * ({@code NpcValueSource290}). Without a blue wire nothing changes: the text is filled exactly the way
+     * it always was.</p>
+     */
+    public static String line(ServerPlayer player, NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+        if (node == null) return "";
+        return withBody(NpcProfile.fill(node.lineFor(0), player, 0), player, graph, node);
+    }
+
+    /**
+     * The three body tokens of a node whose blue input is a door card. The body is the player the chain
+     * runs as - the one who hacked the door - so this costs one hash lookup and no state of its own.
+     */
+    public static String withBody(String text, ServerPlayer player, NpcDialogueGraph graph,
+            NpcDialogueGraph.Node node) {
+        if (text == null || text.isEmpty() || player == null || graph == null || node == null) return text;
+        if (node.varInputNode < 0) return text;
+        NpcDialogueGraph.Node source = graph.get(node.varInputNode);
+        if (!DoorGraph382.isDoorNode(source)) return text;
+        String out = text;
+        if (out.contains("%target_uuid%")) {
+            out = out.replace("%target_uuid%", player.getUUID().toString());
+        }
+        if (out.contains("%target_kind%")) out = out.replace("%target_kind%", "player");
+        if (out.contains("%target%")) out = out.replace("%target%", player.getName().getString());
+        return out;
+    }
+
     // ---- the window ---------------------------------------------------------
 
     /**
@@ -103,7 +139,7 @@ public final class BlockTalk358 {
         try {
             // The node text with the stock placeholders filled; the variants of build 336 are the
             // lineFor of relation 0 - a block has no relation of its own.
-            String text = NpcProfile.fill(node.lineFor(0), player, 0);
+            String text = line(player, graph, node);
             if (text == null || text.isBlank()) return false;
             NpcProfile profile = new NpcProfile();
             profile.blockMouseLook = true;   // the view stays on the block while it speaks
@@ -160,7 +196,7 @@ public final class BlockTalk358 {
                 targets.add(target);
             }
             if (labels.isEmpty()) return false;
-            String text = NpcProfile.fill(node.lineFor(0), player, 0);
+            String text = line(player, graph, node);
             if (text == null) text = "";
             NpcProfile profile = new NpcProfile();
             profile.blockMouseLook = true;

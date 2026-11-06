@@ -1,37 +1,48 @@
 #!/usr/bin/env python3
-"""Gate: a door's graph is a stock graph - the same rows, the same types, the same interpreter.
+"""Gate: a door's graph is a stock graph, and the two outputs of a door are sockets of its card.
 
 The author's report on build 386: «мне не нравится реализация нод в графе двери, сделай реализацию как в
 других графах». Build 386 had invented three node types («Открытие», «Кто открыл», «В радиусе») with their
 own cards, their own inspector rows and their own little walk, which is why a door's graph worked unlike
 every other graph in the mod.
 
-What this gate asks of the jar - the block's answer, build 351, applied to a door:
+The author's report on build 391, with a screenshot of a door graph holding three cards: «Ты создал ноды
+импульс и цель, а я хотел чтобы ты создал не ноды, а УЗЛЫ на ноде \"дверь\"». Builds 389-391 had answered
+the earlier request with two extra cards. Build 392 puts those two outputs where he asked for them - on the
+card itself, as its two sockets.
+
+What this gate asks of the jar:
 
   * the palette of a door is the palette of a block: `BlockMenu363#doorType` answers through
-    `BlockTrigger351#typeForRow`, and no field of a door palette of its own survives;
-  * every stock row creates a stock type, so the stock card painter, the stock inspector rows and the
-    stock fields come with it - there is nothing left for this mod to draw but the door card;
-  * the chain is run by the stock interpreter: `DoorSignal388` starts at the node marked «Начало»
-    (`startNode`) and calls `BlockTrigger351#fire` with the door as the speaker
-    (`BlockTalk358$Where`), so «Триггер» with `%player%` is the «кто открыл», «Переменная» moves the same
-    `NpcPoints` the NPCs use, «Условие If» compares and branches, «Реплика» speaks in the stock window;
-  * build 389's two outputs are wired the way the author drew them: `DoorGraph382#wireStarter` creates a
-    «Импульс» (41) and a blue «Цель» (42) after the card and links them, `DoorSignal388#hack` - called from
-    the solved panel only, never from a plain click - pulses every signal node and stamps the hacker's name
-    into every target node, and both are reachable from the end of a door's create menu;
-  * the door's own node is one card, like a block's «Имя» card: `DoorGraph382` keeps no type other than
-    `DOOR_TYPE`, `DoorCard382` paints only that card, and the inspector parks the stock rows only for it;
-  * a graph written by build 386 is migrated instead of kept: `DoorGraph382#migrate` removes nodes and
-    `DoorGraphClient382#graphOf` calls it, so a node that cannot run never sits in a graph pretending it
-    might;
-  * the walk is reachable from a real opening: both `DoorEvents368` and `DoorHack377` call
-    `DoorSignal388#fire`.
+    `BlockTrigger351#typeForRow`, a door's menu has exactly the stock rows, and no extra row, no door
+    palette field and no `DoorGraph382` reference survives in the menu;
+  * the chain is run by the stock interpreter: `DoorSignal388#hack` starts at the node the card's output
+    socket points at (`DoorGraph382#chainStart`) and calls `BlockTrigger351#fire` with the door as the
+    speaker (`BlockTalk358$Where`), so «Триггер» with `%player%` is the «кто открыл», «Переменная» moves
+    the same `NpcPoints` the NPCs use, «Условие If» compares and branches, «Реплика» speaks in the stock
+    window;
+  * the two outputs are sockets of the card: the execution socket is the card's own `next` (the stock
+    output port row), the blue socket is the value output of `PursuitGraphNode272#isValueSourceNode`, which
+    now includes the door card (`isDoorValueNode` → `DoorGraph382#isDoorNode`), so the diamond, its hit
+    test, the wire drag, the cut and the blue drawing pass all work with no code of their own;
+  * the reference lives on the card: `DoorGraph382#setOpener` writes the hacker's name into the node's
+    `text` field - a field the graph NBT writes for every node - and `#opener` reads it back, so the card
+    shows it and the reference survives a save;
+  * the two nodes of builds 389-391 are folded away, not left behind: `DoorGraph382#foldStarter` knows both
+    old types (41 and 42), rewires the graph (`bypass`) and drops them; `#migrate` and `#open` call it, and
+    the palette of a door cannot create them any more (`#allowed` must not allow 41 or 42);
+  * a line wired to the blue socket reads the hacker: `BlockTalk358#withBody` fills `%target%`,
+    `%target_kind%` and `%target_uuid%` with the player the chain runs as, and both the window
+    (`BlockTalk358#line`) and the chat fallback (`BlockTrigger351#say`) go through it;
+  * the door's own node is one card, like a block's «Имя» card: `DoorCard382` paints only that card and
+    the inspector parks the stock rows only for it;
+  * the walk is reachable from a real opening: `DoorHack377` calls `DoorSignal388#hack`, and a plain click
+    does not.
 
-    python3 tools/door_stock_check.py settledlands-0.8.0-build388-door-stock-nodes.jar
+    python3 tools/door_stock_check.py settledlands-0.8.0-build392-door-card-sockets.jar
 
 Exit 0 = a door's graph is the block's graph: stock rows, stock types, stock interpreter, one card of its
-own, and old invented nodes migrated away.
+own carrying the door's two sockets, and the nodes of the older builds folded into them.
 """
 import json
 import pathlib
@@ -52,15 +63,27 @@ CARD = "dev/settledlands/npc/client/DoorCard382.class"
 ROWS = "dev/settledlands/mixin/NpcDoorRows382Mixin.class"
 PALETTE_MIXIN = "dev/settledlands/mixin/NpcDoorGraph382Mixin.class"
 CLIENT = "dev/settledlands/npc/client/DoorGraphClient382.class"
+PURSUIT = "dev/settledlands/npc/client/PursuitGraphNode272.class"
+TALK = "dev/settledlands/npc/BlockTalk358.class"
+TRIGGER_CLASS = "dev/settledlands/npc/BlockTrigger351.class"
 RU = "assets/settledlands/lang/ru_ru.json"
 EN = "assets/settledlands/lang/en_us.json"
 
 TRIGGER = "dev/settledlands/npc/BlockTrigger351"
-TALK = "dev/settledlands/npc/BlockTalk358$Where"
+TALK_WHERE = "dev/settledlands/npc/BlockTalk358$Where"
+NODE = "dev/settledlands/npc/NpcDialogueGraph$Node"
+DOOR = "dev/settledlands/door/DoorGraph382"
 
 # The types build 386 invented. They are gone, and a gate that finds any of them back means a regression
 # to a door-only node set.
 STALE_TYPES = ("EVENT_TYPE", "WHO_TYPE", "RADIUS_TYPE", "MIN_RADIUS", "MAX_RADIUS", "DEFAULT_RADIUS")
+
+# The two nodes of builds 389-391. They may only exist as the numbers the fold recognises.
+OLD_NODES = ("SIGNAL_TYPE", "TARGET_TYPE")
+
+# The methods and fields build 392 removed. Finding one back means the two cards are back.
+GONE = ("wireStarter", "signalNodes", "relayoutStarter", "rowSpot", "freeSpot", "near", "occupied",
+        "extraType", "PALETTE_EXTRA", "isSignalNode", "isTargetNode")
 
 
 def fail(message):
@@ -139,28 +162,38 @@ def main(argv):
         return fail("no such jar: %s" % jar)
     with zipfile.ZipFile(jar) as z:
         names = set(z.namelist())
-        for required in (LOGIC, SIGNAL, EVENTS, HACK, MENU, CARD, ROWS, PALETTE_MIXIN, CLIENT, RU, EN):
+        for required in (LOGIC, SIGNAL, EVENTS, HACK, MENU, CARD, ROWS, PALETTE_MIXIN, CLIENT, PURSUIT,
+                         TALK, TRIGGER_CLASS, RU, EN):
             if required not in names:
-                return fail("%s is missing - build 388 is not in this jar" % required)
+                return fail("%s is missing - the door's graph is not in this jar" % required)
         if OLD in names:
             return fail("%s is still in the jar - the door's own walk must be gone" % OLD)
-        blobs = {n: z.read(n) for n in (LOGIC, SIGNAL, EVENTS, HACK, MENU, CARD, ROWS,
-                                        PALETTE_MIXIN, CLIENT, RU, EN)}
+        blobs = {n: z.read(n) for n in (LOGIC, SIGNAL, EVENTS, HACK, MENU, CARD, ROWS, PALETTE_MIXIN,
+                                        CLIENT, PURSUIT, TALK, TRIGGER_CLASS, RU, EN)}
 
-    # ---- 1. the door's own types are gone ------------------------------------------------------
+    # ---- 1. the door's own types are gone, and the two old nodes are only a fold ----------------
     logic, logic_refs = parse(blobs[LOGIC])
     stale = [name for name in STALE_TYPES if name in field_names(logic)]
     if stale:
         return fail("DoorGraph382 still declares %s - a door's nodes must be the stock ones"
                     % ", ".join(stale))
-    for member in ("typeForRow", "rowForType", "paletteRows", "migrate"):
+    for member in ("typeForRow", "rowForType", "paletteRows", "migrate", "allowed", "isDoorGraphNode"):
         if member not in methods(logic):
             return fail("DoorGraph382 has no %s()" % member)
     if not calls(logic_refs, TRIGGER, "typeForRow"):
         return fail("DoorGraph382 does not take its rows from the block's palette - the two graphs would"
                     " offer different nodes")
     if not calls(logic_refs, "dev/settledlands/npc/NpcDialogueGraph", "remove"):
-        return fail("DoorGraph382#migrate never removes a node - the build-386 types would stay")
+        return fail("DoorGraph382 never removes a node - the build-386 types and the two old outputs would"
+                    " stay")
+    for gone in GONE:
+        if gone in methods(logic) or gone in field_names(logic):
+            return fail("DoorGraph382 still has %s - the two cards of builds 389-391 are back" % gone)
+    allowed = code_ints(logic, "allowed")
+    for old in (41, 42):
+        if old in allowed:
+            return fail("DoorGraph382#allowed still allows type %d - a door's menu could create the nodes of"
+                        " build 389 again" % old)
 
     # ---- 2. the palette of a door is the palette of a block ------------------------------------
     menu, menu_refs = parse(blobs[MENU])
@@ -168,9 +201,12 @@ def main(argv):
         return fail("BlockMenu363 has no doorType(row)")
     if not calls(menu_refs, TRIGGER, "typeForRow"):
         return fail("BlockMenu363 does not map its rows through BlockTrigger351#typeForRow")
-    for gone in ("DOOR_ROWS", "DOOR_ROW_NUMBERS"):
-        if gone in field_names(menu):
+    for gone in ("DOOR_ROWS", "DOOR_ROW_NUMBERS", "stockCount"):
+        if gone in field_names(menu) or gone in methods(menu):
             return fail("BlockMenu363 still has %s - the door's palette must be the stock one" % gone)
+    if any(owner == DOOR for owner, _m in menu_refs):
+        return fail("BlockMenu363 still asks DoorGraph382 for a type - the menu must be the stock rows and"
+                    " nothing after them")
     mixin, mixin_refs = parse(blobs[PALETTE_MIXIN])
     if not calls(mixin_refs, "dev/settledlands/npc/client/BlockMenu363", "doorType"):
         return fail("the palette click does not ask the menu which type the row is")
@@ -182,19 +218,24 @@ def main(argv):
     for member in ("hack", "startNode"):
         if member not in methods(signal):
             return fail("DoorSignal388 has no %s()" % member)
-    if not calls(signal_refs, "dev/settledlands/door/DoorGraph382", "signalNodes"):
-        return fail("DoorSignal388 does not look for the pulse nodes - nothing would fire the graph")
-    if not calls(signal_refs, "dev/settledlands/door/DoorGraph382", "setOpener"):
-        return fail("DoorSignal388 never stamps the hacker into the blue target node")
+    if not calls(signal_refs, DOOR, "chainStart"):
+        return fail("DoorSignal388 does not start the chain where the card's output socket points - the"
+                    " pulse would have nothing to run")
+    if calls(signal_refs, DOOR, "signalNodes"):
+        return fail("DoorSignal388 still looks for pulse nodes - the outputs are sockets of the card now")
+    if not calls(signal_refs, DOOR, "setOpener"):
+        return fail("DoorSignal388 never writes the hacker onto the card")
+    if not calls(signal_refs, DOOR, "foldStarter"):
+        return fail("DoorSignal388 does not fold the nodes of build 389-391 - a door hacked before its"
+                    " graph is opened again would run nothing")
     if not calls(signal_refs, "dev/settledlands/door/DoorGraph382Store", "put"):
         return fail("DoorSignal388 does not save the graph - the name of the hacker would be lost")
     if not calls(signal_refs, TRIGGER, "fire"):
         return fail("DoorSignal388 does not hand the chain to BlockTrigger351#fire - the door would run a"
                     " walk of its own again")
-    if not calls(signal_refs, TALK, "<init>"):
+    if not calls(signal_refs, TALK_WHERE, "<init>"):
         return fail("DoorSignal388 never builds the speaker of the chain (BlockTalk358$Where)")
-    if 40 not in code_ints(signal, "startNode") and not calls(
-            signal_refs, "dev/settledlands/door/DoorGraph382", "isDoorNode"):
+    if not calls(signal_refs, DOOR, "isDoorNode"):
         return fail("DoorSignal388#startNode does not tell the door card apart from the start node - the"
                     " settings card would start the chain")
     _hack, hack_refs = parse(blobs[HACK])
@@ -204,60 +245,90 @@ def main(argv):
     if calls(events_refs, "dev/settledlands/door/DoorSignal388", "hack"):
         return fail("DoorEvents368 pulses the graph on a plain click - the pulse must be the hack's")
 
-    # ---- 3b. the two outputs of the card ------------------------------------------------------
-    for member in ("wireStarter", "signalNodes", "setOpener", "extraType"):
+    # ---- 3b. the two sockets, and the fold that put them there ---------------------------------
+    for member in ("foldStarter", "bypass", "chainStart", "opener", "setOpener"):
         if member not in methods(logic):
-            return fail("DoorGraph382 has no %s() - the two outputs of the card are not built" % member)
-    # Build 391: the two nodes stand in the row to the right, where the stock canvas draws a wire without
-    # a loop, and a door wired under the card is moved there once. `freeSpot` was the under-the-card
-    # placement that made the tangle; it must not come back.
-    for member in ("rowSpot", "relayoutStarter"):
-        if member not in methods(logic):
-            return fail("DoorGraph382 has no %s() - the outputs of a new door would not sit in a clean row"
-                        % member)
-    if "freeSpot" in methods(logic):
-        return fail("DoorGraph382 still has freeSpot() - that placement put the pulse under the card and the"
-                    " canvas drew the wire looping round it")
-    wired = code_ints(logic, "wireStarter")
-    for wanted in (41, 42):
-        if wanted not in wired:
-            return fail("DoorGraph382#wireStarter does not create type %d - a fresh door would have no"
-                        " signal and no target" % wanted)
-    if not calls(menu_refs, "dev/settledlands/door/DoorGraph382", "extraType"):
-        return fail("BlockMenu363 does not offer the two nodes of the door at the end of its menu")
+            return fail("DoorGraph382 has no %s() - the card's sockets are not built" % member)
+    if not calls(logic_refs, "dev/settledlands/door/DoorGraph382", "foldStarter") and \
+            "foldStarter" not in methods(logic):
+        return fail("DoorGraph382 does not fold the old nodes")
+    folded = code_ints(logic, "foldStarter")
+    for old in (41, 42):
+        if old not in folded:
+            return fail("DoorGraph382#foldStarter does not recognise type %d - a graph of build 389-391"
+                        " would keep its two cards" % old)
+    if not calls(logic_refs, NODE, "removeIf"):
+        pass
+    if not calls(logic_refs, "dev/settledlands/npc/NpcDialogueGraph", "remove"):
+        return fail("DoorGraph382 never removes a folded node")
+    # the name lives on the card: written into the node's own text, read back from it
+    if not any(owner == NODE and member == "text" for owner, member in logic_refs):
+        return fail("DoorGraph382 never touches the node's text - the hacker's name has nowhere to live")
+    # the blue socket works because the value family knows the card
+    pursuit, pursuit_refs = parse(blobs[PURSUIT])
+    if "isDoorValueNode" not in methods(pursuit):
+        return fail("PursuitGraphNode272 has no isDoorValueNode() - the blue socket of the card would not"
+                    " be a value output")
+    if not calls(pursuit_refs, DOOR, "isDoorNode"):
+        return fail("PursuitGraphNode272 does not ask DoorGraph382 whether a node is the door card")
 
     # ---- 4. one card of its own, and the stock inspector for everything else ------------------
     card, card_refs = parse(blobs[CARD])
-    for member in ("keys", "speed", "difficulty", "sealed"):
-        if not calls(card_refs, "dev/settledlands/door/DoorGraph382", member):
+    for member in ("keys", "speed", "difficulty", "sealed", "opener"):
+        if not calls(card_refs, DOOR, member):
             return fail("DoorCard382 does not read DoorGraph382#%s - the card would show nothing" % member)
-    for text_part in ("gui.settledlands.door.target_line1", "gui.settledlands.door.signal_line1"):
-        if text_part not in text(card):
-            return fail("DoorCard382 does not draw %s" % text_part)
+    for member in ("socket", "diamond"):
+        if member not in methods(card):
+            return fail("DoorCard382 has no %s() - the card would draw no socket" % member)
+    card_text = text(card)
+    for key in ("gui.settledlands.door.pin_out", "gui.settledlands.door.pin_who",
+                "gui.settledlands.door.hacked_last"):
+        if key not in card_text:
+            return fail("DoorCard382 does not draw %s - the sockets would have no labels" % key)
+    for gone in ("gui.settledlands.door.signal_line1", "gui.settledlands.door.target_line1"):
+        if gone in card_text:
+            return fail("DoorCard382 still draws %s - that is the card of an old node" % gone)
     rows, rows_refs = parse(blobs[ROWS])
-    if not calls(rows_refs, "dev/settledlands/door/DoorGraph382", "isDoorGraphNode"):
+    if not calls(rows_refs, DOOR, "isDoorGraphNode"):
         return fail("the inspector does not tell the door card apart - it would replace the stock rows of"
                     " every stock node too")
-    if not calls(rows_refs, "dev/settledlands/door/DoorGraph382", "opener"):
-        return fail("the inspector of the blue target does not show the name of the hacker")
+    if not calls(rows_refs, DOOR, "opener"):
+        return fail("the inspector of the door does not show the name of the last hacker")
+    if not calls(rows_refs, DOOR, "isDoorNode"):
+        return fail("the inspector builds no door rows at all")
     for gone in ("setRadius", "isRadiusNode"):
-        if calls(rows_refs, "dev/settledlands/door/DoorGraph382", gone):
+        if calls(rows_refs, DOOR, gone):
             return fail("the inspector still builds a row for the removed type %s" % gone)
     if not any(m == "propertyChange" for _o, m in rows_refs):
         return fail("the door card's rows are not committed through propertyChange")
 
+    # ---- 4b. a line wired to the blue socket reads the hacker ---------------------------------
+    talk, talk_refs = parse(blobs[TALK])
+    for member in ("line", "withBody"):
+        if member not in methods(talk):
+            return fail("BlockTalk358 has no %s() - a line wired to the blue socket would say %target%"
+                        % member)
+    for token in ("%target%", "%target_kind%", "%target_uuid%"):
+        if token not in text(talk):
+            return fail("BlockTalk358#withBody does not fill %s" % token)
+    if not calls(talk_refs, DOOR, "isDoorNode"):
+        return fail("BlockTalk358 does not ask DoorGraph382 where the body comes from")
+    trigger, trigger_refs = parse(blobs[TRIGGER_CLASS])
+    if not calls(trigger_refs, "dev/settledlands/npc/BlockTalk358", "withBody"):
+        return fail("the chat fallback of a block line does not fill the body - the two paths would differ")
+
     # ---- 5. an old graph is migrated ----------------------------------------------------------
     client, client_refs = parse(blobs[CLIENT])
-    if not calls(client_refs, "dev/settledlands/door/DoorGraph382", "migrate"):
-        return fail("DoorGraphClient382#graphOf does not migrate a build-386 graph - the old nodes would"
-                    " sit in it and never run")
+    if not calls(client_refs, DOOR, "migrate"):
+        return fail("DoorGraphClient382#graphOf does not migrate an old graph - the old nodes would sit in"
+                    " it and never run")
 
-    # ---- 6. the palette note says what a door offers ------------------------------------------
+    # ---- 6. the language says what the sockets are --------------------------------------------
     ru = json.loads(blobs[RU].decode("utf-8"))
     en = json.loads(blobs[EN].decode("utf-8"))
-    for needed in ("gui.settledlands.door.signal", "gui.settledlands.door.target",
-                   "gui.settledlands.door.target_last", "gui.settledlands.door.target_none",
-                   "gui.settledlands.door.signal_line1", "gui.settledlands.door.target_line3"):
+    for needed in ("gui.settledlands.door.pin_out", "gui.settledlands.door.pin_who",
+                   "gui.settledlands.door.pin_out_hint", "gui.settledlands.door.hacked_last",
+                   "gui.settledlands.door.target_none"):
         for table, path in ((ru, "ru_ru.json"), (en, "en_us.json")):
             if needed not in table:
                 return fail("%s has no %s" % (path, needed))
@@ -268,11 +339,11 @@ def main(argv):
         if "Открытие" in table[key] or "Opened by" in table[key]:
             return fail("%s still describes the build-386 palette" % path)
 
-    print("door_stock_check: OK  %s  (a door's create menu is the block's row set plus the door's own two"
-          " outputs, the chain runs through BlockTrigger351#fire with the door as the speaker, the pulse"
-          " comes from a solved panel and never from a plain click, every blue target is stamped with the"
-          " hacker's name and saved, a fresh door is wired card -> pulse -> target, and only the three cards"
-          " of this mod replace the stock inspector)" % jar.name)
+    print("door_stock_check: OK  %s  (a door's create menu is the block's row set, the chain runs through"
+          " BlockTrigger351#fire from the card's output socket with the door as the speaker, the pulse comes"
+          " from a solved panel and never from a plain click, the card keeps the name of the last hacker and"
+          " hands it out through its blue socket, the two nodes of builds 389-391 are folded into those"
+          " sockets, and only the door card replaces the stock inspector)" % jar.name)
     return 0
 
 

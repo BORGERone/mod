@@ -69,10 +69,17 @@ DOOR = "dev/settledlands/door/DoorGraph382"
 # The three lines of the card and the title - the ones the author read as «Случайность» and clipped.
 CARD_KEYS = ("gui.settledlands.door.node", "gui.settledlands.door.count",
              "gui.settledlands.door.speed", "gui.settledlands.door.sealed",
-             "gui.settledlands.door.unsealed", "gui.settledlands.door.hint",
+             "gui.settledlands.door.unsealed",
              # Build 385: the difficulty and the rows it opens are lines of the same card.
              "gui.settledlands.door.difficulty", "gui.settledlands.door.rows1",
-             "gui.settledlands.door.rows2", "gui.settledlands.door.rows3")
+             "gui.settledlands.door.rows2", "gui.settledlands.door.rows3",
+             # Build 392: the card has five text lines - count, speed, difficulty, state and the name
+             # of the last hacker - so the line about the blocked keyboard (gui.settledlands.door.hint)
+             # left the card. It was never the panel's only word on it: the panel itself prints
+             # «ESC удержи ~1 с, если клавиша залипла». What the card carries instead are the labels of
+             # its two sockets, which are the reason this build exists.
+             "gui.settledlands.door.pin_out", "gui.settledlands.door.pin_who",
+             "gui.settledlands.door.hacked_last")
 
 
 def fail(message):

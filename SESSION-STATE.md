@@ -1588,3 +1588,39 @@ back across the card, into the pulse's left port). The blue target stood to the 
 - **Unconfirmed in game**: that the right-to-left wire really draws straight for this door, that the one-time
   move did not catch a node the author had nudged by <8 px, and that the target standing after the pulse is
   what he wants when his own chain already existed.
+
+## Build 392 - the two outputs are sockets of the door card (shipped)
+
+**User report (screenshot of the 391 graph):** «теперь все выглядит так. Ты похоже меня не понял. Ты создал
+ноды импульс и цель, а я хотел чтобы ты создал не ноды, а УЗЛЫ на ноде "дверь"». Builds 389-391 answered the
+386/389 request with two extra cards; he wanted the two outputs to be sockets **on** the door card.
+
+- The door card now carries both outputs itself: the round amber **execution socket** on the right edge at the
+  stock output row (`NODE_H / 2`), which is the card's own `next`, so wires/drag/cut stay stock; and one row
+  under it the blue **value socket** - `PursuitGraphNode272.isValueSourceNode` now includes the door card via
+  `isDoorValueNode` -> `DoorGraph382.isDoorNode`, so pin, hit test, drag, cut, blue pass and count all work.
+- The reference lives on the card: `DoorGraph382#setOpener` writes the hacker into `Node#text` (written for
+  every node by the serialiser), `#opener` reads it; the card shows «Взломал: …», and `%target%` /
+  `%target_kind%` / `%target_uuid%` in a «Реплика» wired to the blue socket resolve to the hacker
+  (`BlockTalk358#line`/`withBody`, also used by the `BlockTrigger351#say` chat fallback).
+- `DoorGraph382#foldStarter` folds the 389-391 nodes into the sockets: pulse chain -> `door.next`, readers of
+  the target -> `door.id`, its name -> the card, «Начало» -> the card; `bypass`/`drop` rewire every list
+  (next/falseNext/randomBranches/choices/triggers). Runs in `open()`, `save()`, `migrate()` and `DoorSignal388#hack`.
+- `DoorSignal388#hack` starts at `DoorGraph382#chainStart` (the card's socket target), legacy «Начало» only when
+  nothing is wired; `allowed()` no longer accepts 41/42; `BlockMenu363` is the stock rows only; card layout is
+  five lines (count, speed, difficulty, state, hacker) with the socket labels in a 74 px strip on the right.
+- Gates: `door_stock_check.py` rewritten for 392 (requires foldStarter/bypass/chainStart/opener/setOpener,
+  isDoorValueNode, %target%; forbids wireStarter/signalNodes/relayoutStarter/rowSpot/freeSpot/PALETTE_EXTRA/
+  extraType/isSignalNode/isTargetNode and 41/42 in allowed - fails on 391); new `door_fold_check.py` runs
+  `tools/harness/DoorSockets392Probe.java` against the jar (fold of card->pulse->line + trigger reading target
+  gives 3 nodes, door.next=line, trigger.varInputNode=door, entry=door, opener=Steve, second fold=false,
+  coordinates and texts kept); `door_screen_check.py` drops `door.hint` from the card keys (the panel itself
+  prints the ESC hold line), `block_talk_check.py` accepts `BlockTalk358#line` as the placeholder filler.
+  All 28 gates green; `verify_jar --base 391` PASS (576 entries, 11 replaced, 43/48 mixins, 0 new refs).
+- Ship: `settledlands-0.8.0-build392-door-card-sockets.jar` (sha256 64698415…dde87), README
+  `README-Build392-RU.md`, zip `SettledLands-Build392-CardSockets-Source.zip` (500 entries),
+  `SHA256SUMS-build392.txt`, patch `tools/patch_build392.py` (base 391, `srcdir out392`, 11 entries).
+- **Unconfirmed in game**: how the two sockets and their labels look at his zoom (text clipped to 130 px, label
+  strip 74 px), that the diamond does not cover the blue wire start (same point by construction), that the fold
+  did not remove a node he had dragged and that was a 41/42 by type, and that `%target%` really shows the
+  hacker's name in the dialogue window.

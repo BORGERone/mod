@@ -1,5 +1,6 @@
 package dev.settledlands.npc.client;
 
+import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
 import java.util.ArrayList;
@@ -828,7 +829,20 @@ public final class PursuitGraphNode272 {
 
     /** True for a node with a blue output: it hands out a body. */
     public static boolean isValueSourceNode(Node node) {
-        return isCheckValueNode(node) || isDamageValueNode(node);
+        return isCheckValueNode(node) || isDamageValueNode(node) || isDoorValueNode(node);
+    }
+
+    /**
+     * Build 392: the door card has a blue output too - the socket the author asked for («синий узел цели»
+     * as a socket of the card, not a node beside it). What it hands out is the player who hacked the door,
+     * which is exactly the body {@code %target%} resolves to in a «Реплика» wired to it.
+     *
+     * <p>Everything the blue pin does is already keyed on this one predicate - the diamond, its hit test,
+     * dragging a wire out of it, cutting that wire, and the blue pass that draws it - so the door needs no
+     * code of its own here: it is a value source like «В радиусе» and «Урон».</p>
+     */
+    public static boolean isDoorValueNode(Node node) {
+        return DoorGraph382.isDoorNode(node);
     }
 
     /**

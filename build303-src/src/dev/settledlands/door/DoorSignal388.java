@@ -16,31 +16,34 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Build 388/389: what runs when a door is hacked - the door's graph, through the interpreter every other
- * graph uses.
+ * Build 388/389/392: what runs when a door is hacked - the door's graph, through the interpreter every
+ * other graph uses.
  *
- * <p>Build 388 had made a door's graph a stock graph: the chain starts at «Начало» and
- * {@link BlockTrigger351#fire} runs it, so every stock node behaves the way it does in a block's graph or
- * an NPC's. Build 389 gives that chain the start the author drew in words: «один выходной узел сигнала и
- * синий узел цели ... даёт импульс если дверь взломать ... передаёт ссылку на того кто взломал дверь».</p>
+ * <p>Build 388 had made a door's graph a stock graph: {@link BlockTrigger351#fire} runs it, so every stock
+ * node behaves the way it does in a block's graph or an NPC's. Build 389 gave the chain the start the
+ * author drew in words («один выходной узел сигнала и синий узел цели ... даёт импульс если дверь
+ * взломать»), and did it with two nodes. Build 392 keeps the meaning and drops the nodes: both outputs are
+ * sockets of the door card now.</p>
  *
  * <ul>
- *   <li><b>the pulse</b> - every «Импульс» node ({@link DoorGraph382#SIGNAL_TYPE}) of the graph is fired,
- *       once, and <b>only</b> when the door is hacked: the lock panel of the door was solved. An ordinary
- *       click on a door that is not sealed does not pulse - that is not a hack;</li>
+ *   <li><b>the pulse</b> - the chain that leaves the card's execution socket, and it leaves it <b>only</b>
+ *       when the door is hacked: the lock panel of the door was solved. An ordinary click on a door that
+ *       is not sealed does not pulse - that is not a hack;</li>
  *   <li><b>the reference</b> - the player is the source of the whole chain, so {@code %player%} in a
- *       «Триггер» or a «Реплика» after the pulse is the hacker himself; and every blue «Цель» node
- *       ({@link DoorGraph382#TARGET_TYPE}) of the graph is stamped with his name, which is the reference
- *       the author can see on the card and that the graph keeps in the world file.</li>
+ *       «Триггер» or a «Реплика» after the socket is the hacker himself; the card also keeps his name
+ *       ({@link DoorGraph382#setOpener}), which is what its blue socket hands to every node wired to it -
+ *       {@code %target%} in such a «Реплика» is the hacker.</li>
  * </ul>
  *
- * <p>A graph built by build 388 has no «Импульс» node - it starts at «Начало». Such a graph is still run
- * on a hack, from that start node, so nothing that worked yesterday stops working today.</p>
+ * <p>A graph built by build 388 has its chain at «Начало» and no socket wired: such a graph is still run
+ * on a hack, from that start node, so nothing that worked yesterday stops working today. A graph saved by
+ * 389-391 still holds the two nodes of that build: they are folded into the card first
+ * ({@link DoorGraph382#foldStarter}), and the folded graph is written back.</p>
  *
- * <p>Cost, because this runs inside a door click: one store lookup, one stamp per target node, one walk
- * per signal node, and nothing per tick. The walk itself is bounded by the interpreter (256 nodes, a
- * visited set), so a loop drawn by hand cannot hang a tick, and the same hack cannot run the chain twice -
- * the panel sends once.</p>
+ * <p>Cost, because this runs inside a door click: one store lookup, one name on the card, one walk, and
+ * nothing per tick. The walk itself is bounded by the interpreter (256 nodes, a visited set), so a loop
+ * drawn by hand cannot hang a tick, and the same hack cannot run the chain twice - the panel sends
+ * once.</p>
  */
 public final class DoorSignal388 {
 
@@ -55,8 +58,8 @@ public final class DoorSignal388 {
     private DoorSignal388() {}
 
     /**
-     * Runs the door's graph for the player who hacked it: stamps him into every blue target node and
-     * pulses every signal node.
+     * Runs the door's graph for the player who hacked it: writes his name onto the card and runs the chain
+     * the card's output socket points at.
      *
      * @return true when at least one chain was started
      */
@@ -78,26 +81,31 @@ public final class DoorSignal388 {
             if (RECENT.size() > 256) RECENT.clear();
             RECENT.put(stamp, now);
 
-            // The reference: the player who hacked this door, written into every blue target node of the
-            // graph. Written before the chain runs, so a node of the chain can already read it back.
-            boolean recorded = false;
-            if (graph.nodes != null) {
-                for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-                    if (DoorGraph382.isTargetNode(node)) {
-                        DoorGraph382.setOpener(node, name);
-                        recorded = true;
-                    }
-                }
-            }
+            // Build 392: a graph saved by 389-391 still has the pulse and the blue target as nodes. They
+            // are folded into the card's two sockets here as well as in the editor, because a door may be
+            // hacked before its graph is ever opened again.
+            boolean folded = DoorGraph382.foldStarter(graph);
+
+            // The reference: the card keeps the name of the player who hacked this door, and its blue
+            // socket hands him to every node wired to it. Written before the chain runs, so a node of the
+            // chain can already read him back.
+            NpcDialogueGraph.Node door = DoorGraph382.doorNode(graph);
+            boolean recorded = door != null && name != null && !name.isBlank();
+            if (recorded) DoorGraph382.setOpener(door, name);
 
             // The door stands where a block stands in a block's graph: the window of a «Реплика» aims
             // its camera at these coordinates, and the store key names the door in the log.
             BlockTalk358.Where where = new BlockTalk358.Where(level, key,
                     pos.getX(), pos.getY(), pos.getZ());
 
-            List<NpcDialogueGraph.Node> starts = DoorGraph382.signalNodes(graph);
-            boolean legacy = starts.isEmpty();
-            if (legacy) {
+            // Build 392: the chain starts where the card's execution socket points. A graph that has no
+            // socket wired (build 388) still starts at «Начало», so nothing it does stops working.
+            List<NpcDialogueGraph.Node> starts = new ArrayList<>();
+            NpcDialogueGraph.Node chain = DoorGraph382.chainStart(graph);
+            boolean legacy = chain == null;
+            if (chain != null) {
+                starts.add(chain);
+            } else {
                 NpcDialogueGraph.Node start = startNode(graph);
                 if (start != null) starts.add(start);
             }
@@ -108,15 +116,15 @@ public final class DoorSignal388 {
                 ran |= BlockTrigger351.fire(player, graph, start, where);
             }
 
-            if (recorded) {
+            if (recorded || folded) {
                 // The name has to survive the session: the graph is the store's own, saved by put().
                 store.put(key, graph);
             }
             LOG.info("door: " + key + " was hacked by " + name + " - "
-                    + (starts.isEmpty() ? "no signal node, nothing to pulse"
-                            : starts.size() + " pulse(s) from " + (legacy ? "«Начало» (a graph of build 388 "
-                                    + "or older)" : "the signal node(s)"))
-                    + (recorded ? ", and the target holds his name" : ", and there is no target node"));
+                    + (starts.isEmpty() ? "nothing is wired to the card's output socket, nothing to pulse"
+                            : "the chain runs from " + (legacy ? "«Начало» (a graph of build 388 or older)"
+                                    : "the card's output socket"))
+                    + (recorded ? ", and the card holds his name" : ", and the card did not take his name"));
             return ran;
         } catch (Throwable failure) {
             fail(failure);
@@ -125,8 +133,9 @@ public final class DoorSignal388 {
     }
 
     /**
-     * The node a graph of build 388 starts at when it has no signal node: the «Начало» of the graph,
-     * never the door card (the card is the door's settings, not a step of any chain).
+     * The node a graph of build 388 starts at when the card's output socket is not wired: the «Начало» of
+     * the graph, never the door card (the card is the door's settings and its two sockets, not a step of
+     * any chain).
      */
     public static NpcDialogueGraph.Node startNode(NpcDialogueGraph graph) {
         if (graph == null || graph.nodes == null || graph.nodes.isEmpty()) return null;

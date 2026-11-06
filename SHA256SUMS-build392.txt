@@ -1,0 +1,2 @@
+646984152911ce99d06aba6e4eb6c8eccd6dd85cf95d39501341a88e7ecdde87  settledlands-0.8.0-build392-door-card-sockets.jar
+737db35cf69077bca9740b5e219e4ddd4650f3c6dda43ca1eb85e58e268325f9  SettledLands-Build392-CardSockets-Source.zip

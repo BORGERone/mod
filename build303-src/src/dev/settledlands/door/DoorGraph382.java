@@ -77,51 +77,41 @@ public final class DoorGraph382 {
     public static final int DOOR_TYPE = 40;
 
     /**
-     * Build 389: the door's own signal and the blue target - the two nodes the author asked for out of
-     * the door card: «сделай теперь из ноды "дверь" один выходной узел сигнала и синий узел цели».
+     * Build 392: the two outputs of the door card are <b>sockets on the card itself</b>, not nodes beside
+     * it. The author said it plainly after two builds of nodes: «я хотел чтобы ты создал не ноды, а УЗЛЫ
+     * на ноде "дверь"».
      *
      * <ul>
-     *   <li>{@link #SIGNAL_TYPE} «Импульс» (amber) - the output of the door: the doors's chain starts
-     *       here, and it starts <b>only</b> when the door is hacked (the lock panel is solved). The wire
-     *       from the door card to this node is drawn by the stock canvas, and the pulse leaves through
-     *       the node's own output;</li>
-     *   <li>{@link #TARGET_TYPE} «Цель» (blue) - carries the reference to the player who hacked the door:
-     *       the name is written into the node, and the chain that leaves it runs <b>as</b> that player, so
-     *       {@code %player%} in any node after it is the hacker.</li>
+     *   <li><b>the execution socket</b> - the card's ordinary output port on its right edge, in the row
+     *       the canvas already uses for every node's output. The chain that leaves it runs when the door
+     *       is opened by a solved lock panel - the pulse of build 389, drawn where the author asked for
+     *       it. Its link is the stock {@code next} field, so the stock canvas draws, drags and cuts the
+     *       wire without one line of ours;</li>
+     *   <li><b>the blue socket</b> - the value output every node of this mod already has ({@code
+     *       PursuitGraphNode272}, the blue diamond on the right edge below the execution port). It hands
+     *       over the reference to the player who hacked the door: the same player the chain runs as, so
+     *       {@code %target%} in a «Реплика» wired to this socket is his name. The consumer keeps the
+     *       link in its own {@code varInputNode}, a field the graph NBT already writes;</li>
+     *   <li><b>the name of the last hacker</b> is kept on the card itself, in its {@code text} - the field
+     *       the serialiser writes for every node - so the card can show it and the reference survives a
+     *       save even when nothing is wired to the blue socket.</li>
      * </ul>
      *
-     * <p>Why these two are ours while everything else in a door's graph is stock: no stock node means
-     * "this door was hacked", and a reference to a player is not a number either. They follow the rule
-     * build 388 set for the door card - a type of this mod is allowed only where the stock graph has no
-     * node for the meaning, and then it is drawn and edited the way the stock cards are.</p>
+     * <p>The two node types of build 389/390/391 ({@link #SIGNAL_TYPE} and {@link #TARGET_TYPE}, 41 and
+     * 42) are gone: {@link #foldStarter} folds a graph that still has them back into the card - the
+     * pulse's chain becomes the card's chain, every reader of the blue target now reads the card.</p>
      */
     public static final int SIGNAL_TYPE = 41;
     public static final int TARGET_TYPE = 42;
 
-    /** The language key of the title of a node type of this mod. */
+    /** The language key of the title of a node type of this mod - the door card, and nothing else. */
     public static String labelKey(int type) {
-        if (type == SIGNAL_TYPE) return "gui.settledlands.door.signal";
-        if (type == TARGET_TYPE) return "gui.settledlands.door.target";
         return TITLE_KEY;
     }
 
-    /**
-     * The colour of one of our cards. The door keeps its brown, the signal is amber (the colour a pulse
-     * has had in this mod since build 386) and the target is the blue the author asked for - the same
-     * blue the stock screen uses for a wire to a target.
-     */
+    /** The colour of the door card: the brown it has had since build 382. */
     public static int colour(int type) {
-        if (type == SIGNAL_TYPE) return -3177856;
-        if (type == TARGET_TYPE) return -12973611;
         return -3725286;
-    }
-
-    /** The two extra rows of a door's create menu, after the stock ones. */
-    public static final int[] PALETTE_EXTRA = {SIGNAL_TYPE, TARGET_TYPE};
-
-    /** The type made by an extra row of a door's create menu, or -1 when the row does not exist. */
-    public static int extraType(int extra) {
-        return extra >= 0 && extra < PALETTE_EXTRA.length ? PALETTE_EXTRA[extra] : -1;
     }
 
     /**
@@ -167,10 +157,13 @@ public final class DoorGraph382 {
         return BlockTrigger351.PALETTE_ROWS;
     }
 
-    /** True when this node type may live in a door's graph. */
+    /**
+     * True when this node type may live in a door's graph. Build 392: the two outputs of a door are sockets
+     * of the card, so the only type of this mod a door's graph holds is the card itself - the types 41 and
+     * 42 of builds 389-391 are not allowed any more, they only exist for {@link #foldStarter}.
+     */
     public static boolean allowed(int type) {
-        return type == DOOR_TYPE || type == SIGNAL_TYPE || type == TARGET_TYPE
-                || BlockTrigger351.allowed(type);
+        return type == DOOR_TYPE || BlockTrigger351.allowed(type);
     }
 
     /** The card of the door itself: title, accent and the four lines of its settings. */
@@ -280,168 +273,142 @@ public final class DoorGraph382 {
         return node != null && node.type == DOOR_TYPE;
     }
 
-    /** The signal node of a door - the output of the door card. */
-    public static boolean isSignalNode(NpcDialogueGraph.Node node) {
-        return node != null && node.type == SIGNAL_TYPE;
-    }
-
-    /** The blue target node - the reference to the player who hacked the door. */
-    public static boolean isTargetNode(NpcDialogueGraph.Node node) {
-        return node != null && node.type == TARGET_TYPE;
-    }
-
-    /** True for the nodes this mod owns in a door's graph: the card, the signal and the target. */
+    /**
+     * Build 392: the only card of this mod in a door's graph. The two sockets of the card are not nodes,
+     * so there is nothing else for the card painter or the inspector to know - that is exactly what the
+     * author asked for.
+     */
     public static boolean isDoorGraphNode(NpcDialogueGraph.Node node) {
-        return isDoorNode(node) || isSignalNode(node) || isTargetNode(node);
+        return isDoorNode(node);
     }
 
-    /** Longest name a target node keeps. */
+    /** Longest name the card keeps. */
     private static final int MAX_OPENER = 32;
 
-    /** The player who last hacked this door, as the blue target node keeps him. */
+    /**
+     * The player who last hacked this door, as the card keeps him. Build 392 moved this from the blue
+     * target node (build 389) onto the card itself: the reference belongs to the door, and the blue
+     * socket of the card is what hands it out.
+     */
     public static String opener(NpcDialogueGraph.Node node) {
-        if (!isTargetNode(node) || node.text == null) return "";
+        if (!isDoorNode(node) || node.text == null) return "";
         return node.text.trim();
     }
 
-    /** Records the hacker in a target node. One name, trimmed, bounded. */
+    /** Records the hacker on the card. One name, trimmed, bounded - {@code text} is saved for every node. */
     public static void setOpener(NpcDialogueGraph.Node node, String name) {
-        if (!isTargetNode(node) || name == null) return;
+        if (!isDoorNode(node) || name == null) return;
         String trimmed = name.trim();
         node.text = trimmed.length() <= MAX_OPENER ? trimmed : trimmed.substring(0, MAX_OPENER);
     }
 
     /**
-     * Every signal node of a graph, lowest id first. The chain of a hack starts at each of them, so a
-     * door can have more than one output and each is its own pulse.
+     * The node a hack starts at: the one the card's execution socket points at. Null when nothing is
+     * wired to it - a door whose chain is empty pulses nothing, which is honest: the author drew nothing.
      */
-    public static java.util.List<NpcDialogueGraph.Node> signalNodes(NpcDialogueGraph graph) {
-        java.util.List<NpcDialogueGraph.Node> out = new java.util.ArrayList<>();
-        if (graph == null || graph.nodes == null) return out;
-        for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-            if (isSignalNode(node)) out.add(node);
-        }
-        out.sort((left, right) -> Integer.compare(left.id, right.id));
-        return out;
+    public static NpcDialogueGraph.Node chainStart(NpcDialogueGraph graph) {
+        NpcDialogueGraph.Node door = doorNode(graph);
+        if (door == null || door.next < 0) return null;
+        NpcDialogueGraph.Node start = graph.get(door.next);
+        if (start == null || start == door) return null;
+        return start;
     }
 
     /**
-     * Wires the starter graph of a door: the card, then its signal, then the blue target - the shape the
-     * author drew in words («из ноды "дверь" один выходной узел сигнала и синий узел цели»).
+     * Build 392: folds the two nodes of build 389-391 back into the card.
      *
-     * <p>Only the wires that are missing are made, so calling this on a graph the author has already
-     * edited never rewires his work.</p>
+     * <p>The author wanted sockets, not nodes, so a graph that still has them is rewritten instead of
+     * being left with cards he never asked for:</p>
+     *
+     * <ul>
+     *   <li>«Импульс» (41) - whatever it pointed at becomes the card's own chain ({@code door.next}),
+     *       which is the execution socket; every wire of the graph that ran into the pulse now runs into
+     *       the card, so the author's chain keeps its order;</li>
+     *   <li>«Цель» (42) - every node that read it now reads the card ({@code varInputNode = door.id}),
+     *       which is the blue socket; the name it held is copied onto the card when the card has none.</li>
+     * </ul>
+     *
+     * <p>Idempotent and cheap: with no node of those two types it returns false in one pass over the
+     * graph. It runs on the server when the door's graph is opened or saved, and on the client when the
+     * graph arrives, so a door is never left half folded.</p>
+     *
+     * @return true when something was folded away
      */
-    public static boolean wireStarter(NpcDialogueGraph graph) {
+    public static boolean foldStarter(NpcDialogueGraph graph) {
         if (graph == null || graph.nodes == null) return false;
         NpcDialogueGraph.Node door = doorNode(graph);
         if (door == null) return false;
-        boolean changed = false;
 
-        // ---- the pulse ---------------------------------------------------------------
-        java.util.List<NpcDialogueGraph.Node> signals = signalNodes(graph);
-        NpcDialogueGraph.Node signal = signals.isEmpty() ? null : signals.get(0);
-        if (signal == null) {
-            int[] spot = rowSpot(graph, door, 1);
-            signal = graph.add(SIGNAL_TYPE, spot[0], spot[1]);
-            if (signal == null) return changed;
-            changed = true;
-        }
-
-        // ---- the blue target ---------------------------------------------------------
-        NpcDialogueGraph.Node target = null;
+        java.util.List<NpcDialogueGraph.Node> pulses = new java.util.ArrayList<>();
+        java.util.List<NpcDialogueGraph.Node> targets = new java.util.ArrayList<>();
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-            if (isTargetNode(node)) {
-                target = node;
-                break;
+            if (node == null) continue;
+            if (node.type == SIGNAL_TYPE) pulses.add(node);
+            else if (node.type == TARGET_TYPE) targets.add(node);
+        }
+        if (pulses.isEmpty() && targets.isEmpty()) return false;
+
+        pulses.sort((left, right) -> Integer.compare(left.id, right.id));
+        targets.sort((left, right) -> Integer.compare(left.id, right.id));
+
+        // The pulse: its chain is the card's chain. The first pulse wins, the rest are folded into it in
+        // order, so a door that somehow had two keeps both of its chains, one after the other.
+        for (NpcDialogueGraph.Node pulse : pulses) {
+            int after = pulse.next;
+            if (door.next == pulse.id) {
+                door.next = after;
+            } else if (after >= 0) {
+                // A wire that ran into the pulse now runs into whatever the pulse ran to.
+                bypass(graph, pulse.id, after);
+            } else {
+                bypass(graph, pulse.id, -1);
             }
-        }
-        if (target == null) {
-            int[] spot = rowSpot(graph, door, 2);
-            target = graph.add(TARGET_TYPE, spot[0], spot[1]);
-            if (target == null) return changed;
-            changed = true;
+            graph.remove(pulse.id);
         }
 
-        // ---- the wires ---------------------------------------------------------------
-        // Everything reads left to right, the way the canvas draws a wire: the card's output goes to the
-        // pulse, and the pulse goes on to whatever the card pointed at before. A brand-new door has
-        // nothing after the card yet, so the pulse goes to the blue target - card -> pulse -> target in
-        // one clean line, which is the shape the author drew in words.
-        int after = door.next;
-        if (after >= 0 && after != signal.id && signal.id >= 0) {
-            signal.next = after;
-            changed = true;
-        } else if (after < 0 && target != null && target.id >= 0 && signal.next < 0) {
-            signal.next = target.id;
-            changed = true;
+        // The blue target: its readers now read the card, and the name it held moves onto the card.
+        for (NpcDialogueGraph.Node target : targets) {
+            for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+                if (node == null || node == target) continue;
+                if (node.varInputNode == target.id) node.varInputNode = door.id;
+            }
+            if (door.next == target.id) door.next = -1;
+            else bypass(graph, target.id, target.next);
+            if (opener(door).isEmpty() && target.text != null && !target.text.isBlank()) {
+                setOpener(door, target.text);
+            }
+            graph.remove(target.id);
         }
-        if (door.next != signal.id && signal.id >= 0) {
-            door.next = signal.id;
-            changed = true;
-        }
-        // The pulse is where a chain of a door starts, so «Начало» belongs on it and not on the card.
-        if (signal.id >= 0 && graph.entry != signal.id) {
-            graph.entry = signal.id;
-            changed = true;
-        }
-        return changed;
+
+        // «Начало» belongs on the card: it is where the chain of a door starts, and the two nodes it
+        // pointed at are gone.
+        if (graph.entry < 0 || graph.get(graph.entry) == null) graph.entry = door.id;
+        LOG.info("door: folded " + pulses.size() + " pulse node(s) and " + targets.size()
+                + " blue target node(s) into the sockets of the card");
+        return true;
     }
 
     /**
-     * Build 391: build 390 put the pulse <b>right under</b> the card, and the stock canvas then draws the
-     * card's wire looping down and around it - the author's screenshot was exactly that tangle. The two
-     * nodes are moved once, to the row on the right, and never again: a node the author has dragged
-     * himself is somewhere else and is left alone.
-     *
-     * @return true when something was moved
+     * Rewrites every wire of the graph that ends at {@code removedId} so that it ends at
+     * {@code replacement} (-1 clears it), and drops it out of the lists of a node. One pass, no
+     * allocation beyond the iterator, and it never touches the node being removed.
      */
-    public static boolean relayoutStarter(NpcDialogueGraph graph) {
-        if (graph == null || graph.nodes == null) return false;
-        NpcDialogueGraph.Node door = doorNode(graph);
-        if (door == null) return false;
-        boolean moved = false;
-        for (NpcDialogueGraph.Node node : new java.util.ArrayList<>(graph.nodes.values())) {
-            if (node == null) continue;
-            boolean oldPulse = isSignalNode(node) && near(node.x, door.x) && near(node.y, door.y + 160);
-            boolean oldTarget = isTargetNode(node) && near(node.x, door.x + 260)
-                    && near(node.y, door.y + 160);
-            if (!oldPulse && !oldTarget) continue;
-            int[] spot = rowSpot(graph, door, oldPulse ? 1 : 2);
-            node.x = spot[0];
-            node.y = spot[1];
-            moved = true;
-        }
-        return moved;
-    }
-
-    /** Within a few pixels of a remembered spot - the canvas moves nodes in whole pixels. */
-    private static boolean near(int value, int wanted) {
-        return Math.abs(value - wanted) <= 8;
-    }
-
-    /**
-     * The {@code index}-th place of the row to the right of the door card: level with the card, one node
-     * width and a gap apart, and moved down only when that place is already taken. A wire drawn from a
-     * node to the node on its right is the one shape the stock canvas draws without a loop.
-     */
-    private static int[] rowSpot(NpcDialogueGraph graph, NpcDialogueGraph.Node door, int index) {
-        int x = door.x + 280 * index;
-        int y = door.y;
-        for (int i = 0; i < 10 && occupied(graph, x, y); i++) {
-            y += 140;
-        }
-        return new int[] {x, y};
-    }
-
-    /** True when a node already stands at this spot (the canvas box is 220 x 100). */
-    private static boolean occupied(NpcDialogueGraph graph, int x, int y) {
-        if (graph == null || graph.nodes == null) return false;
+    private static void bypass(NpcDialogueGraph graph, int removedId, int replacement) {
+        if (graph == null || graph.nodes == null) return;
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
-            if (node == null) continue;
-            if (Math.abs(node.x - x) < 200 && Math.abs(node.y - y) < 90) return true;
+            if (node == null || node.id == removedId) continue;
+            if (node.next == removedId) node.next = replacement;
+            if (node.falseNext == removedId) node.falseNext = replacement;
+            drop(node.randomBranches, removedId);
+            drop(node.choices, removedId);
+            drop(node.triggers, removedId);
         }
-        return false;
+    }
+
+    /** Takes one id out of a list of links, when the list is there at all. */
+    private static void drop(java.util.List<Integer> links, int id) {
+        if (links == null || links.isEmpty()) return;
+        links.removeIf(link -> link != null && link.intValue() == id);
     }
 
     /**
@@ -455,8 +422,6 @@ public final class DoorGraph382 {
             setSpeed(node, DEFAULT_SPEED);
             setSealed(node, true);
             setDifficulty(node, DEFAULT_DIFFICULTY);
-        } else if (isTargetNode(node)) {
-            node.text = "";   // nobody has hacked this door yet
         }
     }
 
@@ -471,6 +436,9 @@ public final class DoorGraph382 {
      */
     public static boolean migrate(NpcDialogueGraph graph) {
         if (graph == null || graph.nodes == null) return false;
+        // Build 392: the two nodes of 389-391 are folded into the card's sockets, and the type of build
+        // 386 is dropped. One pass each, and both are no-ops on a graph that has neither.
+        boolean folded = foldStarter(graph);
         java.util.List<Integer> stale = new java.util.ArrayList<>();
         for (NpcDialogueGraph.Node node : graph.nodes.values()) {
             if (node != null && node.type == 43) stale.add(node.id);
@@ -482,7 +450,7 @@ public final class DoorGraph382 {
             LOG.info("door: dropped " + stale.size() + " node(s) of the build-386 «В радиусе» type - the"
                     + " stock «Проверка» node is the radius gate now");
         }
-        return !stale.isEmpty();
+        return folded || !stale.isEmpty();
     }
 
     /** The door node of a graph: the entry node when it is one, else the first door node. */
@@ -586,10 +554,11 @@ public final class DoorGraph382 {
             setSpeed(node, DEFAULT_SPEED);
             setSealed(node, sealed);
             setDifficulty(node, DEFAULT_DIFFICULTY);
+            // Build 392: «Начало» stands on the card, because the card is where the chain of a door
+            // starts - the execution socket is its own output port. Nothing else is added: the two
+            // sockets of the card cost no node, so a fresh door is one card and nothing beside it.
+            graph.entry = node.id;
         }
-        // Build 389: a fresh door is drawn the way the author described it - the card, its signal and
-        // the blue target, wired left to right.
-        wireStarter(graph);
         return graph;
     }
 
@@ -606,13 +575,15 @@ public final class DoorGraph382 {
                 setSealed(made, sealed);
                 setDifficulty(made, DEFAULT_DIFFICULTY);
             }
-            wireStarter(graph);
+            // Build 392: «Начало» belongs on the card of the door, and the two sockets need no nodes.
+            if (made != null && (graph.entry < 0 || graph.get(graph.entry) == null)) {
+                graph.entry = made.id;
+            }
             return graph;
         }
-        // Build 389: a graph the author already has is left exactly as it is. If it was made by build 388
-        // it has no signal node, and the hack then starts at its «Начало» - so nothing it does stops
-        // working; the two outputs of the card are added from the menu when the author wants them, and
-        // deleted ones never come back on the next open.
+        // Build 392: a graph the author already has is left exactly as it is, except for the fold of the
+        // two nodes of 389-391 into the sockets of the card - that happens in open(), once, and is
+        // idempotent.
         return graph;
     }
 
@@ -676,19 +647,11 @@ public final class DoorGraph382 {
                 // the sliders open on something real and the next save cannot unlock a closed door.
                 adopt(graph, sealed);
             }
-            // Build 390: the two outputs of the card are drawn once per door, on the first open after
-            // this build - the author sees the pulse and the blue target he asked for even on a door
-            // whose graph was made before they existed. Once drawn, the door is remembered as done, so a
-            // node he deletes afterwards stays deleted.
-            if (store != null && !store.starterDone(key)) {
-                wireStarter(graph);
-                store.put(key, graph);
-                store.markStarter(key);
-            } else if (relayoutStarter(graph) && store != null) {
-                // Build 391: a door wired by build 390 has the pulse under the card and a wire looping
-                // round it. It is moved to the row on the right once, here, and never touched again.
-                store.put(key, graph);
-            }
+            // Build 392: the two outputs of a door are sockets on the card now, so a graph that still
+            // carries the nodes of 389-391 («Импульс» and the blue «Цель») is folded once, here, and the
+            // folded graph is stored at once - the author opens the card with its two sockets and his own
+            // chains, not the nodes he did not want.
+            if (foldStarter(graph) && store != null) store.put(key, graph);
             CompoundTag data = new CompoundTag();
             data.put("DialogueGraph", graph.save());
             NpcNet.sendRaw(player, new NpcNet.CfgView(idFor(key), data));
@@ -731,6 +694,10 @@ public final class DoorGraph382 {
             graph = withDoorNode(graph, locked(level, pos));
             stripCards(graph);
             adopt(graph, locked(level, pos));
+            // Build 392: a save that still carries the two nodes of builds 389-391 (an editor of one of
+            // those builds, a copied file) is folded before it is written, so the file on disk is a card
+            // with its two sockets and nothing beside it.
+            foldStarter(graph);
             NpcDialogueGraph.Node node = doorNode(graph);
             if (node != null) {
                 setKeys(node, keys(node));
