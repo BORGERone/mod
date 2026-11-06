@@ -241,3 +241,26 @@ VRAM: Voxy держит sparse-буфер геометрии 4 294 966 272 ба�
 6144 -> 9216 -> 13824 -> 20736 -> 31104 ровно в окнах фризов (инджест новых секций).
 Железо: Ryzen 7 5700X (16 потоков), RTX 5080 (616.92), Win11, Java 21.0.7 Microsoft,
 шейдерпак Eclipse-Shader-Unstable.zip (+ Bliss 2.1.1/2.1.2 в паке), ~200 модов.
+
+=== ДОПОЛНЕНИЕ: DH "с выключенным рендером" всё равно генерит + VD=32 ===
+DH при выключенном рендере НЕ простаивает (лог latest-2.log):
+  [IgnoredDimensionCsvHandler] "Dimension ignoring disabled, DH will render all dimensions."
+  WorldGenerationQueue создан для 6 измерений: minecraft:overworld, minecraft:the_nether,
+  minecraft:the_end, settledlands:purgatory, irons_spellbooks:pocket_dimension,
+  ipl_sable:sublevels; при выходе "Closing all [6] databases".
+  Работают потоки "DH-Request Module Ticker [<dim>] Thread[0]" и "DH-Full Data Migration".
+=> генерация фейковых чанков и 6 БД идут параллельно с Voxy (двойная нагрузка на CPU/диск).
+Главный фактор ста́ллов - ванильная дальность прорисовки 32:
+  "Changing view distance to 32, from 8" / "from 10" при каждом входе в мир,
+  "Changing simulation distance to 12". При VD 32 зона загрузки ~4225 столбцов чанков
+  против ~441 при VD 10 (почти x10), каждый форс-загруз чанка дорогой.
+  Сам Immersive Portals пишет: "[iPortal/] Server performance level: bad" (за 12 с до ста́лла).
+  Sodium при смене VD перезапускает ChunkBuilder: "Started 13 worker threads".
+Ста́лл серверного потока (не IP, не Voxy):
+  teallib BlockVariantManager.assignNaturally -> VariantHolderBlockEntity.ensureVariantAssigned
+  -> .sync -> Level.getBlockState -> ServerChunkCache.getChunk -> BlockableEventLoop.managedBlock
+  (синхронная догрузка чанка на серверном потоке; Teal Lib 1.3.teal, используется модами
+  ninni: spawn/naturalist/mutantmonsters). IPL-WATCHDOG - только репортёр ста́лла.
+Immersive Portals x Sable 0.5.0 пользователь хочет оставить (готов к тому, что LOD не виден
+сквозь порталы): предупреждение qouteall = именно про невидимый LOD/артефакты в портал-вью,
+не про падение TPS. После снижения VD и удаления DH "performance level: bad" должен уйти.
