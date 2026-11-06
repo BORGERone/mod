@@ -1453,3 +1453,43 @@ Two author requests: «кнопки блокировали пользовате�
   the panel closes.
 - **Not done on purpose**: mouse buttons are not blocked (the panel never blocked them; a screen already
   keeps clicks out of the world). Offered to add if asked.
+
+## Build 388 - a door's graph is a stock graph (shipped)
+
+**User ask:** «мне не нравится реализация нод в графе двери, сделай реализацию как в других графах»;
+chosen option «both» = stock node types first, stock drawing/palette/inspector with it - shipped as one build
+because the two halves share the same files.
+
+- **Types**: only `DoorGraph382.DOOR_TYPE = 40` (the door card, the role `BlockName359.TYPE = 18` plays for a
+  block) remains. 41/42/43 (EVENT/WHO/RADIUS), `MIN/MAX/DEFAULT_RADIUS`, `PALETTE`, `labelKey`, `colour`,
+  `isEventNode/isWhoNode/isRadiusNode`, `radius/setRadius`, `opener/setOpener`, `eventNode`, `MAX_OPENER` are
+  all gone. New: `typeForRow`/`rowForType`/`paletteRows`/`allowed` delegate to `BlockTrigger351`, and
+  `migrate(graph)` drops 41-43 nodes (called from `DoorGraphClient382.graphOf`).
+- **Palette**: `BlockMenu363` has no door list any more - `rows()`/`label()`/`colour()`/`stockRow()` are the
+  stock ones for both editors, `doorType(compact) = BlockTrigger351.typeForRow(stockRow(compact))`, and the
+  now-unused `DOOR_ROWS`/`DOOR_ROW_NUMBERS` are deleted. `fit(menu, canvas, doorMode)` keeps its 3-arg shape
+  for call sites; the flag changes nothing.
+- **Runner**: new `door/DoorSignal388` - `fire(player, level, pos)` resolves the store/graph, picks the start
+  with `startNode()` (the node marked «Начало», never the door card, else the lowest-id stock node), guards
+  400 ms per door+player, and hands the chain to **`BlockTrigger351.fire`** with
+  `new BlockTalk358.Where(level, key, x, y, z)` - the very interpreter the block graph uses. So «Триггер» +
+  `%player%` is the "who opened" output, «Переменная» moves `NpcPoints`, «If» branches, «Реплика»/«Кнопка»
+  speak in the stock window with the door as speaker, «Катсцена» plays. `DoorGraph386` deleted from the jar.
+- **Hooks**: `DoorEvents368` (empty hand, shut door) and `DoorHack377` (`nowOpen`) call
+  `DoorSignal388.fire`.
+- **Card/inspector**: `DoorCard382` paints only the door card (5 lines, clipped, block-name-card styling);
+  `NpcDoorRows382Mixin` parks stock rows **only** for `isDoorNode` and builds the 3 sliders + toggle; stock
+  nodes keep the stock inspector untouched.
+- **Lang**: `gui.settledlands.door.palette` re-pitched to «У двери те же ноды, что у блока» /
+  "A door offers the same nodes as a block". No other new keys.
+- **Gates**: `door_signal_check.py` (386 design) deleted; new `tools/door_stock_check.py` (fails on 387,
+  passes here). `door_graph_check.py` palette assertion rewritten for the stock palette. All 27 `*_check.py`
+  green, `verify_jar --base 387` PASS (576 entries, 1 removed + 1 added, 43/48 mixins, 0 new external refs,
+  0 dangling refs).
+- Ship: `settledlands-0.8.0-build388-door-stock-nodes.jar`, README `README-Build388-RU.md`, zip
+  `SettledLands-Build388-DoorStockNodes-Source.zip` (494 entries), `SHA256SUMS-build388.txt`, patch
+  `tools/patch_build388.py` (base 387, `srcdir out388`, `REMOVED` support used for the first time).
+- **Known gaps stated in the README**: a «Реплика» in a door's graph opens the stock window but with a blank
+  speaker name (the stock code reads a block's «Имя» card, type 18, which a door has none of); event nodes
+  are stepped over by a walk exactly as in a block graph; the blue "who opened" node is now the stock
+  `Триггер` with `%player%`.

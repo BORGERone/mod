@@ -9,7 +9,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 /**
- * Build 383: the whole card of a door node, drawn by this mod.
+ * Build 383/388: the card of the door itself - the one node of a door's graph this mod draws.
  *
  * <p>Build 382 only wrote the text of the card on top of the stock one, and the stock painter has no
  * branch for a node type it does not know: it drew the colour of the last row of its table (a pink
@@ -20,12 +20,20 @@ import net.minecraft.network.chat.Component;
  * ({@code NpcGraphCanvas#NODE_W} x {@code NODE_H}), so selecting, dragging and multi-select stay the
  * stock ones.</p>
  *
- * <p>What it shows is the whole node: the title, the number of keys the hack panel of this door asks
- * for, how often one of them changes, the difficulty (which rows of the keyboard those keys come from,
- * build 385), whether the door is closed to a plain click, and one line that says the panel owns the
- * keyboard but for ESC. The values are
- * read from the node, so the card repaints on the next frame after a slider moves - nothing is cached
- * and nothing is drawn per tick.</p>
+ * <p>The card is the block's «Имя» card ({@code BlockNameCard359}) with the door's settings in it, and
+ * deliberately so: a block's graph and a door's graph are the same editor, and the one card each of them
+ * owns is the only thing that should look different. Same header, same accent line, same body, same
+ * colours, same box.</p>
+ *
+ * <p>What it shows is the whole settings of the door: how many keys the hack panel asks for, how often
+ * one of them changes, the difficulty (build 385 - which rows of the keyboard those keys come from),
+ * whether the door is closed to a plain click, and one line that says the panel owns the keyboard but for
+ * ESC. The values are read from the node, so the card repaints on the next frame after a slider moves -
+ * nothing is cached and nothing is drawn per tick.</p>
+ *
+ * <p><b>Build 388: this card is the only node type a door owns.</b> Everything else in a door's graph is
+ * a stock node, drawn by the stock painter, because a door now runs the stock interpreter a block does
+ * ({@code BlockTrigger351}). Build 386's three extra types are gone - see {@code DoorGraph382#migrate}.</p>
  */
 public final class DoorCard382 {
 
@@ -42,13 +50,7 @@ public final class DoorCard382 {
     private DoorCard382() {}
 
     /**
-     * Paints one node of a door's graph. Never throws: a card that cannot be drawn costs the card, not
-     * the frame.
-     *
-     * <p>Build 386: four types share this card - «Дверь» (brown), «Открытие» (amber), «Кто открыл»
-     * (blue, the colour the author asked for) and «В радиусе». Each has its own title, its own accent
-     * line under the header and its own two to four lines of text; the box, the hit test, the selection
-     * and the drag stay the stock ones.</p>
+     * Paints the door card. Never throws: a card that cannot be drawn costs the card, not the frame.
      */
     public static void draw(NpcDialogueGraphScreen screen, GuiGraphics graphics, Node node) {
         if (screen == null || graphics == null || node == null) return;
@@ -59,10 +61,8 @@ public final class DoorCard382 {
         int width = NpcGraphCanvas.NODE_W;
         int height = NpcGraphCanvas.NODE_H;
         boolean selected = screen.settledlands$isSelected(node.id);
-        int type = node.type;
-        boolean sealed = type == DoorGraph382.DOOR_TYPE && DoorGraph382.sealed(node);
-        int accent = type == DoorGraph382.DOOR_TYPE
-                ? (sealed ? SEALED : OPEN) : DoorGraph382.colour(type);
+        boolean sealed = DoorGraph382.sealed(node);
+        int accent = sealed ? SEALED : OPEN;
 
         PoseStack pose = graphics.pose();
         pose.pushPose();
@@ -73,39 +73,19 @@ public final class DoorCard382 {
             graphics.fill(0, 0, width, height, BODY);
             graphics.fill(0, 0, width, 20, HEADER);
             graphics.fill(0, 19, width, 20, accent);
-            graphics.drawString(font, tr(DoorGraph382.labelKey(type)), 8, 6, accent, false);
+            graphics.drawString(font, tr(DoorGraph382.TITLE_KEY), 8, 6, accent, false);
 
             // Five lines in the same 100 px box - a 14 px pitch, the last one ends at 93.
-            if (type == DoorGraph382.DOOR_TYPE) {
-                graphics.drawString(font, line("gui.settledlands.door.count",
-                        Integer.toString(DoorGraph382.keys(node))), 8, 28, LABEL, false);
-                graphics.drawString(font, line("gui.settledlands.door.speed",
-                        Integer.toString(DoorGraph382.speed(node))), 8, 42, LABEL, false);
-                // «Сложность: 2 (qwerty + asdf)» - the number and the rows it buys, on one line.
-                graphics.drawString(font, difficulty(node), 8, 56, LABEL, false);
-                graphics.drawString(font, state(sealed), 8, 70, sealed ? SEALED : OPEN, false);
-                // The panel swallows the keyboard but for ESC; the card says so, because a player who
-                // cannot close a panel with anything else deserves to read why.
-                graphics.drawString(font, tr("gui.settledlands.door.hint"), 8, 84, EDGE, false);
-            } else if (type == DoorGraph382.EVENT_TYPE) {
-                graphics.drawString(font, tr("gui.settledlands.door.event_line1"), 8, 28, LABEL, false);
-                graphics.drawString(font, tr("gui.settledlands.door.event_line2"), 8, 42, LABEL, false);
-                graphics.drawString(font, tr("gui.settledlands.door.event_line3"), 8, 56, EDGE, false);
-                graphics.drawString(font, tr("gui.settledlands.door.event_line4"), 8, 70, EDGE, false);
-            } else if (type == DoorGraph382.WHO_TYPE) {
-                graphics.drawString(font, tr("gui.settledlands.door.who_line1"), 8, 28, LABEL, false);
-                String last = DoorGraph382.opener(node);
-                graphics.drawString(font,
-                        last.isEmpty() ? tr("gui.settledlands.door.who_none")
-                                : line("gui.settledlands.door.who_last", last),
-                        8, 42, last.isEmpty() ? EDGE : accent, false);
-                graphics.drawString(font, tr("gui.settledlands.door.who_line3"), 8, 56, EDGE, false);
-            } else if (type == DoorGraph382.RADIUS_TYPE) {
-                graphics.drawString(font, line("gui.settledlands.door.radius_line",
-                        Integer.toString(DoorGraph382.radius(node))), 8, 28, LABEL, false);
-                graphics.drawString(font, tr("gui.settledlands.door.radius_line2"), 8, 42, LABEL, false);
-                graphics.drawString(font, tr("gui.settledlands.door.radius_line3"), 8, 56, EDGE, false);
-            }
+            graphics.drawString(font, clip(font, line("gui.settledlands.door.count",
+                    Integer.toString(DoorGraph382.keys(node))), width - 16), 8, 28, LABEL, false);
+            graphics.drawString(font, clip(font, line("gui.settledlands.door.speed",
+                    Integer.toString(DoorGraph382.speed(node))), width - 16), 8, 42, LABEL, false);
+            // «Сложность: 2 (qwerty + asdf)» - the number and the rows it buys, on one line.
+            graphics.drawString(font, clip(font, difficulty(node), width - 16), 8, 56, LABEL, false);
+            graphics.drawString(font, state(sealed), 8, 70, sealed ? SEALED : OPEN, false);
+            // The panel swallows the keyboard but for ESC; the card says so, because a player who
+            // cannot close a panel with anything else deserves to read why.
+            graphics.drawString(font, tr("gui.settledlands.door.hint"), 8, 84, EDGE, false);
         } catch (Throwable failure) {
             DoorGraph382.fail(failure);
         } finally {
@@ -120,9 +100,9 @@ public final class DoorCard382 {
                 + " (" + tr("gui.settledlands.door.rows" + level) + ")";
     }
 
-    /** The name of the door node, in the language the client runs in. */
+    /** The name of the door card, in the language the client runs in. */
     public static String title() {
-        return tr("gui.settledlands.door.node");
+        return tr(DoorGraph382.TITLE_KEY);
     }
 
     /** {@code Кол-во чисел: 6} - a key with one argument, never a throw. */
@@ -144,5 +124,15 @@ public final class DoorCard382 {
         } catch (Throwable failure) {
             return key;
         }
+    }
+
+    /** Cut a line that would run off the card, so a long one never paints over its neighbour. */
+    private static String clip(Font font, String text, int width) {
+        if (font == null || text == null || font.width(text) <= width) return text == null ? "" : text;
+        String cut = text;
+        while (!cut.isEmpty() && font.width(cut + "…") > width) {
+            cut = cut.substring(0, cut.length() - 1);
+        }
+        return cut.isEmpty() ? "" : cut + "…";
     }
 }

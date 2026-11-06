@@ -245,10 +245,16 @@ def main(argv):
             not any(m == "popPose" for _o, m, _d in painter_refs):
         return fail("DoorCard382 does not restore the pose it translated")
 
-    # ---- the door's palette is the same panel, one row ---------------------------------------
+    # ---- build 388: the door's palette is the stock palette, row for row --------------------
     menu, menu_refs = parse(blobs[MENU])
-    if "DOOR_ROWS" not in text(menu) and "door" not in methods(menu):
-        return fail("BlockMenu363 knows nothing about the door's one-row palette")
+    if "doorType" not in methods(menu):
+        return fail("BlockMenu363 has no doorType(row) - the door's menu cannot name its rows")
+    if not any(o == "dev/settledlands/npc/BlockTrigger351" and m in ("typeForRow", "PALETTE_ROWS")
+               for o, m, _d in menu_refs):
+        return fail("BlockMenu363 does not take its rows from the block's palette - the two editors"
+                    " would drift apart")
+    if "DOOR_ROWS" in text(menu) or "DOOR_ROW_NUMBERS" in text(menu):
+        return fail("BlockMenu363 still carries a palette of its own - build 388 made it the stock one")
 
     # ---- the panel of an unedited door is the panel of 378 -----------------------------------
     if "settings" not in methods(panel) and not any(m == "settings" for _o, m, _d in panel_refs):

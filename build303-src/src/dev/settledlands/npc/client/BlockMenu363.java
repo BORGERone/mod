@@ -1,6 +1,5 @@
 package dev.settledlands.npc.client;
 
-import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.BlockTrigger351;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -101,21 +100,21 @@ public final class BlockMenu363 {
     private static int[] rows;
 
     /**
-     * Build 382: the same panel, with the rows a door has. A door's graph is edited in this very screen
-     * (build 351 taught it to open on a block, build 382 on a door); build 382 gave a door one row,
-     * build 386 gives it four - «Дверь», «Открытие», «Кто открыл» and «В радиусе». Everything else in
-     * this class (the stock body, the header, the hit test, the wheel, the strip) is shared, because a
-     * second painter for a short list would be a second thing to keep in step.
+     * Build 388: a door's panel is the block's panel - the same rows, the same labels, the same colours,
+     * the same five-row window and scrollbar.
+     *
+     * <p>Build 382/386 gave a door a palette of its own because a door could only run the three types
+     * that build had invented. Build 388 makes a door run the stock nodes through the stock interpreter
+     * ({@code DoorSignal388} -> {@code BlockTrigger351}), so there is nothing left to cut away:
+     * {@link #rows()} answers from {@link BlockTrigger351#typeForRow} for both editors, and a door's
+     * create menu <b>is</b> the stock list - the same eleven rows a block can build, in the same order,
+     * with the stock labels and the stock colours.</p>
+     *
+     * <p>The door card itself is not in the palette: like the block's «Имя» card it is created with the
+     * graph, not added from a menu. The flag below stays because the build-382 call sites still pass it;
+     * it no longer changes a row, a label or a colour.</p>
      */
     private static boolean door;
-
-    /**
-     * Build 386: the door's palette is four rows - «Дверь», «Открытие», «Кто открыл», «В радиусе» -
-     * which is what the author asked for after having one («хочу добавить больше нод в граф двери»).
-     * The rows are numbered in the panel's own space (0..3) and mapped to node types by
-     * {@link DoorGraph382#typeForRow}, so the painter, the hit test and the click cannot disagree.
-     */
-    private static final int[] DOOR_ROW_NUMBERS = {0, 1, 2, 3};
 
     /** Where the open panel is, measured when it appeared. */
     private static int left;
@@ -130,14 +129,10 @@ public final class BlockMenu363 {
     /** The menu this geometry belongs to: a second measurement of the same open menu keeps the window. */
     private static NpcGraphContextMenu measured;
 
-    /** The rows of a door panel. */
-    private static final int[] DOOR_ROWS = DOOR_ROW_NUMBERS;
-
     private BlockMenu363() {}
 
-    /** Stock row numbers a block can create - the rows whose type {@link BlockTrigger351} allows. */
+    /** Stock row numbers this panel can create - the rows whose type {@link BlockTrigger351} allows. */
     public static int[] rows() {
-        if (door) return DOOR_ROWS;
         if (rows == null) {
             int[] kept = new int[LABEL_KEYS.length];
             int count = 0;
@@ -154,34 +149,29 @@ public final class BlockMenu363 {
         return rows().length;
     }
 
-    /** The node type a row of the door's panel creates, or -1 for a row that does not exist. */
+    /**
+     * The node type a row of this panel creates, or -1 for a row that does not exist. One mapping for
+     * both editors and three steps, the same ones {@code NpcBlockGraph351Mixin} takes: the row of the
+     * panel, the stock row behind it, the type the stock palette gives that row.
+     */
     public static int doorType(int compact) {
-        return DoorGraph382.typeForRow(compact);
+        return BlockTrigger351.typeForRow(stockRow(compact));
     }
 
     /** Row of this panel -> the stock row behind it, or -1 when there is none. */
     public static int stockRow(int compact) {
-        if (door) return compact >= 0 && compact < DOOR_ROWS.length ? DOOR_ROWS[compact] : -1;
         int[] kept = rows();
         return compact >= 0 && compact < kept.length ? kept[compact] : -1;
     }
 
-    /** The stock label of a row of this panel. */
+    /** The stock label of a row of this panel - the stock one, for a block and for a door alike. */
     public static String label(int compact) {
-        if (door) {
-            int type = doorType(compact);
-            return type < 0 ? "" : Component.translatable(DoorGraph382.labelKey(type)).getString();
-        }
         int stock = stockRow(compact);
         return stock < 0 ? "" : Component.translatable(LABEL_KEYS[stock]).getString();
     }
 
-    /** The stock colour of a row of this panel. */
+    /** The stock colour of a row of this panel - the colour the same node has in an NPC graph. */
     public static int colour(int compact) {
-        if (door) {
-            int type = doorType(compact);
-            return type < 0 ? LABEL : DoorGraph382.colour(type);
-        }
         int stock = stockRow(compact);
         return stock >= 0 && stock < ROW_COLOUR.length ? ROW_COLOUR[stock] : LABEL;
     }
@@ -209,9 +199,9 @@ public final class BlockMenu363 {
     }
 
     /**
-     * Build 382: measure the menu for the editor that asked - a block palette (fifteen rows, cut to the
-     * nodes a block runs) or a door palette (one row). The mode is remembered here, so the painter, the
-     * hit test and the wheel all answer for the same editor without being told again.
+     * Measure the menu for the editor that asked. Build 388: a block's panel and a door's panel are the
+     * same panel, so the flag is only kept for the call sites that still pass it - it no longer changes a
+     * row, a label or a colour.
      */
     public static void fit(NpcGraphContextMenu menu, NpcGraphCanvas canvas, boolean doorMode) {
         door = doorMode;

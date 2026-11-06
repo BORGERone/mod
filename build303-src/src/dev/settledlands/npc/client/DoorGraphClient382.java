@@ -40,7 +40,12 @@ public final class DoorGraphClient382 {
         CompoundTag data = view == null ? null : view.data();
         if (data == null || !data.contains("DialogueGraph", 10)) return new NpcDialogueGraph();
         try {
-            return NpcDialogueGraph.load(data.getCompound("DialogueGraph"));
+            NpcDialogueGraph graph = NpcDialogueGraph.load(data.getCompound("DialogueGraph"));
+            // Build 388: a graph made by build 386 still holds the three types of that build, which no
+            // longer run. They are dropped here - the author sees the graph he has, not nodes that
+            // silently do nothing - and the drop is one line in the log.
+            DoorGraph382.migrate(graph);
+            return graph;
         } catch (Throwable failure) {
             report(failure);
             return new NpcDialogueGraph();

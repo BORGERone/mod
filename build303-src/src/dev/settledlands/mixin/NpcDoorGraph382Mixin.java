@@ -3,7 +3,6 @@ package dev.settledlands.mixin;
 import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.client.BlockMenu363;
-import dev.settledlands.npc.client.DoorGraphClient382;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphContextMenu;
 import net.minecraft.network.chat.Component;
@@ -15,18 +14,18 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Build 382: the door editor's palette has exactly one row - «Дверь».
+ * Build 388: the door editor's palette is the stock palette - the same rows a block's graph offers.
  *
- * <p>Build 382 cut the menu to one row («Для начала только ноду двери»); build 386 gives the door the
- * four nodes it can run - «Дверь», «Открытие», «Кто открыл» и «В радиусе» - because the author asked for
- * more, and the rest of the stock rows would still be a lie: a door cannot run a line of dialogue. The
- * row that was clicked names the type through {@code BlockMenu363#doorType}, and the node gets the
- * defaults of its type, so a node added by hand is exactly the node a fresh door gets. Everything else
- * keeps the stock behaviour of {@code BlockMenu363} - the stock panel, five rows and a scrollbar, the
- * stock hit test counted from the window - and the copy/delete menu of an existing node stays stock.</p>
+ * <p>The author's report on build 386: «мне не нравится реализация нод в графе двери, сделай реализацию
+ * как в других графах». Build 386 had invented three types of its own so that a door could run a signal,
+ * a radius and a name; the honest answer is the block's one (build 351): a graph runs the stock nodes
+ * through the stock interpreter, and the only node of its own is the card that carries the thing's
+ * identity. So this menu now creates stock node types - {@code BlockMenu363#doorType} answers with the
+ * type of the stock row that was clicked - and the door card is created with the graph instead of from
+ * here.</p>
  *
- * <p>One tab, like a block (build 351): a door has one graph, and the second and third tabs would be
- * saved and never run.</p>
+ * <p>One tab, like a block: a door has one graph, and the second and third tabs would be saved and
+ * never run.</p>
  */
 @Mixin(targets = "dev.settledlands.npc.client.NpcDialogueGraphScreen", remap = false)
 public abstract class NpcDoorGraph382Mixin {
@@ -71,20 +70,22 @@ public abstract class NpcDoorGraph382Mixin {
         cir.setReturnValue(Boolean.TRUE);
         if (button != 0 || row < 0) return;
 
+        // Build 388: the row makes the node the stock palette makes for that row - the same type, the
+        // same defaults, the same stock card and the same stock inspector rows. There is no door type
+        // to switch on any more; the door card is not in this menu.
         int type = BlockMenu363.doorType(row);
         if (type < 0) {
-            this.status = DoorGraphClient382.paletteNote();
+            this.status = Component.translatable("gui.settledlands.door.palette").getString();
             return;
         }
         NpcDialogueGraph.Node created = this.addAt(type, worldX, worldY);
         if (created != null) {
-            DoorGraph382.applyDefaults(created);
             this.changed();
             this.status = Component.translatable("gui.settledlands.door.added_node",
-                    Component.translatable(DoorGraph382.labelKey(type))).getString();
+                    Component.literal(BlockMenu363.label(row))).getString();
             return;
         }
-        this.status = DoorGraphClient382.paletteNote();
+        this.status = Component.translatable("gui.settledlands.door.palette").getString();
     }
 
     @Inject(method = "switchTab", at = @At("HEAD"), cancellable = true, remap = false)

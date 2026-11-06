@@ -16,7 +16,8 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Build 382/383/385: the whole inspector of a door node - three sliders and a toggle, nothing else.
+ * Build 382/383/385/388: the whole inspector of the door card - three sliders and a toggle, nothing
+ * else - and nothing at all for the stock nodes of a door's graph.
  *
  * <p>The author asked for exactly this: «нода с 2 ползунками (Кол-во чисел, Скорость) и тумблером
  * открыта/закрыта». Build 382 appended those three rows under the stock ones and the screenshot came
@@ -109,9 +110,11 @@ public abstract class NpcDoorRows382Mixin {
     private void settledlands$doorRows(CallbackInfo ci) {
         if (graph == null || selected < 0) return;
         NpcDialogueGraph.Node node = graph.get(selected);
-        // Build 386: every node type of a door's graph parks the stock rows - a «Открытие» node has no
-        // text, no trigger and no points, and the editor's switch would happily draw them all.
-        if (!DoorGraph382.isDoorGraphNode(node)) return;
+        // Build 388: only the door card itself replaces the stock rows. Every stock node of a door's
+        // graph - «Триггер», «Условие If», «Переменная», «В радиусе» and the rest - keeps the stock
+        // inspector, because it is the stock node with the stock fields: the door runs the same
+        // interpreter a block does, so there is nothing for this mod to draw or to hide.
+        if (!DoorGraph382.isDoorNode(node)) return;
 
         // The rows the stock switch built for a type it does not know: parked, and their labels with
         // them. Both lists were cleared at the start of this same widgets() call, so everything in
@@ -127,59 +130,16 @@ public abstract class NpcDoorRows382Mixin {
 
         buildingInspector = true;
         try {
-            label(DoorGraph382.labelKey(node.type), x, y);
+            label(DoorGraph382.TITLE_KEY, x, y);
             y += 12;
-
-            if (DoorGraph382.isDoorNode(node)) {
-                y = settledlands$slider(node, x, y, width, top, bottom, true);
-                y = settledlands$slider(node, x, y, width, top, bottom, false);
-                y = settledlands$difficulty(node, x, y, width, top, bottom);
-                y = settledlands$seal(node, x, y, width, top, bottom);
-                sidebarHeight += CONTENT;
-            } else if (DoorGraph382.isRadiusNode(node)) {
-                y = settledlands$radius(node, x, y, width, top, bottom);
-                sidebarHeight += 12 + ROW;
-            } else if (DoorGraph382.isWhoNode(node)) {
-                // The blue output has nothing to edit: it is filled by the door itself. The panel says
-                // who opened the door last, which is also the only way to see that the chain ran.
-                String last = DoorGraph382.opener(node);
-                label(last.isEmpty()
-                        ? Component.translatable("gui.settledlands.door.who_none").getString()
-                        : Component.translatable("gui.settledlands.door.who_last",
-                                Component.literal(last)).getString(), x, y);
-                y += 12;
-                label(Component.translatable("gui.settledlands.door.who_line3").getString(), x, y);
-                sidebarHeight += 12 + 12;
-            } else {
-                label(Component.translatable("gui.settledlands.door.event_line1").getString(), x, y);
-                y += 12;
-                label(Component.translatable("gui.settledlands.door.event_line2").getString(), x, y);
-                sidebarHeight += 12 + 12;
-            }
+            y = settledlands$slider(node, x, y, width, top, bottom, true);
+            y = settledlands$slider(node, x, y, width, top, bottom, false);
+            y = settledlands$difficulty(node, x, y, width, top, bottom);
+            y = settledlands$seal(node, x, y, width, top, bottom);
+            sidebarHeight += CONTENT;
         } finally {
             buildingInspector = false;
         }
-    }
-
-    /**
-     * Build 386: «В радиусе» of an opened door - 1..32 blocks, the gate the signal has to pass. A slider
-     * like the door's three, committed the same way.
-     */
-    private int settledlands$radius(NpcDialogueGraph.Node node, int x, int y, int width,
-            int top, int bottom) {
-        NpcUi.NpcSlider slider = NpcUi.slider(x, y, width,
-                DoorGraph382.MIN_RADIUS, DoorGraph382.MAX_RADIUS, DoorGraph382.radius(node),
-                shown -> Component.literal(DoorGraphClient382.safe(
-                        "gui.settledlands.door.radius_line", Integer.toString(shown))),
-                shown -> {
-                    if (shown == DoorGraph382.radius(node)) return;
-                    propertyChange(() -> DoorGraph382.setRadius(node, shown));
-                });
-        if (slider == null) return y;
-        ((NpcDialogueGraphScreen) (Object) this).addRenderableWidget(slider);
-        if (inspectorWidgets != null) inspectorWidgets.add(slider);
-        slider.visible = y >= top && y + 20 <= bottom;
-        return y + ROW;
     }
 
     /** Push every row and every label of this node out of the panel - hidden and moved, both. */
