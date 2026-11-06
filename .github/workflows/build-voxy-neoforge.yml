@@ -19,15 +19,7 @@ jobs:
           - name: pr45-sodium0812-iris
             repo: j-shelfwood/voxy-neoforge
             ref: refs/pull/45/head
-            desc: "PR #45: voxy 0.2.15-beta + Sodium 0.8.12 + Iris 1.8.14 (all 11 iris mixins active)"
-          - name: pr38-iris-sodium0613
-            repo: j-shelfwood/voxy-neoforge
-            ref: refs/pull/38/head
-            desc: "PR #38: Iris 1.8.1 shader integration, Sodium 0.6.13 baseline"
-          - name: irisfork-sodium0613
-            repo: TheNofis/voxy-neoforge-iris-support
-            ref: neoforge-1.21.1
-            desc: "TheNofis iris-support fork, Sodium 0.6.13 baseline"
+            desc: "PR #45: voxy 0.2.15-beta + Sodium 0.8.12 + Iris 1.8.14"
     steps:
       - name: Checkout Voxy sources
         uses: actions/checkout@v4
@@ -42,34 +34,50 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Gradle build
+      - name: Gradle build (capture log, do not fail job yet)
         working-directory: voxy
         run: |
           chmod +x ./gradlew
-          ./gradlew build --console=plain --stacktrace
-        env:
-          GITHUB_ACTIONS: true
+          set +e
+          ./gradlew build --console=plain --stacktrace 2>&1 | tee /tmp/build.log
+          code=${PIPESTATUS[0]}
+          echo "GRADLE_EXIT=$code" >> "$GITHUB_ENV"
+          echo "gradle exit code: $code"
 
-      - name: Show built jars
-        run: |
-          ls -l voxy/build/libs
-          sha256sum voxy/build/libs/*.jar
-
-      - name: Publish jars as a DRAFT release (not public until published)
+      - name: Publish BUILD LOG as draft release (on failure)
+        if: env.GRADLE_EXIT != '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          {
+            echo "BUILD FAILED (gradle exit ${{ env.GRADLE_EXIT }}) for ${{ matrix.name }}"
+            echo "Source: ${{ matrix.repo }} @ ${{ matrix.ref }}"
+            echo ""
+            echo "Gradle output tail:"
+            echo '```'
+            tail -c 60000 /tmp/build.log
+            echo '```'
+          } > lognotes.md
+          gh release create "voxy-buildlog-${{ matrix.name }}-${GITHUB_RUN_ID}" \
+            --repo "${GITHUB_REPOSITORY}" \
+            --draft \
+            --title "BUILDLOG ${{ matrix.name }} (DRAFT)" \
+            --notes-file lognotes.md
+
+      - name: Publish jars as a DRAFT release (on success)
+        if: env.GRADLE_EXIT == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          ls -l voxy/build/libs
+          sha256sum voxy/build/libs/*.jar
           {
             echo "Variant: ${{ matrix.name }}"
             echo "Source: ${{ matrix.repo }} @ ${{ matrix.ref }}"
             echo "${{ matrix.desc }}"
             echo "JDK 21, Minecraft 1.21.1, NeoForge."
             echo ""
-            echo "pr45 variant: Sodium 0.8.12+ and Iris 1.8.14 (LOD renders under shaderpacks)."
-            echo "pr38 / irisfork variants: Sodium 0.6.13-neoforge and Iris 1.8.1 only."
-            echo "Also needs Forgified Fabric API."
             echo "Install: put the voxy-*.jar (without -sources/-dev suffix) into the instance mods folder."
-            echo ""
             echo "Voxy is All Rights Reserved by MCRcortex. Private personal build: delete the draft after downloading."
           } > notes.md
           gh release create "voxy-${{ matrix.name }}-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
