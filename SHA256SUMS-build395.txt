@@ -1,0 +1,2 @@
+89ad3247a379690cccf0cb7428507b2be304843d18d6d8bf49a25052d0591102  settledlands-0.8.0-build395-door-stays-open.jar
+1276f0bc2c34479f381dd4bcd5367ac6aa9829c8fa3f7cce6421c4ff23bbde34  SettledLands-Build395-DoorStaysOpen-Source.zip

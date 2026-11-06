@@ -1,0 +1,1 @@
+89ad3247a379690cccf0cb7428507b2be304843d18d6d8bf49a25052d0591102  settledlands-0.8.0-build395-door-stays-open.jar

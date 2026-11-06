@@ -23,7 +23,9 @@ import org.slf4j.LoggerFactory;
  * <p>Cost is bounded on purpose. The list of locks is copied once every {@value #REBUILD} ticks, and
  * only {@value #BUDGET} of them are looked at per tick, so a world with thousands of locked doors costs
  * the same as a world with three. A door a guide is walking through is left alone
- * ({@code NpcDoors368.guideOpened}): the author asked for guides to pass, not for doors to be sealed.</p>
+ * ({@code NpcDoors368.guideOpened}): the author asked for guides to pass, not for doors to be sealed.
+ * A door this mod itself cracked open is left alone while a player is at it (build 395) and closed again
+ * once the room is empty - not eight seconds after the panel was solved, which is what the author saw.</p>
  */
 @EventBusSubscriber(modid = "settledlands")
 public final class DoorGuard371 {
@@ -91,9 +93,14 @@ public final class DoorGuard371 {
             if (!Doors368.isDoor(level.getBlockState(pos))) continue;
             if (!Doors368.anyOpen(level, pos)) continue;
             if (NpcDoors368.guideOpened(level, pos)) continue;
-            // Build 377: a door a player has just cracked open is open on purpose. Without this the
-            // lock panel would work and the door would slam shut on the next tick.
-            if (DoorHack377.cracked(level, pos)) continue;
+            // Build 377: a door a player has cracked open is open on purpose. Without this the lock panel
+            // would work and the door would slam shut on the next tick.
+            //
+            // Build 395: and it is open on purpose for as long as the player is at it, not for the eight
+            // seconds build 377 guessed. The author saw that guess run out: «дверь после взлома сама
+            // закрывается через секунд 5-10». A door the player walked away from is a locked door standing
+            // open in an empty room, and this guard closes it - which is what 371 is for.
+            if (DoorHack377.crackedOpen(level, pos)) continue;
             Doors368.setOpen(level, pos, false);
             if (closed < 3) {
                 closed++;

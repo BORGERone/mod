@@ -52,15 +52,26 @@ public record DoorHack377(String key) implements CustomPacketPayload {
     private static final double REACH = 6.0D;
 
     /**
-     * Build 377: doors this mod opened by cracking, and when. The guard of build 371 closes every
-     * locked door that is open, so without this a cracked door would slam shut in the player's face on
-     * the next tick. Long enough to walk through, short enough that the lock stays a lock.
+     * Build 377: doors this mod opened by cracking. The guard of build 371 closes every locked door that
+     * is open, so without this a cracked door would slam shut in the player's face on the next tick.
+     *
+     * <p>Build 395: the mark has no clock any more. 377 kept a timestamp and let the guard close the door
+     * eight seconds later - and that is exactly what the author saw: «чето немного странное происходит,
+     * дверь после взлома сама закрывается через секунд 5-10». Eight seconds was a guess, not a rule:
+     * nothing in the game closes a door by itself, and a door opened on purpose is a door. The mark is a
+     * set now and it lives as long as the door stands open with somebody at it - see
+     * {@link #crackedOpen}.</p>
      */
-    private static final java.util.Map<String, Long> CRACKED =
-            new java.util.concurrent.ConcurrentHashMap<String, Long>();
+    private static final java.util.Set<String> CRACKED =
+            java.util.concurrent.ConcurrentHashMap.newKeySet();
 
-    /** How long a cracked door is allowed to stand open before the guard may close it again. */
-    private static final long OPEN_FOR_MS = 8000L;
+    /**
+     * Build 395: how far from a cracked door a player still counts as walking through it, in blocks. This
+     * is the whole of the closing rule now - not a timer. Inside it the door is left alone however long
+     * the player takes; outside it the door is a locked door standing open in an empty room, and 371 is
+     * right to close it.
+     */
+    private static final double KEEP_OPEN = 16.0D;
 
     /**
      * Build 380: panels this client has solved and not yet seen opened - {@code key -> {sentAt, retried,
@@ -206,10 +217,9 @@ public record DoorHack377(String key) implements CustomPacketPayload {
     private static void remember(net.minecraft.server.level.ServerLevel server, BlockPos pos) {
         try {
             java.util.List<BlockPos> parts = Doors368.parts(server, pos);
-            long now = System.currentTimeMillis();
             for (int i = 0; i < parts.size(); i++) {
                 String key = DoorSync375.key(server, parts.get(i));
-                if (!key.isEmpty()) CRACKED.put(key, Long.valueOf(now));
+                if (!key.isEmpty()) CRACKED.add(key);
             }
         } catch (Throwable failure) {
             LOG.warn("door: a cracked door could not be remembered: " + failure);
@@ -263,24 +273,84 @@ public record DoorHack377(String key) implements CustomPacketPayload {
     }
 
     /**
-     * Was this door cracked by a player just now? The guard of 371 asks this before it closes a locked
-     * door, and the answer forgets itself as soon as it is too old.
+     * Build 395: may the guard of build 371 leave this door alone?
+     *
+     * <p>Three questions, in the order that makes the answer cheap and the reason clear:</p>
+     *
+     * <ol>
+     *   <li>did <b>this mod</b> crack this door open - a door somebody else opened is the guard's business,
+     *       exactly as build 371 says;</li>
+     *   <li>is the door still standing open - a door that was closed again (by the player, by redstone)
+     *       is a door the guard may close, and the mark goes with it, so a mark can never outlive the door
+     *       it was made for;</li>
+     *   <li>is somebody still at the door - within {@link #KEEP_OPEN} blocks, nobody is being slammed in
+     *       the face; outside it, a locked door standing open in an empty room is closed again, which is
+     *       the promise of 371.</li>
+     * </ol>
+     *
+     * <p>The eight-second timer of 377 answered only the first two, which is why the author saw a door
+     * close itself «через секунд 5-10» while he was standing at it.</p>
      */
-    public static boolean cracked(Level level, BlockPos pos) {
+    public static boolean crackedOpen(Level level, BlockPos pos) {
         if (level == null || pos == null || CRACKED.isEmpty()) return false;
         try {
             String key = DoorSync375.key(level, pos);
-            if (key.isEmpty()) return false;
-            Long at = CRACKED.get(key);
-            if (at == null) return false;
-            if (System.currentTimeMillis() - at.longValue() > OPEN_FOR_MS) {
-                CRACKED.remove(key);
+            if (key.isEmpty() || !CRACKED.contains(key)) return false;
+            boolean door = Doors368.isDoor(level.getBlockState(pos));
+            boolean open = door && Doors368.anyOpen(level, pos);
+            boolean player = open && someoneNear(level, pos);
+            if (!keepOpen(true, door, open, player)) {
+                // The mark is taken back the moment the rule stops holding, so it can never outlive the
+                // open it was made for.
+                forget(level, pos);
                 return false;
             }
             return true;
         } catch (Throwable failure) {
             return false;
         }
+    }
+
+    /**
+     * Build 395: the rule, without a world - four facts in, one answer out.
+     *
+     * <p>It is a method of its own because this is the whole of the change the author asked for and it has
+     * to be readable and testable on its own: a door is left alone only when <b>this mod</b> cracked it
+     * open, it is <b>still a door</b>, it is <b>still open</b>, and <b>somebody is at it</b>. No clock
+     * appears anywhere in it, which is the difference from build 377.</p>
+     */
+    public static boolean keepOpen(boolean marked, boolean door, boolean open, boolean playerNear) {
+        return marked && door && open && playerNear;
+    }
+
+    /** Build 395: the mark of one door, both halves - what was given is taken back. */
+    private static void forget(Level level, BlockPos pos) {
+        try {
+            java.util.List<BlockPos> parts = Doors368.parts(level, pos);
+            for (int i = 0; i < parts.size(); i++) {
+                String key = DoorSync375.key(level, parts.get(i));
+                if (!key.isEmpty()) CRACKED.remove(key);
+            }
+        } catch (Throwable failure) {
+            CRACKED.clear();
+        }
+    }
+
+    /** Build 395: is a player standing at this door? The server's list, filtered by dimension. */
+    private static boolean someoneNear(Level level, BlockPos pos) {
+        net.minecraft.server.MinecraftServer server = level.getServer();
+        if (server == null) return false;
+        java.util.List<ServerPlayer> players = server.getPlayerList().getPlayers();
+        double reach = KEEP_OPEN * KEEP_OPEN;
+        double x = pos.getX() + 0.5D;
+        double y = pos.getY() + 0.5D;
+        double z = pos.getZ() + 0.5D;
+        for (int i = 0; i < players.size(); i++) {
+            ServerPlayer player = players.get(i);
+            if (player == null || player.level() != level) continue;
+            if (player.distanceToSqr(x, y, z) <= reach) return true;
+        }
+        return false;
     }
 
     /** Is the player still standing at the door they solved the panel for? */

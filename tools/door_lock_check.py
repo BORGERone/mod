@@ -379,7 +379,10 @@ def structural(jar):
         # Build 377: the guard of 371 closes every locked door that is open. A door a player has just
         # cracked open is open on purpose, so the guard has to ask before it slams it shut.
         _guard_cls, guard_refs2 = parse(z.read("dev/settledlands/door/DoorGuard371.class"))
-        if not any(r[1] == "cracked" and r[0] and r[0].endswith("door/DoorHack377")
+        # Build 395: the question is crackedOpen now (build 377's timestamped cracked() is the timer the
+        # author saw close his door); the intent of this check is unchanged - the guard must know a door
+        # this mod opened on purpose.
+        if not any(r[1] in ("crackedOpen", "cracked") and r[0] and r[0].endswith("door/DoorHack377")
                    for r in guard_refs2):
             problems.append("the guard does not know about cracked doors - a solved panel would open a "
                             "door that the next tick closes again")
