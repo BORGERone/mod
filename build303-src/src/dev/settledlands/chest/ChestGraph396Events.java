@@ -82,11 +82,23 @@ public final class ChestGraph396Events {
         final long at;
         boolean window;
 
+        /**
+         * Build 398: was this opening a <b>crack</b>? A chest whose panel was solved runs the chain under its
+         * «взлом» socket, an ordinary opening runs the chain under «открытие» - the same moment (the window
+         * closing), two different chains, which is the whole point of having two sockets on the card.
+         */
+        final boolean cracked;
+
         Pending(ServerLevel level, BlockPos pos, String key, long at) {
+            this(level, pos, key, at, false);
+        }
+
+        Pending(ServerLevel level, BlockPos pos, String key, long at, boolean cracked) {
             this.level = level;
             this.pos = pos;
             this.key = key;
             this.at = at;
+            this.cracked = cracked;
         }
     }
 
@@ -142,6 +154,9 @@ public final class ChestGraph396Events {
             // chest never stands open for a single tick (the rule of builds 371/376). What opens instead
             // is the very same panel a locked door opens, with this chest's four numbers.
             int[] panel = ChestLock397.panel(level, pos);
+            // Build 398: a lock a solved panel has already lifted (because the window did not arrive on that
+            // client) lets this click through, so the game opens the chest exactly as it always has.
+            if (panel != null && ChestLock397.granted(key)) panel = null;
             if (panel != null) {
                 event.setCanceled(true);
                 try {
@@ -169,10 +184,17 @@ public final class ChestGraph396Events {
      * chest, the graph of that chest behaves the same.</p>
      */
     public static void remember(ServerPlayer player, ServerLevel level, BlockPos pos, String key) {
+        remember(player, level, pos, key, false);
+    }
+
+    /** Build 398: the same, for an opening that was a crack - its chain starts under «взлом». */
+    public static void remember(ServerPlayer player, ServerLevel level, BlockPos pos, String key,
+            boolean cracked) {
         if (player == null || level == null || pos == null) return;
         try {
             ChestGraph396.noteOpened(player, level, pos, key);
-            PENDING.put(player.getUUID(), new Pending(level, pos, key, now(level.getServer())));
+            PENDING.put(player.getUUID(),
+                    new Pending(level, pos, key, now(level.getServer()), cracked));
         } catch (Throwable failure) {
             ChestGraph396.fail(failure);
         }
@@ -240,7 +262,7 @@ public final class ChestGraph396Events {
                 if (age < OPEN_GRACE) continue;           // the same tick the click happened in
                 if (!pending.window && age < NO_WINDOW) continue;   // the window is still to come
                 walk.remove();
-                ChestGraph396.run(player, pending.level, pending.pos, pending.key);
+                ChestGraph396.run(player, pending.level, pending.pos, pending.key, pending.cracked);
             } catch (Throwable failure) {
                 walk.remove();
                 ChestGraph396.fail(failure);

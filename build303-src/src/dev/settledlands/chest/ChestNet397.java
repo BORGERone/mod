@@ -259,12 +259,29 @@ public final class ChestNet397 {
                 return;
             }
             OptionalInt opened = player.openMenu(provider);
-            // Build 396's rule: the chest's chain runs when the chest's window closes, and a chest opened
-            // by a solved panel is an opening like any other - so the opener is recorded and the chain is
-            // queued exactly as it is for a plain click.
-            ChestGraph396Events.remember(player, level, pos, key);
+            boolean shown = opened != null && opened.isPresent();
+            // Build 396's rule: the chest's chain runs when the chest's window closes, and a chest opened by
+            // a solved panel is an opening like any other - so the opener is recorded and the chain is queued
+            // exactly as it is for a plain click. Build 398: this opening was a CRACK, so what runs on close
+            // is the chain under the card's «взлом» socket.
+            ChestGraph396Events.remember(player, level, pos, key, true);
+            // Build 398: the lock is lifted for this chest for a few seconds the moment the panel is solved -
+            // always, not only when the window is missing. The window is the polite way in; this is the
+            // guarantee that a player who broke the lock can open his chest even if that window never
+            // arrives on his client, which is the report this build is answering.
+            ChestLock397.grant(key);
+            if (!shown) {
+                // Build 398: the window did not go out. The player solved the panel and must not be left
+                // holding a lock he already broke, so the lock is lifted for this chest for a few seconds
+                // and the next click opens it the game's own way. Said out loud in the action bar, because a
+                // refusal he cannot see is the bug he reported.
+                player.displayClientMessage(
+                        Component.translatable("message.settledlands.chest.again"), true);
+            }
             note("chest: the locked chest at " + pos + " was cracked by " + player.getName().getString()
-                    + " (menu=" + (opened == null ? "none" : String.valueOf(opened)) + ")");
+                    + " (menu=" + (opened == null ? "none" : String.valueOf(opened))
+                    + (shown ? ", the window was opened by the server"
+                            : ", the window did NOT open - the lock is lifted for a moment") + ")");
         } catch (Throwable failure) {
             LOG.warn("chest: a solved panel could not open the chest: " + failure);
         }

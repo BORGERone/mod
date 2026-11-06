@@ -1,0 +1,4 @@
+# SettledLands build 398 - 0.8.0-build398-card-sockets
+# base: settledlands-0.8.0-build397-chest-hack.jar
+855d2073a58eb5d2d1698753d70862c12c493625340b33e8f7028b48b64f8d08  settledlands-0.8.0-build398-card-sockets.jar
+4909758f3c9eb4e88c38befabc02723647606685216c7a9da00dbb6ab6c4b84c  SettledLands-Build398-CardSockets-Source.zip

@@ -105,6 +105,11 @@ public final class ChestCard396 {
             String outLabel = tr("gui.settledlands.chest.pin_out");
             graphics.drawString(font, outLabel, width - 8 - font.width(outLabel),
                     OUT_ROW - 4, AMBER, false);
+            // Build 398: the second execution socket - «взлом» - two rows under «открытие». Its label sits
+            // in the same strip, right-aligned the same way, so the three labels read as one column.
+            String hackLabel = tr(CardEventPin398.labelKey(node));
+            graphics.drawString(font, hackLabel, width - 8 - font.width(hackLabel),
+                    CardEventPin398.SECOND_ROW - 4, AMBER, false);
             String whoLabel = tr("gui.settledlands.chest.pin_who");
             graphics.drawString(font, whoLabel, width - 8 - font.width(whoLabel), VALUE_ROW - 4,
                     PursuitGraphNode272.COL_VALUE, false);
@@ -112,6 +117,9 @@ public final class ChestCard396 {
             // The sockets themselves, where their wires start. Drawn last, so a label can never paint over
             // them. Same shapes as the door's: round is a step of the chain, a diamond is a value.
             DoorCard382.socket(graphics, width, OUT_ROW, AMBER);
+            // Build 398: «взлом» - the socket that starts the chain when this chest was cracked rather than
+            // simply unlocked and opened. Round like the first one: both are execution, neither is a value.
+            DoorCard382.socket(graphics, width, CardEventPin398.SECOND_ROW, AMBER);
             DoorCard382.diamond(graphics, width, VALUE_ROW, 5, PursuitGraphNode272.COL_VALUE);
         } catch (Throwable failure) {
             ChestGraph396.fail(failure);

@@ -124,6 +124,11 @@ public final class DoorCard382 {
             String outLabel = tr("gui.settledlands.door.pin_out");
             graphics.drawString(font, outLabel, width - 8 - font.width(outLabel),
                     OUT_ROW - 4, AMBER, false);
+            // Build 398: the second execution socket - «открытие» - two rows under «взлом»: the chain
+            // that runs when this door is simply opened, which a door that is only hacked never had.
+            String openLabel = tr(CardEventPin398.labelKey(node));
+            graphics.drawString(font, openLabel, width - 8 - font.width(openLabel),
+                    CardEventPin398.SECOND_ROW - 4, AMBER, false);
             String whoLabel = tr("gui.settledlands.door.pin_who");
             graphics.drawString(font, whoLabel, width - 8 - font.width(whoLabel),
                     VALUE_ROW - 4, PursuitGraphNode272.COL_VALUE, false);
@@ -132,6 +137,8 @@ public final class DoorCard382 {
             // and the blue diamond of every value output of this mod. Drawn last, so a label can never
             // paint over them.
             socket(graphics, width, OUT_ROW, AMBER);
+            // Build 398: «открытие» - the socket that starts the chain when this door is opened by hand.
+            socket(graphics, width, CardEventPin398.SECOND_ROW, AMBER);
             diamond(graphics, width, VALUE_ROW, 5, PursuitGraphNode272.COL_VALUE);
         } catch (Throwable failure) {
             DoorGraph382.fail(failure);

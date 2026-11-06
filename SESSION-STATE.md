@@ -1801,3 +1801,53 @@ back across the card, into the pulse's left port). The blue target stood to the 
 - **Unconfirmed in game:** the panel arriving on a live client (title/layout), the vanilla window opening
   from a server `openMenu` on NeoForge 1.21.1, no hand swing on a refused click, the opener line landing on
   the card in the same tick as the window close.
+
+## Build 398 — the second socket on both cards, live toggles, a chest that really opens
+
+`settledlands-0.8.0-build398-card-sockets.jar` (599 entries, 549 classes, 3 633 688 B, sha256
+`855d2073…f8d08`), base 397. Sources `SettledLands-Build398-CardSockets-Source.zip` (539 entries, sha256
+`4909758f…4b84c`), `SHA256SUMS-build398.txt`, `README-Build398-RU.md`, patch `tools/patch_build398.py`,
+classes from `build303-src/out398` (19).
+
+- **The report, four lines:** (1) «тумблер "открыта/закрыта" визуально в правом окне изменяется только при
+  перезаходе в граф. Так-же и в графе сундука»; (2) «после взлома сундука у нас не открывается инвентарь
+  сундука»; (3) «нельзя вытаскивать из синего узла провод»; (4) «добавь ноде главной у сундука узел
+  "взлом" а главной ноде двери узел "открытие"».
+- **(1)** The word was written once, when the sidebar was built. Both `NpcDoorRows382Mixin.settledlands$seal`
+  and `NpcChestRows396Mixin.settledlands$lock` now keep the button in `final Button[] self = new Button[1]`
+  and write `setMessage(settledlands$sealWord(node) / settledlands$lockWord(node))` **inside the click**,
+  after `propertyChange(...)`; the same helper runs once at build, so the two paths cannot disagree.
+- **(2)** Three independent guards: `HackPanel377#onClose` closes only when `Minecraft#screen == this` (the
+  vanilla window that replaced the panel was being closed by it); `settledlands$askAgain` resends the solved
+  answer up to `ASK_TIMES=2` every `ASK_AGAIN_MS=1200` while `containerMenu == inventoryMenu`;
+  `ChestNet397` calls `ChestLock397#grant(key)` (`GRANT_MS=10_000`) **unconditionally** right after
+  `ChestGraph396Events#remember` - it was first written inside the `!shown` branch, i.e. on the wrong side.
+- **(3)** Not `hitPort` (trampoline to `NpcStatsGraphUi.hitPort`, returns -1 for type 16): the single
+  predicate every half of a blue pin is keyed on is `PursuitGraphNode272#isValueSourceNode`, and the chest
+  card was missing from it. Now `isChestValueNode` (`ChestGraph396.isChestNode`).
+- **(4)** `npc/client/CardEventPin398` (geometry `FIRST_ROW=NODE_H/2`, `SECOND_ROW=FIRST_ROW+18`, `isCard`,
+  `secondChain`/`setSecondChain`, `labelKey` -> `gui.settledlands.{chest.pin_hack,door.pin_open}`,
+  `pinScreenX/Y`, `cardAt`, `wireAt`, `hasWire`), `mixin/CardEventPin398Mixin` (client: grab, drop, cut,
+  cable via the screen's own `curve`, undo point + dirty flag; **never** `connect(III)`, which writes
+  `next` for a card), `door/DoorSignal398`. **The second chain lives in `Node#falseNext`** - the field the
+  stock serialiser writes for every node type (rule of 384); `setSecondChain` refuses anything that is not a
+  card (`isCard`), which `CardSockets398Probe` caught as `STOCK untouched=false` before the fix.
+  Runtimes: `ChestGraph396#hackChainStart` (cracked -> second socket, **falls back** to `chainStart` for a
+  396/397 graph), `DoorGraph382#openChainStart` (hand-opened door, closed->open only, server side,
+  `GUARD_MS=250`; no fallback on purpose - the first socket is the hack). `ChestGraph396Events$Pending`
+  gained `cracked`; `DoorUse373Mixin` compares `Doors368#isOpen` before and after the click.
+- **Lang:** +3 keys (`door.pin_open`, `chest.pin_hack`, `chest.again`), 2 hints corrected (both files).
+- **Gates:** `verify_jar --base 397` **PASS** (14 replaced / 3 added, 44 common + 55 client mixins, 1408
+  external refs, 0 new); all 33 `tools/*_check.py` green, including the new `tools/card_sockets_check.py`
+  (message-in-click, the three chest-window guards, `isValueSourceNode`+chest, `falseNext`-only / never
+  `next`, the mixin not calling `connect`, both runtimes reading `falseNext`, the 5 lang keys, and the
+  probe's 7 lines). `tools/harness/CardSockets398Probe.java` -> `SECOND fields=next:true falseNext:true
+  apart=true`, `FIRST next=1 falseNext=2`, `FALLBACK wired=1`, `DOOR second=2 first=1 apart=true`,
+  `NAMES chest=gui.settledlands.chest.pin_hack door=gui.settledlands.door.pin_open`, `STOCK untouched=true`,
+  `GRANT mine=true other=false`. Probes 392-397 still pass.
+- **Not in this build:** «взлом» is an event, not a command; a door opened by a mob/piston runs no chain;
+  a double chest is still two graphs.
+- **Unconfirmed in game:** the toggle repainting in the same frame, the vanilla window arriving after
+  `openMenu` on NeoForge 1.21.1 (and the resend not stacking a second window), the second socket's cable
+  landing pixel-exact next to the blue diamond at every zoom, the door's «открытие» not firing twice on a
+  fast double click.

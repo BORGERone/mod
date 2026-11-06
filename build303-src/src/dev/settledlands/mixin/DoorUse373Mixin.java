@@ -1,7 +1,11 @@
 package dev.settledlands.mixin;
 
 import dev.settledlands.door.DoorEvents368;
+import dev.settledlands.door.DoorSignal398;
+import dev.settledlands.door.Doors368;
 import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -49,6 +53,36 @@ public abstract class DoorUse373Mixin {
             // identical from the outside, and that ambiguity cost build 371 a whole cycle.
             DoorEvents368.sawDoorUse(pos, locked);
             if (locked) cir.setReturnValue(InteractionResult.FAIL);
+        } catch (Throwable ignored) {
+            // never turn a click on a door into a crash
+        }
+    }
+
+    /**
+     * Build 398: the door's «открытие» chain - «а главной ноде двери узел "открытие"».
+     *
+     * <p>The same method, at its return: by now the game has really opened (or not opened) this door. The
+     * chain runs only when the door was <b>closed</b> before this call and is <b>open</b> after it - not on a
+     * refused click (the lock already returned {@code FAIL} above), not on a click that changed nothing, and
+     * not when a player closes a door again. The reading of both states is the mod's own
+     * {@code Doors368.isOpen}, the one every door write of this mod already trusts.</p>
+     */
+    @Inject(method = "useWithoutItem(Lnet/minecraft/world/level/block/state/BlockState;"
+            + "Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;"
+            + "Lnet/minecraft/world/entity/player/Player;Lnet/minecraft/world/phys/BlockHitResult;)"
+            + "Lnet/minecraft/world/InteractionResult;",
+            at = @At("RETURN"), require = 0, remap = false)
+    private void settledlands$doorOpened(BlockState state, Level level, BlockPos pos,
+            Player player, BlockHitResult hit, CallbackInfoReturnable<InteractionResult> cir) {
+        try {
+            if (!(level instanceof ServerLevel server) || !(player instanceof ServerPlayer serverPlayer)) {
+                return;                              // the client's guess is never a signal
+            }
+            if (hit == null || pos == null || state == null) return;
+            if (Doors368.isOpen(state)) return;      // it was already open: this click closed it
+            BlockState after = level.getBlockState(pos);
+            if (!Doors368.isOpen(after)) return;     // the click opened nothing
+            DoorSignal398.open(serverPlayer, server, pos);
         } catch (Throwable ignored) {
             // never turn a click on a door into a crash
         }

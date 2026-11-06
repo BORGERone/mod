@@ -216,15 +216,32 @@ public abstract class NpcDoorRows382Mixin {
         return y + ROW;
     }
 
-    /** The «закрыта/открыта» toggle; the label says the state the click will produce. */
+    /**
+     * The «закрыта/открыта» toggle; the label says the state the click will produce.
+     *
+     * <p><b>Build 398: the label follows the click.</b> The author's report: «сейчас тумблер "открыта/закрыта"
+     * визуально в правом окне изменяется только при перезаходе в граф». The cause is that the message was
+     * written once, when the inspector was built - and a click only changes the node. So the button is now
+     * asked for its own label in the click itself, through the same one-element holder the sliders use for
+     * their own state: whatever the click did, the word on it is the word the node now says.</p>
+     */
     private int settledlands$seal(NpcDialogueGraph.Node node, int x, int y, int width,
             int top, int bottom) {
-        Button toggle = button("gui.settledlands.door.seal", x, y, width, 16, () ->
-                propertyChange(() -> DoorGraph382.setSealed(node, !DoorGraph382.sealed(node))));
+        final Button[] self = new Button[1];
+        Button toggle = button("gui.settledlands.door.seal", x, y, width, 16, () -> {
+            propertyChange(() -> DoorGraph382.setSealed(node, !DoorGraph382.sealed(node)));
+            if (self[0] != null) self[0].setMessage(settledlands$sealWord(node));
+        });
         if (toggle == null) return y;
-        toggle.setMessage(Component.translatable(DoorGraph382.sealed(node)
-                ? "gui.settledlands.door.sealed" : "gui.settledlands.door.unsealed"));
+        self[0] = toggle;
+        toggle.setMessage(settledlands$sealWord(node));
         toggle.visible = y >= top && y + toggle.getHeight() <= bottom;
         return y + 20;
+    }
+
+    /** «Закрыта (только взлом)» or «Открыта (обычный клик)», read from the node as it is right now. */
+    private static Component settledlands$sealWord(NpcDialogueGraph.Node node) {
+        return Component.translatable(DoorGraph382.sealed(node)
+                ? "gui.settledlands.door.sealed" : "gui.settledlands.door.unsealed");
     }
 }

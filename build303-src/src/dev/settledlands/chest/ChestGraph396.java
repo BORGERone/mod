@@ -182,6 +182,29 @@ public final class ChestGraph396 {
         return start;
     }
 
+    /**
+     * Build 398: the chain the card's <b>second</b> socket («взлом») points at - the one that runs when this
+     * chest was cracked rather than simply unlocked and opened. The first socket («открытие») is
+     * {@link #chainStart}.
+     *
+     * <p>It is kept in {@code Node#falseNext}, the second output every node already has: the stock serialiser
+     * writes and reads it for every type (the lesson of build 384), so the second chain survives a save with no
+     * new field and no change to the store. A card is not an «Условие If», and nothing in the stock
+     * interpreter walks {@code falseNext} of anything else, so the field can only mean this.</p>
+     */
+    public static NpcDialogueGraph.Node hackChainStart(NpcDialogueGraph graph) {
+        NpcDialogueGraph.Node chest = chestNode(graph);
+        if (chest == null || chest.falseNext < 0) return null;
+        NpcDialogueGraph.Node start = graph.get(chest.falseNext);
+        if (start == null || start == chest) return null;
+        return start;
+    }
+
+    /** True when the card's «взлом» socket is wired to a node that still exists. */
+    public static boolean hasHackChain(NpcDialogueGraph graph) {
+        return hackChainStart(graph) != null;
+    }
+
     /** The rows of a chest's create menu: the block's rows, in the same order and with the same labels. */
     public static int[] paletteRows() {
         return BlockTrigger351.PALETTE_ROWS;
@@ -368,19 +391,41 @@ public final class ChestGraph396 {
 
     /** Build 396: runs the chain of a chest from the node its socket points at. What a close does. */
     public static boolean run(ServerPlayer player, ServerLevel level, BlockPos pos, String key) {
+        return run(player, level, pos, key, false);
+    }
+
+    /**
+     * Build 398: the chain of a chest's close, from the socket the opening belongs to.
+     *
+     * <p>Two sockets, two events: a chest that was <b>cracked</b> runs the node under «взлом», a chest that was
+     * simply opened runs the node under «открытие». A graph written by build 396/397 has only the one socket
+     * wired - {@code next} - so a cracked chest falls back to it rather than going silent: an older graph keeps
+     * working exactly as it did, and the author gains the second socket without losing the first.</p>
+     */
+    public static boolean run(ServerPlayer player, ServerLevel level, BlockPos pos, String key,
+            boolean cracked) {
         if (player == null || level == null || key == null || key.isEmpty()) return false;
         try {
             ChestGraph396Store store = ChestGraph396Store.get(level.getServer());
             NpcDialogueGraph graph = store == null ? null : store.graph(key);
             if (graph == null) return false;
-            NpcDialogueGraph.Node start = chainStart(graph);
+            NpcDialogueGraph.Node start = cracked ? hackChainStart(graph) : chainStart(graph);
+            boolean fellBack = false;
+            if (start == null && cracked) {
+                // A graph of 396/397 knows nothing of the second socket: its one chain is all there is.
+                start = chainStart(graph);
+                fellBack = start != null;
+            }
             if (start == null) return false;
             BlockTalk358.Where where = new BlockTalk358.Where(level, key, pos.getX(), pos.getY(), pos.getZ());
             // Build 393's rule: the node the socket points at is the FIRST step of the chain, not the one
             // before it - start() runs it, fire() would skip it.
             int stepped = BlockTrigger351.start(player, graph, start.id, where);
-            LOG.info("chest: " + key + " was opened by " + player.getName().getString()
-                    + " and closed - " + stepped + " node(s) stepped from the card's output socket");
+            LOG.info("chest: " + key + " was " + (cracked ? "cracked" : "opened") + " by "
+                    + player.getName().getString() + " and closed - " + stepped
+                    + " node(s) stepped from the card's "
+                    + (cracked && !fellBack ? "«взлом» socket" : "«открытие» socket")
+                    + (fellBack ? " (a graph of 396/397: the only socket it has)" : ""));
             return stepped > 0 || start != null;
         } catch (Throwable failure) {
             fail(failure);

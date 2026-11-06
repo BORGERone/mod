@@ -217,6 +217,38 @@ public final class ChestLock397 {
         }
     }
 
+    /**
+     * Build 398: chests whose lock has been lifted for one player for a moment, and how long that lasts.
+     *
+     * <p>A solved panel opens the chest's own window on the server ({@code ChestNet397#solve}). On a client
+     * where that window does not arrive - a load order, a competing screen, a packet the client drops - the
+     * player is left standing at a chest that answered him with nothing, which is exactly the report «после
+     * взлома сундука у нас не открывается инвентарь сундука». So the opening is not the only way out: when the
+     * window does not open, the lock is lifted for that chest for a few seconds and the very next click opens
+     * it through the game's own path, which is the path this mod has never had trouble with.</p>
+     */
+    private static final long GRANT_MS = 10_000L;
+
+    private static final java.util.Map<String, Long> GRANTED =
+            new java.util.concurrent.ConcurrentHashMap<>();
+
+    /** Lifts the lock of one chest for {@code GRANT_MS}, for whoever clicks it next. */
+    public static void grant(String key) {
+        if (key == null || key.isEmpty()) return;
+        if (GRANTED.size() > 64) GRANTED.clear();
+        GRANTED.put(key, System.currentTimeMillis());
+    }
+
+    /** True while a solved panel's fallback is still standing open for this chest. */
+    public static boolean granted(String key) {
+        if (key == null || key.isEmpty()) return false;
+        Long at = GRANTED.get(key);
+        if (at == null) return false;
+        if (System.currentTimeMillis() - at <= GRANT_MS) return true;
+        GRANTED.remove(key);
+        return false;
+    }
+
     /** Is the player still standing at the chest they solved the panel for? The door's own reach. */
     public static boolean near(net.minecraft.server.level.ServerPlayer player, BlockPos pos) {
         if (player == null || pos == null) return false;

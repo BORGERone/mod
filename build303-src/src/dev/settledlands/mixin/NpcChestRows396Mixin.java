@@ -214,14 +214,29 @@ public abstract class NpcChestRows396Mixin {
         return y + ROW;
     }
 
-    /** The «закрыта/открыта» toggle; the label says the state the click will produce. */
+    /**
+     * The «закрыта/открыта» toggle; the label says the state the click will produce.
+     *
+     * <p><b>Build 398: the label follows the click.</b> Same bug as the door's, found at the same time by the
+     * author («и в графе сундука»): the message was written once when the inspector was built, so the word on
+     * the button changed only when the graph was reopened. It is now asked for in the click itself.</p>
+     */
     private int settledlands$lock(NpcDialogueGraph.Node node, int x, int y, int width,
             int top, int bottom) {
-        Button toggle = button("gui.settledlands.chest.lock", x, y, width, 16, () ->
-                propertyChange(() -> ChestLock397.setLocked(node, !ChestLock397.locked(node))));
+        final Button[] self = new Button[1];
+        Button toggle = button("gui.settledlands.chest.lock", x, y, width, 16, () -> {
+            propertyChange(() -> ChestLock397.setLocked(node, !ChestLock397.locked(node)));
+            if (self[0] != null) self[0].setMessage(settledlands$lockWord(node));
+        });
         if (toggle == null) return y;
-        toggle.setMessage(Component.translatable(ChestLock397.stateKey(node)));
+        self[0] = toggle;
+        toggle.setMessage(settledlands$lockWord(node));
         toggle.visible = y >= top && y + toggle.getHeight() <= bottom;
         return y + 20;
+    }
+
+    /** «Закрыта (только взлом)» or «Открыта (обычный клик)», read from the node as it is right now. */
+    private static Component settledlands$lockWord(NpcDialogueGraph.Node node) {
+        return Component.translatable(ChestLock397.stateKey(node));
     }
 }

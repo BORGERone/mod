@@ -1,5 +1,6 @@
 package dev.settledlands.npc.client;
 
+import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
@@ -829,7 +830,19 @@ public final class PursuitGraphNode272 {
 
     /** True for a node with a blue output: it hands out a body. */
     public static boolean isValueSourceNode(Node node) {
-        return isCheckValueNode(node) || isDamageValueNode(node) || isDoorValueNode(node);
+        return isCheckValueNode(node) || isDamageValueNode(node) || isDoorValueNode(node)
+                || isChestValueNode(node);
+    }
+
+    /**
+     * Build 398: the blue socket of a chest's card is a value source like the door's - the author's report
+     * «сейчас нельзя вытаскивать из синего узла провод» is about exactly this pin, and the cause was one
+     * missing term in this predicate: every half of the blue pin (the hit test that starts the drag, the drop,
+     * the cut, the stored link and the pass that draws it) is keyed on {@code isValueSourceNode}, so a pin
+     * this predicate does not know is painted and unreachable.
+     */
+    public static boolean isChestValueNode(Node node) {
+        return ChestGraph396.isChestNode(node);
     }
 
     /**

@@ -145,6 +145,19 @@ public class HackPanel377 extends Screen {
     private long escDownAt;
 
     /**
+     * Build 398: when the answer went out and how many times it has been sent. A chest's prize is a window
+     * opened by the server; if that window never arrives, the client asks again instead of leaving the player
+     * at a chest that answered him with nothing (the report: «после взлома сундука у нас не открывается
+     * инвентарь сундука»).
+     */
+    private long answeredAt;
+    private int asked;
+
+    /** A resend is only worth it while nothing has opened: a second ask cannot close a window twice. */
+    private static final long ASK_AGAIN_MS = 1200L;
+    private static final int ASK_TIMES = 2;
+
+    /**
      * Build 397: this panel is the <b>door's</b> panel, and a chest opens the very same one. One screen,
      * one keyboard rule, one way out of it - the flag only decides the three words that name the thing
      * being cracked and which packet carries the win back.
@@ -349,6 +362,58 @@ public class HackPanel377 extends Screen {
      * the hardware every frame ({@code isKeyDown} is the truth, the same call the keys are read with),
      * and the panel's own keys are checked on the hardware as well.</p>
      */
+    /**
+     * Build 398: ask again when a chest's window did not arrive.
+     *
+     * <p>Two seconds of watching is enough: the server opens a container in the same tick it answers, so a
+     * window that is not there after a second and a fifth is not late - it is not coming. Two repeats, then the
+     * panel stops asking and the player is left with the lock lifted on the server, which the action bar said
+     * out loud.</p>
+     */
+    private void settledlands$askAgain(long now) {
+        if (asked >= ASK_TIMES || chestKey == null || chestKey.isEmpty()) return;
+        if (now - answeredAt < ASK_AGAIN_MS) return;
+        if (settledlands$windowOpen()) {
+            asked = ASK_TIMES;                       // it arrived: no more asking
+            return;
+        }
+        answeredAt = now;
+        asked++;
+        LOG.info("chest: no window after " + (ASK_AGAIN_MS / 1000L) + " s of the answer - asking again for "
+                + chestKey + " (" + asked + "/" + ASK_TIMES + ")");
+        ChestNet397.sendSolved(chestKey);
+    }
+
+    /** True when a container of any kind is open - the sign that the chest's window really arrived. */
+    private static boolean settledlands$windowOpen() {
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            return mc != null && mc.player != null
+                    && mc.player.containerMenu != mc.player.inventoryMenu;
+        } catch (Throwable failure) {
+            return false;
+        }
+    }
+
+    /**
+     * Build 398: the panel closes only while it is the screen in front.
+     *
+     * <p>A solved chest's window opens on the client as a new screen, and the panel is what it replaces. The
+     * panel used to close itself unconditionally when the last key came up - and if the window had already
+     * arrived by then, that close took the <b>chest's window</b> down with it. From the player's chair the
+     * chest simply never opened, which is exactly what he reported.</p>
+     */
+    @Override
+    public void onClose() {
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null && mc.screen != null && mc.screen != this) return;
+        } catch (Throwable ignored) {
+            // a close must never throw
+        }
+        super.onClose();
+    }
+
     private boolean allReleased() {
         Minecraft mc = Minecraft.getInstance();
         long window = mc == null || mc.getWindow() == null ? 0L : mc.getWindow().getWindow();
@@ -463,6 +528,8 @@ public class HackPanel377 extends Screen {
                     + "sending the hack for " + (chest ? String.valueOf(pos)
                             : DoorSync375.key(Minecraft.getInstance().player == null ? null
                                     : Minecraft.getInstance().player.level(), pos)));
+            answeredAt = System.currentTimeMillis();
+            asked = 1;
             if (chest) ChestNet397.sendSolved(chestKey);
             else DoorHack377.send(pos);
             // Build 387: and the panel does NOT close here. The door is open on the server, but the
@@ -472,6 +539,11 @@ public class HackPanel377 extends Screen {
         }
 
         if (solved) {
+            // Build 398: the chest's window is the server's answer, so the client watches for it. No window
+            // and no key left to press is a broken promise, not a win - so the ask is repeated once or twice
+            // before the panel leaves. The lock itself is lifted on the server as well, so even a client that
+            // never sees the window can open this chest with one more click.
+            if (chest) settledlands$askAgain(now);
             // Build 387: the frame every key is up is the frame the panel goes - nowhere left to cover,
             // and nothing left to explain.
             if (allReleased()) {

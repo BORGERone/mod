@@ -315,6 +315,28 @@ public final class DoorGraph382 {
     }
 
     /**
+     * Build 398: the node the card's <b>second</b> socket points at - «открытие», the chain that runs when the
+     * door is simply opened by hand. The first socket («взлом») is {@link #chainStart}.
+     *
+     * <p>It is kept in {@code Node#falseNext} - the second output every node already has, written and read by
+     * the stock serialiser for every type (the lesson of 384), so the second chain survives a save with no new
+     * field and no change to the store. A card is not an «Условие If», and nothing in the stock interpreter
+     * walks {@code falseNext} of anything else, so the field can only mean this.</p>
+     */
+    public static NpcDialogueGraph.Node openChainStart(NpcDialogueGraph graph) {
+        NpcDialogueGraph.Node door = doorNode(graph);
+        if (door == null || door.falseNext < 0) return null;
+        NpcDialogueGraph.Node start = graph.get(door.falseNext);
+        if (start == null || start == door) return null;
+        return start;
+    }
+
+    /** True when the card's «открытие» socket is wired to a node that still exists. */
+    public static boolean hasOpenChain(NpcDialogueGraph graph) {
+        return openChainStart(graph) != null;
+    }
+
+    /**
      * Build 392: folds the two nodes of build 389-391 back into the card.
      *
      * <p>The author wanted sockets, not nodes, so a graph that still has them is rewritten instead of
