@@ -298,3 +298,28 @@ https://github.com/BORGERone/mod/releases/download/untagged-9a40eb0ce6b96e8bd304
 enableShaders=false; включить в меню Iris (Shaders -> Enable) или поставить enableShaders=true.
 LOD сквозь порталы по-прежнему не виден (это и есть несовместимость IP+Voxy) - но шейдеры
 больше не гаснут и Voxy продолжает работать в основном мире.
+
+=== ВИЗУАЛЬНЫЕ БАГИ С ШЕЙДЕРАМИ ПОСЛЕ ПОРТАЛА (лог latest-4.log, скрин image-1.png) ===
+Симптомы: (a) в Незере LOD за дальностью прорисовки "размазан" как след от окна XP;
+(b) полотно портала Immersive Portals видно сквозь стены; (c) при портале в кадре в
+Верхнем мире пропадает жёлто-белый солнечный свет (синий амбиент остаётся).
+Исключений в логе нет - баги чисто в Iris-интеграции рендера.
+Перенесены 3 фикса из форка TheNofis/voxy-neoforge-iris-support (коммиты 6fbb4d2a2a,
+36fa10f3ad, 3f036dcb59, 56c7109a2b) поверх PR #45 (коммит 5f6d566):
+1) MixinIrisRenderingPipeline.voxy$injectViewportSetup: инъекция в beginLevelRendering
+   перенесена с INVOKE RenderSystem;activeTexture(I)V (точки больше нет в Iris 1.8.x) на
+   @At("HEAD") + org.lwjgl.opengl.GL11C.glViewport(0,0,mainRenderTarget.width,height) перед
+   применением CAPTURED_VIEWPORT_PARAMETERS (shadow-pass оставляет чужой GL viewport ->
+   setupViewport читал нулевые размеры -> размазанная геометрия/битая глубина).
+2) MixinDefaultChunkRenderer.doRender: всегда renderer.setupViewport(матрицы ТЕКУЩЕГО
+   прохода) вместо renderer.getViewport() с пре-захваченными параметрами (Iris зовёт
+   beginLevelRendering РАНЬШЕ LevelRenderer.renderLevel, поэтому захват пустой; портал-вью
+   IP получали чужие матрицы -> полотно портала игнорировало глубину).
+3) ViewportSelector.getViewport: во время Iris shadow pass возвращать null вместо
+   отдельного shadow-вьюпорта (LOD писался в shadow/G-buffer таргеты -> карта теней
+   портилась -> солнечный свет гас); renderOpaque(null) - безопасный no-op (проверено:
+   VoxyRenderSystem.renderOpaque первым делом `if (viewport == null) return;`).
+Итоговый jar: voxy-0.2.15-beta.jar, 89 345 766 байт,
+sha256 909ce3173f487097bfe36219a095f9233952245b41579b0fc5b67cd9d7590fab
+https://github.com/BORGERone/mod/releases/download/untagged-dc8b18ccaaf55c8c5927/voxy-0.2.15-beta.jar
+У пользователя в mods лежал voxy-0.2.15-beta(1).jar - удалять ОБА старых voxy-0.2.15*.jar.
