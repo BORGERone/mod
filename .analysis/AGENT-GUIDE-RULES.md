@@ -32,7 +32,8 @@
 |---|---|---|---|---|
 | voxy v5 (iris-ipfix-v5) | РАБОЧАЯ (база/откат) | 32fa43034507b1287926ec36e856d259fbc0642e233923fe5d2b73eeeb519b9c | id 1ZMU1o3sLZrBW0UDgHaRtqQ-k22wdBy-Z (uc?id=1ZMU1o3sLZrBW0UDgHaRtqQ-k22wdBy-Z&export=download) | untagged-45d58ca9715927cdc0a7 |
 | voxy v8 (pipeline takeover) | ОТКЛОНЕНА (LOD-маски другого измерения) | d7b27398ff609ec5ce70cbffe7edff3a99e94295c1dc797a40c1a914264c1ea4 | в корзине | draft run 42391451970 |
-| voxy v9 (iris-ipfix-v9) | КАНДИДАТ (фикс ghosting: clear colour в Normal) | dfcf854e7e0e857020eed99c36bf639c18aa9183263061a2efa60febfc267652 | id 1ScnI7X9tGFkNQ2J2YHdqgJEG5VIUwqep (uc?id=1ScnI7X9tGFkNQ2J2YHdqgJEG5VIUwqep&export=download) | run 42398948971 |
+| voxy v9 (clear colourTex) | ОТКЛОНЕНА (ничего не изменила: чищена не та текстура) | dfcf854e7e0e857020eed99c36bf639c18aa9183263061a2efa60febfc267652 | в корзине | run 42398948971 |
+| voxy v10 (iris-ipfix-v10) | КАНДИДАТ (clear colourTex+colourSSAOTex) | 99cf32ffd8f8e32ed2735e83b6326814120e64491222b72ef5e412e43524ea5a | id 1-0ZE6q8RSJg_3jKodYrpuwkw5N-FPxXx (uc?id=1-0ZE6q8RSJg_3jKodYrpuwkw5N-FPxXx&export=download) | run 42409851350 |
 | ipl-copy-fix 1.0.0 | РАБОЧАЯ (шим копий IP×Iris) | ea98169cd0defb9a34be16d38d2b02e893dcc50309c4ec345009fcee81085aef | id 1yPr7qGuGlVl3HAz4lMjLm9LQt7mzczOJ (uc?id=1yPr7qGuGlVl3HAz4lMjLm9LQt7mzczOJ&export=download) | releases/tag/ipl-copy-fix-1.0.0 |
 | voxy v6 (deferred composite) | ОТКЛОНЕНА (радужные LOD) | — | в корзине | — |
 | voxy v7 (nether lod off) | ОТКЛОНЕНА (смаз в верхнем мире) | b8778bb286ec83612a070c2603d340313c31fdc6aa25c7bfe8fc2075f503a984 | в корзине | draft удалён |
@@ -46,7 +47,11 @@
 transformBlitDepth), пока новые draw-вызовы их не перекроют. IrisVoxyRenderPipeline
 colour чистит (glClear COLOR) -> поэтому мир, загруженный первым/напрямую, чистый,
 а миры на Normal-пайплайне (созданные после смены измерения / портал-миры IP) — нет.
-v9 = v5 + glClearColor/glClear(COLOR_BUFFER_BIT) в NormalRenderPipeline.setup() после
-initDepthStencil. Гипотеза про TAA/пайплайн-назначение ОТКЛОНЕНА (не повторять!).
-Если ghosting останется после v9 — смотреть: (a) не вызывается ли setup() не каждый
-кадр; (b) fbSSAO/colourSSAOTex; (c)_blit в finish() при fogCoversAllRendering.
+v9 = clear colourTex — НЕ ДОСТАТОЧНО (финальный blit читает colourSSAOTex!).
+Настоящий stale-буфер: colourSSAOTex — READ_WRITE image SSAO-компьюта (SSAO.computeSSAO,
+glDispatchCompute по всему вьюпорту, но imageStore только где есть LOD; остальные
+пиксели хранят прошлое, включая другое измерение) -> ghost-маски/«серые чанки».
+v10 = v9 + glClearNamedFramebufferfv(fbSSAO, COLOR, 0) каждый кадр в setup().
+Гипотезы про TAA/пайплайн-назначение ОТКЛОНЕНЫ (не повторять!).
+ЕСЛИ v10 не решит: ЗАПРАШИВАТЬ latest.log ДО следующего патча (маркер, строки
+pipeline, GL-ошибки) — без лога новые патчи не собирать.
