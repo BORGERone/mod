@@ -1,6 +1,8 @@
 name: Build Voxy NeoForge 1.21.1
 
 on:
+  push:
+    branches: ['arena/94d4d401-mod']
   workflow_dispatch:
 
 permissions:
@@ -282,45 +284,24 @@ jobs:
               f.write(guard_src)
           print('wrote ' + guard_path)
 
-          old_dorender_head = '''    private void doRender(ChunkRenderMatrices matrices, TerrainRenderPass renderPass, CameraTransform camera) {
-                  if (renderPass == DefaultTerrainRenderPasses.CUTOUT) {'''
-
-          new_dorender_head = '''    private void doRender(ChunkRenderMatrices matrices, TerrainRenderPass renderPass, CameraTransform camera) {
-                  if (me.cortex.voxy.client.core.util.PortalViewGuard.isRenderingPortalView()) {
-                      return;
-                  }
-                  if (renderPass == DefaultTerrainRenderPasses.CUTOUT) {'''
-
-          patch(base + '../mixin/sodium/MixinDefaultChunkRenderer.java', [(old_dorender_head, new_dorender_head)])
+          # (v5: the portal-view LOD skip from v4 is REVERTED on user request - LOD must
+          #  stay visible inside portal views, as it was in v2/v3)
 
           # 8) build marker so the running jar can be identified from the log
           old_marker = '''        //Note this is where will choose/create e.g. IrisRenderPipeline or normal pipeline
                   AbstractRenderPipeline pipeline = null;'''
 
-          new_marker = '''        Logger.info("arena build marker: iris-ipfix-v4 (secondary-renderer guard)");
+          new_marker = '''        Logger.info("arena build marker: iris-ipfix-v5 (conservative depth merge blit)");
                   //Note this is where will choose/create e.g. IrisRenderPipeline or normal pipeline
                   AbstractRenderPipeline pipeline = null;'''
 
           patch(base + 'RenderPipelineFactory.java', [(old_marker, new_marker)])
 
-          # 9) MixinLevelRenderer: Immersive Portals creates a SECONDARY LevelRenderer per
-          #    portal world. Both renderers fight for the single IrisVoxyRenderPipelineData
-          #    slot, so one of them silently falls back to NormalRenderPipeline (gray/unlit
-          #    LOD, its own depth blits) and uniform updates go to the wrong instance
-          #    (smeared LOD). Voxy must only run on the primary LevelRenderer.
+          # 9) MixinLevelRenderer: do NOT kill shaders when the render system constructor
+          #    throws (second shader-kill path found in voxy$createRenderer catch).
           old_import = '''import net.minecraft.client.multiplayer.ClientLevel;'''
           new_import = '''import net.minecraft.client.Minecraft;
           import net.minecraft.client.multiplayer.ClientLevel;'''
-
-          old_create = '''    public void voxy$createRenderer() {
-                  if (this.renderer != null) throw new IllegalStateException("Cannot have multiple renderers");'''
-
-          new_create = '''    public void voxy$createRenderer() {
-                  if ((LevelRenderer) (Object) this != Minecraft.getInstance().levelRenderer) {
-                      Logger.info("Skipping voxy renderer: secondary (Immersive Portals) world renderer");
-                      return;
-                  }
-                  if (this.renderer != null) throw new IllegalStateException("Cannot have multiple renderers");'''
 
           old_catch = '''        } catch (RuntimeException e) {
                       if (IrisUtil.irisShaderPackEnabled()) {
@@ -336,7 +317,27 @@ jobs:
                   }'''
 
           mlr = base + '../mixin/minecraft/MixinLevelRenderer.java'
-          patch(mlr, [(old_import, new_import), (old_create, new_create), (old_catch, new_catch)])
+          patch(mlr, [(old_import, new_import), (old_catch, new_catch)])
+
+          # 10) IrisVoxyRenderPipeline.finish(): the depth emit blit inherits whatever depth
+          #     func Iris/Eclipse left active (composite passes commonly leave GL_ALWAYS),
+          #     which makes it OVERWRITE the whole scene depth with LOD depth -> portals draw
+          #     through walls and fog/lighting smears. Force the conservative closer-equal
+          #     compare so the blit only fills pixels where LOD is in front of what is there.
+          old_blit = '''                glColorMask(false, false, false, false);
+                          AbstractRenderPipeline.transformBlitDepth(this.depthBlit,
+                                  this.fbTranslucent.getDepthTex().id, sourceFrameBuffer,
+                                  viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
+                          glColorMask(true, true, true, true);'''
+
+          new_blit = '''                glColorMask(false, false, false, false);
+                          glDepthFunc(this.properties.closerEqualDepthCompare());
+                          AbstractRenderPipeline.transformBlitDepth(this.depthBlit,
+                                  this.fbTranslucent.getDepthTex().id, sourceFrameBuffer,
+                                  viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
+                          glColorMask(true, true, true, true);'''
+
+          patch(base + 'IrisVoxyRenderPipeline.java', [(old_blit, new_blit)])
           PYEOF
           python3 /tmp/patch.py
           echo "=== diff ==="
