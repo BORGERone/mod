@@ -360,3 +360,18 @@ LOD вне конвейера Iris со своими depth-blit'ами -> раз
 2) MixinLevelRenderer.voxy$createRenderer catch: убран второй вызов
    IrisUtil.disableIrisShaders() (найден ещё один shader-kill путь), вместо него log+null.
 Всего поверх PR #45 теперь 10 патчей + PortalViewGuard.java.
+
+=== v5: откат v4-guard + консервативный depth-merge ===
+Фидбек по v4: артефакты НЕ ушли, плюс исчез LOD в портал-вью (был в v2/v3) -> стало хуже.
+v5 (коммит 003cd1b, маркер "arena build marker: iris-ipfix-v5"):
+- Убраны оба "skip" v4: PortalViewGuard-early-return в MixinDefaultChunkRenderer.doRender и
+  secondary-renderer-skip в MixinLevelRenderer.voxy$createRenderer (LOD в портале возвращён).
+- Оставлено: catch без disableIrisShaders в voxy$createRenderer (+ импорт Minecraft безвреден).
+- НОВЫЙ фикс: в IrisVoxyRenderPipeline.finish() перед AbstractRenderPipeline.transformBlitDepth
+  явно glDepthFunc(this.properties.closerEqualDepthCompare()). Гипотеза: blit наследовал
+  depth-func от composite-проходов Eclipse (часто GL_ALWAYS) и ПЕРЕЗАПИСЫВАЛ всю глубину сцены
+  глубиной LOD -> портал рисовался сквозь стены, туман/свет размазывало. С closer-equal blit
+  дописывает глубину только там, где LOD ближе текущего содержимого (merge, а не overwrite).
+Диагностика для пользователя без сборки: в config/voxy-config.json поставить
+"enable_rendering": false и создать портал с Eclipse - если размаз/сквозь-стены останутся,
+виноват не Voxy, а связка Immersive Portals + Eclipse.
