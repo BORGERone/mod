@@ -414,45 +414,64 @@ jobs:
           echo "===== build/libs =====" | tee -a /tmp/ipfix-build.log
           ls -la build/libs 2>&1 | tee -a /tmp/ipfix-build.log
 
-      - name: Publish build log + jar to draft release
+      - name: Upload jar as workflow artifact
         if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ipl-copy-fix-jar
+          path: ipl-copy-fix/build/libs/*.jar
+          if-no-files-found: warn
+
+      - name: Publish release with jar and build log
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
+          set -x
+          ls -la ipl-copy-fix/build/libs || true
+          JAR=$(ls ipl-copy-fix/build/libs/*.jar 2>/dev/null | grep -v sources | head -1 || true)
+          echo "JAR=$JAR"
+
+          # drop stale drafts from earlier attempts
           for RID in $(curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               "${GITHUB_API_URL}/repos/${{ github.repository }}/releases?per_page=100" \
-              | jq -r '.[] | select(.draft==true) | select(.name | startswith("ipl-copy-fix CI build")) | .id'); do
-            echo "deleting draft $RID"
+              | jq -r '.[] | select(.draft==true) | select(.name | test("ipl-copy-fix")) | .id'); do
             curl -sL -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "${GITHUB_API_URL}/repos/${{ github.repository }}/releases/$RID"
+              "${GITHUB_API_URL}/repos/${{ github.repository }}/releases/$RID" || true
           done
 
-          BODY=$(python3 - <<'PYLOG'
-          import pathlib
-          log = pathlib.Path('/tmp/ipfix-build.log')
-          text = log.read_text(errors='replace') if log.exists() else 'NO LOG CAPTURED'
-          lines = text.splitlines()
-          tail = lines[-300:] if len(lines) > 300 else lines
-          header = 'arena build marker: ipl-copy-fix-1.0.0 | run %s | log lines %d' % ('${{ github.run_id }}', len(lines))
-          import json
-          print(json.dumps({'tag_name': 'ipl-copy-fix-ci-${{ github.run_id }}',
-                            'name': 'ipl-copy-fix CI build ${{ github.run_id }}',
-                            'body': header + '\n\n```\n' + '\n'.join(tail) + '\n```',
-                            'draft': True, 'prerelease': False}))
-          PYLOG
-          )
-          RID=$(curl -sL -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "${GITHUB_API_URL}/repos/${{ github.repository }}/releases" \
-            -d "$BODY" | jq -r .id)
-          echo "RID=$RID"
+          TAG=ipl-copy-fix-1.0.0
+          {
+            echo "arena build marker: ipl-copy-fix-1.0.0"
+            echo "run: ${{ github.run_id }}  commit: ${{ github.sha }}"
+            echo
+            echo "Client-only companion mod for Immersive Portals x Iris on NeoForge 1.21.1."
+            echo "Reroutes IPIrisHelper.newCopyDepthStencil / copyDepthStencil / copyColor:"
+            echo "  color -> glBlitNamedFramebuffer (legal cross-format conversion)"
+            echo "  depth -> blit when internal formats match, fullscreen gl_FragDepth pass when they differ"
+            echo
+            echo "Fixes the thousands of per-frame GL_INVALID_OPERATION"
+            echo "'source and destination internal formats are not compatible' errors that make portals"
+            echo "render without depth (visible through walls) and break lighting around them when an"
+            echo "Iris shader pack (Eclipse) replaces the main framebuffer attachments."
+            echo
+            echo "#### build log (tail)"
+            echo '```'
+            tail -n 120 /tmp/ipfix-build.log 2>/dev/null || echo "no log"
+            echo '```'
+          } > notes.md
 
-          JAR=$(ls ipl-copy-fix/build/libs/ipl-copy-fix-*.jar 2>/dev/null | grep -v sources | head -1)
+          gh release delete "$TAG" --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
           if [ -n "$JAR" ]; then
-            curl -sL -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              -H "Content-Type: application/java-archive" \
-              "${GITHUB_API_URL}/repos/${{ github.repository }}/releases/$RID/assets?name=$(basename $JAR)" \
-              --data-binary @"$JAR" | jq -r '.browser_download_url'
-            unzip -l "$JAR" | head -30
-            unzip -p "$JAR" META-INF/neoforge.mods.toml | head -20
+            gh release create "$TAG" "$JAR" \
+              --repo "$GITHUB_REPOSITORY" \
+              --title "ipl-copy-fix 1.0.0 (IP x Iris framebuffer copy shim)" \
+              --notes-file notes.md \
+              --prerelease
+            echo "DOWNLOAD_URL=https://github.com/${{ github.repository }}/releases/download/$TAG/$(basename "$JAR")"
           else
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" \
+              --title "ipl-copy-fix 1.0.0 BUILD FAILED" --notes-file notes.md --prerelease || true
             echo "NO JAR PRODUCED"
+            exit 1
           fi
