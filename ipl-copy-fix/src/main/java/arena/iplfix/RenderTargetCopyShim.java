@@ -8,6 +8,7 @@ import org.lwjgl.opengl.GL20C;
 import org.lwjgl.opengl.GL30C;
 import org.lwjgl.opengl.GL45C;
 
+import java.nio.ByteBuffer;
 import java.nio.IntBuffer;
 
 /**
@@ -70,6 +71,9 @@ public final class RenderTargetCopyShim {
                 gl_FragDepth = texture(uDepth, uv).r;
             }
             """;
+
+    private static final IntBuffer ONE_INT = BufferUtils.createIntBuffer(1);
+    private static final ByteBuffer FOUR_BYTES = BufferUtils.createByteBuffer(4);
 
     private static boolean disabled = false;
     private static int failureCount = 0;
@@ -155,7 +159,8 @@ public final class RenderTargetCopyShim {
     }
 
     private static int internalFormat(int texture) {
-        return GL45C.glGetTextureLevelParameteriv(texture, 0, GL_INTERNAL_FORMAT);
+        GL45C.glGetTextureLevelParameteriv(texture, 0, GL_INTERNAL_FORMAT, ONE_INT);
+        return ONE_INT.get(0);
     }
 
     private static boolean shaderDepthCopy(int sourceDepthTexture, RenderTarget dest) {
@@ -164,7 +169,7 @@ public final class RenderTargetCopyShim {
         }
 
         IntBuffer previousViewport = BufferUtils.createIntBuffer(4);
-        IntBuffer previousColorMask = BufferUtils.createIntBuffer(4);
+        ByteBuffer previousColorMask = FOUR_BYTES;
 
         int previousMinFilter = GL11C.GL_NEAREST;
         int previousMagFilter = GL11C.GL_NEAREST;
@@ -198,9 +203,9 @@ public final class RenderTargetCopyShim {
             GL13C.glActiveTexture(GL13C.GL_TEXTURE0);
             GL11C.glBindTexture(GL11C.GL_TEXTURE_2D, sourceDepthTexture);
             sourceTextureBound = true;
-            previousMinFilter = GL11C.glGetTexParameteriv(GL11C.GL_TEXTURE_2D, GL11C.GL_TEXTURE_MIN_FILTER);
-            previousMagFilter = GL11C.glGetTexParameteriv(GL11C.GL_TEXTURE_2D, GL11C.GL_TEXTURE_MAG_FILTER);
-            previousCompareMode = GL11C.glGetTexParameteriv(GL11C.GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE);
+            previousMinFilter = queryTextureParameter(GL11C.GL_TEXTURE_MIN_FILTER);
+            previousMagFilter = queryTextureParameter(GL11C.GL_TEXTURE_MAG_FILTER);
+            previousCompareMode = queryTextureParameter(GL_TEXTURE_COMPARE_MODE);
             GL11C.glTexParameteri(GL11C.GL_TEXTURE_2D, GL11C.GL_TEXTURE_MIN_FILTER, GL11C.GL_NEAREST);
             GL11C.glTexParameteri(GL11C.GL_TEXTURE_2D, GL11C.GL_TEXTURE_MAG_FILTER, GL11C.GL_NEAREST);
             GL11C.glTexParameteri(GL11C.GL_TEXTURE_2D, GL_TEXTURE_COMPARE_MODE, GL_NONE);
@@ -245,6 +250,12 @@ public final class RenderTargetCopyShim {
             }
             GL20C.glUseProgram(previousProgram);
         }
+    }
+
+    /** Reads a parameter of the texture currently bound to GL_TEXTURE_2D. */
+    private static int queryTextureParameter(int pname) {
+        GL11C.glGetTexParameteriv(GL11C.GL_TEXTURE_2D, pname, ONE_INT);
+        return ONE_INT.get(0);
     }
 
     private static boolean ensureProgram() {
