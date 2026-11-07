@@ -33,7 +33,8 @@
 | voxy v5 (iris-ipfix-v5) | РАБОЧАЯ (база/откат) | 32fa43034507b1287926ec36e856d259fbc0642e233923fe5d2b73eeeb519b9c | id 1ZMU1o3sLZrBW0UDgHaRtqQ-k22wdBy-Z (uc?id=1ZMU1o3sLZrBW0UDgHaRtqQ-k22wdBy-Z&export=download) | untagged-45d58ca9715927cdc0a7 |
 | voxy v8 (pipeline takeover) | ОТКЛОНЕНА (LOD-маски другого измерения) | d7b27398ff609ec5ce70cbffe7edff3a99e94295c1dc797a40c1a914264c1ea4 | в корзине | draft run 42391451970 |
 | voxy v9 (clear colourTex) | ОТКЛОНЕНА (ничего не изменила: чищена не та текстура) | dfcf854e7e0e857020eed99c36bf639c18aa9183263061a2efa60febfc267652 | в корзине | run 42398948971 |
-| voxy v10 (iris-ipfix-v10) | КАНДИДАТ (clear colourTex+colourSSAOTex) | 99cf32ffd8f8e32ed2735e83b6326814120e64491222b72ef5e412e43524ea5a | id 1-0ZE6q8RSJg_3jKodYrpuwkw5N-FPxXx (uc?id=1-0ZE6q8RSJg_3jKodYrpuwkw5N-FPxXx&export=download) | run 42409851350 |
+| voxy v10 (clear colourTex+colourSSAOTex) | ЗАМЕНЕНА v11 (краш/серые чанки остались) | 99cf32ffd8f8e32ed2735e83b6326814120e64491222b72ef5e412e43524ea5a | id 1-0ZE6q8RSJg_3jKodYrpuwkw5N-FPxXx | run 42409851350 |
+| voxy v11 (iris-ipfix-v11) | КАНДИДАТ (v10 + MipGen ThreadLocal: серые чанки+краш) | 97b7478e134b8a99839c20ff1ac5360c108ba548f477f3adb99ad07b29b2a783 | id 1hUWaZIxffxu05YNoXRh4D-BMSmGkilfy (uc?id=1hUWaZIxffxu05YNoXRh4D-BMSmGkilfy&export=download) | run 42411642699 |
 | ipl-copy-fix 1.0.0 | РАБОЧАЯ (шим копий IP×Iris) | ea98169cd0defb9a34be16d38d2b02e893dcc50309c4ec345009fcee81085aef | id 1yPr7qGuGlVl3HAz4lMjLm9LQt7mzczOJ (uc?id=1yPr7qGuGlVl3HAz4lMjLm9LQt7mzczOJ&export=download) | releases/tag/ipl-copy-fix-1.0.0 |
 | voxy v6 (deferred composite) | ОТКЛОНЕНА (радужные LOD) | — | в корзине | — |
 | voxy v7 (nether lod off) | ОТКЛОНЕНА (смаз в верхнем мире) | b8778bb286ec83612a070c2603d340313c31fdc6aa25c7bfe8fc2075f503a984 | в корзине | draft удалён |
@@ -53,5 +54,14 @@ glDispatchCompute по всему вьюпорту, но imageStore только
 пиксели хранят прошлое, включая другое измерение) -> ghost-маски/«серые чанки».
 v10 = v9 + glClearNamedFramebufferfv(fbSSAO, COLOR, 0) каждый кадр в setup().
 Гипотезы про TAA/пайплайн-назначение ОТКЛОНЕНЫ (не повторять!).
-ЕСЛИ v10 не решит: ЗАПРАШИВАТЬ latest.log ДО следующего патча (маркер, строки
-pipeline, GL-ошибки) — без лога новые патчи не собирать.
+ЕСЛИ фикс не подтверждён: ЗАПРАШИВАТЬ latest.log ДО следующего патча — без лога новые
+патчи не собирать. ЛОГ-ДИАГНОСТИКА latest-10: краш AIOOBE Index 37/length 32 в
+MipGen.solidify (fastutil ByteArrayFIFOQueue underflow) на потоке 'Model factory
+processor'; причина — static SCRATCH/QUEUE в MipGen при N потоках пекарни (по одному на
+world engine: основной + портал-миры IP) => гонка => (a) краш, (b) порча атласа текстур
+моделей = серые/белые чанки. v11 = ThreadLocal + try/catch вокруг solidify.
+ВАЖНО из latest-10: основные миры ВСЕГДА получают IrisVoxyRenderPipeline (создание после
+free старого), NormalRenderPipeline достается ТОЛЬКО вторичным портала-мирам IP =>
+ghost-маски в ОСНОВНОМ.view не могут происходить из Normal-пайплайна; если маски
+останутся на v11 — искать в Iris-цепочке (history/TAA Eclipse, ipl-copy-fix копии,
+IrisVoxyRenderPipeline fb) и снова требовать лог+скрин.
