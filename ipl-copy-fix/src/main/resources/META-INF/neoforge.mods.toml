@@ -1,0 +1,34 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "ipl_copy_fix"
+version = "1.0.0"
+displayName = "IP x Iris Copy Fix"
+description = '''Replaces Immersive Portals' Iris-compatibility framebuffer copies
+(glCopyImageSubData) with format tolerant copies (named framebuffer blit for color,
+shader based gl_FragDepth pass for depth when internal formats differ).
+
+Fixes the per-frame GL_INVALID_OPERATION "source and destination internal formats are
+not compatible" errors that appear when an Iris shader pack (for example Eclipse)
+replaces the main framebuffer attachments with differently formatted textures.
+Those errors make portals render without depth (visible through walls) and break
+lighting around them.
+
+Client side only. Does nothing if Immersive Portals is not installed.'''
+
+[[mixins]]
+config = "mixins.iplcopyfix.json"
+
+[[dependencies.ipl_copy_fix]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+side = "CLIENT"
+
+[[dependencies.ipl_copy_fix]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21.1,)"
+side = "CLIENT"
