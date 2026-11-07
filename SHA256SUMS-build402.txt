@@ -1,0 +1,4 @@
+# SettledLands build 402 - 0.8.0-build402-open-after-close
+# base: settledlands-0.8.0-build401-chain-first.jar
+4dab0a7c86544ec9077f3bf3d2e4653f4a33099b6905c121dded249fbb24de53  settledlands-0.8.0-build402-open-after-close.jar
+b86b2e146611b03a9645383a0e1107afadcdb93c1f014b535acb7329d2d6c0fe  SettledLands-Build402-OpenAfterClose-Source.zip

@@ -268,16 +268,13 @@ public final class ChestGraph396Events {
                 if (age < OPEN_GRACE) continue;           // the same tick the click happened in
                 if (!pending.window && age < NO_WINDOW) continue;   // the window is still to come
                 walk.remove();
-                // Build 401: a crack's chain has already run - it ran before the chest opened, which is the
-                // order the author asked for («сначала реплика, потом инвентарь»). Re-running it here would
-                // play the same «Реплика» a second time, after the window closed. So a crack only counts on the
-                // card here; an ordinary opening is what runs «открытие», and it runs now, on the close.
-                if (pending.cracked) {
-                    LOG.info("chest: " + pending.key + " was closed after a crack - its «взлом» chain ran"
-                            + " before the chest opened, nothing runs again");
-                    continue;
-                }
-                ChestGraph396.run(player, pending.level, pending.pos, pending.key, false);
+                // Build 402: the close is the «открытие» moment, and it is the same moment for every opening.
+                // The «взлом» socket is not a second way in - it is the thing that happens <b>before</b> the
+                // chest opens (build 401, and only when it is wired). A cracked chest therefore plays both,
+                // in that order: the lock speaks, the chest opens, he takes what he came for, the chest shuts,
+                // and «открытие» speaks here. Build 401 skipped this for a crack, which silenced the author's
+                // own card - his «Реплика» is wired to «открытие», and his «взлом» is empty.
+                ChestGraph396.run(player, pending.level, pending.pos, pending.key, pending.cracked);
             } catch (Throwable failure) {
                 walk.remove();
                 ChestGraph396.fail(failure);

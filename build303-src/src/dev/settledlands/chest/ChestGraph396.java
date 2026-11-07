@@ -205,6 +205,18 @@ public final class ChestGraph396 {
         return hackChainStart(graph) != null;
     }
 
+    /**
+     * Build 402: the chain of a chest's <b>close</b> - the card's «открытие» socket, whatever opened the chest.
+     *
+     * <p>It exists as its own name so that the rule is a name and not a comment: a close has one chain, an
+     * opening has another, and a cracked chest is not a third case. `runCrack` may not consult this method and
+     * `run` may not consult {@link #hackChainStart} - the gate checks both directions on the bytecode, and the
+     * probe prints both sockets on the author's own shape of card («открытие» wired, «взлом» empty).</p>
+     */
+    public static NpcDialogueGraph.Node closeChainStart(NpcDialogueGraph graph) {
+        return chainStart(graph);
+    }
+
     /** The rows of a chest's create menu: the block's rows, in the same order and with the same labels. */
     public static int[] paletteRows() {
         return BlockTrigger351.PALETTE_ROWS;
@@ -395,12 +407,29 @@ public final class ChestGraph396 {
     }
 
     /**
-     * Build 398: the chain of a chest's close, from the socket the opening belongs to.
+     * Build 402: the chain of a chest's <b>close</b> - always the card's «открытие» socket, every time.
      *
-     * <p>Two sockets, two events: a chest that was <b>cracked</b> runs the node under «взлом», a chest that was
-     * simply opened runs the node under «открытие». A graph written by build 396/397 has only the one socket
-     * wired - {@code next} - so a cracked chest falls back to it rather than going silent: an older graph keeps
-     * working exactly as it did, and the author gains the second socket without losing the first.</p>
+     * <p>Build 398 sent a <b>cracked</b> chest's close to the «взлом» socket instead, and build 401 moved that
+     * socket in front of the opening. Together they left the author's own graph with nowhere to speak: his card
+     * has «открытие» wired to «Реплика #1» and «взлом» empty, so there was no crack chain to run before the
+     * chest - the build-401 fallback pulled the «открытие» chain forward, and the close then skipped it as
+     * "already played". His words: «я бы хотел чтобы реплика проигрывалась не после взлома, а уже после
+     * открытия инвентаря сундука и его закрытия, как было до этого апдейта».</p>
+     *
+     * <p>So the two sockets are two different <b>moments</b>, not two different kinds of entry, and a close is
+     * always the later one:</p>
+     *
+     * <ul>
+     *   <li>«взлом» - before the chest opens, only when it is wired, only on a crack ({@link #runCrack});</li>
+     *   <li>«открытие» - when the chest's window closes, on every opening, ordinary or cracked.</li>
+     * </ul>
+     *
+     * <p>A graph that wires both says both things, in that order: the lock speaks, the chest opens, he takes
+     * what he came for, the chest shuts, and «открытие» says its line with nothing in front of it. A graph with
+     * only the first socket - every graph written by build 396/397 - is this method, exactly as it always
+     * was.</p>
+     *
+     * @param cracked the opening was a crack - for the log only; the chain of a close is the same either way
      */
     public static boolean run(ServerPlayer player, ServerLevel level, BlockPos pos, String key,
             boolean cracked) {
@@ -409,24 +438,23 @@ public final class ChestGraph396 {
             ChestGraph396Store store = ChestGraph396Store.get(level.getServer());
             NpcDialogueGraph graph = store == null ? null : store.graph(key);
             if (graph == null) return false;
-            NpcDialogueGraph.Node start = cracked ? hackChainStart(graph) : chainStart(graph);
-            boolean fellBack = false;
-            if (start == null && cracked) {
-                // A graph of 396/397 knows nothing of the second socket: its one chain is all there is.
-                start = chainStart(graph);
-                fellBack = start != null;
+            NpcDialogueGraph.Node start = closeChainStart(graph);
+            if (start == null) {
+                LOG.info("chest: " + key + " was closed - nothing is wired to the card's «открытие» socket,"
+                        + " so there is no line for this moment");
+                return false;
             }
-            if (start == null) return false;
             BlockTalk358.Where where = new BlockTalk358.Where(level, key, pos.getX(), pos.getY(), pos.getZ());
             // Build 393's rule: the node the socket points at is the FIRST step of the chain, not the one
             // before it - start() runs it, fire() would skip it.
             int stepped = BlockTrigger351.start(player, graph, start.id, where);
-            LOG.info("chest: " + key + " was " + (cracked ? "cracked" : "opened") + " by "
-                    + player.getName().getString() + " and closed - " + stepped
-                    + " node(s) stepped from the card's "
-                    + (cracked && !fellBack ? "«взлом» socket" : "«открытие» socket")
-                    + (fellBack ? " (a graph of 396/397: the only socket it has)" : ""));
-            return stepped > 0 || start != null;
+            LOG.info("chest: " + key + " was " + (cracked ? "cracked and" : "") + " opened by "
+                    + player.getName().getString() + " and its window closed - " + stepped
+                    + " node(s) stepped from the card's «открытие» socket"
+                    + (cracked && hasHackChain(graph)
+                            ? " (the «взлом» chain of this chest played before the chest opened)"
+                            : ""));
+            return stepped > 0;
         } catch (Throwable failure) {
             fail(failure);
             return false;
@@ -445,9 +473,14 @@ public final class ChestGraph396 {
      *
      * <p>So a crack runs here, from the card's «взлом» socket, and the chest is opened afterwards - by the
      * player's own click, delivered by the client once this chain has had its say ({@code ChestNet397#solve}
-     * sends {@code settledlands:chest_ready} with that answer). A graph of 396/397 has only the one socket: a
-     * crack falls back to it, so an older graph keeps working and its chain now plays before the opening
-     * instead of after it, which is the order its own author asked for.</p>
+     * sends {@code settledlands:chest_ready} with that answer).</p>
+     *
+     * <p><b>Build 402: no fallback.</b> Build 401 fell back to the «открытие» socket when «взлом» was empty,
+     * and that turned out to be the author's own graph: his card has «открытие» → «Реплика #1» and «взлом»
+     * empty, so the build-401 rule played his line <b>before</b> the chest - and then the close skipped it.
+     * With this socket empty there is nothing to say before the opening, and that is a legitimate graph: the
+     * chest opens at once and «открытие» speaks when its window closes ({@link #run}). The two sockets are two
+     * moments; neither stands in for the other.</p>
      *
      * @param stopped returned to the caller: {@code true} when the chain is waiting for the player to close a
      *                window, {@code false} when it ran to its end - the client waits only in the first case
@@ -462,23 +495,18 @@ public final class ChestGraph396 {
             NpcDialogueGraph graph = store == null ? null : store.graph(key);
             if (graph == null) return 0;
             NpcDialogueGraph.Node start = hackChainStart(graph);
-            boolean fellBack = false;
             if (start == null) {
-                start = chainStart(graph);
-                fellBack = start != null;
-            }
-            if (start == null) {
-                LOG.info("chest: " + key + " was cracked, but nothing is wired to the card's «взлом» socket -"
-                        + " the chest opens straight away");
+                // No other socket is consulted here: «открытие» is the close's chain, and it will say its own
+                // line (or its own "nothing is wired") when the chest's window closes.
+                LOG.info("chest: " + key + " was cracked - nothing is wired to the card's «взлом» socket, so"
+                        + " nothing speaks before the chest opens");
                 return 0;
             }
             BlockTalk358.Where where = new BlockTalk358.Where(level, key,
                     pos.getX(), pos.getY(), pos.getZ());
             int stepped = BlockTrigger351.startReportingWindow(player, graph, start.id, where, stopped);
             LOG.info("chest: " + key + " was cracked by " + player.getName().getString() + " - " + stepped
-                    + " node(s) stepped from the card's "
-                    + (fellBack ? "«открытие» socket (a graph of 396/397: the only socket it has)"
-                            : "«взлом» socket")
+                    + " node(s) stepped from the card's «взлом» socket"
                     + (stopped != null && stopped.length > 0 && stopped[0]
                             ? ", the chain is waiting for the player before the chest opens"
                             : ", the chest opens now"));

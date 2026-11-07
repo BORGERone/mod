@@ -161,6 +161,8 @@ LOCK_PROBE_CLASS = "ChestHack397Probe"
 # Build 400: the numbers of the card reach the panel, and the lift of a solved panel lasts one click.
 OPEN_PROBE = ROOT / "tools" / "harness" / "ChestOpen401Probe.java"
 OPEN_PROBE_CLASS = "ChestOpen401Probe"
+CLOSE_PROBE = ROOT / "tools" / "harness" / "ChestClose402Probe.java"
+CLOSE_PROBE_CLASS = "ChestClose402Probe"
 
 EXPECT = {
     "TYPE": "own=1 stock=false",
@@ -180,6 +182,21 @@ EXPECT_LOCK = {
     "STOCK": "untouched=true",
     "NOTE": "fields=6",
 }
+
+
+def instruction_listing_all(data, method_name):
+    """Every overload of one method name, joined - `run` has two, and the chain lives in the one that works."""
+    parsed = disasm.parse_class(data)
+    cp = parsed["cp"]
+    parts = []
+    for _acc, ni, di, attrs in parsed["methods"]:
+        if cp[ni][1] != method_name:
+            continue
+        code = disasm.code_of(attrs, cp)
+        if code is None:
+            continue
+        parts.append(disasm.disasm(code["code"], cp)[0])
+    return "\n".join(parts) if parts else None
 
 
 def instruction_listing(data, method_name):
@@ -524,6 +541,33 @@ def structural(jar):
                        for r in opener_refs):
                 problems.append("ChestOpen401 never reads Minecraft#screen - it cannot tell the chain's"
                                 " window from a closed one, and the click would fire on top of the«Реплика»")
+        # Build 402: the two sockets are two moments, and neither stands in for the other. A close is the
+        # later one - `ChestGraph396#run` may only ever follow «открытие» (chainStart), and the pre-opening
+        # chain - `runCrack` - may only ever follow «взлом» (hackChainStart). Build 401 broke exactly this in
+        # both directions: runCrack fell back to chainStart when «взлом» was empty (the author's own card), and
+        # the close was skipped for a crack.
+        graph_cls, graph_refs = refs_of(zf.read(GRAPH))
+        run_src = instruction_listing_all(zf.read(GRAPH), "run")
+        crack_src = instruction_listing_all(zf.read(GRAPH), "runCrack")
+        if run_src is None or crack_src is None:
+            problems.append("ChestGraph396 has no run()/runCrack() - a chest could not speak at all")
+        else:
+            if "ChestGraph396.closeChainStart(" not in run_src:
+                problems.append("ChestGraph396#run never asks closeChainStart() - the line of a closed chest"
+                                " would not play")
+            if "ChestGraph396.hackChainStart(" in run_src:
+                problems.append("ChestGraph396#run follows the card's «взлом» socket - the close is the"
+                                " «открытие» moment (build 402), the crack's chain plays before the opening")
+            if "ChestGraph396.hackChainStart(" not in crack_src:
+                problems.append("ChestGraph396#runCrack never follows the card's «взлом» socket")
+            close_src = instruction_listing_all(zf.read(GRAPH), "closeChainStart")
+            if close_src is None or "ChestGraph396.chainStart(" not in close_src:
+                problems.append("ChestGraph396#closeChainStart does not follow the card's «открытие» socket")
+            if "ChestGraph396.chainStart(" in crack_src or "closeChainStart(" in crack_src:
+                problems.append("ChestGraph396#runCrack falls back to the «открытие» socket - that is the"
+                                " build-401 rule that played the author's «Реплика» before the chest opened"
+                                " («я бы хотел чтобы реплика проигрывалась ... уже после открытия инвентаря"
+                                " сундука и его закрытия»)")
         if READY_PACKET not in names:
             problems.append("the jar has no chest_ready packet - the server could not tell the client when"
                             " the chain of a cracked chest is done")
@@ -564,6 +608,14 @@ def structural(jar):
                             " would not reach the player")
     return problems
 
+
+EXPECT_CLOSE = {
+    # The author's card: «открытие» → «Реплика #1», «взлом» empty.
+    "AUTHOR": "next=1 falseNext=-1 close=1 hack=none",
+    # Both sockets: two moments, two nodes - a close never borrows the crack's chain.
+    "BOTH": "next=1 falseNext=2 close=1 hack=2",
+    "EMPTY": "close=none hack=none",
+}
 
 EXPECT_OPEN = {
     "CRACK_BEFORE": "false",
@@ -635,6 +687,12 @@ def main(argv):
         for key, want in EXPECT_OPEN.items():
             if opened.get(key) != want:
                 problems.append("open %s is %r, expected %r" % (key, opened.get(key), want))
+    closed, more_close = run_one(jar, CLOSE_PROBE, CLOSE_PROBE_CLASS)
+    problems += more_close
+    if closed is not None:
+        for key, want in EXPECT_CLOSE.items():
+            if closed.get(key) != want:
+                problems.append("close %s is %r, expected %r" % (key, closed.get(key), want))
     if problems:
         print("chest_graph_check: FAIL  %s" % jar.name)
         for line in problems:
@@ -644,7 +702,8 @@ def main(argv):
           " outputs as sockets on it, the stock palette and the stock interpreter - and the lock of that"
           " card is a setting: three sliders and a toggle the graph can edit, honoured by the chest's own"
           " panel; its card's three sliders write the numbers that panel asks for, and the lift of a solved"
-          " panel is spent by the click that follows it, and that click waits for the chain)" % jar.name)
+          " panel is spent by the click that follows it, and that click waits for the chain; its two sockets are"
+          " two moments - «взлом» before the opening, «открытие» on the close)" % jar.name)
     return 0
 
 

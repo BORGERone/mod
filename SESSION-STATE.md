@@ -1881,6 +1881,28 @@ base 398, two classes replaced (`CardEventPin398Mixin`, `NpcChestRows396Mixin`),
   nothing; never name a mixin helper the same as another mixin's helper on the same target; two mixins' synthetic
   lambdas must not share name+descriptor; and **a green structural gate is not a running game**.
 
+## Build 402 — the two chest sockets are two moments: «взлом» before, «открытие» on the close
+
+`settledlands-0.8.0-build402-open-after-close.jar` (603 entries, 553 classes, 3 641 836 B, sha256
+`4dab0a7c…de53`), base 401, **2 classes replaced, 0 added, 0 removed members**, source zip
+`SettledLands-Build402-OpenAfterClose-Source.zip` (553 entries, sha256 `b86b2e14…c0fe`), patch
+`tools/patch_build402.py`, tree `build303-src/out402`.
+
+- **Report (with a screenshot):** card `Сундук` → «открытие» → «Реплика #1», «взлом» empty; «я бы хотел чтобы
+  реплика проигрывалась не после взлома, а уже после открытия инвентаря сундука и его закрытия, как было до
+  этого апдейта». Two build-401 rules met on that card: `runCrack` fell back to `chainStart` when «взлом» was
+  empty (pulling the line before the chest), and `ChestGraph396Events` skipped the close of a cracked chest.
+- **Fix:** no fallback in `runCrack` (only `hackChainStart`), and `run`/the close always follow «открытие»
+  (new named method `ChestGraph396#closeChainStart`, which is `chainStart`). A chest that is cracked plays
+  «взлом» before (only if wired) and «открытие» on the close; a 396/397 graph (one socket) behaves as before
+  401.
+- **Gate:** `chest_graph_check` now asserts both directions on the bytecode — `run` reaches `closeChainStart`
+  and must not reach `hackChainStart`, `runCrack` the other way round; **it fails on build 401**.
+- **Probe:** `tools/harness/ChestClose402Probe.java` →
+  `AUTHOR next=1 falseNext=-1 close=1 hack=none`, `BOTH next=1 falseNext=2 close=1 hack=2`,
+  `EMPTY close=none hack=none`.
+- **Verified:** `verify_jar --base 401` PASS, all **35** gates green, `mixin_clash_check` green.
+
 ## Build 401 — the «взлом» chain speaks first, the door's «открытие» always speaks, ESC works
 
 `settledlands-0.8.0-build401-chain-first.jar` (603 entries, 553 classes, 3 642 737 B, sha256
