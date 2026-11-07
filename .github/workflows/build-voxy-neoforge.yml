@@ -1,6 +1,8 @@
 name: Build Voxy NeoForge 1.21.1
 
 on:
+  push:
+    branches: ['arena/94d4d401-mod']
   workflow_dispatch:
 
 permissions:
@@ -176,6 +178,132 @@ jobs:
                   }'''
 
           patch(base + 'rendering/ViewportSelector.java', [(old_shadow, new_shadow)])
+
+          # 6) IrisVoxyRenderPipeline.finish(): snapshot/restore GL state. The depth blit
+          #    leaves DEPTH_TEST/STENCIL_TEST/depth-func disabled or changed; Immersive
+          #    Portals draws its portal quads right after and relies on sane state, so the
+          #    leak made portals draw through walls and corrupted scene depth/lighting.
+          old_finish = '''    @Override
+              protected void finish(Viewport<?> viewport, int sourceFrameBuffer, int srcWidth, int srcHeight) {
+                  if (this.data.renderToVanillaDepth && srcWidth == viewport.width  && srcHeight == viewport.height) {//We can only depthblit out if destination size is the same
+                      glColorMask(false, false, false, false);
+                      AbstractRenderPipeline.transformBlitDepth(this.depthBlit,
+                              this.fbTranslucent.getDepthTex().id, sourceFrameBuffer,
+                              viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
+                      glColorMask(true, true, true, true);
+                  } else {
+                      // normally disabled by AbstractRenderPipeline but since we are skipping it we do it here
+                      glDisable(GL_STENCIL_TEST);
+                      glDisable(GL_DEPTH_TEST);
+                  }
+              }'''
+
+          new_finish = '''    @Override
+              protected void finish(Viewport<?> viewport, int sourceFrameBuffer, int srcWidth, int srcHeight) {
+                  int prevDepthFunc = org.lwjgl.opengl.GL11C.glGetInteger(org.lwjgl.opengl.GL11C.GL_DEPTH_FUNC);
+                  boolean prevDepthTest = org.lwjgl.opengl.GL11C.glIsEnabled(org.lwjgl.opengl.GL11C.GL_DEPTH_TEST);
+                  boolean prevStencilTest = org.lwjgl.opengl.GL11C.glIsEnabled(org.lwjgl.opengl.GL11C.GL_STENCIL_TEST);
+                  boolean prevCullFace = org.lwjgl.opengl.GL11C.glIsEnabled(org.lwjgl.opengl.GL11C.GL_CULL_FACE);
+                  try {
+                      if (this.data.renderToVanillaDepth && srcWidth == viewport.width  && srcHeight == viewport.height) {//We can only depthblit out if destination size is the same
+                          glColorMask(false, false, false, false);
+                          AbstractRenderPipeline.transformBlitDepth(this.depthBlit,
+                                  this.fbTranslucent.getDepthTex().id, sourceFrameBuffer,
+                                  viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
+                          glColorMask(true, true, true, true);
+                      } else {
+                          // normally disabled by AbstractRenderPipeline but since we are skipping it we do it here
+                          glDisable(GL_STENCIL_TEST);
+                          glDisable(GL_DEPTH_TEST);
+                      }
+                  } finally {
+                      if (prevDepthTest) {
+                          glEnable(GL_DEPTH_TEST);
+                      } else {
+                          glDisable(GL_DEPTH_TEST);
+                      }
+                      if (prevStencilTest) {
+                          glEnable(GL_STENCIL_TEST);
+                      } else {
+                          glDisable(GL_STENCIL_TEST);
+                      }
+                      if (prevCullFace) {
+                          glEnable(GL_CULL_FACE);
+                      } else {
+                          glDisable(GL_CULL_FACE);
+                      }
+                      glDepthFunc(prevDepthFunc);
+                  }
+              }'''
+
+          patch(base + 'IrisVoxyRenderPipeline.java', [(old_finish, new_finish)])
+
+          # 7) PortalViewGuard + skip LOD draws while Immersive Portals renders a portal
+          #    view (the user accepts LOD being invisible through portals).
+          guard_path = base + 'util/PortalViewGuard.java'
+          guard_src = '''package me.cortex.voxy.client.core.util;
+
+          public class PortalViewGuard {
+              private static final java.lang.reflect.Method IS_RENDERING = resolve();
+
+              private static java.lang.reflect.Method resolve() {
+                  String[] classNames = {
+                          "qouteall.imm_ptl.core.render.context_management.PortalRendering",
+                          "qouteall.imm_ptl.core.render.context_management.RenderStates"
+                  };
+                  String[] methodNames = { "isRendering", "isPortalRendering" };
+                  for (String className : classNames) {
+                      try {
+                          Class<?> clazz = Class.forName(className);
+                          for (String methodName : methodNames) {
+                              try {
+                                  return clazz.getMethod(methodName);
+                              } catch (NoSuchMethodException ignored) {
+                              }
+                          }
+                      } catch (Throwable ignored) {
+                      }
+                  }
+                  return null;
+              }
+
+              public static boolean isRenderingPortalView() {
+                  if (IS_RENDERING == null) {
+                      return false;
+                  }
+                  try {
+                      return (Boolean) IS_RENDERING.invoke(null);
+                  } catch (Throwable t) {
+                      return false;
+                  }
+              }
+          }
+          '''
+          os.makedirs(os.path.dirname(guard_path), exist_ok=True)
+          with io.open(guard_path, 'w', encoding='utf-8') as f:
+              f.write(guard_src)
+          print('wrote ' + guard_path)
+
+          old_dorender_head = '''    private void doRender(ChunkRenderMatrices matrices, TerrainRenderPass renderPass, CameraTransform camera) {
+                  if (renderPass == DefaultTerrainRenderPasses.CUTOUT) {'''
+
+          new_dorender_head = '''    private void doRender(ChunkRenderMatrices matrices, TerrainRenderPass renderPass, CameraTransform camera) {
+                  if (me.cortex.voxy.client.core.util.PortalViewGuard.isRenderingPortalView()) {
+                      return;
+                  }
+                  if (renderPass == DefaultTerrainRenderPasses.CUTOUT) {'''
+
+          patch(base + '../mixin/sodium/MixinDefaultChunkRenderer.java', [(old_dorender_head, new_dorender_head)])
+
+          # 8) build marker so the running jar can be identified from the log
+          old_marker = '''        //Note this is where will choose/create e.g. IrisRenderPipeline or normal pipeline
+                  AbstractRenderPipeline pipeline = null;'''
+
+          new_marker = '''        Logger.info("arena build marker: iris-ipfix-v3 (gl-state restore + portal-view guard)");
+                  //Note this is where will choose/create e.g. IrisRenderPipeline or normal pipeline
+                  AbstractRenderPipeline pipeline = null;'''
+
+          patch(base + 'RenderPipelineFactory.java', [(old_marker, new_marker)])
           PYEOF
           python3 /tmp/patch.py
           echo "=== diff ==="
