@@ -2,6 +2,7 @@ name: Build Voxy NeoForge 1.21.1
 
 on:
   workflow_dispatch:
+  push:
 
 permissions:
   contents: write
@@ -336,6 +337,79 @@ jobs:
                           glColorMask(true, true, true, true);'''
 
           patch(base + 'IrisVoxyRenderPipeline.java', [(old_blit, new_blit)])
+
+          # ================= v6: deferred Iris composite (smear / TAA / double lighting fix) ====
+          # Under Iris shader packs the LOD colour must NOT travel through Iris's deferred
+          # passes: Voxy's patched G-buffer writes do not match what packs like Eclipse
+          # expect (normals/velocity/SSAO input), which shows up as black smeared LOD with
+          # ghost trails on unloaded chunks. Both pipelines now defer their blit and
+          # composite colour+depth onto the main framebuffer AFTER Iris composites.
+          ivrp = base + 'IrisVoxyRenderPipeline.java'
+
+          patch(ivrp, [(
+              "    private final GlBuffer shaderUniforms;\n    private boolean voxyIrisPipelineFreed = false;",
+              "    private final GlBuffer shaderUniforms;\n    private boolean voxyIrisPipelineFreed = false;\n    private boolean hasDeferredIrisBlit = false;\n    private Viewport<?> deferredIrisViewport = null;\n    private final FullscreenBlit compositeBlit;\n    private me.cortex.voxy.client.core.gl.GlTexture opaqueColourTex;\n    private me.cortex.voxy.client.core.gl.GlTexture translucentColourTex;"
+          ), (
+              "        this.depthBlit = new FullscreenBlit(properties, \"voxy:post/blit_texture_depth_cutout.frag\");",
+              "        this.depthBlit = new FullscreenBlit(properties, \"voxy:post/blit_texture_depth_cutout.frag\");\n        this.compositeBlit = new FullscreenBlit(properties, \"voxy:post/blit_texture_depth_cutout.frag\",\n                a -> a.define(\"EMIT_COLOUR\"));"
+          ), (
+              "        this.fb.resize(viewport.width, viewport.height);\n        this.fbTranslucent.resize(viewport.width, viewport.height);",
+              "        this.fb.resize(viewport.width, viewport.height);\n        this.fbTranslucent.resize(viewport.width, viewport.height);\n        this.ensureOwnColourTargets(viewport.width, viewport.height);"
+          ), (
+              "        boolean prevCullFace = org.lwjgl.opengl.GL11C.glIsEnabled(org.lwjgl.opengl.GL11C.GL_CULL_FACE);\n        try {",
+              "        boolean prevCullFace = org.lwjgl.opengl.GL11C.glIsEnabled(org.lwjgl.opengl.GL11C.GL_CULL_FACE);\n        if (me.cortex.voxy.client.core.util.IrisUtil.IRIS_INSTALLED && me.cortex.voxy.client.core.util.IrisUtil.irisShaderPackEnabled()) {\n            // v6: do not feed LOD colour/depth into Iris's deferred passes (double lighting,\n            // wrong normals, TAA ghost trails, SSAO/GI garbage on LOD pixels). The composite\n            // happens after Iris composites, in postIrisComposite().\n            org.lwjgl.opengl.GL11C.glDisable(org.lwjgl.opengl.GL11C.GL_STENCIL_TEST);\n            glBindFramebuffer(GL_FRAMEBUFFER, sourceFrameBuffer);\n            this.hasDeferredIrisBlit = true;\n            this.deferredIrisViewport = viewport;\n            return;\n        }\n        try {"
+          ), (
+              "    @Override\n    public void setupAndBindOpaque(Viewport<?> viewport) {\n        this.fb.bind();\n        this.doBindings();\n    }",
+              "    private void ensureOwnColourTargets(int width, int height) {\n        if (this.opaqueColourTex != null && this.opaqueColourTex.getWidth() == width && this.opaqueColourTex.getHeight() == height) {\n            return;\n        }\n        if (this.opaqueColourTex != null) {\n            this.opaqueColourTex.free();\n            this.translucentColourTex.free();\n        }\n        this.opaqueColourTex = new me.cortex.voxy.client.core.gl.GlTexture().store(org.lwjgl.opengl.GL11C.GL_RGBA8, 1, width, height);\n        this.translucentColourTex = new me.cortex.voxy.client.core.gl.GlTexture().store(org.lwjgl.opengl.GL11C.GL_RGBA8, 1, width, height);\n        glNamedFramebufferTexture(this.fb.framebuffer.id, GL30.GL_COLOR_ATTACHMENT0, this.opaqueColourTex.id, 0);\n        glNamedFramebufferDrawBuffers(this.fb.framebuffer.id, GL30.GL_COLOR_ATTACHMENT0);\n        glNamedFramebufferTexture(this.fbTranslucent.framebuffer.id, GL30.GL_COLOR_ATTACHMENT0, this.translucentColourTex.id, 0);\n        glNamedFramebufferDrawBuffers(this.fbTranslucent.framebuffer.id, GL30.GL_COLOR_ATTACHMENT0);\n        glTextureParameterf(this.opaqueColourTex.id, org.lwjgl.opengl.GL11C.GL_TEXTURE_MIN_FILTER, GL_NEAREST);\n        glTextureParameterf(this.opaqueColourTex.id, org.lwjgl.opengl.GL11C.GL_TEXTURE_MAG_FILTER, GL_NEAREST);\n        glTextureParameterf(this.translucentColourTex.id, org.lwjgl.opengl.GL11C.GL_TEXTURE_MIN_FILTER, GL_NEAREST);\n        glTextureParameterf(this.translucentColourTex.id, org.lwjgl.opengl.GL11C.GL_TEXTURE_MAG_FILTER, GL_NEAREST);\n        this.fb.framebuffer.verify();\n        this.fbTranslucent.framebuffer.verify();\n    }\n\n    @Override\n    public void postIrisComposite(int mainFB, int srcWidth, int srcHeight) {\n        if (!this.hasDeferredIrisBlit || this.deferredIrisViewport == null || this.opaqueColourTex == null) {\n            return;\n        }\n        var viewport = this.deferredIrisViewport;\n        this.hasDeferredIrisBlit = false;\n        this.deferredIrisViewport = null;\n\n        this.compositeBlit.bind();\n        glBindTextureUnit(3, this.opaqueColourTex.id);\n        org.lwjgl.opengl.GL11C.glEnable(org.lwjgl.opengl.GL11C.GL_BLEND);\n        org.lwjgl.opengl.GL14C.glBlendFuncSeparate(org.lwjgl.opengl.GL11C.GL_SRC_ALPHA, org.lwjgl.opengl.GL11C.GL_ONE_MINUS_SRC_ALPHA, org.lwjgl.opengl.GL11C.GL_ONE, org.lwjgl.opengl.GL11C.GL_ONE_MINUS_SRC_ALPHA);\n        AbstractRenderPipeline.transformBlitDepth(this.compositeBlit, this.fbTranslucent.getDepthTex().id, mainFB,\n                viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));\n        org.lwjgl.opengl.GL11C.glDisable(org.lwjgl.opengl.GL11C.GL_BLEND);\n        org.lwjgl.opengl.GL20C.glUseProgram(0);\n        org.lwjgl.opengl.GL11C.glEnable(org.lwjgl.opengl.GL11C.GL_DEPTH_TEST);\n    }\n\n    @Override\n    public void setupAndBindOpaque(Viewport<?> viewport) {\n        this.fb.bind();\n        this.doBindings();\n    }"
+          ), (
+              "        this.depthBlit.delete();\n        this.fbTranslucent.free();",
+              "        this.depthBlit.delete();\n        this.compositeBlit.delete();\n        if (this.opaqueColourTex != null) {\n            this.opaqueColourTex.free();\n            this.translucentColourTex.free();\n        }\n        this.fbTranslucent.free();"
+          )])
+
+          nrp = base + 'NormalRenderPipeline.java'
+          patch(nrp, [(
+              "import me.cortex.voxy.client.core.gl.GlFramebuffer;",
+              "import me.cortex.voxy.client.core.gl.GlFramebuffer;\nimport me.cortex.voxy.client.core.util.IrisUtil;"
+          ), (
+              "    private final SSAO ssao;",
+              "    private final SSAO ssao;\n\n    // v6: deferred Iris composite state\n    private boolean hasDeferredIrisBlit = false;\n    private Viewport<?> deferredIrisViewport = null;\n    private boolean skipSsaoThisFrame = false;"
+          ), (
+              "    protected void postOpaquePreTranslucent(Viewport<?> viewport, int sourceFrameBuffer) {\n        GPUTiming.INSTANCE.marker(\"ao\");",
+              "    protected void postOpaquePreTranslucent(Viewport<?> viewport, int sourceFrameBuffer) {\n        if (IrisUtil.IRIS_INSTALLED && IrisUtil.irisShaderPackEnabled()) {\n            // v6: SSAO under Iris uses the Iris-modified MVP (different near/far) and\n            // over-darkens LOD geometry; packs then tint those pixels. Skip it.\n            this.skipSsaoThisFrame = true;\n            glBindFramebuffer(GL_FRAMEBUFFER, this.fbSSAO.id);\n            return;\n        }\n        this.skipSsaoThisFrame = false;\n        GPUTiming.INSTANCE.marker(\"ao\");"
+          ), (
+              "    protected void finish(Viewport<?> viewport, int sourceFrameBuffer, int srcWidth, int srcHeight) {\n        this.finalBlit.bind();",
+              "    protected void finish(Viewport<?> viewport, int sourceFrameBuffer, int srcWidth, int srcHeight) {\n        if (IrisUtil.IRIS_INSTALLED && IrisUtil.irisShaderPackEnabled()) {\n            // v6: blitting already-lit LOD colour into Iris's G-buffer makes Iris light it a\n            // second time and leaves TAA trails; defer to postIrisComposite() instead.\n            glDisable(GL_STENCIL_TEST);\n            glBindFramebuffer(GL_FRAMEBUFFER, sourceFrameBuffer);\n            this.hasDeferredIrisBlit = true;\n            this.deferredIrisViewport = viewport;\n            return;\n        }\n        this.finalBlit.bind();"
+          ), (
+              "    @Override\n    public void setupAndBindOpaque(Viewport<?> viewport) {\n        this.fb.bind();\n    }",
+              "    @Override\n    public void postIrisComposite(int mainFB, int srcWidth, int srcHeight) {\n        if (!this.hasDeferredIrisBlit || this.deferredIrisViewport == null) {\n            return;\n        }\n        var viewport = this.deferredIrisViewport;\n        this.hasDeferredIrisBlit = false;\n        this.deferredIrisViewport = null;\n\n        this.finalBlit.bind();\n        if (this.useEnvFog) {\n            glUniform2f(4, 0, 0);\n            glUniform4f(5, 0, 0, 0, 0);\n            glUniform1i(6, 0);\n            glUniform1f(7, 0);\n            glUniform1f(8, 0);\n        }\n        glBindTextureUnit(3, this.skipSsaoThisFrame ? this.colourTex.id : this.colourSSAOTex.id);\n        glEnable(GL_BLEND);\n        glBlendFuncSeparate(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA, GL_ONE, GL_ONE_MINUS_SRC_ALPHA);\n        AbstractRenderPipeline.transformBlitDepth(this.finalBlit, this.fb.getDepthTex().id, mainFB,\n                viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));\n        glDisable(GL_BLEND);\n        org.lwjgl.opengl.GL20C.glUseProgram(0);\n        glEnable(GL_DEPTH_TEST);\n    }\n\n    @Override\n    public void setupAndBindOpaque(Viewport<?> viewport) {\n        this.fb.bind();\n    }"
+          )])
+
+          patch(base + 'AbstractRenderPipeline.java', [(
+              "    public abstract void setupAndBindOpaque(Viewport<?> viewport);",
+              "    /**\n     * v6: called after Iris finalizeLevelRendering() (after all composite passes).\n     * Pipelines that deferred their LOD blit composite colour+depth onto the main\n     * framebuffer here, bypassing Iris's deferred lighting/TAA/SSAO for LOD pixels.\n     */\n    public void postIrisComposite(int mainFB, int srcWidth, int srcHeight) {}\n\n    public abstract void setupAndBindOpaque(Viewport<?> viewport);"
+          )])
+
+          vrs = base + 'VoxyRenderSystem.java'
+          patch(vrs, [(
+              "    private final AbstractRenderPipeline pipeline;",
+              "    private final AbstractRenderPipeline pipeline;\n\n    // v6: live render systems, so the Iris finalize hook can composite every world\n    // (main + Immersive Portals secondary/portal worlds).\n    public static final java.util.List<VoxyRenderSystem> INSTANCES = new java.util.concurrent.CopyOnWriteArrayList<>();"
+          ), (
+              "            this.pipeline = RenderPipelineFactory.createPipeline(this.properties, this.nodeManager, this.nodeCleaner, this.traversal, this::frexStillHasWork);",
+              "            this.pipeline = RenderPipelineFactory.createPipeline(this.properties, this.nodeManager, this.nodeCleaner, this.traversal, this::frexStillHasWork);\n            INSTANCES.add(this);"
+          ), (
+              "    public void shutdown() {",
+              "    /**\n     * v6: called from MixinIrisRenderingPipeline after Iris finalizeLevelRendering().\n     */\n    public void postIrisComposite() {\n        if (this.pipeline == null) {\n            return;\n        }\n        var mainTarget = net.minecraft.client.Minecraft.getInstance().getMainRenderTarget();\n        this.pipeline.postIrisComposite(mainTarget.frameBufferId, mainTarget.width, mainTarget.height);\n    }\n\n    public void shutdown() {\n        INSTANCES.remove(this);"
+          )])
+
+          patch(base + '../mixin/iris/MixinIrisRenderingPipeline.java', [(
+              "    @Override\n    public IrisShaderPatch voxy$getPatchData() {",
+              "    @Inject(method = \"finalizeLevelRendering\", at = @At(\"RETURN\"), remap = false)\n    private void voxy$injectPostComposite(CallbackInfo ci) {\n        for (var renderer : me.cortex.voxy.client.core.VoxyRenderSystem.INSTANCES) {\n            renderer.postIrisComposite();\n        }\n    }\n\n    @Override\n    public IrisShaderPatch voxy$getPatchData() {"
+          )])
+
+          patch(base + 'RenderPipelineFactory.java', [(
+              "        Logger.info(\"arena build marker: iris-ipfix-v5 (conservative depth merge blit)\");",
+              "        Logger.info(\"arena build marker: iris-ipfix-v6 (deferred iris composite, ssao skip)\");"
+          )])
           PYEOF
           python3 /tmp/patch.py
           echo "=== diff ==="
