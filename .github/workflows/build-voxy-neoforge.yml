@@ -2,6 +2,7 @@ name: Build Voxy NeoForge 1.21.1
 
 on:
   workflow_dispatch:
+  push:
 
 permissions:
   contents: write
@@ -338,6 +339,35 @@ jobs:
           patch(base + 'IrisVoxyRenderPipeline.java', [(old_blit, new_blit)])
 
 
+
+          # ================= v8: no Normal-pipeline fallback for main worlds ============
+          # Root cause of the order-dependent smear: the FIRST VoxyRenderSystem of a session
+          # got IrisVoxyRenderPipeline, every later one (world after a dimension switch)
+          # fell back to NormalRenderPipeline, whose under-Iris blit double-lights LOD and
+          # leaves TAA trails = smear. Now the MAIN level renderer's render system takes
+          # over the Iris pipeline binding; only IP secondary/portal worlds keep Normal.
+          patch(base + 'RenderPipelineFactory.java', [(
+              "    public static AbstractRenderPipeline createPipeline(RenderProperties properties, AsyncNodeManager nodeManager, NodeCleaner nodeCleaner, HierarchicalOcclusionTraverser traversal, BooleanSupplier frexSupplier) {",
+              "    // v8: set by MixinLevelRenderer before constructing a VoxyRenderSystem:\n    // true when the system belongs to the main level renderer (may take over the Iris\n    // pipeline binding), false for Immersive Portals secondary/portal worlds.\n    public static boolean CREATING_FOR_MAIN_LEVEL = false;\n\n    public static AbstractRenderPipeline createPipeline(RenderProperties properties, AsyncNodeManager nodeManager, NodeCleaner nodeCleaner, HierarchicalOcclusionTraverser traversal, BooleanSupplier frexSupplier) {"
+          ), (
+              "            if (pipeData.thePipeline != null) {\n                Logger.info(\"Iris pipeline data already bound by another voxy render system (secondary world / portal world switch) - using the normal pipeline for this instance, shaders stay enabled\");\n                return null;\n            }\n            Logger.info(\"Creating voxy iris render pipeline\");",
+              "            if (pipeData.thePipeline != null) {\n                if (!CREATING_FOR_MAIN_LEVEL) {\n                    Logger.info(\"Iris pipeline data already bound by another voxy render system (secondary world / portal world switch) - using the normal pipeline for this instance, shaders stay enabled\");\n                    return null;\n                }\n                Logger.info(\"v8: Iris pipeline data still bound by a stale render system - main level takes over the binding instead of falling back to the normal pipeline\");\n            }\n            Logger.info(\"Creating voxy iris render pipeline\");"
+          )])
+
+          patch(base + 'IrisVoxyRenderPipeline.java', [(
+              "        if (this.data.thePipeline != null) {\n            throw new IllegalStateException(\"Pipeline data already bound\");\n        }\n        this.data.thePipeline = this;",
+              "        if (this.data.thePipeline != null) {\n            // v8: take over instead of throwing. The stale owner keeps its GL objects\n            // until free(); free() only unbinds when it still owns the data.\n            me.cortex.voxy.common.Logger.info(\"v8: taking over Iris pipeline data from a previous owner\");\n        }\n        this.data.thePipeline = this;"
+          )])
+
+          patch(base + '../mixin/minecraft/MixinLevelRenderer.java', [(
+              "            this.renderer = new VoxyRenderSystem(world, instance.getServiceManager());",
+              "            me.cortex.voxy.client.core.RenderPipelineFactory.CREATING_FOR_MAIN_LEVEL =\n                    ((Object) this) == Minecraft.getInstance().levelRenderer;\n            this.renderer = new VoxyRenderSystem(world, instance.getServiceManager());"
+          )])
+
+          patch(base + 'RenderPipelineFactory.java', [(
+              "        Logger.info(\"arena build marker: iris-ipfix-v5 (conservative depth merge blit)\");",
+              "        Logger.info(\"arena build marker: iris-ipfix-v8 (main level takes over iris pipeline, no normal fallback)\");"
+          )])
           PYEOF
           python3 /tmp/patch.py
           echo "=== diff ==="
@@ -438,6 +468,25 @@ jobs:
           ./gradlew build --no-daemon --stacktrace 2>&1 | tee /tmp/ipfix-build.log
           echo "===== build/libs =====" | tee -a /tmp/ipfix-build.log
           ls -la build/libs 2>&1 | tee -a /tmp/ipfix-build.log
+
+      - name: Stash ipfix jar as orphan-commit tag (Drive re-upload channel)
+        if: success()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -x
+          JAR=$(ls ipl-copy-fix/build/libs/ipl-copy-fix-*.jar | grep -v sources | head -1)
+          rm -rf /tmp/artstage2 && mkdir -p /tmp/artstage2
+          cp "$JAR" /tmp/artstage2/ipfix.jar
+          sha256sum "$JAR" > /tmp/artstage2/sha256.txt
+          cd /tmp/artstage2
+          git init -q .
+          git config user.email "arena@users.noreply.github.com"
+          git config user.name "arena-ci"
+          git add ipfix.jar sha256.txt
+          git commit -q -m "artifact: ipfix jar run ${GITHUB_RUN_ID}"
+          ASHA=$(git rev-parse HEAD)
+          git push -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$ASHA:refs/tags/arena-artifact-ipfix-${GITHUB_RUN_ID}"
 
       - name: Upload jar as workflow artifact
         if: always()
