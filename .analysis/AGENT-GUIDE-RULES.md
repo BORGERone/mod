@@ -30,8 +30,9 @@
 ## 5. Таблица known-good / отклонённые
 | сборка | статус | sha256 | Drive | GitHub |
 |---|---|---|---|---|
-| voxy v5 (iris-ipfix-v5) | РАБОЧАЯ (база) | 32fa43034507b1287926ec36e856d259fbc0642e233923fe5d2b73eeeb519b9c | id 1ZMU1o3sLZrBW0UDgHaRtqQ-k22wdBy-Z (uc?id=1ZMU1o3sLZrBW0UDgHaRtqQ-k22wdBy-Z&export=download) | untagged-45d58ca9715927cdc0a7 |
-| ipl-copy-fix 1.0.0 | РАБОЧАЯ (шим копий IP×Iris) | ea98169cd0defb9a34be16d38d2b02e893dcc50309c4ec345009fcee81085aef | (пока только GitHub; добавить на Drive при следующей сборке) | releases/tag/ipl-copy-fix-1.0.0 |
+| voxy v5 (iris-ipfix-v5) | РАБОЧАЯ (база/откат) | 32fa43034507b1287926ec36e856d259fbc0642e233923fe5d2b73eeeb519b9c | id 1ZMU1o3sLZrBW0UDgHaRtqQ-k22wdBy-Z (uc?id=1ZMU1o3sLZrBW0UDgHaRtqQ-k22wdBy-Z&export=download) | untagged-45d58ca9715927cdc0a7 |
+| voxy v8 (iris-ipfix-v8) | КАНДИДАТ (фикс смаза после смены измерения) | d7b27398ff609ec5ce70cbffe7edff3a99e94295c1dc797a40c1a914264c1ea4 | id 1gD9htsb5dAO_sJURt39Nj1DkF4qJgF6l (uc?id=1gD9htsb5dAO_sJURt39Nj1DkF4qJgF6l&export=download) | draft run 42391451970 |
+| ipl-copy-fix 1.0.0 | РАБОЧАЯ (шим копий IP×Iris) | ea98169cd0defb9a34be16d38d2b02e893dcc50309c4ec345009fcee81085aef | id 1yPr7qGuGlVl3HAz4lMjLm9LQt7mzczOJ (uc?id=1yPr7qGuGlVl3HAz4lMjLm9LQt7mzczOJ&export=download) | releases/tag/ipl-copy-fix-1.0.0 |
 | voxy v6 (deferred composite) | ОТКЛОНЕНА (радужные LOD) | — | в корзине | — |
 | voxy v7 (nether lod off) | ОТКЛОНЕНА (смаз в верхнем мире) | b8778bb286ec83612a070c2603d340313c31fdc6aa25c7bfe8fc2075f503a984 | в корзине | draft удалён |
 
