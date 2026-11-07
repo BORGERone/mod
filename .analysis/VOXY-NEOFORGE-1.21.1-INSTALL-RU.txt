@@ -375,3 +375,36 @@ v5 (коммит 003cd1b, маркер "arena build marker: iris-ipfix-v5"):
 Диагностика для пользователя без сборки: в config/voxy-config.json поставить
 "enable_rendering": false и создать портал с Eclipse - если размаз/сквозь-стены останутся,
 виноват не Voxy, а связка Immersive Portals + Eclipse.
+
+=== ПОРТАЛ СКВОЗЬ СТЕНЫ + ПРОПАДАЮЩИЙ СОЛНЕЧНЫЙ СВЕТ: НЕ VOXY (лог latest-6.log) ===
+Проверка пользователя: enable_rendering=false у Voxy -> размаз исчез, портал-сквозь-стены и
+потеря солнечного света ОСТАЛИСЬ => оба бага вне Voxy.
+Улика: 4985x "GL_INVALID_OPERATION ... source and destination internal formats are not
+compatible" от glCopyImageSubData, стек:
+  qouteall.imm_ptl.core.compat.iris_compatibility.IrisCompatibilityPortalRenderer.onBeforeHandRendering
+  -> qouteall.imm_ptl.core.compat.iris_compatibility.IPIrisHelper.newCopyDepthStencil/copyColor
+  -> GL43C.glCopyImageSubData (каждый кадр, начиная с создания портала).
+Лог: "[iPortal/] switched to renderer class ...IrisCompatibilityPortalRenderer" (06:01:28,
+сразу после генерации портала).
+Механика: в compatibility-схеме Iris-рендера IP композитит портал на этапе hand-rendering,
+используя глубину/цвет, скопированные glCopyImageSubData из таргетов Iris; у Eclipse
+(colortex float-форматов) форматы несовместимы -> копирование падает каждый кадр -> портал
+рисуется без валидной глубины (не отсекается стенами), а сломанная передача буферов в final
+pass Iris роняет солнечный член освещения. Размаз при этом - отдельный баг Voxy (depth emit).
+Почему включена compatibility-схема: IPConfig.Client.compatibilityRenderMode=true
+(config/immersive_portals.json, IPConfig.java:168 -> IPGlobal.renderMode) ЛИБO авто-фолбэк
+IrisPortalRenderer.java:137 (ошибка glBlitFramebuffer -> renderMode=compatibility + чат).
+Выбор рендерера: PortalRenderer.switchToCorrectRenderer(): при Iris+шейдеры:
+  experimentalIrisPortalRenderer -> ExperimentalIrisPortalRenderer
+  иначе renderMode normal -> IrisPortalRenderer / compatibility -> IrisCompatibilityPortalRenderer.
+Рычаги (команды ClientDebugCommand, префикс /imm_ptl_client_debug):
+  render_mode_normal | render_mode_compatibility | render_mode_debug | render_mode_none
+  experimental_iris_portal_renderer <true|false>
+План проверки: A) /imm_ptl_client_debug render_mode_normal (стандартная схема IrisPortalRenderer,
+blit между MC-таргетами, на NVIDIA depth32->depth24stencil8 поддерживается);
+B) если сломано с Sable: /imm_ptl_client_debug experimental_iris_portal_renderer true;
+C) персистентно: "compatibilityRenderMode": false в config/immersive_portals.json;
+D) если оба падают - репорт в iPortalTeam/ImmersivePortalsMod с GL-ошибкой и стеком
+(несовместимость форматов Iris-таргетов Eclipse и копий IP).
+Побочно: спам GlDebug+printStackTrace (~5000/сессию) сам по себе ест время_render-потока.
+Размаз: ждать подтверждения, что v5 (depth merge closer-equal) убрал его при enable_rendering=true.
