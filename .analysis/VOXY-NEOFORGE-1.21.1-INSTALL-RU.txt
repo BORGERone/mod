@@ -531,3 +531,20 @@ https://github.com/BORGERone/mod/releases/download/untagged-6eb15bd01f7f744a486e
 v6-код остаётся только в истории (commit e4abf20). Рабочая сборка = v5:
 https://github.com/BORGERone/mod/releases/download/untagged-45d58ca9715927cdc0a7/voxy-0.2.15-beta.jar
 sha256 32fa43034507b1287926ec36e856d259fbc0642e233923fe5d2b73eeeb519b9c
+
+--------------------------------------------------------------------------------
+v7 (07.11.2026, run 42379864879): LOD отключён в Незере
+--------------------------------------------------------------------------------
+v6 отклонён (радужные LOD: shader-ветка #ifdef VOXY в Eclipse семплировала
+vxDepthTexOpaque, ставший мусором после перевода пайплайна на собственные таргеты).
+v7 = v5 + guard: VoxyRenderSystem.renderOpaque() рано возвращается, если
+renderDimension == Level.NETHER (renderDimension проставляется в
+MixinLevelRenderer.voxy$createRenderer из this.level.dimension()).
+Покрывает opaque+translucent+depth-emit целиком (всё идёт через runPipeline).
+Следствия: в аду LOD нет вообще (видна только прогруженная геометрия); портал из
+верхнего мира в ад тоже без LOD внутри; портал из ада в верхний мир - с LOD.
+Смешивать Voxy(верх) + Distant Horizons(ад) НЕ стали: DH x IP в порталах не проверен,
+две LOD-системы = риск вернуть старые подёргивания; отказ от DH - ранее требование пользователя.
+МАРКЕР: arena build marker: iris-ipfix-v7 (nether lod disabled)
+АРТЕФАКТ: voxy-0.2.15-beta.jar, 89 349 741 B (см. ссылку в ответе),
+резервы: v5 untagged-45d58ca9715927cdc0a7.
