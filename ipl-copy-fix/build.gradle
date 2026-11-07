@@ -18,12 +18,6 @@ java {
 
 neoForge {
     version = project.neoforge_version
-
-    mods {
-        ipl_copy_fix {
-            sourceSet sourceSets.main
-        }
-    }
 }
 
 repositories {

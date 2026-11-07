@@ -405,26 +405,17 @@ jobs:
           distribution: 'temurin'
           java-version: '21'
 
-      - name: Build companion mod
+      - name: Build companion mod (log always captured)
         working-directory: ipl-copy-fix
         run: |
+          set -o pipefail
           chmod +x ./gradlew
-          ./gradlew build --no-daemon --stacktrace
-          echo "===== build/libs ====="
-          ls -la build/libs
+          ./gradlew build --no-daemon --stacktrace 2>&1 | tee /tmp/ipfix-build.log
+          echo "===== build/libs =====" | tee -a /tmp/ipfix-build.log
+          ls -la build/libs 2>&1 | tee -a /tmp/ipfix-build.log
 
-      - name: Inspect jar contents
-        run: |
-          JAR=$(ls ipl-copy-fix/build/libs/ipl-copy-fix-*.jar | grep -v sources | head -1)
-          echo "JAR=$JAR" >> "$GITHUB_ENV"
-          echo "===== jar tree ====="
-          unzip -l "$JAR" | head -30
-          echo "===== mods.toml ====="
-          unzip -p "$JAR" META-INF/neoforge.mods.toml
-          echo "===== mixin config ====="
-          unzip -p "$JAR" mixins.iplcopyfix.json
-
-      - name: Delete previous companion drafts
+      - name: Publish build log + jar to draft release
+        if: always()
         run: |
           for RID in $(curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
               "${GITHUB_API_URL}/repos/${{ github.repository }}/releases?per_page=100" \
@@ -434,41 +425,34 @@ jobs:
               "${GITHUB_API_URL}/repos/${{ github.repository }}/releases/$RID"
           done
 
-      - name: Create draft release with jar
-        run: |
+          BODY=$(python3 - <<'PYLOG'
+          import pathlib
+          log = pathlib.Path('/tmp/ipfix-build.log')
+          text = log.read_text(errors='replace') if log.exists() else 'NO LOG CAPTURED'
+          lines = text.splitlines()
+          tail = lines[-300:] if len(lines) > 300 else lines
+          header = 'arena build marker: ipl-copy-fix-1.0.0 | run %s | log lines %d' % ('${{ github.run_id }}', len(lines))
+          import json
+          print(json.dumps({'tag_name': 'ipl-copy-fix-ci-${{ github.run_id }}',
+                            'name': 'ipl-copy-fix CI build ${{ github.run_id }}',
+                            'body': header + '\n\n```\n' + '\n'.join(tail) + '\n```',
+                            'draft': True, 'prerelease': False}))
+          PYLOG
+          )
           RID=$(curl -sL -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
             -H "Accept: application/vnd.github+json" \
             "${GITHUB_API_URL}/repos/${{ github.repository }}/releases" \
-            -d @- <<EOF | jq -r .id
-          {
-            "tag_name": "ipl-copy-fix-ci-${{ github.run_id }}",
-            "name": "ipl-copy-fix CI build ${{ github.run_id }}",
-            "body": "Companion mod for Immersive Portals x Iris (NeoForge 1.21.1). Reroutes IP's iris-compatibility framebuffer copies through format tolerant paths so portals get real depth again. arena build marker: ipl-copy-fix-1.0.0",
-            "draft": true,
-            "prerelease": false
-          }
-          EOF
-          )
+            -d "$BODY" | jq -r .id)
           echo "RID=$RID"
-          curl -sL -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Content-Type: application/java-archive" \
-            "${GITHUB_API_URL}/repos/${{ github.repository }}/releases/$RID/assets?name=$(basename $JAR)" \
-            --data-binary @"$JAR" | jq -r '.browser_download_url'
 
-      - name: Write build log into draft body
-        if: always()
-        run: |
-          for RID in $(curl -sL -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "${GITHUB_API_URL}/repos/${{ github.repository }}/releases?per_page=100" \
-              | jq -r '.[] | select(.draft==true) | select(.name | startswith("ipl-copy-fix CI build")) | .id'); do
-            curl -sL -X DELETE -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-              "${GITHUB_API_URL}/repos/${{ github.repository }}/releases/$RID"
-          done
-          RID=$(curl -sL -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
-            -H "Accept: application/vnd.github+json" \
-            "${GITHUB_API_URL}/repos/${{ github.repository }}/releases" \
-            -d @- <<'EOF' | jq -r .id
-          {"tag_name":"ipl-copy-fix-buildlog","name":"ipl-copy-fix BUILDLOG","body":"placeholder","draft":true}
-          EOF
-          )
-          echo "BUILDLOG RID=$RID"
+          JAR=$(ls ipl-copy-fix/build/libs/ipl-copy-fix-*.jar 2>/dev/null | grep -v sources | head -1)
+          if [ -n "$JAR" ]; then
+            curl -sL -X POST -H "Authorization: Bearer ${{ secrets.GITHUB_TOKEN }}" \
+              -H "Content-Type: application/java-archive" \
+              "${GITHUB_API_URL}/repos/${{ github.repository }}/releases/$RID/assets?name=$(basename $JAR)" \
+              --data-binary @"$JAR" | jq -r '.browser_download_url'
+            unzip -l "$JAR" | head -30
+            unzip -p "$JAR" META-INF/neoforge.mods.toml | head -20
+          else
+            echo "NO JAR PRODUCED"
+          fi
