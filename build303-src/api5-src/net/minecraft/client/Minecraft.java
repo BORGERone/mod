@@ -29,8 +29,21 @@ public class Minecraft {
     }
     public net.minecraft.client.player.LocalPlayer player;
 
+    /**
+     * Build 400: the client half of the interaction - {@code useItemOn} is how a screen asks the game to
+     * click a block for the player, which is the one opening path a locked chest has never had trouble with.
+     */
+    public net.minecraft.client.multiplayer.MultiPlayerGameMode gameMode;
+
     public static Minecraft getInstance() {
         return null;
+    }
+
+    /**
+     * Build 400: run a task on the client thread. The panel uses it to click its chest on the frame after it
+     * itself has gone, which is the only frame in which the click belongs to nobody.
+     */
+    public void execute(Runnable task) {
     }
 
     /** Build 351: NpcConfigScreen#open already switches screens this way. */

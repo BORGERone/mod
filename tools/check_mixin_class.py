@@ -777,6 +777,39 @@ CONFIRMED_EXTERNAL = {
     ("net/minecraft/world/item/component/DyedItemColor", "getOrDefault",
      "(Lnet/minecraft/world/item/ItemStack;I)I"):
         "Build 348 armour: the leather colour the armour layer tints a dyeable layer with",
+    # ---------------------------------------------------------------------------------------
+    # Build 400, the click that opens a cracked chest. Builds 397/398/399 all answered a solved
+    # panel with `ServerPlayer#openMenu(state.getMenuProvider(...))` and produced no window in
+    # the author's game ("по прежнему после успешного взлома сундук не открывается"), so the panel
+    # now performs the click the game performs when the player right-clicks a block. These four
+    # game members are the first of their kind in the jar - nothing in build 399 clicked anything -
+    # so, like build 368's door properties, they are confirmed against the published mappings
+    # rather than against the base jar: the NeoForge 1.21 javadoc
+    # (nekoyue.github.io/ForgeJavaDocs-NG/javadoc/1.21.x-neoforge) declares
+    # Minecraft#gameMode as `MultiPlayerGameMode gameMode` (public, non-final),
+    # MultiPlayerGameMode#useItemOn as `public InteractionResult useItemOn(LocalPlayer,
+    # InteractionHand, BlockHitResult)`, BlockHitResult's 4-argument constructor as `public
+    # BlockHitResult(Vec3, Direction, BlockPos, boolean)` (with a private 5-argument one, so the
+    # 4-argument is the public door to it), and Direction.UP as `public static final Direction UP`.
+    # None of the four changed between 1.21.0 and 1.21.1.
+    ("net/minecraft/client/Minecraft", "gameMode",
+     "Lnet/minecraft/client/multiplayer/MultiPlayerGameMode;"):
+        "Build 400: the game's own use handler, held by the client instance - 1.21 NeoForge javadoc,"
+        " field `MultiPlayerGameMode gameMode`",
+    ("net/minecraft/client/multiplayer/MultiPlayerGameMode", "useItemOn",
+     "(Lnet/minecraft/client/player/LocalPlayer;Lnet/minecraft/world/InteractionHand;"
+     "Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;"):
+        "Build 400: the click a solved panel performs to open the chest it cracked - 1.21 NeoForge"
+        " javadoc, `public InteractionResult useItemOn(LocalPlayer, InteractionHand, BlockHitResult)`",
+    ("net/minecraft/world/phys/BlockHitResult",
+     "<init>",
+     "(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/core/Direction;Lnet/minecraft/core/BlockPos;Z)V"):
+        "Build 400: the hit a click carries, aimed at the centre of the cracked chest - 1.21 NeoForge"
+        " javadoc, `public BlockHitResult(Vec3, Direction, BlockPos, boolean)`",
+    ("net/minecraft/core/Direction", "UP",
+     "Lnet/minecraft/core/Direction;"):
+        "Build 400: the side the click of a solved panel lands on - 1.21 NeoForge javadoc,"
+        " `public static final Direction UP`",
 }
 
 

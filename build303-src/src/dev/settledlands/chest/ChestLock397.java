@@ -239,6 +239,16 @@ public final class ChestLock397 {
         GRANTED.put(key, System.currentTimeMillis());
     }
 
+    /**
+     * Build 400: the lifted lock has been used. The click that follows a solved panel is what opens the chest,
+     * and it is a <b>crack</b>; one crack, one click - a second opening inside the same ten seconds is an
+     * ordinary opening and must run the «открытие» chain, not «взлом» again.
+     */
+    public static void revoke(String key) {
+        if (key == null || key.isEmpty()) return;
+        GRANTED.remove(key);
+    }
+
     /** True while a solved panel's fallback is still standing open for this chest. */
     public static boolean granted(String key) {
         if (key == null || key.isEmpty()) return false;

@@ -51,8 +51,8 @@ public abstract class BlockMenu363Mixin {
             CallbackInfoReturnable<Boolean> cir) {
         // Build 382: a door's panel is measured too - one row instead of fifteen. Build 396: a chest's
         // panel is the block's panel as well, so it is measured the same way.
-        boolean door = settledlands$isDoor();
-        if (!door && !settledlands$isBlock() && !settledlands$isChest()) return;
+        boolean door = settledlands$doorEditor();
+        if (!door && !settledlands$blockEditor() && !settledlands$isChest()) return;
         if (this.contextMenu == null) return;
         BlockMenu363.fit(this.contextMenu,
                 ((NpcDialogueGraphScreen) (Object) this).settledlands$canvas(), door);
@@ -86,12 +86,12 @@ public abstract class BlockMenu363Mixin {
         cir.setReturnValue(Boolean.TRUE);
     }
 
-    private boolean settledlands$isBlock() {
+    private boolean settledlands$blockEditor() {
         return BlockTrigger351.isBlockEditorId(((NpcDialogueGraphScreen) (Object) this).entityId());
     }
 
     /** Build 382: the same panel serves the door editor, with the door's one row. */
-    private boolean settledlands$isDoor() {
+    private boolean settledlands$doorEditor() {
         return DoorGraph382.isDoorEditorId(((NpcDialogueGraphScreen) (Object) this).entityId());
     }
 
@@ -102,6 +102,6 @@ public abstract class BlockMenu363Mixin {
 
     /** True for every graph that borrows this panel. */
     private boolean settledlands$editor() {
-        return settledlands$isBlock() || settledlands$isDoor() || settledlands$isChest();
+        return settledlands$blockEditor() || settledlands$doorEditor() || settledlands$isChest();
     }
 }

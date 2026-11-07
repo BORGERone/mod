@@ -100,7 +100,7 @@ public abstract class BlockNameInspector359Mixin {
         // The rows the stock switch built for a type it does not know: parked, and their labels with
         // them. Both lists were cleared at the start of this same widgets() call, so everything in
         // them belongs to the node that is selected right now.
-        settledlands$parkStockRows();
+        settledlands$parkNameRows();
         sidebarHeight = 0;
 
         int x = inspectorX + 8;
@@ -148,10 +148,14 @@ public abstract class BlockNameInspector359Mixin {
     }
 
     /** Push every row and every label of this node out of the panel - hidden and moved, both. */
-    private void settledlands$parkStockRows() {
+    private void settledlands$parkNameRows() {
         if (labels != null) labels.clear();
         if (inspectorWidgets == null) return;
-        for (Object widget : inspectorWidgets) {
+        // Build 400: over a copy of the list. `WidgetPark361.park` takes the widget out of it, and this
+        // helper used to share the name `settledlands$parkStockRows` with the door's inspector - the door's
+        // copy iterated a copy and survived the merge, so this loop never actually ran as written. Now each
+        // inspector parks with its own name and both walk a copy.
+        for (Object widget : inspectorWidgets.toArray()) {
             WidgetPark361.park(widget);
         }
     }

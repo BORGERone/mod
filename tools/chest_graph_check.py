@@ -156,6 +156,9 @@ LOCK_RANGES = (("MIN_KEYS", 4), ("MAX_KEYS", 10), ("DEFAULT_KEYS", 6),
 PROBE_CLASS = "ChestGraph396Probe"
 LOCK_PROBE = ROOT / "tools" / "harness" / "ChestHack397Probe.java"
 LOCK_PROBE_CLASS = "ChestHack397Probe"
+# Build 400: the numbers of the card reach the panel, and the lift of a solved panel lasts one click.
+OPEN_PROBE = ROOT / "tools" / "harness" / "ChestOpen400Probe.java"
+OPEN_PROBE_CLASS = "ChestOpen400Probe"
 
 EXPECT = {
     "TYPE": "own=1 stock=false",
@@ -430,17 +433,34 @@ def structural(jar):
                        for r in net_refs):
                 problems.append("ChestNet397 does not register %s - one half of the lock panel would never"
                                 " arrive" % name)
-        for wanted, why in (("openMenu", "the chest's own window"),
-                            ("getMenuProvider", "the window vanilla would have opened")):
-            if not any(r[1] == wanted and r[0] == "net/minecraft/server/level/ServerPlayer"
-                       or r[1] == wanted and r[0] == "net/minecraft/world/level/block/state/BlockState"
-                       for r in net_refs):
-                problems.append("ChestNet397 never calls %s - a solved panel must open %s, not a"
-                                " stand-in" % (wanted, why))
-        if not any(r[1] == "remember" and r[0] == "dev/settledlands/chest/ChestGraph396Events"
-                   for r in net_refs):
-            problems.append("ChestNet397 does not hand a cracked chest to ChestGraph396Events#remember -"
-                            " the chain of a chest opened by a solved panel would never run")
+        # Build 400: the opening is the player's own click, not a menu opened from behind a screen. Three
+        # builds of `ServerPlayer#openMenu(state.getMenuProvider(...))` produced no window in the author's
+        # game («по прежнему после успешного взлома сундук не открывается»), so the rule is now: the answer
+        # lifts the lock of that one chest, and the panel clicks the chest through the game's own handler.
+        if not any(r[1] == "grant" and r[0] == "dev/settledlands/chest/ChestLock397" for r in net_refs):
+            problems.append("ChestNet397 does not lift the lock of the chest a panel was solved for - the"
+                            " click that follows would be refused and the panel would open again")
+        if any(r[1] == "openMenu" and r[0] == "net/minecraft/server/level/ServerPlayer"
+               for r in net_refs):
+            problems.append("ChestNet397 opens a menu from the server again - the path that never opened a"
+                            " chest in the author's game (build 400)")
+        events_400, event_refs_400 = refs_of(zf.read(EVENTS))
+        for wanted, why in (("granted", "the click that follows a solved panel must be let through"),
+                            ("revoke", "the lifted lock belongs to exactly one click")):
+            if not any(r[1] == wanted and r[0] == "dev/settledlands/chest/ChestLock397"
+                       for r in event_refs_400):
+                problems.append("ChestGraph396Events never calls ChestLock397#%s - %s" % (wanted, why))
+        if not any(r[2].endswith("Z)V") and r[1] == "remember" for r in event_refs_400):
+            problems.append("ChestGraph396Events does not pass the crack on to remember(..., boolean) - a"
+                            " chest opened by a cracked panel would run the «открытие» chain")
+        panel_400, panel_refs_400 = refs_of(zf.read(PANEL_SCREEN))
+        if not any(r[1] == "useItemOn"
+                   and r[0] == "net/minecraft/client/multiplayer/MultiPlayerGameMode"
+                   for r in panel_refs_400):
+            problems.append("HackPanel377 never clicks its chest through MultiPlayerGameMode#useItemOn - the"
+                            " solved panel would have no way to open anything")
+        if not any(r[1] == "BlockHitResult" or "BlockHitResult" in r[2] for r in panel_refs_400):
+            problems.append("HackPanel377 does not build the BlockHitResult a click needs")
         for name in (PANEL_PACKET, SOLVED_PACKET):
             if name not in names:
                 problems.append("the jar has no %s" % name)
@@ -475,6 +495,15 @@ def structural(jar):
             problems.append("ChestGraph396Events never asks ChestLock397#panel - the numbers on the card"
                             " would not reach the player")
     return problems
+
+
+EXPECT_OPEN = {
+    "CARD_BEFORE": "keys=6 sec=5 diff=1",
+    "CARD_AFTER": "keys=9 sec=3 diff=2",
+    "LIFT_BEFORE": "false",
+    "LIFT_GRANTED": "true",
+    "LIFT_SPENT": "cracked=true after=false again=false",
+}
 
 
 def run_probe(jar):
@@ -529,6 +558,12 @@ def main(argv):
         for key, want in EXPECT_LOCK.items():
             if lock.get(key) != want:
                 problems.append("lock %s is %r, expected %r" % (key, lock.get(key), want))
+    opened, more_open = run_one(jar, OPEN_PROBE, OPEN_PROBE_CLASS)
+    problems += more_open
+    if opened is not None:
+        for key, want in EXPECT_OPEN.items():
+            if opened.get(key) != want:
+                problems.append("open %s is %r, expected %r" % (key, opened.get(key), want))
     if problems:
         print("chest_graph_check: FAIL  %s" % jar.name)
         for line in problems:
@@ -537,7 +572,8 @@ def main(argv):
     print("chest_graph_check: OK  %s  (a chest has the door's graph - one card of this mod, its two"
           " outputs as sockets on it, the stock palette and the stock interpreter - and the lock of that"
           " card is a setting: three sliders and a toggle the graph can edit, honoured by the chest's own"
-          " panel)" % jar.name)
+          " panel; its card's three sliders write the numbers that panel asks for, and the lift of a solved"
+          " panel is spent by the click that follows it)" % jar.name)
     return 0
 
 

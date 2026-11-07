@@ -117,7 +117,7 @@ public abstract class NpcChestRows396Mixin {
         // keeps the stock inspector, because it is the stock node with the stock fields.
         if (!ChestGraph396.isChestGraphNode(node)) return;
 
-        settledlands$parkStockRows();
+        settledlands$parkChestRows();
         sidebarHeight = 0;
 
         int x = inspectorX + 8;
@@ -134,9 +134,9 @@ public abstract class NpcChestRows396Mixin {
             // Build 397: the settings the author could not reach. They are the door's rows, in the door's
             // order, writing the chest's fields through ChestLock397 - so the panel of this chest asks for
             // exactly the numbers the author sets here.
-            y = settledlands$slider(node, x, y, width, top, bottom, true);
-            y = settledlands$slider(node, x, y, width, top, bottom, false);
-            y = settledlands$difficulty(node, x, y, width, top, bottom);
+            y = settledlands$lockSlider(node, x, y, width, top, bottom, true);
+            y = settledlands$lockSlider(node, x, y, width, top, bottom, false);
+            y = settledlands$lockDifficulty(node, x, y, width, top, bottom);
             y = settledlands$lock(node, x, y, width, top, bottom);
 
             // The facts that were the whole of the 396 panel, kept under the controls: how many times the
@@ -158,8 +158,16 @@ public abstract class NpcChestRows396Mixin {
         }
     }
 
-    /** Push every row and every label of this node out of the panel - hidden and moved, both. */
-    private void settledlands$parkStockRows() {
+    /**
+     * Push every row and every label of this node out of the panel - hidden and moved, both.
+     *
+     * <p><b>Build 400: its own name.</b> `BlockNameInspector359Mixin`, `NpcDoorRows382Mixin` and this mixin
+     * each add a method of this exact name and signature to the same screen class. Mixin keeps one of them and
+     * silently drops the others, so "the chest's own version" was never a thing that existed - whatever the
+     * first mixin wrote is what every row builder ran. Every helper and every callback this mixin adds now has
+     * a name (or a signature) nobody else can claim.</p>
+     */
+    private void settledlands$parkChestRows() {
         if (labels != null) labels.clear();
         if (inspectorWidgets == null) return;
         for (Object widget : inspectorWidgets.toArray()) {
@@ -167,25 +175,40 @@ public abstract class NpcChestRows396Mixin {
         }
     }
 
-    /** One of the two value sliders; {@code keys} picks which. Returns the next free y. */
-    private int settledlands$slider(NpcDialogueGraph.Node node, int x, int y, int width,
+    /**
+     * One of the two value sliders; {@code keys} picks which. Returns the next free y.
+     *
+     * <p><b>Build 400: why this method is called {@code $lockSlider} and why its callbacks close over a
+     * {@code Node[]} and a {@code String}.</b> The reported bug was «в взломе сундука не меняется кол-во чисел,
+     * скорость и сложность»: the sliders moved the handle, wrote a value - and the panel of the chest kept
+     * asking the same numbers. The cause was not in this code but in what Mixin does with it: the door's
+     * inspector adds `settledlands$slider(Node,IIIIIZ)I` to the same screen class with the same signature, the
+     * door's version is the one that survived the merge, and the door's version writes through
+     * `DoorGraph382#setKeys` - which refuses anything that is not a door node. So every chest slider ran the
+     * door's code and wrote nothing at all. A unique name fixes the method; the unique captures fix the two
+     * callbacks inside it, because {@code lambda$N} methods collide by name and signature just the same.</p>
+     */
+    private int settledlands$lockSlider(NpcDialogueGraph.Node node, int x, int y, int width,
             int top, int bottom, boolean keys) {
         int min = keys ? ChestLock397.MIN_KEYS : ChestLock397.MIN_SPEED;
         int max = keys ? ChestLock397.MAX_KEYS : ChestLock397.MAX_SPEED;
         int value = keys ? ChestLock397.keys(node) : ChestLock397.seconds(node);
-        NpcUi.NpcSlider slider = NpcUi.slider(x, y, width, min, max, value, shown -> {
-            String text = keys
-                    ? ChestGraphClient396.safe("gui.settledlands.chest.keys", Integer.toString(shown))
-                    : ChestGraphClient396.safe("gui.settledlands.chest.speed", Integer.toString(shown));
-            return Component.literal(text);
-        }, shown -> {
-            boolean same = keys ? shown == ChestLock397.keys(node) : shown == ChestLock397.seconds(node);
-            if (same) return;
-            propertyChange(() -> {
-                if (keys) ChestLock397.setKeys(node, shown);
-                else ChestLock397.setSeconds(node, shown);
-            });
-        });
+        // The label key travels into the callback as a string, the card into a holder: neither capture can be
+        // mistaken for the door's callbacks, and both are cheaper to read than a boolean branch.
+        final String labelKey = keys ? "gui.settledlands.chest.keys" : "gui.settledlands.chest.speed";
+        final NpcDialogueGraph.Node[] card = new NpcDialogueGraph.Node[1];
+        card[0] = node;
+        NpcUi.NpcSlider slider = NpcUi.slider(x, y, width, min, max, value, shown ->
+                Component.literal(ChestGraphClient396.safe(labelKey, Integer.toString(shown))),
+                shown -> {
+                    boolean same = keys ? shown == ChestLock397.keys(card[0])
+                            : shown == ChestLock397.seconds(card[0]);
+                    if (same) return;
+                    propertyChange(() -> {
+                        if (keys) ChestLock397.setKeys(card[0], shown);
+                        else ChestLock397.setSeconds(card[0], shown);
+                    });
+                });
         if (slider == null) return y;
         // Build 359 lesson: a member inherited from Minecraft is CALLED, never shadowed - Mixin refuses a
         // shadow it cannot find in the target class itself, and every graph screen died on first open.
@@ -195,17 +218,30 @@ public abstract class NpcChestRows396Mixin {
         return y + ROW;
     }
 
-    /** «Сложность» of the panel: 1, 2 or 3 rows of the keyboard, one slider step each. */
-    private int settledlands$difficulty(NpcDialogueGraph.Node node, int x, int y, int width,
+    /**
+     * «Сложность» of the panel: 1, 2 or 3 rows of the keyboard, one slider step each.
+     *
+     * <p>Build 400: its own name and its own captures, for the same reason as {@code $lockSlider} - the door
+     * has a difficulty slider too, and two mixins cannot both own {@code settledlands$difficulty}.</p>
+     */
+    private int settledlands$lockDifficulty(NpcDialogueGraph.Node node, int x, int y, int width,
             int top, int bottom) {
+        final NpcDialogueGraph.Node[] card = new NpcDialogueGraph.Node[1];
+        card[0] = node;
+        // Build 400: the translated «Сложность: » is resolved once, outside the callback, and the callback
+        // appends the number. That is the same sentence as before - and it is what keeps this callback out
+        // of the door's way. A callback built from literals only captures nothing, so the compiler names it
+        // `lambda$N(I)Component`, the door's difficulty slider is the same shape with its own text, and Mixin
+        // merges one of the two into the screen class. A captured prefix gives this one a signature of its
+        // own, and the door can never speak for a chest again.
+        final String prefix = ChestGraphClient396.safe("gui.settledlands.chest.difficulty", "");
         NpcUi.NpcSlider slider = NpcUi.slider(x, y, width,
                 ChestLock397.MIN_DIFFICULTY, ChestLock397.MAX_DIFFICULTY,
-                ChestLock397.difficulty(node), shown ->
-                Component.literal(ChestGraphClient396.safe("gui.settledlands.chest.difficulty",
-                        Integer.toString(shown))),
+                ChestLock397.difficulty(card[0]),
+                shown -> Component.literal(prefix + shown),
                 shown -> {
-                    if (shown == ChestLock397.difficulty(node)) return;
-                    propertyChange(() -> ChestLock397.setDifficulty(node, shown));
+                    if (shown == ChestLock397.difficulty(card[0])) return;
+                    propertyChange(() -> ChestLock397.setDifficulty(card[0], shown));
                 });
         if (slider == null) return y;
         ((NpcDialogueGraphScreen) (Object) this).addRenderableWidget(slider);

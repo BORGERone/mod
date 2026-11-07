@@ -1880,3 +1880,40 @@ base 398, two classes replaced (`CardEventPin398Mixin`, `NpcChestRows396Mixin`),
 - **Lessons for the next build:** a `BufferBuilder` must be closed on *every* path, including the one that draws
   nothing; never name a mixin helper the same as another mixin's helper on the same target; two mixins' synthetic
   lambdas must not share name+descriptor; and **a green structural gate is not a running game**.
+
+## Build 400 — the chest's settings reach its panel, and a solved panel opens the chest
+
+`settledlands-0.8.0-build400-chest-open.jar` (599 entries, 549 classes, 3 634 462 B, sha256 `1eaff1a7…f5012`),
+base 399, **10 classes replaced, 0 added**, source zip `SettledLands-Build400-ChestOpen-Source.zip`
+(545 entries, sha256 `5d198691…9da4`).
+
+- **Report 1:** «в взломе сундука не меняется кол-во чисел, скорость и сложность». **Cause:** Mixin merges one
+  method per name+signature per target, and `NpcChestRows396Mixin` declared `settledlands$slider(Node,IIIIIZ)I`,
+  `settledlands$difficulty(...)` and `settledlands$parkStockRows()V` — the exact names and signatures
+  `NpcDoorRows382Mixin` already merges into `NpcDialogueGraphScreen`. The door's copies survived; the door's
+  copies write through `DoorGraph382#setKeys`, which refuses anything that is not a door. Every chest slider moved
+  and wrote nothing, and no gate could see it: a jar with a dead chest method still compiles.
+- **Fix 1:** chest helpers are `$lockSlider`, `$lockDifficulty`, `$parkChestRows`, and their callbacks close over
+  `Node[] card` + a `String`/prefix so their `lambda$N` signatures are theirs alone.
+- **Report 2:** «по прежнему после успешного взлома сундук не открывается» (398, 399 both answered with
+  `ServerPlayer#openMenu(state.getMenuProvider(...))` and produced no window).
+- **Fix 2 — a different path, not a better menu call:** `ChestNet397#solve` only lifts that chest's lock
+  (`ChestLock397.grant`); `HackPanel377#onClose` → `settledlands$clickTheChest()` performs the player's own click
+  through `Minecraft#gameMode.useItemOn(player, MAIN_HAND, BlockHitResult(centre, UP, pos, false))`; the click
+  lands in `ChestGraph396Events#onUse`, which reads the lift, **consumes** it (`ChestLock397.revoke`), lets the
+  click through to vanilla, and records the opening as a crack (`remember(..., true)`) so the «взлом» chain runs
+  on close and later openings run «открытие».
+- **Five more silent merges removed in the same pass:** `settledlands$parkStockRows` (name inspector vs door),
+  `settledlands$isBlock`/`$isDoor` (block menu vs graph mixins), the chest's `lambda$3(I)Component` difficulty
+  label (vs the door's).
+- **New gate:** `tools/mixin_clash_check.py` — **fails on 399 with 12 clashes** (including `$slider` and
+  `$difficulty`) and is green on 400 with **one documented exception**: `lambda$0(Node)V` shared by
+  `NpcRadiusRow355Mixin` and `NpcRandomLineInspectorMixin337` (pre-existing since 355/337, no report, and every
+  other capture signature on that screen is already taken — removing it means rewriting both rows).
+- **New probe:** `tools/harness/ChestOpen400Probe.java` (run by `chest_graph_check`) prints
+  `CARD_AFTER keys=9 sec=3 diff=2` and `LIFT_SPENT cracked=true after=false again=false`.
+- **Gate results:** `verify_jar --base 399` PASS (0 new external refs — the four new game members are in
+  `CONFIRMED_EXTERNAL` with javadoc evidence; 0 dangling), all **34** `*_check.py` green.
+- **Lessons:** a silently merged method is *dead code that compiles* — the gate must compare helper names **and
+  lambda descriptors** across every mixin of one target; and when the same "obvious" API fails three builds in a
+  row (`openMenu` from behind a screen), change the mechanism, not the arguments.

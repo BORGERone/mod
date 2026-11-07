@@ -2,6 +2,10 @@ package dev.settledlands.door;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.settledlands.chest.ChestNet397;
+import net.minecraft.core.Direction;
+import net.minecraft.world.InteractionHand;
+import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.Vec3;
 import java.util.Random;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -152,6 +156,17 @@ public class HackPanel377 extends Screen {
      */
     private long answeredAt;
     private int asked;
+
+    /**
+     * Build 400: did this panel already deliver the click that opens its chest?
+     *
+     * <p>The chest of a solved panel is opened by the player's own click and by nothing else - three builds
+     * of opening a menu from the server produced no window in the author's game («по прежнему после успешного
+     * взлома сундук не открывается»). The server lifts that chest's lock when it accepts the answer, and this
+     * panel then clicks the chest for the player, through the game's own interaction handler. One panel, one
+     * click.</p>
+     */
+    private boolean chestClicked;
 
     /** A resend is only worth it while nothing has opened: a second ask cannot close a window twice. */
     private static final long ASK_AGAIN_MS = 1200L;
@@ -412,6 +427,44 @@ public class HackPanel377 extends Screen {
             // a close must never throw
         }
         super.onClose();
+        // Build 400: a solved chest's panel is the last thing between the player and his chest, so the click
+        // that opens it is delivered here - once, from an empty screen, through the game's own handler.
+        settledlands$clickTheChest();
+    }
+
+    /**
+     * Build 400: click the chest this panel was solved for.
+     *
+     * <p>This is the whole of the chest's opening now. The server lifts the lock ({@code ChestNet397#solve}),
+     * and the game opens the chest when it is clicked - the path that never once failed in the author's game.
+     * The call goes to {@code MultiPlayerGameMode#useItemOn}, the same entry the client uses for a real
+     * right-click, so the server checks reach, sneaking and the lock exactly as it does for a human click.</p>
+     *
+     * <p>Three refusals: only a chest, only once, and never on top of something the player already has open.</p>
+     */
+    private void settledlands$clickTheChest() {
+        if (!chest || chestClicked || pos == null) return;
+        chestClicked = true;
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null) return;
+            mc.execute(() -> {
+                try {
+                    if (mc.player == null || mc.gameMode == null) return;
+                    if (mc.screen != null) return;                                   // something is in the way
+                    if (mc.player.containerMenu != mc.player.inventoryMenu) return;  // the chest is already up
+                    mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
+                            new BlockHitResult(new Vec3(pos.getX() + 0.5D, pos.getY() + 0.5D,
+                                    pos.getZ() + 0.5D), Direction.UP, pos, false));
+                    LOG.info("chest: the panel delivered its click to the chest at " + pos);
+                } catch (Throwable failure) {
+                    LOG.warn("chest: the panel could not click the chest at " + pos
+                            + " - one more click by hand opens it", failure);
+                }
+            });
+        } catch (Throwable ignored) {
+            // never let a click cost the screen
+        }
     }
 
     private boolean allReleased() {

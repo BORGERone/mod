@@ -154,9 +154,14 @@ public final class ChestGraph396Events {
             // chest never stands open for a single tick (the rule of builds 371/376). What opens instead
             // is the very same panel a locked door opens, with this chest's four numbers.
             int[] panel = ChestLock397.panel(level, pos);
-            // Build 398: a lock a solved panel has already lifted (because the window did not arrive on that
-            // client) lets this click through, so the game opens the chest exactly as it always has.
-            if (panel != null && ChestLock397.granted(key)) panel = null;
+            // Build 398: a lock a solved panel has already lifted lets this click through, so the game opens
+            // the chest exactly as it always has. Build 400: this IS the opening now - the server no longer
+            // opens the chest's menu itself, the client that solved the panel clicks the chest, and this
+            // event is where that click lands. The lift is consumed here, so the click it belongs to is the
+            // crack and every later opening is an ordinary one.
+            boolean cracked = ChestLock397.granted(key);
+            if (cracked) ChestLock397.revoke(key);
+            if (panel != null && cracked) panel = null;
             if (panel != null) {
                 event.setCanceled(true);
                 try {
@@ -169,7 +174,9 @@ public final class ChestGraph396Events {
                 ChestNet397.sendPanel(player, level, pos, key, panel);
                 return;                                  // the chain does not run: nothing was opened
             }
-            remember(player, level, pos, key);
+            // Build 398: a chest opened through a lifted lock runs the chain under the card's «взлом» socket;
+            // an ordinary opening runs «открытие».
+            remember(player, level, pos, key, cracked);
         } catch (Throwable failure) {
             ChestGraph396.fail(failure);
         }

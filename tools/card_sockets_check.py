@@ -217,13 +217,17 @@ def structural(jar):
         if not any(r[1] == "grant" and r[0] == "dev/settledlands/chest/ChestLock397" for r in net_refs):
             problems.append("ChestNet397 never lifts the lock - a client whose window does not arrive is stuck"
                             " with a chest it already cracked")
-        if not any(r[1] == "remember" and r[0] == "dev/settledlands/chest/ChestGraph396Events"
-                   for r in net_refs):
-            problems.append("ChestNet397 never hands the opening to ChestGraph396Events")
-        if not any(r[1] == "remember" and r[2].endswith("Z)V") for r in net_refs):
-            problems.append("ChestNet397 never marks the opening as a CRACK (remember(..., boolean)) - the"
-                            " «взлом» chain would never know it was one")
         events, event_refs = refs_of(zf.read(CHEST_EVENTS))
+        # Build 400: the crack is decided where the click lands, not in the packet handler. The click
+        # that opens a cracked chest reaches the use event, so the lift must be read and consumed here.
+        if not any(r[1] == "granted" and r[0] == "dev/settledlands/chest/ChestLock397"
+                   for r in event_refs):
+            problems.append("ChestGraph396Events never asks whether this click is a crack - the «взлом»"
+                            " chain would never know it was one")
+        if not any(r[1] == "revoke" and r[0] == "dev/settledlands/chest/ChestLock397"
+                   for r in event_refs):
+            problems.append("ChestGraph396Events never consumes the lifted lock - every later opening of"
+                            " that chest would run the «взлом» chain")
         if not any(r[1] == "run" and r[2].endswith("Z)Z") for r in event_refs):
             problems.append("ChestGraph396Events does not pass the crack on to ChestGraph396#run")
         pending, _pending_refs = refs_of(zf.read(CHEST_PENDING))
