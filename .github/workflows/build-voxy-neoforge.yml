@@ -2,7 +2,6 @@ name: Build Voxy NeoForge 1.21.1
 
 on:
   workflow_dispatch:
-  push:
 
 permissions:
   contents: write
