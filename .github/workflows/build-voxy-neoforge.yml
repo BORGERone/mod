@@ -416,38 +416,25 @@ jobs:
           fi
           exit 0
 
-      - name: Stash jar as dangling git blob (Google Drive re-upload channel)
+      - name: Stash jar as orphan-commit tag (Google Drive re-upload channel)
         if: env.GRADLE_EXIT == '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -x
           JAR=$(ls voxy/build/libs/voxy-*.jar | grep -v sources | head -1)
-          base64 -w0 "$JAR" > /tmp/jar.b64
-          python3 - <<'PY'
-          import json
-          b64 = open('/tmp/jar.b64').read().strip()
-          json.dump({"content": b64, "encoding": "base64"}, open('/tmp/blobreq.json', 'w'))
-          PY
-          SHA=$(curl -sL -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/blobs" -d @/tmp/blobreq.json | jq -r .sha)
-          echo "BLOB_SHA=$SHA"
-          RID=$(curl -sL -H "Authorization: Bearer $GH_TOKEN" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-            | jq -r --arg t "voxy-pr45-iris-ipfix-${GITHUB_RUN_ID}" '.[] | select(.draft==true) | select(.tag_name==$t) | .id' | head -1)
-          if [ -z "$RID" ] || [ "$RID" = "null" ]; then
-            RID=$(curl -sL -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
-              -H "Content-Type: application/json" \
-              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases" \
-              -d "{\"tag_name\":\"voxy-blob-${GITHUB_RUN_ID}\",\"name\":\"voxy blob channel ${GITHUB_RUN_ID}\",\"draft\":true,\"body\":\"placeholder\"}" | jq -r .id)
-          fi
-          curl -sL -H "Authorization: Bearer $GH_TOKEN" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/$RID" | jq -r .body > /tmp/body.txt
-          printf '\nBLOB_SHA=%s\n' "$SHA" >> /tmp/body.txt
-          printf '\n== publish.log ==\n```\n' >> /tmp/body.txt
-          cat /tmp/publish.log >> /tmp/body.txt 2>/dev/null || true
-          printf '```\n' >> /tmp/body.txt
-          jq -n --rawfile b /tmp/body.txt '{body: $b}' > /tmp/bodyreq.json
-          curl -sL -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
-            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/$RID" -d @/tmp/bodyreq.json | jq -r .id
+          rm -rf /tmp/artstage && mkdir -p /tmp/artstage
+          cp "$JAR" /tmp/artstage/voxy.jar
+          sha256sum "$JAR" > /tmp/artstage/sha256.txt
+          cd /tmp/artstage
+          git init -q .
+          git config user.email "arena@users.noreply.github.com"
+          git config user.name "arena-ci"
+          git add voxy.jar sha256.txt
+          git commit -q -m "artifact: voxy jar run ${GITHUB_RUN_ID}"
+          ASHA=$(git rev-parse HEAD)
+          git push -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$ASHA:refs/tags/arena-artifact-${GITHUB_RUN_ID}"
+          echo "ARTIFACT_TAG=arena-artifact-${GITHUB_RUN_ID} commit=$ASHA"
 
   build-ipfix:
     name: IPL Copy Fix (companion, IP x Iris framebuffer copies)
