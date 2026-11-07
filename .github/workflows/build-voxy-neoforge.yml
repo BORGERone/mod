@@ -1,8 +1,6 @@
 name: Build Voxy NeoForge 1.21.1
 
 on:
-  push:
-    branches: ['arena/94d4d401-mod']
   workflow_dispatch:
 
 permissions:

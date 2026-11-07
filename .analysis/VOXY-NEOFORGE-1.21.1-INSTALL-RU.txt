@@ -264,3 +264,37 @@ DH при выключенном рендере НЕ простаивает (л�
 Immersive Portals x Sable 0.5.0 пользователь хочет оставить (готов к тому, что LOD не виден
 сквозь порталы): предупреждение qouteall = именно про невидимый LOD/артефакты в портал-вью,
 не про падение TPS. После снижения VD и удаления DH "performance level: bad" должен уйти.
+
+=== ШЕЙДЕРЫ ВЫКЛЮЧАЮТСЯ ПРИ СОЗДАНИИ ПОРТАЛА (Immersive Portals) ===
+Лог latest-3.log, цепочка:
+  iPortal "Portal Generation Attempted" -> BlockManipulationClient.updateTargetedBlockThroughPortal
+  -> ClientWorldLoader.getWorld -> createSecondaryClientWorld -> LevelRenderer.setLevel
+  -> LevelRenderer.allChanged -> voxy mixin reloadVoxyRenderer -> VoxyRenderSystem.<init>
+  -> RenderPipelineFactory.createIrisPipeline -> new IrisVoxyRenderPipeline
+  -> ERROR "java.lang.IllegalStateException: Pipeline data already bound" (IrisVoxyRenderPipeline.java:39)
+  -> catch в RenderPipelineFactory вызывает IrisUtil.disableIrisShaders()
+     = IrisApi.getInstance().getConfig().setShadersEnabledAndApply(false)
+  -> Iris: "Destroying pipeline ..." и "Shaders are disabled because enableShaders is set
+     to false in iris.properties" (3 раза за сессию; также при повторном включении шейдеров
+     из GUI: ShaderPackScreen.applyChanges -> setShadersEnabledAndApply -> Iris.reload ->
+     IP _onWorldRendererReloaded -> withSwitchedWorld -> allChanged -> та же ошибка).
+Суть: у Iris один IrisRenderingPipeline на измерение, у Voxy один слот
+IrisVoxyRenderPipelineData.thePipeline; при переключении миров IP текущий pipeline Iris
+принадлежит другому измерению и уже занят живым VoxyRenderSystem -> Voxy бросает
+исключение и ГЛОБАЛЬНО гасит шейдеры (записывает enableShaders=false в config/iris.properties).
+Патч (применяется в CI перед сборкой, коммит 1740183):
+1) RenderPipelineFactory.createIrisPipeline: если pipeData.thePipeline != null - не создавать
+   Iris-конвейер для этого инстанса, вернуть null (откат на NormalRenderPipeline), БЕЗ вызова
+   IrisUtil.disableIrisShaders(); catch Throwable + pipeData.thePipeline = null (снять
+   полу-привязку, если конструктор упал посередине).
+2) IrisVoxyRenderPipeline.free(): убрать throw IllegalStateException при чужой привязке,
+   добавить флаг voxyIrisPipelineFreed (идемпотентность, защита от "double freed" в
+   TrackedObject.free0), очищать thePipeline только если он наш - GL-объекты старого
+   конвейера по-прежнему освобождаются его VoxyRenderSystem.
+Готовый jar: voxy-0.2.15-beta.jar, 89 345 758 байт,
+sha256 2e9416b93e13a13cfb829c017bc903f52d8bbb90a1029bf85fba50be27308133
+https://github.com/BORGERone/mod/releases/download/untagged-9a40eb0ce6b96e8bd304/voxy-0.2.15-beta.jar
+ВАЖНО: после замены jar'а шейдеры сами не включатся - в config/iris.properties осталось
+enableShaders=false; включить в меню Iris (Shaders -> Enable) или поставить enableShaders=true.
+LOD сквозь порталы по-прежнему не виден (это и есть несовместимость IP+Voxy) - но шейдеры
+больше не гаснут и Voxy продолжает работать в основном мире.
