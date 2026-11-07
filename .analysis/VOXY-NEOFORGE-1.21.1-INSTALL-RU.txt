@@ -408,3 +408,87 @@ D) если оба падают - репорт в iPortalTeam/ImmersivePortalsMo
 (несовместимость форматов Iris-таргетов Eclipse и копий IP).
 Побочно: спам GlDebug+printStackTrace (~5000/сессию) сам по себе ест время_render-потока.
 Размаз: ждать подтверждения, что v5 (depth merge closer-equal) убрал его при enable_rendering=true.
+
+
+================================================================================
+ЗАДАЧА 9, ЭТАП 3: companion-фикс ipl-copy-fix 1.0.0 (портал сквозь стены + свет)
+================================================================================
+
+ДИАГНОЗ (по latest-8.log, 07.11.2026 14:55-14:56, Voxy в сессии отсутствовал)
+-------------------------------------------------------------------------------
+Под Eclipse + Sable + Iris-NeoForge ломаются ВСЕ ТРИ схемы рендера порталов IP:
+
+1. normal (IrisPortalRenderer) — /imm_ptl_client_debug render_mode_normal
+   14:55:22 OpenGL Error 1281 (GL_INVALID_VALUE) в IPIrisHelper/CHelper.doCheckGlError,
+   затем чат "[Immersive Portals]Switched to compatibility portal rendering mode."
+   -> IP сам откатывается в compatibility через 1-3 секунды.
+2. experimental (ExperimentalIrisPortalRenderer) — 14:55:48
+   шквал GL_INVALID_OPERATION (id=1282), по словам пользователя "ломает всё".
+3. compatibility (IrisCompatibilityPortalRenderer) — режим по умолчанию
+   IPIrisHelper.newCopyDepthStencil/copyColor = GL43C.glCopyImageSubData КАЖДЫЙ КАДР;
+   4985 ошибок "source and destination internal formats are not compatible"
+   (1035 только в этом логе). Копирование не происходит ->
+   a) портал композитится без настоящей глубины => виден сквозь стены;
+   b) кадр возвращается в финальный проход Iris с битыми вложениями => пропадает свет.
+
+Причина: glCopyImageSubData требует СОВПАДЕНИЯ внутренних форматов текстур.
+Iris (шейдерпак Eclipse) подменяет вложения главного фреймбуфера своими
+(colortex/depth других форматов), поэтому копирования IP всегда падают.
+К Voxy это отношения не имеет (ошибки сохранялись при enable_rendering=false).
+
+ЧТО СДЕЛАНО
+-------------------------------------------------------------------------------
+Отдельный клиентский мод-компаньон ipl-copy-fix 1.0.0 (8 КБ), исходники в репозитории:
+  ipl-copy-fix/src/main/java/arena/iplfix/RenderTargetCopyShim.java   (GL-логика)
+  ipl-copy-fix/src/main/java/arena/iplfix/mixin/MixinIPIrisHelper.java (перехват)
+  ipl-copy-fix/src/main/resources/mixins.iplcopyfix.json, META-INF/neoforge.mods.toml
+CI-джоб build-ipfix в .github/workflows/build-voxy-neoforge.yml.
+
+Перехватываются три метода qouteall.imm_ptl.core.compat.iris_compatibility.IPIrisHelper:
+  newCopyDepthStencil(RenderTarget,RenderTarget)
+  copyDepthStencil(RenderTarget,RenderTarget,boolean,boolean)
+  copyColor(RenderTarget,RenderTarget)
+Замены:
+  цвет   -> GL45C.glBlitNamedFramebuffer(COLOR_BUFFER_BIT, NEAREST)
+            (конвертация между цветовыми форматами разрешена спецификацией);
+  глубина-> blit DEPTH|STENCIL, если внутренние форматы совпадают
+            (GL45C.glGetTextureLevelParameteriv(GL_INTERNAL_FORMAT)),
+            иначе полноэкранный треугольник с шейдером gl_FragDepth = texture(uDepth, uv).r
+            (единственный переносимый способ перенести глубину между разными форматами);
+  стенсила при несовпадении форматов не переносится: compatibility-рендер IP сам
+            отключает GL_STENCIL_TEST на время композитинга.
+Все инъекции cancellable и отменяют оригинал ТОЛЬКО при успехе; весь GL-состояние
+(программа, VAO, фреймбуфер, viewport, маски, фильтры/compare-mode текстуры)
+сохраняется и восстанавливается; счётчик ошибок: 5 логируются, после 20 шим
+отключается и IP работает как раньше.
+
+АРТЕФАКТ
+-------------------------------------------------------------------------------
+ipl-copy-fix-1.0.0.jar  (8 410 байт)
+sha256 ea98169cd0defb9a34be16d38d2b02e893dcc50309c4ec345009fcee81085aef
+https://github.com/BORGERone/mod/releases/download/ipl-copy-fix-1.0.0/ipl-copy-fix-1.0.0.jar
+(run 42372978198, commit 15a53d3; релиз опубликован, скачивается без логина)
+
+УСТАНОВКА
+-------------------------------------------------------------------------------
+1. mods/ipl-copy-fix-1.0.0.jar          (новый компаньон)
+2. mods/voxy-0.2.15-beta.jar            (v5, вернуть - в логах 7 и 8 его не было)
+   https://github.com/BORGERone/mod/releases/download/untagged-45d58ca9715927cdc0a7/voxy-0.2.15-beta.jar
+3. config/voxy-config.json: "enable_rendering": true
+4. Режим рендера порталов НЕ трогать: оставить compatibility (по умолчанию).
+   render_mode_normal и experimental_iris_portal_renderer больше не нужны.
+
+ПРОВЕРКА ПО ЛОГУ
+-------------------------------------------------------------------------------
+есть:  ipl-copy-fix: arena build marker: ipl-copy-fix-1.0.0
+есть:  ipl-copy-fix: Copy shim active: Immersive Portals framebuffer copies rerouted ...
+НЕТ:   source and destination internal formats are not compatible
+НЕТ:   [Immersive Portals]Switched to compatibility portal rendering mode (если не трогать режим)
+
+ПРОВЕРКА В ИГРЕ
+-------------------------------------------------------------------------------
+- портал за стеной не виден (окклюзия работает);
+- свет вокруг/внутри портала нормальный;
+- размазывание LOD в Незере: проверить именно С включённым рендерингом Voxy (v5);
+- если шим не помог: удалить ipl-copy-fix-1.0.0.jar - ничего не ломается, поведение
+  возвращается к исходному, и остаётся путь upstream-репорта в iPortalTeam.

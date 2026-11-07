@@ -1,0 +1,171 @@
+PURESCALE MODERN 1.3.0 | NeoForge | Minecraft 1.21.1
+ЗАВИСАНИЕ КАДРА ПРИ ВКЛЮЧЁННОЙ ГЕНЕРАЦИИ (Esc / инвентарь / панель F9)
+Разбор по содержимому jar, 2026-11-06
+
+=========================================================
+1. ЧТО ИМЕННО ПРОИСХОДИТ (по коду мода, а не догадки)
+=========================================================
+Проверенный jar: purescale-modern-neoforge-mc1.21.1-1.3.0.jar
+sha256 142e1118fc1c77decea85c87b7dac23ff746ee9c27de06ec858de6d284ff7972
+
+a) Мод перехватывает сам вывод кадра на экран.
+   Класс com/purescale/client/classic/mixin/ClassicPresentMixin.class:
+   @Redirect на вызов org/lwjgl/glfw/GLFW.glfwSwapBuffers внутри Minecraft.flipFrame.
+   Условие ветвления: PurescaleOpenGLFG.usesDxgiPresentation(), плюс читается
+   net.minecraft.client.Options.enableVsync.
+   То есть при активном DLSS Frame Generation кадр на экран отдаёт не GLFW,
+   а собственный DXGI-present мост мода.
+   В PurescaleOpenGLFG есть поле blocked и лог "[Purescale] OpenGL presentation failed: {}".
+   Если present заблокирован/не вызван - на экране остаётся ПОСЛЕДНИЙ выданный кадр.
+   Игра при этом жива (звук идёт, клики работают) - это в точности ваш симптом.
+
+b) Генератор кадров отдельно следит за экранами и паузой.
+   В com/purescale/client/classic/PurescaleClassicFrameGen.class есть поля и ссылки:
+   screen (net/minecraft/client/gui/screens/Screen), isPaused, lastPresent,
+   staticHold, PACE_MAX_REAL_FPS, fgMinRealFps, baseFpsCap, reset, State.
+   При нажатии Esc или открытии инвентаря в одиночной игре isPaused() = true,
+   камера неподвижна -> FG уходит в static hold / reset.
+   Переход "рендер мира -> рендер экрана" при подменённом swap-пути и даёт замершую картинку.
+
+c) Меню дополнительно завязано на кадровый буфер через блюр-миксины.
+   PurescaleMenuBlurMixin -> Minecraft.getMenuBackgroundBlurriness
+   PurescalePanelBlurMixin -> Screen.processBlurEffect (HEAD + RETURN, capture/restore)
+   PurescalePanelBlur.capture копирует main render target в свой FBO (copyFbo).
+   В 1.3 автор уже чинил здесь краш "Can only blur once per frame" (с модами Blur/Ixeris),
+   но сама точка взаимодействия меню и кадрового буфера осталась.
+
+d) Это СЕМЕЙСТВО багов автор сам объявил неисправленным в 1.3.0.
+   Цитата из changelog 1.3.0:
+   "Fullscreen freeze when joining a world with frame generation on: the 10-second wait
+    above was a likely cause, but I haven't reproduced the freeze itself yet.
+    If it still happens to you, alt-tabbing or switching to windowed and back fixes it
+    for now. A log would help a lot."
+   Там же: ожидание ответа GPU в DLSS FG мосту урезали с 10 секунд до 2 - такие паузы
+   выглядят ровно как зависание.
+
+e) Более новой сборки НЕТ. HEAD ветки main = 63208b9e от 2026-10-29T15:43:42Z,
+   blob вашего jar 2720492c89c01456b62a78a612a847e9070e875c с тех пор не менялся.
+   В issues автора (9 штук) бага про зависание при открытии меню нет:
+   #6 - артефакты HUD при DLSS SR/FG на Minecraft 26.3, Fabric
+   #4 - NeoForge 1.21.1: при F9 видно только blur (автор: "починю в следующей версии")
+   То есть скачать версию, где это исправлено, сейчас нельзя.
+
+=========================================================
+2. ЧТО ДЕЛАТЬ - ПО УБЫВАНИЮ ВЕРОЯТНОСТИ
+=========================================================
+ШАГ 0. Мгновенный разблок (документированный обход автора):
+   alt-tab из игры и обратно, либо переключить оконный/полноэкранный режим.
+   Если картинка отмирает - подтверждено, что это stall пути вывода кадра, а не рендера.
+   На время диагностики лучше играть в оконном/рамочном режиме, не в exclusive fullscreen.
+
+ШАГ 1. VSync и лимит FPS в настройках Minecraft: VSync = OFF, FPS limit = Unlimited.
+   Основание: в present-миксине читается options.enableVsync, а в lang-файле мода есть
+   собственное предупреждение:
+   purescale.warn.present_cap = "VSync/FPS cap on - Frame Gen can't add frames"
+   С вертикалкой или капом вывод FG gated по vblank, и при открытии меню это легко
+   превращается в замерший кадр.
+
+ШАГ 2. F9 -> Frame Generation -> "FG Engine": уйти с DLSS FG на встроенный движок
+   (Interpolation или Cinematic). Это полностью убирает DXGI-мост из цепочки вывода.
+   Зависание пропало -> виноват нативный DLSS-G present, а не апскейлинг.
+   Учтите: DLSS SR (апскейл) при этом можно оставить - проблема именно в FG-мосту.
+
+ШАГ 3. Выключить все "держатели кадров" - именно они дают замершую картинку на статичной сцене:
+   Realistic FG Latency -> Off
+       (тултип мода: "A real frame generator holds the newest frame back to blend toward it";
+        на неподвижной сцене/паузе удерживаемый кадр = замершее изображение)
+   Frame Pacing (Frame Gen) -> Off
+   Frame Pacing -> Off
+   Low Latency (NVIDIA Reflex) -> Off   (в логах: "[Purescale] Reflex (low latency)",
+                                         "[Purescale] Reflex sleep failed (ignored)")
+   Low-FPS Rescue -> Off                (сам включает FG при просадке; при паузе реальная
+                                         частота падает и он дёргает состояние FG)
+   Base FPS (debug) -> OFF / 0          (ВАЖНО: если включали для проверки FG - он жёстко
+                                         режет РЕАЛЬНУЮ частоту кадров, и любое меню выглядит
+                                         зависшим. Тултип: "caps the REAL render rate")
+   Min Real FPS -> Off / 0
+   Target FPS -> не задавать
+
+ШАГ 4. Если не помогло: Frame Gen -> Off.
+   Апскейлинг (DLSS SR / FSR / XSS) продолжит работать, зависаний не будет.
+
+ШАГ 5. На время теста уберите другие моды, блюрящие меню (Blur, Ixeris и подобные) -
+   они конфликтуют с теми же миксинами processBlurEffect / getMenuBackgroundBlurriness.
+
+=========================================================
+3. КАК ПРАВИТЬ НАСТРОЙКИ, ЕСЛИ ПАНЕЛЬ F9 САМА ЗАВИСАЕТ
+=========================================================
+Файл конфига (проверено в jar: FMLPaths.CONFIGDIR + "purescale-modern.json"):
+
+   <папка инстанса>/config/purescale-modern.json
+
+Закройте игру -> отредактируйте -> запустите.
+Ключи ниже - это ТОЧНЫЕ имена полей класса com.purescale.config.PurescaleConfig.
+Аннотации @SerializedName в классе нет (проверено), Gson пишет имена полей как есть.
+
+Безопасный набор для диагностики зависания:
+
+  "frameGen": "OFF",
+  "fgEngine": "INTERPOLATION",
+  "fgPacing": false,
+  "framePacing": false,
+  "fgRealisticLatency": false,
+  "lowLatency": false,
+  "lowFpsRescue": false,
+  "baseFpsCap": 0,
+  "fgMinRealFps": 0,
+  "autoFgEngaged": false,
+  "dynamicFgFactor": 1
+
+Допустимые значения перечислений (из class-файлов):
+  frameGen      : "OFF", "X2", "X3", "X4", "X5"
+  fgEngine      : "DLSS_FG", "INTERPOLATION", "OPTICAL_FLOW", "REPROJECTION",
+                  "ADAPTIVE", "SMART", "HYBRID", "FLUID", "CINEMATIC"
+  targetFps     : "FPS60", "FPS90", "FPS120", "FPS144"
+  mode (апскейл): "OFF", "NEAREST", "BILINEAR", "BICUBIC", "NIS_STYLE", "DLSS",
+                  "FSR41", "FSR1", "FSR3", "XAIS1", "XAIS2_ULTRA", "XESS",
+                  "DLAA", "SHARPEN", "COMMUNITY"
+  enabled       : true/false  (общий выключатель мода)
+
+Как вернуть FG после диагностики: ставьте по одному за раз, начиная с
+  "fgEngine": "CINEMATIC" + "frameGen": "X2" + все три latency/pacing флага false.
+Потом, если хотите именно DLSS FG, верните "fgEngine": "DLSS_FG" отдельно.
+
+Защита от опечатки: если JSON не читается, мод стартует ВЫКЛЮЧЕННЫМ и НЕ перезаписывает
+файл - лог "[Purescale] Failed to read config; starting with PureScale disabled.
+The original file is preserved until settings are saved."
+
+=========================================================
+4. КАК СОБРАТЬ ДОКАЗАТЕЛЬСТВА (автор прямо просит лог)
+=========================================================
+Включите в панели: "FPS Overlay" и "Detailed Overlay".
+Во время зависания смотрите на счётчик presented FPS:
+  - presented FPS растёт, картинка стоит  -> stall в пути вывода кадра (DXGI present)
+  - presented FPS тоже встал              -> остановился сам цикл рендера
+
+В latest.log / debug.log искать строки (точные тексты из jar):
+  [Purescale] OpenGL presentation failed
+  [Purescale] OpenGL SR/FG:                       (покажет, какой мост поднялся,
+                                                   например "OpenGL D3D12 SR/FG bridge initialized")
+  [Purescale] Classic FG: real=, generated=, factor=, size=
+  [Purescale] Classic FG disabled for this session after an error
+  [Purescale] DLSS-G                              (все варианты: loaded / failed / ABI mismatch /
+                                                   disabled this session / present marker failed)
+  [Purescale] Reflex (low latency)
+  [Purescale] Reflex sleep failed (ignored)
+  [Purescale] classic scene target
+
+Полезная проверка, что FG вообще живой (без меню): "Base FPS (debug)" = 30,
+тогда presented FPS должен читаться примерно как 30 x множитель. После теста вернуть в 0!
+
+=========================================================
+5. СТАТУС
+=========================================================
+Исправленной версии пока нет (main = 1.3.0 от 2026-10-29). Баг не заведён в issues.
+Рекомендуется собрать latest.log по шагу 4 и отправить автору:
+  репозиторий  https://github.com/XsoraS/purescale
+  issues       https://github.com/XsoraS/purescale/issues
+  Discord      https://discord.gg/XgH4EpyPD2
+В отчёте стоит указать: видеокарту и драйвер, что FG Engine стоял (DLSS FG или встроенный),
+полноэкранный ли режим, VSync/лимит FPS, какие флаги latency/pacing были включены,
+и что зависание ловится на Esc/инвентаре/F9, а alt-tab его снимает.
