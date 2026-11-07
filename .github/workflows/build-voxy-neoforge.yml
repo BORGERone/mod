@@ -122,6 +122,60 @@ jobs:
                   }'''
 
           patch(base + 'IrisVoxyRenderPipeline.java', [(old_field, new_field), (old_free, new_free)])
+
+          # 3) MixinIrisRenderingPipeline: inject at HEAD (the activeTexture invoke point
+          #    is gone in Iris 1.8.x) and restore the main render target viewport before
+          #    applying captured parameters (shadow pass leaves a wrong GL viewport).
+          old_begin = '''    @Inject(method = "beginLevelRendering", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;activeTexture(I)V", shift = At.Shift.BEFORE), remap = false)
+              private void voxy$injectViewportSetup(CallbackInfo ci) {
+                  if (IrisUtil.CAPTURED_VIEWPORT_PARAMETERS != null) {
+                      var renderer = ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).voxy$getRenderSystem();
+                      if (renderer != null) {
+                          IrisUtil.CAPTURED_VIEWPORT_PARAMETERS.apply(renderer);
+                      }
+                  }
+              }'''
+
+          new_begin = '''    @Inject(method = "beginLevelRendering", at = @At("HEAD"), remap = false)
+              private void voxy$injectViewportSetup(CallbackInfo ci) {
+                  if (IrisUtil.CAPTURED_VIEWPORT_PARAMETERS != null) {
+                      var renderer = ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).voxy$getRenderSystem();
+                      if (renderer != null) {
+                          var rt = Minecraft.getInstance().getMainRenderTarget();
+                          org.lwjgl.opengl.GL11C.glViewport(0, 0, rt.width, rt.height);
+                          IrisUtil.CAPTURED_VIEWPORT_PARAMETERS.apply(renderer);
+                      }
+                  }
+              }'''
+
+          patch(base + '../mixin/iris/MixinIrisRenderingPipeline.java', [(old_begin, new_begin)])
+
+          # 4) MixinDefaultChunkRenderer: always setupViewport from doRender with the
+          #    matrices of the CURRENT render pass (portal views get their own viewport
+          #    instead of a stale one captured at renderLevel HEAD).
+          old_dorender = '''                Viewport<?> viewport = null;
+                          if (IrisUtil.irisShaderPackEnabled()) {
+                              viewport = renderer.getViewport();
+                          } else {
+                              viewport = renderer.setupViewport(matrices.projection(), matrices.modelView(), camera.x, camera.y, camera.z);
+                          }'''
+
+          new_dorender = '''                Viewport<?> viewport = renderer.setupViewport(matrices.projection(), matrices.modelView(), camera.x, camera.y, camera.z);'''
+
+          patch(base + '../mixin/sodium/MixinDefaultChunkRenderer.java', [(old_dorender, new_dorender)])
+
+          # 5) ViewportSelector: do not render LOD into Iris shadow/G-buffer targets
+          #    during the shadow pass (breaks the shadow map -> sunlight disappears);
+          #    renderOpaque(null) is a safe no-op.
+          old_shadow = '''        if (viewport == null && IrisUtil.irisShadowActive()) {
+                      viewport = this.getOrCreate(IRIS_SHADOW_OBJECT);
+                  }'''
+
+          new_shadow = '''        if (viewport == null && IrisUtil.irisShadowActive()) {
+                      return null;
+                  }'''
+
+          patch(base + 'rendering/ViewportSelector.java', [(old_shadow, new_shadow)])
           PYEOF
           python3 /tmp/patch.py
           echo "=== diff ==="
