@@ -1,13 +1,15 @@
 name: Build Voxy NeoForge 1.21.1
 
 on:
+  push:
+    branches: ['arena/94d4d401-mod']
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  probe-and-build:
+  build:
     runs-on: ubuntu-latest
     continue-on-error: true
     steps:
@@ -24,13 +26,12 @@ jobs:
           distribution: temurin
           java-version: 21
 
-      - name: Resolve real Sodium classes + Iris jar into libs/
+      - name: Resolve Sodium + Iris jars into libs/
         working-directory: voxy
         run: |
           set -e
           mkdir -p libs
           exec > >(tee /tmp/probe.log) 2>&1
-
           has_cls() { unzip -l "$1" 2>/dev/null | grep -c 'net/caffeinemc/mods/sodium/client/gl/shader/ShaderParser.class' || true; }
 
           SOD_JSON=$(curl -sG 'https://api.modrinth.com/v2/project/sodium/version' \
@@ -38,37 +39,11 @@ jobs:
           SOD_URL=$(echo "$SOD_JSON" | jq -r '[.[] | select(.version_number|test("0\\.8\\.13"))][0].files[0].url // empty')
           echo "modrinth sodium url: $SOD_URL"
           curl -sL -o /tmp/sodium-modrinth.jar "$SOD_URL"
-          echo "modrinth jar: $(ls -l /tmp/sodium-modrinth.jar | awk '{print $5}') bytes, ShaderParser=$(has_cls /tmp/sodium-modrinth.jar)"
-
-          echo "== full listing of the modrinth sodium jar =="
-          unzip -l /tmp/sodium-modrinth.jar | head -140
-
-          echo "== nested jars inside =="
-          unzip -l /tmp/sodium-modrinth.jar | grep -aE '\.jar$' || echo "(none)"
-
-          echo "== urls referenced inside the jar =="
+          echo "outer jar ShaderParser=$(has_cls /tmp/sodium-modrinth.jar)"
           rm -rf /tmp/sodx && mkdir -p /tmp/sodx && (cd /tmp/sodx && unzip -oq /tmp/sodium-modrinth.jar)
-          find /tmp/sodx -type f \( -name '*.class' -o -name '*.json' -o -name '*.toml' -o -name '*.properties' \) -print0 \
-            | xargs -0 cat 2>/dev/null | strings | grep -aoE 'https?://[A-Za-z0-9./_%?=&-]+' | sort -u | head -30
-
-          echo "== mods.toml / manifest of the thin jar =="
-          for f in META-INF/neoforge.mods.toml META-INF/MANIFEST.MF META-INF/jarjar/metadata.json; do
-            echo "--- $f"; cat "/tmp/sodx/$f" 2>/dev/null | head -40 || echo "(missing)"
-          done
-
-          echo "== try caffeinemc maven =="
-          for u in \
-            'https://maven.caffeinemc.net/net/caffeinemc/sodium/maven-metadata.xml' \
-            'https://maven.caffeinemc.net/net/caffeinemc/sodium/sodium-neoforge/maven-metadata.xml' \
-            'https://maven.caffeinemc.net/' ; do
-            echo "--- $u"; curl -s -m 25 "$u" | head -30
-          done
-
-          echo "== pick the best sodium jar for compilation =="
           BEST=""
           for cand in $(find /tmp/sodx -name '*.jar' 2>/dev/null) /tmp/sodium-modrinth.jar; do
-            c=$(has_cls "$cand")
-            echo "candidate $cand -> ShaderParser=$c"
+            c=$(has_cls "$cand"); echo "candidate $cand -> ShaderParser=$c"
             if [ "$c" -gt 0 ] && [ -z "$BEST" ]; then BEST="$cand"; fi
           done
           echo "BEST=$BEST"
@@ -79,10 +54,81 @@ jobs:
           IRIS_URL=$(echo "$IRIS_JSON" | jq -r '[.[] | select(.version_number|test("1\\.8\\.14"))][0].files[0].url // empty')
           echo "iris url: $IRIS_URL"
           curl -sL -o 'libs/iris-neoforge-1.8.14-beta.1.jar' "$IRIS_URL"
-
-          echo "== final libs/ =="
           ls -l libs
-          for f in libs/*.jar; do echo "--- $f entries=$(unzip -l "$f" | tail -1) ShaderParser=$(has_cls "$f")"; done
+
+      - name: Patch Iris pipeline handling (Immersive Portals fix)
+        working-directory: voxy
+        run: |
+          set -e
+          cat > /tmp/patch.py <<'PYEOF'
+          import io, os, sys
+
+          def patch(path, pairs):
+              with io.open(path, encoding='utf-8') as f:
+                  src = f.read()
+              for old, new in pairs:
+                  if old not in src:
+                      print('!! PATTERN NOT FOUND in ' + path)
+                      print(repr(old))
+                      sys.exit(3)
+                  src = src.replace(old, new, 1)
+              with io.open(path, 'w', encoding='utf-8') as f:
+                  f.write(src)
+              print('patched ' + path)
+
+          base = 'src/main/java/me/cortex/voxy/client/core/'
+
+          old_factory = '''            Logger.info("Creating voxy iris render pipeline");
+                      try {
+                          return new IrisVoxyRenderPipeline(properties, pipeData, nodeManager, nodeCleaner, traversal, frexSupplier);
+                      } catch (Exception e) {
+                          Logger.error("Failed to create iris render pipeline", e);
+                          IrisUtil.disableIrisShaders();
+                          return null;
+                      }'''
+
+          new_factory = '''            if (pipeData.thePipeline != null) {
+                          Logger.info("Iris pipeline data already bound by another voxy render system (secondary world / portal world switch) - using the normal pipeline for this instance, shaders stay enabled");
+                          return null;
+                      }
+                      Logger.info("Creating voxy iris render pipeline");
+                      try {
+                          return new IrisVoxyRenderPipeline(properties, pipeData, nodeManager, nodeCleaner, traversal, frexSupplier);
+                      } catch (Throwable e) {
+                          Logger.error("Failed to create iris render pipeline - keeping shaders ENABLED, falling back to the normal pipeline", e);
+                          pipeData.thePipeline = null;
+                          return null;
+                      }'''
+
+          patch(base + 'RenderPipelineFactory.java', [(old_factory, new_factory)])
+
+          old_field = '''    private final GlBuffer shaderUniforms;'''
+          new_field = '''    private final GlBuffer shaderUniforms;
+              private boolean voxyIrisPipelineFreed = false;'''
+
+          old_free = '''    @Override
+              public void free() {
+                  if (this.data.thePipeline != this) {
+                      throw new IllegalStateException();
+                  }
+                  this.data.thePipeline = null;'''
+
+          new_free = '''    @Override
+              public void free() {
+                  if (this.voxyIrisPipelineFreed) {
+                      return;
+                  }
+                  this.voxyIrisPipelineFreed = true;
+                  if (this.data.thePipeline == this) {
+                      this.data.thePipeline = null;
+                  }'''
+
+          patch(base + 'IrisVoxyRenderPipeline.java', [(old_field, new_field), (old_free, new_free)])
+          PYEOF
+          python3 /tmp/patch.py
+          echo "=== diff ==="
+          git --no-pager diff --stat
+          git --no-pager diff | tee /tmp/patch.diff | head -120
 
       - name: Gradle build (capture log)
         working-directory: voxy
@@ -94,34 +140,39 @@ jobs:
           echo "GRADLE_EXIT=$code" >> "$GITHUB_ENV"
           echo "gradle exit code: $code"
 
-      - name: Publish result (jar on success, log on failure)
+      - name: Publish result
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           {
             echo "gradle exit: ${{ env.GRADLE_EXIT }}"
             echo ""
-            echo "== PROBE =="
-            echo '```'
-            head -c 45000 /tmp/probe.log
+            echo "== applied patch =="
+            echo '```diff'
+            head -c 20000 /tmp/patch.diff
             echo '```'
             echo ""
             echo "== compile errors =="
             echo '```'
             grep -aE "error:|FAILURE|What went wrong|Execution failed|Could not resolve|> Task .* FAILED" /tmp/build.log | head -40
             echo '```'
-          } > lognotes.md
+            echo ""
+            echo "== probe (libs/) =="
+            echo '```'
+            head -c 4000 /tmp/probe.log
+            echo '```'
+          } > notes.md
           if [ "${{ env.GRADLE_EXIT }}" = "0" ]; then
             ls -l voxy/build/libs
             sha256sum voxy/build/libs/*.jar | tee /tmp/sha.txt
-            printf '\n== checksums ==\n```\n' >> lognotes.md
-            cat /tmp/sha.txt >> lognotes.md
-            printf '```\n' >> lognotes.md
-            gh release create "voxy-pr45-iris-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
+            printf '\n== checksums ==\n```\n' >> notes.md
+            cat /tmp/sha.txt >> notes.md
+            printf '```\n' >> notes.md
+            gh release create "voxy-pr45-iris-ipfix-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
               --repo "${GITHUB_REPOSITORY}" --draft \
-              --title "Voxy 0.2.15-beta NeoForge + Iris (DRAFT)" --notes-file lognotes.md
+              --title "Voxy 0.2.15-beta NeoForge + Iris (IP fix) (DRAFT)" --notes-file notes.md
           else
-            gh release create "voxy-buildlog-probe-${GITHUB_RUN_ID}" \
+            gh release create "voxy-buildlog-ipfix-${GITHUB_RUN_ID}" \
               --repo "${GITHUB_REPOSITORY}" --draft \
-              --title "BUILDLOG probe pr45 (DRAFT)" --notes-file lognotes.md
+              --title "BUILDLOG ipfix (DRAFT)" --notes-file notes.md
           fi
