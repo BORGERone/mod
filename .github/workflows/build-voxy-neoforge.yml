@@ -1,6 +1,8 @@
 name: Build Voxy NeoForge 1.21.1
 
 on:
+  push:
+    branches: ['arena/94d4d401-mod']
   workflow_dispatch:
 
 permissions:
@@ -297,11 +299,46 @@ jobs:
           old_marker = '''        //Note this is where will choose/create e.g. IrisRenderPipeline or normal pipeline
                   AbstractRenderPipeline pipeline = null;'''
 
-          new_marker = '''        Logger.info("arena build marker: iris-ipfix-v3 (gl-state restore + portal-view guard)");
+          new_marker = '''        Logger.info("arena build marker: iris-ipfix-v4 (secondary-renderer guard)");
                   //Note this is where will choose/create e.g. IrisRenderPipeline or normal pipeline
                   AbstractRenderPipeline pipeline = null;'''
 
           patch(base + 'RenderPipelineFactory.java', [(old_marker, new_marker)])
+
+          # 9) MixinLevelRenderer: Immersive Portals creates a SECONDARY LevelRenderer per
+          #    portal world. Both renderers fight for the single IrisVoxyRenderPipelineData
+          #    slot, so one of them silently falls back to NormalRenderPipeline (gray/unlit
+          #    LOD, its own depth blits) and uniform updates go to the wrong instance
+          #    (smeared LOD). Voxy must only run on the primary LevelRenderer.
+          old_import = '''import net.minecraft.client.multiplayer.ClientLevel;'''
+          new_import = '''import net.minecraft.client.Minecraft;
+          import net.minecraft.client.multiplayer.ClientLevel;'''
+
+          old_create = '''    public void voxy$createRenderer() {
+                  if (this.renderer != null) throw new IllegalStateException("Cannot have multiple renderers");'''
+
+          new_create = '''    public void voxy$createRenderer() {
+                  if ((LevelRenderer) (Object) this != Minecraft.getInstance().levelRenderer) {
+                      Logger.info("Skipping voxy renderer: secondary (Immersive Portals) world renderer");
+                      return;
+                  }
+                  if (this.renderer != null) throw new IllegalStateException("Cannot have multiple renderers");'''
+
+          old_catch = '''        } catch (RuntimeException e) {
+                      if (IrisUtil.irisShaderPackEnabled()) {
+                          IrisUtil.disableIrisShaders();
+                      } else {
+                          throw e;
+                      }
+                  }'''
+
+          new_catch = '''        } catch (RuntimeException e) {
+                      Logger.error("Failed to create voxy render system - keeping shaders ENABLED", e);
+                      this.renderer = null;
+                  }'''
+
+          mlr = base + '../mixin/minecraft/MixinLevelRenderer.java'
+          patch(mlr, [(old_import, new_import), (old_create, new_create), (old_catch, new_catch)])
           PYEOF
           python3 /tmp/patch.py
           echo "=== diff ==="
