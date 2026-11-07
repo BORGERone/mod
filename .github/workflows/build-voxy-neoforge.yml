@@ -2,6 +2,7 @@ name: Build Voxy NeoForge 1.21.1
 
 on:
   workflow_dispatch:
+  push:
 
 permissions:
   contents: write
@@ -405,6 +406,29 @@ jobs:
             gh release create "voxy-pr45-iris-ipfix-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
               --repo "${GITHUB_REPOSITORY}" --draft \
               --title "Voxy 0.2.15-beta NeoForge + Iris (IP fix) (DRAFT)" --notes-file notes.md
+
+      - name: Stash jar as dangling git blob (Google Drive re-upload channel)
+        if: env.GRADLE_EXIT == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          JAR=$(ls voxy/build/libs/voxy-*.jar | grep -v sources | head -1)
+          base64 -w0 "$JAR" > /tmp/jar.b64
+          python3 - <<'PY'
+          import json
+          b64 = open('/tmp/jar.b64').read().strip()
+          json.dump({"content": b64, "encoding": "base64"}, open('/tmp/blobreq.json', 'w'))
+          PY
+          SHA=$(curl -sL -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/blobs" -d @/tmp/blobreq.json | jq -r .sha)
+          echo "BLOB_SHA=$SHA"
+          RID=$(curl -sL -H "Authorization: Bearer $GH_TOKEN" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
+            | jq -r --arg t "voxy-pr45-iris-ipfix-${GITHUB_RUN_ID}" '.[] | select(.draft==true) | select(.tag_name==$t) | .id')
+          curl -sL -H "Authorization: Bearer $GH_TOKEN" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/$RID" | jq -r .body > /tmp/body.txt
+          printf '\nBLOB_SHA=%s\n' "$SHA" >> /tmp/body.txt
+          jq -n --rawfile b /tmp/body.txt '{body: $b}' > /tmp/bodyreq.json
+          curl -sL -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
+            "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/$RID" -d @/tmp/bodyreq.json | jq -r .id
           else
             gh release create "voxy-buildlog-ipfix-${GITHUB_RUN_ID}" \
               --repo "${GITHUB_REPOSITORY}" --draft \
