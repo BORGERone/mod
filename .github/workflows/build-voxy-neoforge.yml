@@ -2,6 +2,7 @@ name: Build Voxy NeoForge 1.21.1
 
 on:
   workflow_dispatch:
+  push:
 
 permissions:
   contents: write
@@ -337,6 +338,27 @@ jobs:
 
           patch(base + 'IrisVoxyRenderPipeline.java', [(old_blit, new_blit)])
 
+
+          # ================= v7: disable Voxy LOD in the Nether dimension =================
+          # The Nether is where every Iris x Voxy artifact concentrates (smeared/rainbow LOD
+          # on unloaded chunks). The Overworld (and portal views into it) keeps full LOD.
+          patch(base + 'VoxyRenderSystem.java', [(
+              "    private final WorldEngine worldIn;",
+              "    private final WorldEngine worldIn;\n\n    // v7: dimension this render system draws for; LOD is skipped in the Nether\n    public net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level> renderDimension;"
+          ), (
+              "    public void renderOpaque(Viewport<?> viewport) {\n        if (viewport == null) {\n            return;\n        }",
+              "    public void renderOpaque(Viewport<?> viewport) {\n        if (this.renderDimension == net.minecraft.world.level.Level.NETHER) {\n            // v7: no LOD in the Nether - every Iris interaction artifact lives there\n            return;\n        }\n        if (viewport == null) {\n            return;\n        }"
+          )])
+
+          patch(base + '../mixin/minecraft/MixinLevelRenderer.java', [(
+              "            this.renderer = new VoxyRenderSystem(world, instance.getServiceManager());",
+              "            this.renderer = new VoxyRenderSystem(world, instance.getServiceManager());\n            this.renderer.renderDimension = this.level.dimension();"
+          )])
+
+          patch(base + 'RenderPipelineFactory.java', [(
+              "        Logger.info(\"arena build marker: iris-ipfix-v5 (conservative depth merge blit)\");",
+              "        Logger.info(\"arena build marker: iris-ipfix-v7 (nether lod disabled)\");"
+          )])
           PYEOF
           python3 /tmp/patch.py
           echo "=== diff ==="
