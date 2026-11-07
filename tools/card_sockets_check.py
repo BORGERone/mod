@@ -19,6 +19,14 @@ The author's four lines, and what this gate refuses to let go quiet:
      their own field: `ChestGraph396#hackChainStart` for a cracked chest, `DoorGraph382#openChainStart` for a
      door opened by hand.
 
+Build 399 added one more rule here, because 398 shipped a bug this gate could not see: the pass that draws the
+second cable began a vertex buffer and returned early when there was nothing to draw, and a `BufferBuilder` left
+open makes the next `Tesselator#begin` of the frame throw - so every door and every chest graph died on its first
+frame and the wand appeared to stop working («ты сломал графы, они теперь не открываются»). The gate now asks for
+the empty path that closes the builder (`BufferBuilder#build`), for the restore of the render state, and for a
+helper name that is not shared with the blue pass of build 290 (`settledlands$screen`), plus two callbacks in the
+door and the chest inspectors that cannot be mistaken for each other.
+
 Behaviourally, `tools/harness/CardSockets398Probe.java` runs on the real classes from the jar and answers the
 one question that decides whether the feature is worth anything - are the two chains two fields:
 
@@ -120,6 +128,14 @@ def refs_of(data):
 def methods_of(parsed):
     cp = parsed["cp"]
     return {cp[ni][1] for _a, ni, _d, _attrs in parsed["methods"]}
+
+
+def callbacks_of(data):
+    """Every synthetic lambda of a mixin class, as (name, descriptor) - what Mixin merges into the target."""
+    parsed, _refs = refs_of(data)
+    return {(name, desc) for name, desc in
+            ((parsed["cp"][ni][1], parsed["cp"][di][1]) for _a, ni, di, _attrs in parsed["methods"])
+            if name.startswith("lambda$")}
 
 
 def fields_of(parsed):
@@ -266,6 +282,45 @@ def structural(jar):
             problems.append("the second socket does not take the screen's undo point")
         if not any(r[1] == "settledlands$changed" for r in mixin_refs):
             problems.append("the second socket does not mark the graph dirty")
+        # Build 399: a vertex buffer that is begun must be closed on every path. A builder left open makes the
+        # next Tesselator#begin of the frame throw, and the graph screen dies on its first frame - that is the
+        # 398 report «графы не открываются», and it is invisible in a screen shot of a graph that never opened.
+        if not any(r[0] == "com/mojang/blaze3d/vertex/BufferBuilder" and r[1] == "build" for r in mixin_refs):
+            problems.append("CardEventPin398Mixin never calls BufferBuilder#build - the path with nothing to"
+                            " draw would leave the vertex buffer OPEN, and the next draw pass of the frame"
+                            " throws (build 399)")
+        if not any(r[0] == "com/mojang/blaze3d/vertex/BufferBuilder" and r[1] == "buildOrThrow"
+                   for r in mixin_refs):
+            problems.append("CardEventPin398Mixin never ends its buffer through buildOrThrow")
+        if not any(r[0] == "com/mojang/blaze3d/vertex/BufferUploader" and r[1] == "drawWithShader"
+                   for r in mixin_refs):
+            problems.append("CardEventPin398Mixin never draws the buffer it builds")
+        for wanted in ("disableBlend", "enableDepthTest", "enableCull"):
+            if not any(r[0] == "com/mojang/blaze3d/systems/RenderSystem" and r[1] == wanted
+                       for r in mixin_refs):
+                problems.append("CardEventPin398Mixin does not restore %s after its pass" % wanted)
+        mixin_names = methods_of(mixin)
+        if "settledlands$screen" in mixin_names:
+            problems.append("CardEventPin398Mixin adds settledlands$screen - the blue pass of build 290 adds a"
+                            " method of that exact name and signature to the same class, and two mixins cannot"
+                            " both own it (build 399 renamed it)")
+        if "settledlands$cardScreen" not in mixin_names:
+            problems.append("CardEventPin398Mixin has no settledlands$cardScreen - did the rename get lost?")
+        for name in mixin_names:
+            if name.startswith("lambda$") and "Button" in name:
+                problems.append("CardEventPin398Mixin has a lambda (%s) - the cable pass needs no closure" % name)
+
+        # Build 399: the two inspectors' toggle callbacks must not share a name+signature. Both are merged into
+        # the same screen class, so Mixin would be free to hand the chest the door's click - a chest's toggle
+        # would then flip a door's seal.
+        door_lambdas = callbacks_of(zf.read(DOOR_ROWS))
+        chest_lambdas = callbacks_of(zf.read(CHEST_ROWS))
+        shared = {k for k in door_lambdas if k in chest_lambdas and "Button" in k[1]}
+        if shared:
+            problems.append("the door's and the chest's toggle callbacks share %s - one of the two would run"
+                            " the other's click (build 399)" % sorted(shared))
+        if not chest_lambdas:
+            problems.append("the chest inspector has no click callback at all")
 
         mixins = json.loads(zf.read("settledlands.mixins.json").decode("utf-8"))
         if "CardEventPin398Mixin" not in mixins.get("client", []):

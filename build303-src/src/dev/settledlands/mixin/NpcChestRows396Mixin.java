@@ -224,9 +224,16 @@ public abstract class NpcChestRows396Mixin {
     private int settledlands$lock(NpcDialogueGraph.Node node, int x, int y, int width,
             int top, int bottom) {
         final Button[] self = new Button[1];
+        // Build 399: the node reaches the click through a one-element holder instead of being closed over
+        // directly. The door's inspector merges a click callback of its own into this same class, and two
+        // mixins that add a method of the same name and signature leave it to Mixin to pick one - the door's
+        // would then toggle a DOOR lock on a chest's card. Different captures, different signatures, and the
+        // chest can only ever run its own click.
+        final NpcDialogueGraph.Node[] card = new NpcDialogueGraph.Node[1];
+        card[0] = node;
         Button toggle = button("gui.settledlands.chest.lock", x, y, width, 16, () -> {
-            propertyChange(() -> ChestLock397.setLocked(node, !ChestLock397.locked(node)));
-            if (self[0] != null) self[0].setMessage(settledlands$lockWord(node));
+            propertyChange(() -> ChestLock397.setLocked(card[0], !ChestLock397.locked(card[0])));
+            if (self[0] != null) self[0].setMessage(settledlands$lockWord(card[0]));
         });
         if (toggle == null) return y;
         self[0] = toggle;

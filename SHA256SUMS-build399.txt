@@ -1,0 +1,4 @@
+# SettledLands build 399 - 0.8.0-build399-card-cable
+# base: settledlands-0.8.0-build398-card-sockets.jar
+7eaef16ee9df357da9faac1211fa28f9e7fe5da46d4c5dd160f6d7292520ac51  settledlands-0.8.0-build399-card-cable.jar
+f03178553bd667aa8e46b401003a9f1dcf31974528972169e73834a6ebe968f5  SettledLands-Build399-CardCable-Source.zip

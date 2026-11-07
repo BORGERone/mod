@@ -1851,3 +1851,32 @@ classes from `build303-src/out398` (19).
   `openMenu` on NeoForge 1.21.1 (and the resend not stacking a second window), the second socket's cable
   landing pixel-exact next to the blue diamond at every zoom, the door's «открытие» not firing twice on a
   fast double click.
+
+## Build 399 — the graph screens open again (398 was broken)
+
+`settledlands-0.8.0-build399-card-cable.jar` (599 entries, 549 classes, 3 633 895 B, sha256 `7eaef16e…0ac51`),
+base 398, two classes replaced (`CardEventPin398Mixin`, `NpcChestRows396Mixin`), source zip
+`SettledLands-Build399-CardCable-Source.zip` (540 entries, sha256 `f0317855…68f5`).
+
+- **Report:** «ты сломал графы, они теперь не открываются» — no crash, the wand click did nothing at all
+  (confirmed with the author: option «клик палочкой вообще ничего не делает»).
+- **Cause, found by reading the shipped bytecode of the 398 drawing pass:** `settledlands$drawCardSockets`
+  began a `BufferBuilder` (`Tesselator#begin`) and then `return`ed when `quads <= 0` — **leaving the builder
+  open**. `Tesselator#begin` refuses a second begin while one is open, so the next draw pass of the frame threw
+  `IllegalStateException: Not building!` and the screen died on its first frame. Every door/chest graph has a
+  card, so every one of them entered the pass; with no second cable wired `quads` was 0 — the empty path was the
+  one that ran. The 290 blue pass, which this mixin was copied from, closes the builder on both paths
+  (`drawWithShader(buildOrThrow())` / `buffer.build()`); that line was dropped.
+- **Fix:** both paths close the buffer; `settledlands$cables` owns the decision; whole pass wrapped so a draw
+  failure can never escape into the screen; render state restored (`disableBlend` was missing too).
+- **Two more real defects fixed in the same pass:** the mixin's helper was `settledlands$screen`, the very
+  name+signature the 290 mixin already merges into `NpcDialogueGraphScreen` (renamed `settledlands$cardScreen`);
+  the chest inspector's toggle callback shared name+signature with the door's (`lambda$6(Node,[Button])V`), so
+  Mixin could hand the chest the door's click and flip a door's seal (the chest now closes over a `Node[]`
+  holder → its own signature).
+- **Gate:** `tools/card_sockets_check.py` gained the rule that would have caught it — it now **fails on 398**
+  with all three findings and passes on 399. `verify_jar --base 398` PASS (0 new external refs, 0 dangling),
+  all 33 `*_check.py` green, probes 392–398 unchanged.
+- **Lessons for the next build:** a `BufferBuilder` must be closed on *every* path, including the one that draws
+  nothing; never name a mixin helper the same as another mixin's helper on the same target; two mixins' synthetic
+  lambdas must not share name+descriptor; and **a green structural gate is not a running game**.

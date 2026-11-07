@@ -32,23 +32,22 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * drawn - the author's report about the blue pin of the chest («сейчас нельзя вытаскивать из синего узла
  * провод») is exactly what happens when a socket is painted but not registered.</p>
  *
- * <p>So this mixin registers it, and it does so in three places, the same three the blue value wires use
- * ({@code NpcPursuitValuePinMixin290}) because that is the only pattern in this mod known to work in game:</p>
- *
- * <ul>
- *   <li><b>mouseClicked</b> - a press on the socket starts a drag; a middle press on the cable under the cursor
- *       cuts it; a right press unplugs the socket;</li>
- *   <li><b>mouseReleased</b> - the drop links the socket to whatever node is under the cursor, through the
- *       screen's own {@code remember()} and {@code changed()}, so the edit takes the same undo point the stock
- *       edits take and the graph is marked dirty;</li>
- *   <li><b>wires TAIL</b> - the cable of every wired second socket is drawn in the screen's own buffer, with
- *       the screen's own {@code curve}, right after the screen's own cables: identical geometry, identical
- *       render state, one colour.</li>
- * </ul>
+ * <p>So this mixin registers it in three places, the same three the blue value wires use
+ * ({@code NpcPursuitValuePinMixin290}) because that is the only pattern in this mod known to work in game: a
+ * press starts a drag (or cuts / unplugs), a release links the socket to whatever node is under the cursor
+ * through the screen's own {@code remember()} and {@code changed()}, and the cables are drawn at the tail of the
+ * screen's own {@code wires} pass, in the screen's own buffer and with the screen's own {@code curve}.</p>
  *
  * <p>What the socket holds is {@code Node#falseNext} - a field the stock serialiser writes and reads for every
  * node type. Nothing here writes {@code next}, so a card's first chain can never be overwritten by its second
  * one.</p>
+ *
+ * <p><b>Build 399: the buffer is always closed.</b> The pass in 398 began a {@code BufferBuilder} and returned
+ * early when there was nothing to draw - and a builder left open is not a harmless no-op: the next
+ * {@code Tesselator#begin} of the frame throws {@code IllegalStateException: Not building!}, the graph screen
+ * dies on its first frame, and from the player's chair the wand simply stops opening graphs. So the empty path
+ * now closes the builder the way the blue pass of build 290 does ({@code buffer.build()} with nothing uploaded),
+ * and no path of this class may leave it open.</p>
  */
 @Mixin(targets = "dev.settledlands.npc.client.NpcDialogueGraphScreen", remap = false)
 public abstract class CardEventPin398Mixin {
@@ -63,41 +62,52 @@ public abstract class CardEventPin398Mixin {
         throw new AssertionError();
     }
 
-    private static NpcDialogueGraphScreen settledlands$screen(Object self) {
+    /**
+     * {@code this}, as the screen.
+     *
+     * <p>Named {@code $cardScreen} and not {@code $screen}: the blue pass of build 290 already merges a
+     * {@code settledlands$screen(Object)} into this very class, and two mixins that add one method of the same
+     * name and signature leave it to Mixin to pick one of them. Different names, no question.</p>
+     */
+    private static NpcDialogueGraphScreen settledlands$cardScreen(Object self) {
         return (NpcDialogueGraphScreen) self;
     }
 
     @Inject(method = "mouseClicked(DDI)Z", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$grabCardSocket(double mouseX, double mouseY, int button,
             CallbackInfoReturnable<Boolean> cir) {
-        if (button < 0 || button > 2) return;
-        NpcDialogueGraphScreen screen = settledlands$screen(this);
-        if (screen.settledlands$contextOpen()) return;
-        NpcDialogueGraph graph = screen.settledlands$graph();
-        NpcGraphCanvas canvas = screen.settledlands$canvas();
-        if (graph == null || canvas == null || !canvas.contains(mouseX, mouseY)) return;
+        try {
+            if (button < 0 || button > 2) return;
+            NpcDialogueGraphScreen screen = settledlands$cardScreen(this);
+            if (screen.settledlands$contextOpen()) return;
+            NpcDialogueGraph graph = screen.settledlands$graph();
+            NpcGraphCanvas canvas = screen.settledlands$canvas();
+            if (graph == null || canvas == null || !canvas.contains(mouseX, mouseY)) return;
 
-        if (button == 2) {
-            Node cut = CardEventPin398.wireAt(graph, canvas, mouseX, mouseY);
-            if (cut == null) return;
-            screen.settledlands$remember();
-            CardEventPin398.setSecondChain(cut, -1);
-            screen.settledlands$changed();
+            if (button == 2) {
+                Node cut = CardEventPin398.wireAt(graph, canvas, mouseX, mouseY);
+                if (cut == null) return;
+                screen.settledlands$remember();
+                CardEventPin398.setSecondChain(cut, -1);
+                screen.settledlands$changed();
+                cir.setReturnValue(true);
+                return;
+            }
+
+            Node card = CardEventPin398.cardAt(graph, canvas, mouseX, mouseY);
+            if (card == null) return;
+            if (button == 1) {
+                // Right click: this socket lets go of everything it points at. The stock shortcut for a pin.
+                screen.settledlands$remember();
+                CardEventPin398.setSecondChain(card, -1);
+                screen.settledlands$changed();
+            } else {
+                settledlands$dragCard = card.id;
+            }
             cir.setReturnValue(true);
-            return;
+        } catch (Throwable ignored) {
+            // a click on a second socket must never cost the screen
         }
-
-        Node card = CardEventPin398.cardAt(graph, canvas, mouseX, mouseY);
-        if (card == null) return;
-        if (button == 1) {
-            // Right click: this socket lets go of everything it points at. The stock shortcut for a pin.
-            screen.settledlands$remember();
-            CardEventPin398.setSecondChain(card, -1);
-            screen.settledlands$changed();
-        } else {
-            settledlands$dragCard = card.id;
-        }
-        cir.setReturnValue(true);
     }
 
     @Inject(method = "mouseReleased(DDI)Z", at = @At("HEAD"), cancellable = true, remap = false)
@@ -107,23 +117,26 @@ public abstract class CardEventPin398Mixin {
         if (drag < 0) return;
         settledlands$dragCard = -1;
         cir.setReturnValue(true);
+        try {
+            NpcDialogueGraphScreen screen = settledlands$cardScreen(this);
+            NpcDialogueGraph graph = screen.settledlands$graph();
+            NpcGraphCanvas canvas = screen.settledlands$canvas();
+            if (graph == null || canvas == null) return;
+            Node card = graph.get(drag);
+            if (card == null || !CardEventPin398.isCard(card)) return;
 
-        NpcDialogueGraphScreen screen = settledlands$screen(this);
-        NpcDialogueGraph graph = screen.settledlands$graph();
-        NpcGraphCanvas canvas = screen.settledlands$canvas();
-        if (graph == null || canvas == null) return;
-        Node card = graph.get(drag);
-        if (card == null || !CardEventPin398.isCard(card)) return;
-
-        // The drop is on a node, never on empty canvas: a chain that points at nothing is not a chain, and
-        // the author's wire would look connected while leading nowhere.
-        int over = canvas.hit(graph, mouseX, mouseY);
-        if (over < 0 || over == card.id) return;
-        Node target = graph.get(over);
-        if (target == null || CardEventPin398.isCard(target)) return;
-        screen.settledlands$remember();
-        CardEventPin398.setSecondChain(card, over);
-        screen.settledlands$changed();
+            // The drop is on a node, never on empty canvas: a chain that points at nothing is not a chain, and
+            // the author's wire would look connected while leading nowhere.
+            int over = canvas.hit(graph, mouseX, mouseY);
+            if (over < 0 || over == card.id) return;
+            Node target = graph.get(over);
+            if (target == null || CardEventPin398.isCard(target)) return;
+            screen.settledlands$remember();
+            CardEventPin398.setSecondChain(card, over);
+            screen.settledlands$changed();
+        } catch (Throwable ignored) {
+            // a drop that went nowhere must never cost the screen
+        }
     }
 
     /**
@@ -134,44 +147,62 @@ public abstract class CardEventPin398Mixin {
     @Inject(method = "wires(Lnet/minecraft/client/gui/GuiGraphics;II)V", at = @At("TAIL"), remap = false)
     private void settledlands$drawCardSockets(GuiGraphics graphics, int mouseX, int mouseY,
             CallbackInfo ci) {
-        NpcDialogueGraphScreen screen = settledlands$screen(this);
-        NpcDialogueGraph graph = screen.settledlands$graph();
-        NpcGraphCanvas canvas = screen.settledlands$canvas();
-        if (graph == null || canvas == null || graphics == null || graph.nodes == null) return;
-        if (!settledlands$hasAny(graph)) return;
-
-        int color = CardEventPin398.COL_AMBER_WIRE;
-        graphics.flush();
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.disableDepthTest();
-        RenderSystem.disableCull();
-        RenderSystem.setShader(GameRenderer::getPositionColorShader);
-        BufferBuilder buffer = Tesselator.getInstance()
-                .begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
-        Matrix4f matrix = graphics.pose().last().pose();
-        int quads = 0;
         try {
-            for (Node card : graph.nodes.values()) {
-                if (!CardEventPin398.isCard(card)) continue;
-                double x1 = CardEventPin398.pinScreenX(canvas, card);
-                double y1 = CardEventPin398.pinScreenY(canvas, card);
-                if (card.id == settledlands$dragCard) {
-                    quads += curve(buffer, matrix, x1, y1, mouseX, mouseY, color, false);
-                    continue;
-                }
-                if (!CardEventPin398.hasWire(graph, card)) continue;
-                Node to = graph.get(CardEventPin398.secondChain(card));
-                if (to == null) continue;
-                quads += curve(buffer, matrix, x1, y1, canvas.portScreenX(to, false),
-                        canvas.portScreenY(to, false, 0), color, false);
+            NpcDialogueGraphScreen screen = settledlands$cardScreen(this);
+            NpcDialogueGraph graph = screen.settledlands$graph();
+            NpcGraphCanvas canvas = screen.settledlands$canvas();
+            if (graph == null || canvas == null || graphics == null || graph.nodes == null) return;
+            if (!settledlands$hasAny(graph)) return;       // nothing to draw: no buffer is ever begun
+
+            graphics.flush();
+            RenderSystem.enableBlend();
+            RenderSystem.defaultBlendFunc();
+            RenderSystem.disableDepthTest();
+            RenderSystem.disableCull();
+            RenderSystem.setShader(GameRenderer::getPositionColorShader);
+            BufferBuilder buffer = Tesselator.getInstance()
+                    .begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
+            int quads;
+            try {
+                quads = settledlands$cables(buffer, graphics.pose().last().pose(), graph, canvas,
+                        mouseX, mouseY);
+            } catch (Throwable failure) {
+                quads = 0;                                  // and the buffer is closed below, always
             }
-            if (quads <= 0) return;
-            BufferUploader.drawWithShader(buffer.buildOrThrow());
-        } finally {
+            if (quads > 0) {
+                BufferUploader.drawWithShader(buffer.buildOrThrow());
+            } else {
+                // Build 399: close the builder even when it stayed empty. This is the line 398 was missing.
+                buffer.build();
+            }
             RenderSystem.enableDepthTest();
             RenderSystem.enableCull();
+            RenderSystem.disableBlend();
+        } catch (Throwable ignored) {
+            // drawing a second cable must never cost the screen
         }
+    }
+
+    /** Every cable of a second socket, plus the rubber band of the one being pulled. */
+    private int settledlands$cables(BufferBuilder buffer, Matrix4f matrix, NpcDialogueGraph graph,
+            NpcGraphCanvas canvas, double mouseX, double mouseY) {
+        int color = CardEventPin398.COL_AMBER_WIRE;
+        int quads = 0;
+        for (Node card : graph.nodes.values()) {
+            if (!CardEventPin398.isCard(card)) continue;
+            double x1 = CardEventPin398.pinScreenX(canvas, card);
+            double y1 = CardEventPin398.pinScreenY(canvas, card);
+            if (card.id == settledlands$dragCard) {
+                quads += curve(buffer, matrix, x1, y1, mouseX, mouseY, color, false);
+                continue;
+            }
+            if (!CardEventPin398.hasWire(graph, card)) continue;
+            Node to = graph.get(CardEventPin398.secondChain(card));
+            if (to == null) continue;
+            quads += curve(buffer, matrix, x1, y1, canvas.portScreenX(to, false),
+                    canvas.portScreenY(to, false, 0), color, false);
+        }
+        return quads;
     }
 
     private static boolean settledlands$hasAny(NpcDialogueGraph graph) {
@@ -182,10 +213,5 @@ public abstract class CardEventPin398Mixin {
             if (CardEventPin398.hasWire(graph, node)) return true;
         }
         return false;
-    }
-
-    /** Kept for the gates: this class must not be the one that decides what a card is. */
-    static boolean settledlands$isCard(Node node) {
-        return DoorGraph382.isDoorNode(node) || ChestGraph396.isChestNode(node);
     }
 }
