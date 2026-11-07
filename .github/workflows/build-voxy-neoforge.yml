@@ -379,6 +379,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -x
           {
             echo "gradle exit: ${{ env.GRADLE_EXIT }}"
             echo ""
@@ -398,20 +399,29 @@ jobs:
             echo '```'
           } > notes.md
           if [ "${{ env.GRADLE_EXIT }}" = "0" ]; then
-            ls -l voxy/build/libs
-            sha256sum voxy/build/libs/*.jar | tee /tmp/sha.txt
+            ls -l voxy/build/libs || true
+            sha256sum voxy/build/libs/*.jar | tee /tmp/sha.txt || true
             printf '\n== checksums ==\n```\n' >> notes.md
-            cat /tmp/sha.txt >> notes.md
+            cat /tmp/sha.txt >> notes.md || true
             printf '```\n' >> notes.md
             gh release create "voxy-pr45-iris-ipfix-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
               --repo "${GITHUB_REPOSITORY}" --draft \
-              --title "Voxy 0.2.15-beta NeoForge + Iris (IP fix) (DRAFT)" --notes-file notes.md
+              --title "Voxy 0.2.15-beta NeoForge + Iris (IP fix) (DRAFT)" --notes-file notes.md \
+              2>&1 | tee /tmp/publish.log || echo "RELEASE CREATE FAILED (see publish.log)"
+          else
+            gh release create "voxy-buildlog-ipfix-${GITHUB_RUN_ID}" \
+              --repo "${GITHUB_REPOSITORY}" --draft \
+              --title "BUILDLOG ipfix (DRAFT)" --notes-file notes.md \
+              2>&1 | tee /tmp/publish.log || echo "RELEASE CREATE FAILED (see publish.log)"
+          fi
+          exit 0
 
       - name: Stash jar as dangling git blob (Google Drive re-upload channel)
         if: env.GRADLE_EXIT == '0'
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
+          set -x
           JAR=$(ls voxy/build/libs/voxy-*.jar | grep -v sources | head -1)
           base64 -w0 "$JAR" > /tmp/jar.b64
           python3 - <<'PY'
@@ -423,17 +433,21 @@ jobs:
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/git/blobs" -d @/tmp/blobreq.json | jq -r .sha)
           echo "BLOB_SHA=$SHA"
           RID=$(curl -sL -H "Authorization: Bearer $GH_TOKEN" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases?per_page=100" \
-            | jq -r --arg t "voxy-pr45-iris-ipfix-${GITHUB_RUN_ID}" '.[] | select(.draft==true) | select(.tag_name==$t) | .id')
+            | jq -r --arg t "voxy-pr45-iris-ipfix-${GITHUB_RUN_ID}" '.[] | select(.draft==true) | select(.tag_name==$t) | .id' | head -1)
+          if [ -z "$RID" ] || [ "$RID" = "null" ]; then
+            RID=$(curl -sL -X POST -H "Authorization: Bearer $GH_TOKEN" -H "Accept: application/vnd.github+json" \
+              -H "Content-Type: application/json" \
+              "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases" \
+              -d "{\"tag_name\":\"voxy-blob-${GITHUB_RUN_ID}\",\"name\":\"voxy blob channel ${GITHUB_RUN_ID}\",\"draft\":true,\"body\":\"placeholder\"}" | jq -r .id)
+          fi
           curl -sL -H "Authorization: Bearer $GH_TOKEN" "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/$RID" | jq -r .body > /tmp/body.txt
           printf '\nBLOB_SHA=%s\n' "$SHA" >> /tmp/body.txt
+          printf '\n== publish.log ==\n```\n' >> /tmp/body.txt
+          cat /tmp/publish.log >> /tmp/body.txt 2>/dev/null || true
+          printf '```\n' >> /tmp/body.txt
           jq -n --rawfile b /tmp/body.txt '{body: $b}' > /tmp/bodyreq.json
           curl -sL -X PATCH -H "Authorization: Bearer $GH_TOKEN" -H "Content-Type: application/json" \
             "${GITHUB_API_URL}/repos/${GITHUB_REPOSITORY}/releases/$RID" -d @/tmp/bodyreq.json | jq -r .id
-          else
-            gh release create "voxy-buildlog-ipfix-${GITHUB_RUN_ID}" \
-              --repo "${GITHUB_REPOSITORY}" --draft \
-              --title "BUILDLOG ipfix (DRAFT)" --notes-file notes.md
-          fi
 
   build-ipfix:
     name: IPL Copy Fix (companion, IP x Iris framebuffer copies)
