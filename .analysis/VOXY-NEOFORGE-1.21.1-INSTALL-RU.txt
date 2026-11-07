@@ -341,3 +341,22 @@ glDisable(GL_STENCIL_TEST)/glDisable(GL_DEPTH_TEST); Immersive Portals рису�
 3) Маркер сборки в RenderPipelineFactory.createPipeline - по нему в логе видно, какой jar
    действительно загружен (проверять в next-логе строку "arena build marker").
 Итого 8 патчей поверх PR #45: IP-fix (2), TheNofis-порты (3), v3 (3).
+
+=== v4: КОРЕНЬ АРТЕФАКТОВ - ВТОРИЧНЫЙ LevelRenderer ОТ IP (лог latest-5.log) ===
+Маркер iris-ipfix-v3 в логе есть (jar новый), DH удалён пользователем, шейдеры Eclipse вкл.
+Улика: пайплайн Voxy МЕЛЯЕТСЯ между инстансами:
+  05:38:50 'NormalRenderPipeline', 05:38:51 'IrisVoxyRenderPipeline', 05:38:52 'NormalRenderPipeline'
+Причина: Immersive Portals создаёт ВТОРОЙ (secondary) LevelRenderer на каждый портал-мир
+(ClientWorldLoader.createSecondaryClientWorld -> LevelRenderer.setLevel -> allChanged ->
+voxy$reloadVoxyRenderer). У Iris один IrisRenderingPipeline на измерение и у Voxy один слот
+IrisVoxyRenderPipelineData.thePipeline -> два рендерера одного измерения дерутся за слот;
+проигравший молча падает в NormalRenderPipeline (мой же fallback из v1-фикса), который рисует
+LOD вне конвейера Iris со своими depth-blit'ами -> размаз/свет/портал-сквозь-стены; uniform-
+обновления уходят только одному инстансу -> трейлы.
+Патчи v4 (коммит df812f8, маркер "arena build marker: iris-ipfix-v4"):
+1) MixinLevelRenderer.voxy$createRenderer: если (LevelRenderer)(Object)this !=
+   Minecraft.getInstance().levelRenderer -> не создавать Voxy-рендерер (secondary-рендереры
+   IP живут без Voxy; LOD сквозь порталы и так не виден - согласовано).
+2) MixinLevelRenderer.voxy$createRenderer catch: убран второй вызов
+   IrisUtil.disableIrisShaders() (найден ещё один shader-kill путь), вместо него log+null.
+Всего поверх PR #45 теперь 10 патчей + PortalViewGuard.java.
