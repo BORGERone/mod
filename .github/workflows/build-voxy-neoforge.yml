@@ -2,6 +2,7 @@ name: Build Voxy NeoForge 1.21.1
 
 on:
   workflow_dispatch:
+  push:
 
 permissions:
   contents: write
@@ -348,13 +349,16 @@ jobs:
           # IrisVoxyRenderPipeline clears its colour target, which is why first-world /
           # direct-join sessions look clean.
           patch(base + 'NormalRenderPipeline.java', [(
+              "            glTextureParameterf(this.fb.getDepthTex().id, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);\n        }",
+              "            glTextureParameterf(this.fb.getDepthTex().id, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);\n        }\n\n        // v10: the SSAO compute pass uses colourSSAOTex as a READ_WRITE image and only\n        // writes pixels that actually have LOD; every other pixel keeps its previous\n        // content - including pixels from earlier frames or from the previous dimension\n        // (ghost masks over sky/horizon, chunk-shaped grey patches). Clear it per frame.\n        if (this.colourSSAOTex != null) {\n            org.lwjgl.opengl.GL45C.glClearNamedFramebufferfv(this.fbSSAO.id, org.lwjgl.opengl.GL11C.GL_COLOR, 0, new float[]{0.0f, 0.0f, 0.0f, 0.0f});\n        }"
+          ), (
               "        this.initDepthStencil(sourceFB, this.fb.framebuffer.id, viewport.width, viewport.height, viewport.width, viewport.height);\n\n        return this.fb.getDepthTex().id;",
               "        this.initDepthStencil(sourceFB, this.fb.framebuffer.id, viewport.width, viewport.height, viewport.width, viewport.height);\n\n        // v9: upstream never clears the colour target of this framebuffer - stale LOD\n        // pixels from earlier frames/worlds persist and get re-blitted (WinXP-trail\n        // ghosting, cross-dimension masks). Depth/stencil are re-initialised above,\n        // so clearing colour here is safe and fixes the ghosting.\n        org.lwjgl.opengl.GL11C.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);\n        org.lwjgl.opengl.GL11C.glClear(org.lwjgl.opengl.GL11C.GL_COLOR_BUFFER_BIT);\n\n        return this.fb.getDepthTex().id;"
           )])
 
           patch(base + 'RenderPipelineFactory.java', [(
               "        Logger.info(\"arena build marker: iris-ipfix-v5 (conservative depth merge blit)\");",
-              "        Logger.info(\"arena build marker: iris-ipfix-v9 (normal pipeline colour clear, ghost fix)\");"
+              "        Logger.info(\"arena build marker: iris-ipfix-v10 (clear colourTex AND colourSSAOTex per frame, ghost fix)\");"
           )])
           PYEOF
           python3 /tmp/patch.py
