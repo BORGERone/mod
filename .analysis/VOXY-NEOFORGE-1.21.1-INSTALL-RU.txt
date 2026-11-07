@@ -323,3 +323,21 @@ LOD сквозь порталы по-прежнему не виден (это и
 sha256 909ce3173f487097bfe36219a095f9233952245b41579b0fc5b67cd9d7590fab
 https://github.com/BORGERone/mod/releases/download/untagged-dc8b18ccaaf55c8c5927/voxy-0.2.15-beta.jar
 У пользователя в mods лежал voxy-0.2.15-beta(1).jar - удалять ОБА старых voxy-0.2.15*.jar.
+
+=== v3: АРТЕФАКТЫ ОСТАЛИСЬ (image-2.png Незер-размаз, image-3.png портал сквозь бревно) ===
+Гипотеза v2 не подтвердилась; новая причина - утечка GL-состояния из IrisVoxyRenderPipeline
+.finish(): transformBlitDepth пишет глубину Voxy в фреймбуфер шейдерпака и в конце делает
+glDisable(GL_STENCIL_TEST)/glDisable(GL_DEPTH_TEST); Immersive Portals рисует полотно портала
+сразу после и опирается на корректное состояние -> портал игнорирует глубину (виден сквозь
+стены), а испорченный depth ломает свет/туман (размаз в Незере).
+Патчи v3 (коммит 5f9bca1, маркер в логе: "arena build marker: iris-ipfix-v3"):
+1) IrisVoxyRenderPipeline.finish(): снапшот GL_DEPTH_FUNC/GL_DEPTH_TEST/GL_STENCIL_TEST/
+   GL_CULL_FACE до тела и восстановление в finally (утечка состояния исключена).
+2) PortalViewGuard.java (новый файл, рефлексия на
+   qouteall.imm_ptl.core.render.context_management.PortalRendering.isRendering /
+   RenderStates.isRendering|isPortalRendering) + early return в
+   MixinDefaultChunkRenderer.doRender: LOD не рисуется во время портал-вью IP
+   (пользователь согласен, что LOD сквозь порталы не виден).
+3) Маркер сборки в RenderPipelineFactory.createPipeline - по нему в логе видно, какой jar
+   действительно загружен (проверять в next-логе строку "arena build marker").
+Итого 8 патчей поверх PR #45: IP-fix (2), TheNofis-порты (3), v3 (3).
