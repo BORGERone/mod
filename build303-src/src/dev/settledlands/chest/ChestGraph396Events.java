@@ -154,13 +154,12 @@ public final class ChestGraph396Events {
             // chest never stands open for a single tick (the rule of builds 371/376). What opens instead
             // is the very same panel a locked door opens, with this chest's four numbers.
             int[] panel = ChestLock397.panel(level, pos);
-            // Build 398: a lock a solved panel has already lifted lets this click through, so the game opens
-            // the chest exactly as it always has. Build 400: this IS the opening now - the server no longer
-            // opens the chest's menu itself, the client that solved the panel clicks the chest, and this
-            // event is where that click lands. The lift is consumed here, so the click it belongs to is the
-            // crack and every later opening is an ordinary one.
-            boolean cracked = ChestLock397.granted(key);
-            if (cracked) ChestLock397.revoke(key);
+            // Build 398/400/401: the click that follows a solved panel is the opening. Build 400 lifted the
+            // lock for whoever clicked first; build 401 keys the lift by the player who solved the panel and by
+            // the chest, spends it on exactly one click, and keeps it for ten minutes - the chest's «взлом»
+            // chain now plays before this click, and a «Реплика» is read at the player's own pace. The click it
+            // belongs to is the crack, and every later opening is an ordinary one.
+            boolean cracked = ChestLock397.takeCrack(player.getName().getString(), key);
             if (panel != null && cracked) panel = null;
             if (panel != null) {
                 event.setCanceled(true);
@@ -269,7 +268,16 @@ public final class ChestGraph396Events {
                 if (age < OPEN_GRACE) continue;           // the same tick the click happened in
                 if (!pending.window && age < NO_WINDOW) continue;   // the window is still to come
                 walk.remove();
-                ChestGraph396.run(player, pending.level, pending.pos, pending.key, pending.cracked);
+                // Build 401: a crack's chain has already run - it ran before the chest opened, which is the
+                // order the author asked for («сначала реплика, потом инвентарь»). Re-running it here would
+                // play the same «Реплика» a second time, after the window closed. So a crack only counts on the
+                // card here; an ordinary opening is what runs «открытие», and it runs now, on the close.
+                if (pending.cracked) {
+                    LOG.info("chest: " + pending.key + " was closed after a crack - its «взлом» chain ran"
+                            + " before the chest opened, nothing runs again");
+                    continue;
+                }
+                ChestGraph396.run(player, pending.level, pending.pos, pending.key, false);
             } catch (Throwable failure) {
                 walk.remove();
                 ChestGraph396.fail(failure);

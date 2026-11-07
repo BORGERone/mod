@@ -79,9 +79,15 @@ public abstract class DoorUse373Mixin {
                 return;                              // the client's guess is never a signal
             }
             if (hit == null || pos == null || state == null) return;
+            DoorSignal398.sawUse(pos, state, Doors368.isOpen(state));   // build 401: is this mixin alive?
             if (Doors368.isOpen(state)) return;      // it was already open: this click closed it
             BlockState after = level.getBlockState(pos);
             if (!Doors368.isOpen(after)) return;     // the click opened nothing
+            // Build 401: this line is the evidence of report #3. It is written by the mixin itself, so the
+            // author's next log says whether the injection bound at all: no line after a door click means the
+            // selector missed on this game version, and the chain then has only the watcher leg
+            // (DoorEvents368#onRightClick -> DoorSignal398#watch), which says so in its own words.
+            DoorSignal398.sawOpened(pos);
             DoorSignal398.open(serverPlayer, server, pos);
         } catch (Throwable ignored) {
             // never turn a click on a door into a crash

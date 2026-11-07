@@ -24,8 +24,9 @@ import dev.settledlands.npc.client.CardEventPin398;
  *       first, so a cracked chest and a hand-opened door run what the author wired to them;</li>
  *   <li><b>the fallback</b> - a graph of build 396/397 has only the first socket wired, so a cracked chest must
  *       still find a chain;</li>
- *   <li><b>the lock lift</b> - {@code ChestLock397#grant}/{@code #granted} opens one chest for a few seconds and
- *       no other, which is the guarantee behind the chest-window fix.</li>
+ *   <li><b>the crack</b> - {@code ChestLock397#crack}/{@code #cracked} opens one chest, for the player whose
+ *       panel was solved, and no other chest and no other player (build 401: a «Реплика» is read at the
+ *       player's pace, so the lift of build 400 could be gone before the chain was over).</li>
  * </ul>
  *
  * <pre>
@@ -35,7 +36,7 @@ import dev.settledlands.npc.client.CardEventPin398;
  *   DOOR second=2 first=1 apart=true
  *   NAMES chest=gui.settledlands.chest.pin_hack door=gui.settledlands.door.pin_open
  *   STOCK untouched=true
- *   GRANT mine=true other=false
+ *   CRACK mine=true other=false player=false
  * </pre>
  */
 public final class CardSockets398Probe {
@@ -96,10 +97,11 @@ public final class CardSockets398Probe {
                 && CardEventPin398.secondChain(line) == -1;
         System.out.println("STOCK untouched=" + untouched);
 
-        // 7. The lock lift of a solved panel: this chest and no other.
+        // 7. The crack of a solved panel: this chest, this player, and no other of either.
         String key = ChestGraph396.keyOf(ChestGraph396.idFor("minecraft:overworld@5,70,5"));
-        ChestLock397.grant(key);
-        System.out.println("GRANT mine=" + ChestLock397.granted(key)
-                + " other=" + ChestLock397.granted(key + "x"));
+        ChestLock397.crack("BORGER", key);
+        System.out.println("CRACK mine=" + ChestLock397.cracked("BORGER", key)
+                + " other=" + ChestLock397.cracked("BORGER", key + "x")
+                + " player=" + ChestLock397.cracked("Steve", key));
     }
 }

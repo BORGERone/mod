@@ -15,7 +15,9 @@ What this gate asks of the jar, all of it structural, because that is what a jar
     and the panel's own keys through `held()`, which covers a key that was already down when the panel
     opened and therefore never sent a press;
   * in `render()` the close comes **after** `allReleased()` and after the hack was sent: the instruction
-    order is the assertion. On the build that had the bug, `onClose` follows `send` directly.
+    order is the assertion. On the build that had the bug, `onClose` follows `send` directly;
+  * the escape hatch of a solved panel is a hold of ESC - 800 ms of it, timed in `tick()` on the hardware
+    (`InputConstants#isKeyDown`, build 401) - and never a tap: a tap is how a player leaves a screen.
 
     python3 tools/panel_release_check.py settledlands-0.8.0-build387-panel-release.jar
 
@@ -118,8 +120,30 @@ def main(argv):
                     " has not closed yet")
 
     # ---- the escape hatch is a hold, not a tap -------------------------------------------
-    if "escDownAt" not in press:
-        return fail("keyPressed does not time the ESC hold - a tap would escape a solved panel")
+    # Build 401: the hold is timed in tick(), on the hardware. It used to be timed in keyPressed from key
+    # *repeats*, and the author's report was «проблемы с закрытием взлома на ESC, срабатывает через раз» -
+    # repeats are the window manager's business, so the hold sometimes ended by itself and sometimes never
+    # arrived.
+    if "tick" not in names:
+        return fail("HackPanel377 has no tick() - its ESC hold is timed on key repeats, and that is the"
+                    " «срабатывает через раз» of build 401")
+    tick = method_listing(parsed, "tick")
+    if "escHeldTick(" not in tick:
+        return fail("tick() does not ask for the ESC hold - a tap would escape a solved panel")
+    hold = method_listing(parsed, "escHeldTick")
+    if "escHeldSince" not in hold:
+        return fail("escHeldTick() does not time the ESC hold - a tap would escape a solved panel")
+    # The hardware read may sit in the helper tick() calls (settledlands$escDown), so ask the class: the
+    # tick must reach the hardware, directly or through exactly that helper.
+    if "InputConstants.isKeyDown(" not in hold:
+        helper = method_listing(parsed, "settledlands$escDown")
+        if "settledlands$escDown(" not in hold or "InputConstants.isKeyDown(" not in helper:
+            return fail("tick() asks nothing about the keyboard - the hold would be a timer, not a hold")
+    if "HackPanel377.onClose(" not in hold:
+        return fail("tick() never closes the panel it was asked to close")
+    if "escHeldSince" in press:
+        return fail("keyPressed still times the ESC hold as well - two clocks on one key is how the panel"
+                    " closed «через раз»")
     if "Screen.keyPressed(" not in press:
         return fail("keyPressed never hands ESC to the screen - an unsolved panel could not be closed")
 

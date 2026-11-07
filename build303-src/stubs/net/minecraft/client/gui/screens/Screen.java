@@ -50,6 +50,16 @@ public class Screen implements GuiEventListener {
     public void onClose() {
     }
 
+    /**
+     * Build 401: the tick the game gives the screen in front, every client tick.
+     *
+     * <p>Vanilla's {@code Screen#tick()} is called from {@code Minecraft#tick} for the current screen, which is
+     * why a panel can time a key hold there instead of trusting {@code keyPressed} repeats - the door's ESC
+     * hold arrived «через раз» exactly because repeats are the window manager's business.</p>
+     */
+    public void tick() {
+    }
+
     public void removed() {
     }
 

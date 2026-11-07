@@ -9,7 +9,8 @@ The author's four lines, and what this gate refuses to let go quiet:
   2. «после взлома сундука у нас не открывается инвентарь сундука». - Three independent guards: the panel
      closes only while it is the screen in front (`onClose` reads `Minecraft#screen`), it asks again while no
      container is open (`containerMenu` against `inventoryMenu`), and the server lifts the lock of that chest
-     for a few seconds the moment the panel is solved (`ChestLock397#grant`), so one more click always opens it;
+     the moment the panel is solved (`ChestLock397#crack`, keyed by player and chest), so the click that
+     follows always opens it - and that click is `ChestOpen401`'s, delivered after the «взлом» chain;
   3. «сейчас нельзя вытаскивать из синего узла провод». - The chest card must be a value source: every half of
      a blue pin is keyed on `PursuitGraphNode272#isValueSourceNode`, so the chest has to be in that predicate,
      not painted next to it;
@@ -36,7 +37,7 @@ one question that decides whether the feature is worth anything - are the two ch
     DOOR second=2 first=1 apart=true
     NAMES chest=gui.settledlands.chest.pin_hack door=gui.settledlands.door.pin_open
     STOCK untouched=true
-    GRANT mine=true other=false
+    CRACK mine=true other=false player=false
 
     python3 tools/card_sockets_check.py settledlands-0.8.0-build398-card-sockets.jar
 
@@ -85,8 +86,10 @@ VALUE_PIN = "dev/settledlands/npc/client/PursuitGraphNode272.class"
 NEW_KEYS = {
     "gui.settledlands.door.pin_open": ("открытие", "opening"),
     "gui.settledlands.chest.pin_hack": ("взлом", "hack"),
-    "message.settledlands.chest.again": ("Замок снят: нажми на сундук ещё раз",
-                                         "The lock is off: click the chest again"),
+    # Build 401: the click is not the player's job any more - the client delivers it once the «взлом» chain
+    # of that chest is done, so the line must not tell him to click a chest that is about to open itself.
+    "message.settledlands.chest.again": ("Замок снят: сундук откроется сам",
+                                         "The lock is off: the chest opens by itself"),
 }
 
 # The corrected hint lines: a card with two execution sockets must not describe one.
@@ -104,7 +107,7 @@ EXPECT = {
     "DOOR": "second=2 first=1 apart=true",
     "NAMES": "chest=gui.settledlands.chest.pin_hack door=gui.settledlands.door.pin_open",
     "STOCK": "untouched=true",
-    "GRANT": "mine=true other=false",
+    "CRACK": "mine=true other=false player=false",
 }
 
 
@@ -202,32 +205,46 @@ def structural(jar):
         if "settledlands$askAgain" not in panel_methods:
             problems.append("HackPanel377 has no settledlands$askAgain() - the answer to a chest is sent once"
                             " and never repeated")
+        # Build 401: the escape hatch of a solved panel is timed on the hardware, in tick(), because the
+        # keyPressed repeats it used to wait for arrived «через раз».
+        if "tick" not in panel_methods:
+            problems.append("HackPanel377 does not override tick() - its ESC hold is timed on key repeats,"
+                            " which is the «срабатывает через раз» of build 401")
+        if not any(r[1] == "isKeyDown" for r in panel_refs):
+            problems.append("HackPanel377 never reads InputConstants#isKeyDown - it cannot tell a held ESC"
+                            " from a key repeat that never came")
+        if any(r[1] == "useItemOn" for r in panel_refs):
+            problems.append("HackPanel377 clicks its chest again - the click must come after the «взлом»"
+                            " chain (ChestOpen401), not from the panel's close")
         for wanted in ("containerMenu", "inventoryMenu"):
             if not any(r[1] == wanted for r in panel_refs):
                 problems.append("HackPanel377 never reads %s - it cannot tell whether a container opened, so"
                                 " it cannot know the chest's window is late" % wanted)
         lock, lock_refs = refs_of(zf.read(CHEST_LOCK))
-        for name in ("grant", "granted"):
+        for name in ("crack", "cracked", "takeCrack"):
             if name not in methods_of(lock):
                 problems.append("ChestLock397 has no %s() - a solved panel would have the server's window as"
                                 " its only way in" % name)
-        if "GRANTED" not in fields_of(lock):
-            problems.append("ChestLock397 keeps no lifted locks - nothing would ever time out")
+        if "CRACKED" not in fields_of(lock):
+            problems.append("ChestLock397 keeps no cracks - nothing would ever time out, and every later"
+                            " opening of a cracked chest would run «взлом» again")
+        if "GRANTED" in fields_of(lock):
+            problems.append("ChestLock397 still keeps the ten-second lift of build 400 - a «Реплика» can take"
+                            " longer than that, so the crack must outlive the chain")
         net, net_refs = refs_of(zf.read(CHEST_NET))
-        if not any(r[1] == "grant" and r[0] == "dev/settledlands/chest/ChestLock397" for r in net_refs):
-            problems.append("ChestNet397 never lifts the lock - a client whose window does not arrive is stuck"
-                            " with a chest it already cracked")
+        if not any(r[1] == "crack" and r[0] == "dev/settledlands/chest/ChestLock397" for r in net_refs):
+            problems.append("ChestNet397 never cracks the lock - a client whose window does not arrive is"
+                            " stuck with a chest it already cracked")
         events, event_refs = refs_of(zf.read(CHEST_EVENTS))
         # Build 400: the crack is decided where the click lands, not in the packet handler. The click
         # that opens a cracked chest reaches the use event, so the lift must be read and consumed here.
-        if not any(r[1] == "granted" and r[0] == "dev/settledlands/chest/ChestLock397"
+        # Build 401: takeCrack answers both questions and spends the crack in the same call: is this click a
+        # crack, and is that crack done with. Asking and then spending would leave a window in which the same
+        # click is a crack twice.
+        if not any(r[1] == "takeCrack" and r[0] == "dev/settledlands/chest/ChestLock397"
                    for r in event_refs):
-            problems.append("ChestGraph396Events never asks whether this click is a crack - the «взлом»"
-                            " chain would never know it was one")
-        if not any(r[1] == "revoke" and r[0] == "dev/settledlands/chest/ChestLock397"
-                   for r in event_refs):
-            problems.append("ChestGraph396Events never consumes the lifted lock - every later opening of"
-                            " that chest would run the «взлом» chain")
+            problems.append("ChestGraph396Events never takes the crack - the «взлом» chain would not know"
+                            " this click was one, and every later opening of that chest would run it again")
         if not any(r[1] == "run" and r[2].endswith("Z)Z") for r in event_refs):
             problems.append("ChestGraph396Events does not pass the crack on to ChestGraph396#run")
         pending, _pending_refs = refs_of(zf.read(CHEST_PENDING))

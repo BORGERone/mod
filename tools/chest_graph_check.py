@@ -88,6 +88,8 @@ NET = "dev/settledlands/chest/ChestNet397.class"
 PANEL_PACKET = "dev/settledlands/chest/ChestNet397$Panel.class"
 SOLVED_PACKET = "dev/settledlands/chest/ChestNet397$Solved.class"
 PANEL_SCREEN = "dev/settledlands/door/HackPanel377.class"
+OPEN_CLASS = "dev/settledlands/chest/ChestOpen401.class"
+READY_PACKET = "dev/settledlands/chest/ChestNet397$Ready.class"
 ROWS = "dev/settledlands/mixin/NpcChestRows396Mixin.class"
 CLIENT = "dev/settledlands/npc/client/ChestGraphClient396.class"
 PASS = "dev/settledlands/npc/RadiusPass354.class"
@@ -157,8 +159,8 @@ PROBE_CLASS = "ChestGraph396Probe"
 LOCK_PROBE = ROOT / "tools" / "harness" / "ChestHack397Probe.java"
 LOCK_PROBE_CLASS = "ChestHack397Probe"
 # Build 400: the numbers of the card reach the panel, and the lift of a solved panel lasts one click.
-OPEN_PROBE = ROOT / "tools" / "harness" / "ChestOpen400Probe.java"
-OPEN_PROBE_CLASS = "ChestOpen400Probe"
+OPEN_PROBE = ROOT / "tools" / "harness" / "ChestOpen401Probe.java"
+OPEN_PROBE_CLASS = "ChestOpen401Probe"
 
 EXPECT = {
     "TYPE": "own=1 stock=false",
@@ -178,6 +180,24 @@ EXPECT_LOCK = {
     "STOCK": "untouched=true",
     "NOTE": "fields=6",
 }
+
+
+def instruction_listing(data, method_name):
+    """The instructions of one method, in order, as one searchable text.
+
+    <p>Ref order is the only order a jar has, and the order of the two calls in `solve` is the whole of the
+    author's report about the chest: chain first, `chest_ready` second.</p>
+    """
+    parsed = disasm.parse_class(data)
+    cp = parsed["cp"]
+    for _acc, ni, di, attrs in parsed["methods"]:
+        if cp[ni][1] != method_name:
+            continue
+        code = disasm.code_of(attrs, cp)
+        if code is None:
+            return None
+        return disasm.disasm(code["code"], cp)[0]
+    return None
 
 
 def refs_of(data):
@@ -437,30 +457,78 @@ def structural(jar):
         # builds of `ServerPlayer#openMenu(state.getMenuProvider(...))` produced no window in the author's
         # game («по прежнему после успешного взлома сундук не открывается»), so the rule is now: the answer
         # lifts the lock of that one chest, and the panel clicks the chest through the game's own handler.
-        if not any(r[1] == "grant" and r[0] == "dev/settledlands/chest/ChestLock397" for r in net_refs):
-            problems.append("ChestNet397 does not lift the lock of the chest a panel was solved for - the"
-                            " click that follows would be refused and the panel would open again")
+        # Build 401: the lift is a crack keyed by player and chest (a «Реплика» takes longer than ten
+        # seconds), and the chest is clicked only after the chain of that chest has had its say.
+        if not any(r[1] == "crack" and r[0] == "dev/settledlands/chest/ChestLock397" for r in net_refs):
+            problems.append("ChestNet397 does not crack the chest a panel was solved for - the click that"
+                            " follows would be refused and the panel would open again")
+        if any(r[1] == "grant" for r in net_refs):
+            problems.append("ChestNet397 still lifts a lock with ChestLock397#grant - the ten-second lift"
+                            " of build 400 is gone (build 401); the crack is keyed by player and chest")
+        # The order is the report («сначала открывается инвентарь а потом проигрывается реплика»), and the
+        # order of a method is its instruction stream - a constant-pool set has no order at all.
+        solve = instruction_listing(zf.read(NET), "solve")
+        if solve is None:
+            problems.append("ChestNet397 has no solve(...) - a solved panel could not answer its chest")
+        else:
+            run_at = solve.find("ChestGraph396.runCrack(")
+            ready_at = solve.find("ChestNet397.sendReady(")
+            if run_at < 0:
+                problems.append("ChestNet397#solve never runs the «взлом» chain - the «Реплика» of that"
+                                " socket would never be heard")
+            if ready_at < 0:
+                problems.append("ChestNet397#solve never tells the client the chest is ready - the chest"
+                                " would never open")
+            if run_at >= 0 and ready_at >= 0 and run_at > ready_at:
+                problems.append("ChestNet397#solve tells the client the chest is ready BEFORE it runs the"
+                                " «взлом» chain - that is the order the author reported as wrong («сначала"
+                                " открывается инвентарь а потом проигрывается реплика»)")
         if any(r[1] == "openMenu" and r[0] == "net/minecraft/server/level/ServerPlayer"
                for r in net_refs):
             problems.append("ChestNet397 opens a menu from the server again - the path that never opened a"
                             " chest in the author's game (build 400)")
         events_400, event_refs_400 = refs_of(zf.read(EVENTS))
-        for wanted, why in (("granted", "the click that follows a solved panel must be let through"),
-                            ("revoke", "the lifted lock belongs to exactly one click")):
+        # Build 401: the crack is asked (cracked) and taken (takeCrack) - the take is what spends it.
+        # takeCrack answers both questions at once - is this click a crack, and is that crack now spent -
+        # and answering them in one call is what makes the click and the spend the same moment.
+        for wanted, why in (("takeCrack", "the click that follows a solved panel must be let through, and"
+                                          " the crack must belong to exactly one click"),):
             if not any(r[1] == wanted and r[0] == "dev/settledlands/chest/ChestLock397"
                        for r in event_refs_400):
                 problems.append("ChestGraph396Events never calls ChestLock397#%s - %s" % (wanted, why))
         if not any(r[2].endswith("Z)V") and r[1] == "remember" for r in event_refs_400):
             problems.append("ChestGraph396Events does not pass the crack on to remember(..., boolean) - a"
                             " chest opened by a cracked panel would run the «открытие» chain")
+        # Build 401: the click moved out of the panel and into ChestOpen401, because the panel's close came
+        # BEFORE the «взлом» chain. The panel must not click its chest at all any more.
         panel_400, panel_refs_400 = refs_of(zf.read(PANEL_SCREEN))
-        if not any(r[1] == "useItemOn"
-                   and r[0] == "net/minecraft/client/multiplayer/MultiPlayerGameMode"
-                   for r in panel_refs_400):
-            problems.append("HackPanel377 never clicks its chest through MultiPlayerGameMode#useItemOn - the"
-                            " solved panel would have no way to open anything")
-        if not any(r[1] == "BlockHitResult" or "BlockHitResult" in r[2] for r in panel_refs_400):
-            problems.append("HackPanel377 does not build the BlockHitResult a click needs")
+        if any(r[1] == "useItemOn" for r in panel_refs_400):
+            problems.append("HackPanel377 still clicks its chest - that click opened the window before the"
+                            " «Реплика» of the «взлом» chain, which is the report of build 401")
+        if OPEN_CLASS not in names:
+            problems.append("the jar has no %s - nothing would open a cracked chest" % OPEN_CLASS)
+        else:
+            opener, opener_refs = refs_of(zf.read(OPEN_CLASS))
+            for name in ("arm", "watch", "clear"):
+                if name not in methods_of(opener):
+                    problems.append("ChestOpen401 has no %s() - the click of a cracked chest has no door"
+                                    " through it" % name)
+            if not any(r[1] == "useItemOn"
+                       and r[0] == "net/minecraft/client/multiplayer/MultiPlayerGameMode"
+                       for r in opener_refs):
+                problems.append("ChestOpen401 never clicks the chest through MultiPlayerGameMode#useItemOn -"
+                                " the solved panel would have no way to open anything")
+            if not any("BlockHitResult" in r[2] for r in opener_refs):
+                problems.append("ChestOpen401 does not build the BlockHitResult a click needs")
+            if not any(r[1] == "screen" and r[0] == "net/minecraft/client/Minecraft"
+                       for r in opener_refs):
+                problems.append("ChestOpen401 never reads Minecraft#screen - it cannot tell the chain's"
+                                " window from a closed one, and the click would fire on top of the«Реплика»")
+        if READY_PACKET not in names:
+            problems.append("the jar has no chest_ready packet - the server could not tell the client when"
+                            " the chain of a cracked chest is done")
+        elif b"chest_ready" not in zf.read(READY_PACKET):
+            problems.append("%s does not declare chest_ready" % READY_PACKET)
         for name in (PANEL_PACKET, SOLVED_PACKET):
             if name not in names:
                 problems.append("the jar has no %s" % name)
@@ -498,11 +566,14 @@ def structural(jar):
 
 
 EXPECT_OPEN = {
-    "CARD_BEFORE": "keys=6 sec=5 diff=1",
-    "CARD_AFTER": "keys=9 sec=3 diff=2",
-    "LIFT_BEFORE": "false",
-    "LIFT_GRANTED": "true",
-    "LIFT_SPENT": "cracked=true after=false again=false",
+    "CRACK_BEFORE": "false",
+    "CRACK_ONE": "true",
+    "CRACK_OTHER": "false",
+    "CRACK_SPENT": "cracked=true take1=true take2=false",
+    "ARM_BEFORE": "false",
+    "ARM_READY": "true",
+    "ARM_CLEARED": "false",
+    "WATCH_QUIET": "ok",
 }
 
 
@@ -573,7 +644,7 @@ def main(argv):
           " outputs as sockets on it, the stock palette and the stock interpreter - and the lock of that"
           " card is a setting: three sliders and a toggle the graph can edit, honoured by the chest's own"
           " panel; its card's three sliders write the numbers that panel asks for, and the lift of a solved"
-          " panel is spent by the click that follows it)" % jar.name)
+          " panel is spent by the click that follows it, and that click waits for the chain)" % jar.name)
     return 0
 
 

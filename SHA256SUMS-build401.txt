@@ -1,0 +1,4 @@
+# SettledLands build 401 - 0.8.0-build401-chain-first
+# base: settledlands-0.8.0-build400-chest-open.jar
+ce074e6b0b84ce42ba7f27e34228e938968d785b67cabd77b3b14499ac67840b  settledlands-0.8.0-build401-chain-first.jar
+8cbb0c0881495868a72f3e0ef630cf716e113113f3eed8355dd886ca2d72aa59  SettledLands-Build401-ChainFirst-Source.zip

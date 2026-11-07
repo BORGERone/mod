@@ -256,7 +256,7 @@ public final class BlockTrigger351 {
             if (start < 0 || graph.get(start) == null) return false;  // no start node: nothing happens
             String key = BlockTriggerStore351.key(level, pos);
             walk(player, graph, start, new HashSet<>(),
-                    new BlockTalk358.Where(level, key, pos.getX(), pos.getY(), pos.getZ()));
+                    new BlockTalk358.Where(level, key, pos.getX(), pos.getY(), pos.getZ()), null);
             return true;
         } catch (Throwable failure) {
             fail(failure);
@@ -277,7 +277,7 @@ public final class BlockTrigger351 {
             visited.add(node.id);
             act(source, node);
             fireTriggers(source, graph, node, visited);
-            if (node.next >= 0) walk(source, graph, node.next, visited, where);
+            if (node.next >= 0) walk(source, graph, node.next, visited, where, null);
             return true;
         } catch (Throwable failure) {
             fail(failure);
@@ -303,7 +303,30 @@ public final class BlockTrigger351 {
             BlockTalk358.Where where) {
         if (graph == null || startId < 0) return 0;
         try {
-            return walk(player, graph, startId, new HashSet<>(), where);
+            return walk(player, graph, startId, new HashSet<>(), where, null);
+        } catch (Throwable failure) {
+            fail(failure);
+            return 0;
+        }
+    }
+
+    /**
+     * Build 401: run a chain and say whether it <b>stopped at a window</b> instead of running to its end.
+     *
+     * <p>A «Реплика» opens the stock dialogue window and the chain waits for the player to close it; a
+     * «Кнопка» waits for his click; a «Катсцена» for the playback. A caller that has to do something
+     * <b>after</b> the chain - the chest of build 401 opens itself after the «взлом» chain has had its say -
+     * cannot use the step count for that: one step that opened a window and one step that finished look
+     * identical from the outside. So the walk is asked directly, and {@code stopped[0]} is set when a window
+     * was opened and the player is the one who ends the chain.</p>
+     *
+     * @return how many nodes were stepped over - 0 when there was nothing to run
+     */
+    public static int startReportingWindow(ServerPlayer player, NpcDialogueGraph graph, int startId,
+            BlockTalk358.Where where, boolean[] stopped) {
+        if (graph == null || startId < 0) return 0;
+        try {
+            return walk(player, graph, startId, new HashSet<>(), where, stopped);
         } catch (Throwable failure) {
             fail(failure);
             return 0;
@@ -318,7 +341,7 @@ public final class BlockTrigger351 {
             BlockTalk358.Where where) {
         if (player == null || graph == null) return;
         try {
-            walk(player, graph, start, new HashSet<>(), where);
+            walk(player, graph, start, new HashSet<>(), where, null);
         } catch (Throwable failure) {
             fail(failure);
         }
@@ -331,9 +354,17 @@ public final class BlockTrigger351 {
      *
      * <p>Build 393: it returns how many nodes it stepped over, so a caller can say whether a chain had
      * anything to do - {@link #start} hands that number back to the door.</p>
+     *
+     * <p>Build 401: there is one walk, not two. {@code stopped} is the only difference between the caller
+     * that cares where a chain ended and the callers that do not, and a second overload whose body was one
+     * line of delegation cost this build a gate and any reader a lookup: {@code null} says "nobody is
+     * asking" better than a method of the same name.</p>
+     *
+     * @param stopped when not null, {@code stopped[0]} is set to true the moment a window, a set of buttons
+     *                or a scene takes the chain over, so the caller knows the rest happens after the player
      */
     private static int walk(ServerPlayer player, NpcDialogueGraph graph, int start,
-            Set<Integer> visited, BlockTalk358.Where where) {
+            Set<Integer> visited, BlockTalk358.Where where, boolean[] stopped) {
         int curId = start;
         int steps = 0;
         while (curId >= 0 && visited.size() < MAX_STEPS && visited.add(curId)) {
@@ -345,7 +376,10 @@ public final class BlockTrigger351 {
                 // The block's voice: the stock dialogue window with the camera on the block, and the
                 // chain waits for that window to be closed (BlockTalk358#pick continues it). The chat
                 // below is only the fallback for when no window can be shown at all.
-                if (BlockTalk358.say(player, graph, cur, where)) return steps;
+                if (BlockTalk358.say(player, graph, cur, where)) {
+                    if (stopped != null) stopped[0] = true;
+                    return steps;
+                }
                 say(player, graph, cur);
                 act(player, cur);
                 fireTriggers(player, graph, cur, visited);
@@ -358,7 +392,10 @@ public final class BlockTrigger351 {
                 // stops here; a node with no usable button is only a step of the chain.
                 act(player, cur);
                 fireTriggers(player, graph, cur, visited);
-                if (BlockTalk358.choices(player, graph, cur, where)) return steps;
+                if (BlockTalk358.choices(player, graph, cur, where)) {
+                    if (stopped != null) stopped[0] = true;
+                    return steps;
+                }
                 curId = cur.next;
                 continue;
             }
@@ -367,7 +404,10 @@ public final class BlockTrigger351 {
                 // waits for the playback to finish - RadiusPass354 polls it and walks on from next.
                 act(player, cur);
                 fireTriggers(player, graph, cur, visited);
-                if (playCutscene(player, graph, cur, where)) return steps;
+                if (playCutscene(player, graph, cur, where)) {
+                    if (stopped != null) stopped[0] = true;
+                    return steps;
+                }
                 curId = cur.next;
                 continue;
             }

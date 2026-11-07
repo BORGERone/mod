@@ -9,7 +9,11 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.phys.AABB;
 
-public class Level {
+/**
+ * Build 401: {@code Level} is a {@code LevelAccessor}, because the game's is - and a block event hands back the
+ * interface, so an {@code instanceof ServerLevel} on that answer has to be possible.
+ */
+public class Level implements LevelAccessor {
     public boolean isClientSide;
     public boolean hasChunkAt(BlockPos pos) { return true; }
     public long getGameTime() { return 0; }

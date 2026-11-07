@@ -132,8 +132,13 @@ def structural(jar):
         else:
             lines = walk.splitlines()
             call = next(i for i, line in enumerate(lines) if "BlockTrigger351.say(" in line)
-            guard = "\n".join(lines[max(0, call - 14):call])
-            if "Node.typeI" not in guard or ("ifne" not in guard and "if_icmpne" not in guard):
+            # Build 401: the window is instruction distance, and this build put the "this chain stopped at a
+            # window" report inside the same branch as the line node (the chest needs to know whether a
+            # «Реплика» took the chain over). The type check therefore sits further from the say() call than
+            # it used to - 14 instructions is not a rule, "the node's type was checked in this branch" is.
+            guard = "\n".join(lines[max(0, call - 40):call])
+            if "Node.typeI" not in guard or ("ifne" not in guard and "if_icmpne" not in guard
+                                             and "ifeq" not in guard):
                 problems.append("say() is not reached through the node type - the walk could speak "
                                 "for a node that is not a line:\n%s" % guard)
             window = next((i for i, line in enumerate(lines) if "BlockTalk358.say(" in line), -1)

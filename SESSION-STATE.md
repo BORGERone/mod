@@ -1881,6 +1881,45 @@ base 398, two classes replaced (`CardEventPin398Mixin`, `NpcChestRows396Mixin`),
   nothing; never name a mixin helper the same as another mixin's helper on the same target; two mixins' synthetic
   lambdas must not share name+descriptor; and **a green structural gate is not a running game**.
 
+## Build 401 — the «взлом» chain speaks first, the door's «открытие» always speaks, ESC works
+
+`settledlands-0.8.0-build401-chain-first.jar` (603 entries, 553 classes, 3 642 737 B, sha256
+`ce074e6b…67840b`), base 400, **9 classes replaced, 4 added**, source zip
+`SettledLands-Build401-ChainFirst-Source.zip` (551 entries, sha256 `8cbb0c08…2aa59`), patch script
+`tools/patch_build401.py`, class tree `build303-src/out401`.
+
+- **The root cause found on the way (and it is the cause of report 2, not a side note):** the compile-time
+  mirror `PlayerInteractEvent` declared `getEntity()` returning `Entity`, while the game's method is
+  `PlayerEvent`'s and returns `Player`. Four classes compiled against the wrong descriptor -
+  `ChestGraph396Events`, `DoorEvents368`, `DoorGraph382Events`, `BlockTriggerEvents351` - and every
+  `event.getEntity()` threw `NoSuchMethodError` **inside the handler's own `try`**. Same for
+  `BlockEvent#getLevel()`: the game declares `LevelAccessor`, the mirror said `Level` (used by the chest/door
+  break guards). A handler that dies on its first line is "nothing happens", which is exactly the report.
+  The base mod's own `GuideDialogue`/`PossessionSystem` call the `Player` descriptor - that is what settled it.
+- **New gate 35:** `tools/event_getter_check.py` - one event getter, one descriptor per jar (mod and base mod
+  together). **It fails on build 400** on `getEntity` and `getLevel`, and is green on 401.
+- **Report 1 (chest order «реплика → окно»):** the click left the panel. `ChestNet397#solve` now: crack
+  (`ChestLock397.crack(player, key)`, `CRACK_MS = 600_000`) → `ChestGraph396#runCrack` →
+  `BlockTrigger351#startReportingWindow` (new, `stopped[0]` says a window took the chain over) → **then**
+  `settledlands:chest_ready` (`ChestNet397$Ready`, `key|wait`). Client `ChestOpen401` (`arm/armed/clear/watch`,
+  `TTL 60 s`, `WINDOW_GRACE 5 s`, `QUIET_TICKS 2`) delivers the 400 `useItemOn` click only when the chain's
+  window is gone; `ChestOpenWatch401` (`ClientTickEvent.Post`) drives it. `ChestGraph396Events` no longer runs
+  the «взлом» chain on window close (it would speak twice). Action bar: «Замок снят: сундук откроется сам».
+- **Report 2 (door «открытие» silent):** the mixin leg stays, and now logs (`DoorUse373Mixin is LIVE`,
+  "saw the door go shut → open"); a second leg that no mixin can remove watches the click:
+  `DoorEvents368#onRightClick` (unlocked, shut) → `DoorSignal398#watch` → `ServerTickEvent.Post` re-reads the
+  door and runs the chain if it opened. Both legs share `GUARD_MS = 250`. Every reason the chain can decline is
+  logged once, including "the card has nothing wired to its «открытие» socket".
+- **Report 3 (ESC «через раз»):** the solved panel's hold is timed in `tick()` and `render()` on the hardware
+  (`InputConstants.isKeyDown`, helper `escHeldTick`/`settledlands$escDown`), `ESC_HOLD_MS` 1200 → **800**, drawn
+  as a percentage; `keyPressed` no longer times it; `settledlands$askAgain` only reports, never resends (a
+  resend would run the «взлом» chain twice).
+- **Probe:** `tools/harness/ChestOpen401Probe.java` → `CRACK_ONE true`, `CRACK_OTHER false`,
+  `CRACK_SPENT cracked=true take1=true take2=false`, `ARM_READY true`, `ARM_CLEARED false`,
+  `WATCH_QUIET ok`. Order «chain → ready» is asserted on the **instruction order** of `ChestNet397#solve`.
+- **Verified:** `verify_jar --base 400` PASS (0 new external refs; `Screen#tick()` added to
+  `CONFIRMED_EXTERNAL`), all **35** gates green, `mixin_clash_check` green (1 documented exception).
+
 ## Build 400 — the chest's settings reach its panel, and a solved panel opens the chest
 
 `settledlands-0.8.0-build400-chest-open.jar` (599 entries, 549 classes, 3 634 462 B, sha256 `1eaff1a7…f5012`),

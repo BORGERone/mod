@@ -179,6 +179,15 @@ public final class DoorEvents368 {
                     // hack - a solved lock panel (DoorHack377) - and an unlocked door has no panel to
                     // solve, so a plain click stays a plain click: vanilla opens the door and the graph
                     // is not touched at all.
+                    //
+                    // Build 401: except that this IS the moment the author wired his «Реплика» to. The
+                    // click on a shut door is handed to DoorSignal398, which reads the door once more on
+                    // the next tick and runs the «открытие» chain if the click opened it. This leg does
+                    // not depend on a mixin matching this game version - the event is the game's own -
+                    // which is why the socket of build 398 cannot be silent any more.
+                    if (!Doors368.anyOpen(server, pos) && event.getEntity() instanceof ServerPlayer clicker) {
+                        DoorSignal398.watch(clicker, server, pos);
+                    }
                     return;
                 }
                 // A locked door is not a door for a player: no opening, no closing, no sound of a

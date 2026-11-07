@@ -2,10 +2,6 @@ package dev.settledlands.door;
 
 import com.mojang.blaze3d.platform.InputConstants;
 import dev.settledlands.chest.ChestNet397;
-import net.minecraft.core.Direction;
-import net.minecraft.world.InteractionHand;
-import net.minecraft.world.phys.BlockHitResult;
-import net.minecraft.world.phys.Vec3;
 import java.util.Random;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -92,7 +88,7 @@ public class HackPanel377 extends Screen {
      * do it - that is the whole point of the build - but a key that is stuck down in hardware must not
      * leave the player locked inside a panel either.
      */
-    private static final long ESC_HOLD_MS = 1200L;
+    private static final long ESC_HOLD_MS = 800L;
 
     private static final int MIN_BUTTONS = 4;
     private static final int MAX_BUTTONS = 10;
@@ -145,8 +141,17 @@ public class HackPanel377 extends Screen {
      */
     private final java.util.Set<Integer> pressed = new java.util.LinkedHashSet<>();
 
-    /** When ESC went down after the hack was accepted - the escape hatch needs a deliberate hold. */
-    private long escDownAt;
+    /**
+     * Build 401: since when ESC is held down after the hack was accepted - the escape hatch needs a
+     * deliberate hold.
+     *
+     * <p>The hold used to be measured from the {@code keyPressed} events, which only repeat while the window
+     * manager feels like repeating them: on the author's machine ESC closed the panel «через раз» («проблемы с
+     * закрытием взлома на ESC, срабатывает через раз»). The key is now read on the <b>hardware</b> every tick
+     * ({@code InputConstants#isKeyDown}), the same call the panel already trusts for the keys it holds, so a
+     * hold is a hold whether or not a repeat event ever arrives.</p>
+     */
+    private long escHeldSince;
 
     /**
      * Build 398: when the answer went out and how many times it has been sent. A chest's prize is a window
@@ -158,18 +163,18 @@ public class HackPanel377 extends Screen {
     private int asked;
 
     /**
-     * Build 400: did this panel already deliver the click that opens its chest?
+     * Build 401: the panel does not click its chest any more - {@code ChestOpen401} does.
      *
-     * <p>The chest of a solved panel is opened by the player's own click and by nothing else - three builds
-     * of opening a menu from the server produced no window in the author's game («по прежнему после успешного
-     * взлома сундук не открывается»). The server lifts that chest's lock when it accepts the answer, and this
-     * panel then clicks the chest for the player, through the game's own interaction handler. One panel, one
-     * click.</p>
+     * <p>Build 400 opened the chest here, in {@code onClose}, and that was the first mechanism in this story
+     * that worked. It also opened the chest <b>before</b> the «взлом» chain had said a word, which is the
+     * author's report «сначала открывается инвентарь а потом проигрывается реплика». The click itself did not
+     * change; <b>who decides the moment</b> did: the server runs the chain first and then says
+     * {@code settledlands:chest_ready}, and the client clicks when the chain's window is gone. One panel, one
+     * chain, one click - and the chain comes first.</p>
      */
-    private boolean chestClicked;
-
-    /** A resend is only worth it while nothing has opened: a second ask cannot close a window twice. */
     private static final long ASK_AGAIN_MS = 1200L;
+
+    /** How many times the absence of a window is written to the log - a report, not a flood. */
     private static final int ASK_TIMES = 2;
 
     /**
@@ -348,8 +353,8 @@ public class HackPanel377 extends Screen {
             // nothing else; the door stays shut. After it, the panel has to leave the player free of
             // the keyboard before it goes, so ESC is swallowed unless it is held on purpose.
             if (!solved) return super.keyPressed(keyCode, scanCode, modifiers);
-            if (escDownAt == 0L) escDownAt = System.currentTimeMillis();
-            if (System.currentTimeMillis() - escDownAt >= ESC_HOLD_MS) this.onClose();
+            // Build 401: the hold is timed in tick(), on the hardware. Here ESC is only swallowed, so the
+            // game never sees an ESC that belongs to the panel.
             return true;
         }
         if (keyCode >= 0) pressed.add(Integer.valueOf(keyCode));
@@ -360,7 +365,6 @@ public class HackPanel377 extends Screen {
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
         if (keyCode == ESC) {
-            escDownAt = 0L;
             if (!solved) return super.keyReleased(keyCode, scanCode, modifiers);
             return true;
         }
@@ -389,14 +393,17 @@ public class HackPanel377 extends Screen {
         if (asked >= ASK_TIMES || chestKey == null || chestKey.isEmpty()) return;
         if (now - answeredAt < ASK_AGAIN_MS) return;
         if (settledlands$windowOpen()) {
-            asked = ASK_TIMES;                       // it arrived: no more asking
+            asked = ASK_TIMES;                       // it arrived: nothing to report
             return;
         }
         answeredAt = now;
         asked++;
-        LOG.info("chest: no window after " + (ASK_AGAIN_MS / 1000L) + " s of the answer - asking again for "
-                + chestKey + " (" + asked + "/" + ASK_TIMES + ")");
-        ChestNet397.sendSolved(chestKey);
+        // Build 401: a report, never a resend. The answer is sent once, because sending it again would run the
+        // chest's «взлом» chain a second time - and that chain now plays BEFORE the chest opens, so a repeated
+        // ask would put a second «Реплика» in front of a chest that is already waiting for one click.
+        LOG.info("chest: no window " + (ASK_AGAIN_MS / 1000L) + " s after the answer for " + chestKey
+                + " - the chain of that chest may have nothing to show; the click comes when the server says"
+                + " the chain is done (" + asked + "/2)");
     }
 
     /** True when a container of any kind is open - the sign that the chest's window really arrived. */
@@ -427,44 +434,79 @@ public class HackPanel377 extends Screen {
             // a close must never throw
         }
         super.onClose();
-        // Build 400: a solved chest's panel is the last thing between the player and his chest, so the click
-        // that opens it is delivered here - once, from an empty screen, through the game's own handler.
-        settledlands$clickTheChest();
+        // Build 401: nothing is clicked here. The chest of a solved panel is opened once the server's
+        // «взлом» chain has had its say (ChestOpen401); a click from this close would open the chest on top of
+        // the «Реплика» the author wired for exactly this moment.
     }
 
     /**
-     * Build 400: click the chest this panel was solved for.
+     * Build 401: the escape hatch of a solved panel, measured on the hardware.
      *
-     * <p>This is the whole of the chest's opening now. The server lifts the lock ({@code ChestNet397#solve}),
-     * and the game opens the chest when it is clicked - the path that never once failed in the author's game.
-     * The call goes to {@code MultiPlayerGameMode#useItemOn}, the same entry the client uses for a real
-     * right-click, so the server checks reach, sneaking and the lock exactly as it does for a human click.</p>
-     *
-     * <p>Three refusals: only a chest, only once, and never on top of something the player already has open.</p>
+     * <p>A solved panel closes itself the moment every key is up, and that is the normal way out. The escape
+     * hatch exists for the other case - a key the keyboard never reports as released - and it is a deliberate
+     * hold of ESC, not a tap: a tap is how a player leaves a screen, and this screen must not be left before
+     * its answer is out. The hold is read from {@code InputConstants#isKeyDown} on every call, because the
+     * {@code keyPressed} repeats it used to rely on arrived «через раз» and the panel with them.</p>
      */
-    private void settledlands$clickTheChest() {
-        if (!chest || chestClicked || pos == null) return;
-        chestClicked = true;
+    @Override
+    public void tick() {
+        super.tick();
+        escHeldTick();
+    }
+
+    /**
+     * The same question, asked again from {@code render}: a screen's tick is the game's business, its frame is
+     * not. Two chances per frame at a key hold cost nothing and remove the one way this fix could be invisible.
+     */
+    private void escHeldTick() {
+        try {
+            if (!solved || escHoldDisabled()) {
+                escHeldSince = 0L;
+                return;
+            }
+            long now = System.currentTimeMillis();
+            if (!settledlands$escDown()) {
+                escHeldSince = 0L;
+                return;
+            }
+            if (escHeldSince == 0L) escHeldSince = now;
+            if (now - escHeldSince >= ESC_HOLD_MS) {
+                escHeldSince = 0L;
+                LOG.info((chest ? "chest" : "door") + ": ESC was held for " + ESC_HOLD_MS
+                        + " ms - the panel leaves, the answer is already with the server");
+                this.onClose();
+            }
+        } catch (Throwable ignored) {
+            // a frame must never cost the screen
+        }
+    }
+
+    /** True when the hardware cannot be asked (no window, no client) - the hold simply does not count. */
+    private boolean escHoldDisabled() {
         try {
             Minecraft mc = Minecraft.getInstance();
-            if (mc == null) return;
-            mc.execute(() -> {
-                try {
-                    if (mc.player == null || mc.gameMode == null) return;
-                    if (mc.screen != null) return;                                   // something is in the way
-                    if (mc.player.containerMenu != mc.player.inventoryMenu) return;  // the chest is already up
-                    mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
-                            new BlockHitResult(new Vec3(pos.getX() + 0.5D, pos.getY() + 0.5D,
-                                    pos.getZ() + 0.5D), Direction.UP, pos, false));
-                    LOG.info("chest: the panel delivered its click to the chest at " + pos);
-                } catch (Throwable failure) {
-                    LOG.warn("chest: the panel could not click the chest at " + pos
-                            + " - one more click by hand opens it", failure);
-                }
-            });
-        } catch (Throwable ignored) {
-            // never let a click cost the screen
+            return mc == null || mc.getWindow() == null;
+        } catch (Throwable failure) {
+            return true;
         }
+    }
+
+    /** Is ESC down right now, as the keyboard itself says? */
+    private boolean settledlands$escDown() {
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null || mc.getWindow() == null) return false;
+            return InputConstants.isKeyDown(mc.getWindow().getWindow(), ESC);
+        } catch (Throwable failure) {
+            return false;
+        }
+    }
+
+    /** How much of the hold is behind the player, 0..1 - what the panel draws so the hold is not a guess. */
+    private float settledlands$escHeld() {
+        if (escHeldSince == 0L) return 0.0F;
+        float part = (System.currentTimeMillis() - escHeldSince) / (float) ESC_HOLD_MS;
+        return Math.max(0.0F, Math.min(1.0F, part));
     }
 
     private boolean allReleased() {
@@ -555,6 +597,8 @@ public class HackPanel377 extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
+        // Build 401: the ESC hold is asked here as well as in tick() - see escHeldTick().
+        escHeldTick();
         long now = System.currentTimeMillis();
         // Build 387: a solved panel has no clock - the keys are the only thing left to watch.
         if (!solved && now - rolledAt > this.rollMs) {
@@ -617,6 +661,14 @@ public class HackPanel377 extends Screen {
                     center, panelTop + 60, LABEL);
             graphics.drawCenteredString(this.font, Component.literal("ещё зажато: " + still),
                     center, panelTop + 80, SWAP);
+            // Build 401: the escape hatch shows itself. A hold that is measured but never drawn is the same
+            // «срабатывает через раз» as before - the player cannot tell a hold in progress from a dead key.
+            float escPart = settledlands$escHeld();
+            if (escPart > 0.0F) {
+                graphics.drawCenteredString(this.font,
+                        Component.literal("ESC: " + Math.round(escPart * 100.0F) + "% - панель уйдёт"),
+                        center, panelTop + 100, SWAP);
+            }
             graphics.drawCenteredString(this.font,
                     Component.literal("пока панель здесь, клавиатура заблокирована"),
                     center, panelTop + 100, DIM);

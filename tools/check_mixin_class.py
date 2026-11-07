@@ -810,6 +810,12 @@ CONFIRMED_EXTERNAL = {
      "Lnet/minecraft/core/Direction;"):
         "Build 400: the side the click of a solved panel lands on - 1.21 NeoForge javadoc,"
         " `public static final Direction UP`",
+    # Build 401, the ESC hold of the hack panel. `Screen#tick()` is the tick vanilla gives the screen in
+    # front (`Minecraft#tick` calls it for `this.screen`), public and present since 1.13 - the panel times
+    # its hold there because `keyPressed` repeats are the window manager's business and arrived «через раз».
+    ("net/minecraft/client/gui/screens/Screen", "tick", "()V"):
+        "Build 401: the per-tick hook of a screen - vanilla `Minecraft#tick` calls `Screen#tick()` for the"
+        " screen in front",
 }
 
 

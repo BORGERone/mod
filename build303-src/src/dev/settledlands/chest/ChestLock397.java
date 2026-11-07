@@ -227,36 +227,59 @@ public final class ChestLock397 {
      * window does not open, the lock is lifted for that chest for a few seconds and the very next click opens
      * it through the game's own path, which is the path this mod has never had trouble with.</p>
      */
-    private static final long GRANT_MS = 10_000L;
+    /**
+     * Build 401: how long a solved panel's crack waits for the click that spends it.
+     *
+     * <p>Ten seconds was right while the click came the instant the panel closed. It is not right any more: the
+     * chest's «взлом» chain now runs <b>before</b> the chest opens («после успешного взлома проиграется
+     * реплика, после чего откроется инвентарь сундука»), and a «Реплика» is a window the player reads at his own
+     * pace. Ten seconds of reading would have turned the crack into an expired one and opened the lock panel
+     * again. Ten minutes is longer than any reply of this mod and still not "for ever".</p>
+     */
+    private static final long CRACK_MS = 600_000L;
 
-    private static final java.util.Map<String, Long> GRANTED =
+    /** {@code player@key} -> when the panel was solved. One crack belongs to one player and one chest. */
+    private static final java.util.Map<String, Long> CRACKED =
             new java.util.concurrent.ConcurrentHashMap<>();
 
-    /** Lifts the lock of one chest for {@code GRANT_MS}, for whoever clicks it next. */
-    public static void grant(String key) {
-        if (key == null || key.isEmpty()) return;
-        if (GRANTED.size() > 64) GRANTED.clear();
-        GRANTED.put(key, System.currentTimeMillis());
+    /**
+     * Build 401: this player has solved the panel of this chest - his next click on it is a <b>crack</b>.
+     *
+     * <p>Builds 398-400 kept a lift keyed by the <b>chest</b> alone and timed it at ten seconds: whoever clicked
+     * the chest inside that window got in, and the window was shorter than a «Реплика». Keying it by the player
+     * and the chest is both safer (nobody else's click can spend it) and enough time for the chain to play.</p>
+     */
+    public static void crack(String who, String key) {
+        if (who == null || who.isEmpty() || key == null || key.isEmpty()) return;
+        if (CRACKED.size() > 64) CRACKED.clear();
+        CRACKED.put(who + "@" + key, System.currentTimeMillis());
     }
 
     /**
-     * Build 400: the lifted lock has been used. The click that follows a solved panel is what opens the chest,
-     * and it is a <b>crack</b>; one crack, one click - a second opening inside the same ten seconds is an
-     * ordinary opening and must run the «открытие» chain, not «взлом» again.
+     * Was this click paid for by a solved panel of this chest? <b>Consumed here</b>: one crack, one click.
+     *
+     * <p>A second opening of the same chest is an ordinary opening and must run the «открытие» chain, and a
+     * crack that was never spent must not leave the chest open to anybody who walks past it later.</p>
      */
-    public static void revoke(String key) {
-        if (key == null || key.isEmpty()) return;
-        GRANTED.remove(key);
+    public static boolean takeCrack(String who, String key) {
+        if (who == null || who.isEmpty() || key == null || key.isEmpty()) return false;
+        Long at = CRACKED.remove(who + "@" + key);
+        return at != null && System.currentTimeMillis() - at <= CRACK_MS;
     }
 
-    /** True while a solved panel's fallback is still standing open for this chest. */
-    public static boolean granted(String key) {
-        if (key == null || key.isEmpty()) return false;
-        Long at = GRANTED.get(key);
+    /** Does this player still have an unspent crack on this chest? For the gate, never for the game. */
+    public static boolean cracked(String who, String key) {
+        if (who == null || who.isEmpty() || key == null || key.isEmpty()) return false;
+        Long at = CRACKED.get(who + "@" + key);
         if (at == null) return false;
-        if (System.currentTimeMillis() - at <= GRANT_MS) return true;
-        GRANTED.remove(key);
+        if (System.currentTimeMillis() - at <= CRACK_MS) return true;
+        CRACKED.remove(who + "@" + key);
         return false;
+    }
+
+    /** How many unspent cracks there are - the gate reads this to prove the click spends one. */
+    public static int cracks() {
+        return CRACKED.size();
     }
 
     /** Is the player still standing at the chest they solved the panel for? The door's own reach. */

@@ -13,7 +13,22 @@ import net.minecraft.world.level.Level;
  * {@code setCancellationResult}.
  */
 public class PlayerInteractEvent {
-    public Entity getEntity() { return null; }
+    /**
+     * Build 401: the clicker is a <b>player</b>, and the descriptor says so.
+     *
+     * <p>This mirror said {@code Entity} for four builds, and the jar believed it: every
+     * {@code event.getEntity()} in a block or door click path asked for
+     * {@code getEntity()Lnet/minecraft/world/entity/Entity;}, while the game's own method - through
+     * {@code PlayerEvent}, which narrows {@code EntityEvent}'s return type to {@code Player} - answers only
+     * {@code getEntity()Lnet/minecraft/world/entity/player/Player;}. The call therefore threw
+     * {@code NoSuchMethodError} inside the {@code try} of every click handler, and the handler stopped where it
+     * stood: a locked door was still refused (the cancel came first), a chest's crack was never read, and the
+     * author's reports - a door that opens by hand and says nothing, a chest whose «взлом» ran in the wrong
+     * order - are exactly what a click handler that dies halfway looks like. The base mod's own compiled
+     * classes call the {@code Player} descriptor on this very event ({@code GuideDialogue},
+     * {@code PossessionSystem}), which is what settled the question.</p>
+     */
+    public net.minecraft.world.entity.player.Player getEntity() { return null; }
     public Level getLevel() { return null; }
     public ItemStack getItemStack() { return null; }
     public void setCanceled(boolean canceled) {}

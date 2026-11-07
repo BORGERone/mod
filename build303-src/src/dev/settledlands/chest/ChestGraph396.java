@@ -433,6 +433,62 @@ public final class ChestGraph396 {
         }
     }
 
+    /**
+     * Build 401: run the chest's <b>«взлом»</b> chain the moment the panel is solved - before the chest opens.
+     *
+     * <p>The author's words: «Ожидаемое выполнение - после успешного взлома проиграется репика, после чего
+     * откроется инвентарь сундука. Но сейчас сначала открывается инвентарь а потом проигрывается реплика».
+     * Build 396 ran every chest chain when the window <b>closed</b>, and for an ordinary opening that is still
+     * right - he takes what he came for, the chest shuts, and the «Реплика» of «открытие» says its line with
+     * nothing in front of it. For a <b>crack</b> it is exactly backwards: the flavour of cracking a lock comes
+     * before the reward, and the author asked for that order in words.</p>
+     *
+     * <p>So a crack runs here, from the card's «взлом» socket, and the chest is opened afterwards - by the
+     * player's own click, delivered by the client once this chain has had its say ({@code ChestNet397#solve}
+     * sends {@code settledlands:chest_ready} with that answer). A graph of 396/397 has only the one socket: a
+     * crack falls back to it, so an older graph keeps working and its chain now plays before the opening
+     * instead of after it, which is the order its own author asked for.</p>
+     *
+     * @param stopped returned to the caller: {@code true} when the chain is waiting for the player to close a
+     *                window, {@code false} when it ran to its end - the client waits only in the first case
+     * @return how many nodes were stepped over, 0 when nothing is wired
+     */
+    public static int runCrack(ServerPlayer player, ServerLevel level, BlockPos pos, String key,
+            boolean[] stopped) {
+        if (stopped != null && stopped.length > 0) stopped[0] = false;
+        if (player == null || level == null || pos == null || key == null || key.isEmpty()) return 0;
+        try {
+            ChestGraph396Store store = ChestGraph396Store.get(level.getServer());
+            NpcDialogueGraph graph = store == null ? null : store.graph(key);
+            if (graph == null) return 0;
+            NpcDialogueGraph.Node start = hackChainStart(graph);
+            boolean fellBack = false;
+            if (start == null) {
+                start = chainStart(graph);
+                fellBack = start != null;
+            }
+            if (start == null) {
+                LOG.info("chest: " + key + " was cracked, but nothing is wired to the card's «взлом» socket -"
+                        + " the chest opens straight away");
+                return 0;
+            }
+            BlockTalk358.Where where = new BlockTalk358.Where(level, key,
+                    pos.getX(), pos.getY(), pos.getZ());
+            int stepped = BlockTrigger351.startReportingWindow(player, graph, start.id, where, stopped);
+            LOG.info("chest: " + key + " was cracked by " + player.getName().getString() + " - " + stepped
+                    + " node(s) stepped from the card's "
+                    + (fellBack ? "«открытие» socket (a graph of 396/397: the only socket it has)"
+                            : "«взлом» socket")
+                    + (stopped != null && stopped.length > 0 && stopped[0]
+                            ? ", the chain is waiting for the player before the chest opens"
+                            : ", the chest opens now"));
+            return stepped;
+        } catch (Throwable failure) {
+            fail(failure);
+            return 0;
+        }
+    }
+
     // ---- helpers ------------------------------------------------------------
 
     /** {@code 12 64 -30} - for messages, without the dimension. */

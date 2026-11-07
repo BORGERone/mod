@@ -95,6 +95,35 @@ public final class ChestNet397 {
         }
     }
 
+    // ---- server to client: the crack has had its say, open the chest --------
+
+    /**
+     * Build 401: «the chain of this crack is done - click the chest» - {@code key|wait}.
+     *
+     * <p>The author wanted the «взлом» chain to play <b>before</b> the chest's inventory, and the chest is
+     * opened by the player's own click (build 400's one thing that works). Those two together need one more
+     * packet: the server is the only side that knows when the chain has finished waiting - it is the side that
+     * runs the chain. {@code wait = 1} means "a window of the chain is in front of the player; click when it is
+     * gone", {@code wait = 0} means "the chain is over, click now". The client never guesses, and the chest can
+     * never open before the «Реплика» that was wired for it.</p>
+     *
+     * <p>One string, the shape of the two payloads next to it: {@code key|wait}.</p>
+     */
+    public record Ready(String data) implements CustomPacketPayload {
+
+        public static final CustomPacketPayload.Type<Ready> TYPE =
+                new CustomPacketPayload.Type<>(
+                        ResourceLocation.fromNamespaceAndPath("settledlands", "chest_ready"));
+
+        public static final StreamCodec<RegistryFriendlyByteBuf, Ready> STREAM_CODEC =
+                StreamCodec.composite(ByteBufCodecs.STRING_UTF8, Ready::data, Ready::new);
+
+        @Override
+        public CustomPacketPayload.Type<Ready> type() {
+            return TYPE;
+        }
+    }
+
     // ---- registration -------------------------------------------------------
 
     @SubscribeEvent
@@ -118,6 +147,14 @@ public final class ChestNet397 {
                     + "click and stay silent: " + failure);
         }
         try {
+            // Build 401: the answer to a solved panel - "open the chest now" or "after this window".
+            registrar.playToClient(Ready.TYPE, Ready.STREAM_CODEC,
+                    (payload, context) -> context.enqueueWork(() -> ready(payload, context)));
+        } catch (Throwable failure) {
+            LOG.warn("chest: the ready packet could not be registered - a cracked chest would wait for the"
+                    + " player's own click, which the action bar asks for anyway: " + failure);
+        }
+        try {
             // The work is handed to the main thread explicitly, the shape every payload of this mod and
             // of the base uses: a handler that touches the world from the network thread is a handler
             // that throws and is never seen again.
@@ -127,8 +164,8 @@ public final class ChestNet397 {
             LOG.warn("chest: the hacking packet could not be registered - a solved panel will change "
                     + "nothing: " + failure);
         }
-        note("chest: settledlands:chest_panel and settledlands:chest_hack registered (build 397 chest "
-                + "lock)");
+        note("chest: settledlands:chest_panel, settledlands:chest_hack and settledlands:chest_ready"
+                + " registered (chest lock, build 397; the ready word is build 401)");
     }
 
     // ---- server: tell one player about one panel ----------------------------
@@ -176,6 +213,24 @@ public final class ChestNet397 {
         }
         // Build 397: the chest's panel IS the door's panel. One screen, one keyboard rule, one way out.
         dev.settledlands.door.HackPanel377.openForChest(parts[0], pos, keys, seconds, difficulty);
+    }
+
+    /** Client half of the ready packet: click the chest, now or once the chain's window is gone. */
+    private static void ready(Ready payload, IPayloadContext context) {
+        if (payload == null || payload.data() == null) return;
+        String[] parts = payload.data().split("\\|");
+        if (parts.length != 2) {
+            LOG.warn("chest: a ready payload arrived with " + parts.length + " fields, expected 2 - nothing"
+                    + " opened");
+            return;
+        }
+        BlockPos pos = ChestGraph396Store.positionOf(parts[0]);
+        if (pos == null) {
+            LOG.warn("chest: a ready payload named " + parts[0] + " which is not a block position - nothing"
+                    + " opened");
+            return;
+        }
+        dev.settledlands.chest.ChestOpen401.arm(parts[0], pos, "1".equals(parts[1].trim()));
     }
 
     // ---- client: a solved panel asks the server to open the chest -----------
@@ -247,23 +302,37 @@ public final class ChestNet397 {
                         true);
                 return;
             }
-            // Build 400: the lock is lifted, and that is the whole of the unlock.
+            // Build 401: the chain FIRST, the chest after it.
             //
-            // 397 and 398 opened the chest's menu from here (`player.openMenu(state.getMenuProvider(...))`).
-            // It never worked in the author's game - three builds of «после успешного взлома сундук не
-            // открывается», with the answer arriving, every guard passing, and no window. So this build stops
-            // calling a menu from the server and uses the path a chest has never failed on: the player's own
-            // click. The lock of this chest is lifted for a few seconds here, and the client that solved the
-            // panel clicks the chest itself (HackPanel377) - the game opens it exactly as it opens an ordinary
-            // chest, because by then it IS an ordinary chest.
-            ChestLock397.grant(key);
+            // The order is the author's own: «после успешного взлома проиграется репика, после чего откроется
+            // инвентарь сундука». Build 396 ran a chest's chain when its window closed, which is right for an
+            // ordinary opening and backwards for a crack, and build 400's click opened the chest before the
+            // chain had said a word. So the «взлом» chain runs here, on the server, from the card's socket -
+            // and the client is told to click only when it has had its say.
+            String who = player.getName().getString();
+            ChestLock397.crack(who, key);
+            boolean[] waiting = new boolean[1];
+            int stepped = ChestGraph396.runCrack(player, level, pos, key, waiting);
+            boolean wait = waiting.length > 0 && waiting[0];
+            sendReady(player, key, wait);
             // Said out loud anyway: a player whose client could not click (a screen in the way, a sneak) must
             // know that the lock is off and that one more click is all that is left.
             player.displayClientMessage(Component.translatable("message.settledlands.chest.again"), true);
-            note("chest: the locked chest at " + pos + " was cracked by " + player.getName().getString()
-                    + " - its lock is lifted, the click that follows opens it");
+            note("chest: the locked chest at " + pos + " was cracked by " + who + " - " + stepped
+                    + " node(s) of its «взлом» chain ran"
+                    + (wait ? ", the chest opens when that window closes" : ", the chest opens now"));
         } catch (Throwable failure) {
             LOG.warn("chest: a solved panel could not open the chest: " + failure);
+        }
+    }
+
+    /** Tell one player's client that the crack chain is done and the chest may be clicked. */
+    private static void sendReady(ServerPlayer player, String key, boolean waitForWindow) {
+        if (player == null || key == null || key.isEmpty()) return;
+        try {
+            PacketDistributor.sendToPlayer(player, new Ready(key + "|" + (waitForWindow ? "1" : "0")));
+        } catch (Throwable failure) {
+            LOG.warn("chest: the ready packet could not be sent - one more click opens the chest: " + failure);
         }
     }
 
