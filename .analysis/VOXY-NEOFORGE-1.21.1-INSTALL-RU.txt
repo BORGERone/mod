@@ -492,3 +492,36 @@ https://github.com/BORGERone/mod/releases/download/ipl-copy-fix-1.0.0/ipl-copy-f
 - размазывание LOD в Незере: проверить именно С включённым рендерингом Voxy (v5);
 - если шим не помог: удалить ipl-copy-fix-1.0.0.jar - ничего не ломается, поведение
   возвращается к исходному, и остаётся путь upstream-репорта в iPortalTeam.
+
+
+--------------------------------------------------------------------------------
+v6 (07.11.2026, run 42375408700): смазанность LOD в аду / TAA-шлейфы
+--------------------------------------------------------------------------------
+СИМПТОМ: при включённом рендере Voxy на непрогруженных чанках (особенно в аду)
+LOD рисуется чёрными смазанными_mass_ с вертикальными шлейфами (image-4.png).
+ПРИЧИНА: цвет LOD уходил в G-буферы Iris и проходил все deferred-проходы Eclipse
+вторично: второе освещение по неверным нормалям, мусор в SSAO/GI по пикселям LOD и
+TAA-шлейфы (у LOD нет корректных motion vectors) => чёрные смазанные области.
+РЕШЕНИЕ (портировано по мотивам TheNofis/voxy-neoforge-iris-support, commit 45ac258629):
+ - обе пайплайны (IrisVoxyRenderPipeline и NormalRenderPipeline) при активном Iris
+   НЕ пишут/blit'ят цвет в G-буферы в finish();
+ - новый хук MixinIrisRenderingPipeline @Inject(finalizeLevelRendering, RETURN) вызывает
+   VoxyRenderSystem.postIrisComposite() для ВСЕХ живых render system (основной мир +
+   вторичные миры порталов IP) после всех composite-проходов Iris;
+ - композит: fullscreen-проход blit_texture_depth_cutout.frag (EMIT_COLOUR) с
+   transformBlitDepth: цвет+глубина LOD пишутся в главный фреймбуфер с depth-тестом,
+   минуя deferred-освещение/TAA/SSAO Iris;
+ - IrisVoxyRenderPipeline получил собственные цветовые текстуры (RGBA8) вместо
+   вложений в colortex-текстуры Iris (ensureOwnColourTargets, переаттач при resize);
+ - SSAO в NormalRenderPipeline пропускается при активном Iris (MVP Iris имеет другие
+   near/far -> LOD перетемнялся и пак тонировал его в фиолетовый).
+ЦЕНА: LOD не проходит пост-эффекты Eclipse (атмосферный туман/объёмный свет) - выглядит
+чуть "площе" ближней геометрии; взамен исчезают смаз/шлейфы/чернота.
+МАРКЕР В ЛОГЕ: arena build marker: iris-ipfix-v6 (deferred iris composite, ssao skip)
+АРТЕФАКТ: voxy-0.2.15-beta.jar, 89 349 563 B,
+sha256 e9d70441ce96d225e61319c7d205347535a23ed841a2df6f8b142d81251a3162
+https://github.com/BORGERone/mod/releases/download/untagged-6eb15bd01f7f744a486e/voxy-0.2.15-beta.jar
+(v5 остаётся резервом: untagged-45d58ca9715927cdc0a7)
+БАГ 1 (тёплый солнечный свет гаснет при рендере портала) - отдельная история:
+предположительно HDR-кламп при конверсии RGBA16F->RGBA8 в цветовом копировании IP;
+берём в работу после подтверждения фикса смаза.
