@@ -2,6 +2,7 @@ name: Build Voxy NeoForge 1.21.1
 
 on:
   workflow_dispatch:
+  push:
 
 permissions:
   contents: write
@@ -355,9 +356,27 @@ jobs:
               "        this.initDepthStencil(sourceFB, this.fb.framebuffer.id, viewport.width, viewport.height, viewport.width, viewport.height);\n\n        // v9: upstream never clears the colour target of this framebuffer - stale LOD\n        // pixels from earlier frames/worlds persist and get re-blitted (WinXP-trail\n        // ghosting, cross-dimension masks). Depth/stencil are re-initialised above,\n        // so clearing colour here is safe and fixes the ghosting.\n        org.lwjgl.opengl.GL11C.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);\n        org.lwjgl.opengl.GL11C.glClear(org.lwjgl.opengl.GL11C.GL_COLOR_BUFFER_BIT);\n\n        return this.fb.getDepthTex().id;"
           )])
 
+          # ================= v11: MipGen thread-safety (grey chunks + bakery crash) ======
+          # Crash log (latest-10): ArrayIndexOutOfBoundsException in MipGen.solidify via
+          # ModelFactory.processTextureBakeResult on the "Model factory processor" thread.
+          # SCRATCH/QUEUE are static but EVERY world engine runs its own bakery processing
+          # thread (main world + Immersive Portals secondary worlds) => two threads race in
+          # solidify(): BFS queue underflow (crash) and corrupted distance fills written
+          # into the model texture atlas = grey/white chunk patches.
+          patch(base + 'model/MipGen.java', [(
+              "    private static final short[] SCRATCH = new short[MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE];\n    private static final ByteArrayFIFOQueue QUEUE = new ByteArrayFIFOQueue(MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE);",
+              "    // v11: per-thread instances - multiple ModelFactory processing threads (main world\n    // + Immersive Portals secondary worlds) raced on these statics, corrupting the model\n    // texture atlas (grey/white chunks) and underflowing the BFS queue (AIOOBE crash).\n    private static final ThreadLocal<short[]> SCRATCH_T = ThreadLocal.withInitial(() -> new short[MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE]);\n    private static final ThreadLocal<ByteArrayFIFOQueue> QUEUE_T = ThreadLocal.withInitial(() -> new ByteArrayFIFOQueue(MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE));"
+          ), (
+              "    private static void solidify(long baseAddr, byte msk) {\n        for (int idx = 0; idx < 6; idx++) {",
+              "    private static void solidify(long baseAddr, byte msk) {\n        final short[] SCRATCH = SCRATCH_T.get();\n        final ByteArrayFIFOQueue QUEUE = QUEUE_T.get();\n        for (int idx = 0; idx < 6; idx++) {"
+          ), (
+              "        if (!darkened) {\n            solidify(addr, solidMsk);\n        }",
+              "        if (!darkened) {\n            try {\n                solidify(addr, solidMsk);\n            } catch (Throwable t) {\n                me.cortex.voxy.common.Logger.error(\"v11: solidify failed for a model, skipping solid fill (atlas kept as-is)\", t);\n            }\n        }"
+          )])
+
           patch(base + 'RenderPipelineFactory.java', [(
               "        Logger.info(\"arena build marker: iris-ipfix-v5 (conservative depth merge blit)\");",
-              "        Logger.info(\"arena build marker: iris-ipfix-v10 (clear colourTex AND colourSSAOTex per frame, ghost fix)\");"
+              "        Logger.info(\"arena build marker: iris-ipfix-v11 (v10 + MipGen thread-safety: grey chunks and bakery crash fix)\");"
           )])
           PYEOF
           python3 /tmp/patch.py
