@@ -1,0 +1,521 @@
+name: Build Voxy NeoForge 1.21.1
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [arena/e102897c-mod]
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      - name: Checkout Voxy sources (PR #45 head)
+        uses: actions/checkout@v4
+        with:
+          repository: j-shelfwood/voxy-neoforge
+          ref: 47cfa85266cba581be5264de880e7ece409db92c
+          path: voxy
+
+      - name: Setup Java 21
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 21
+
+      - name: Resolve Sodium + Iris jars into libs/
+        working-directory: voxy
+        run: |
+          set -e
+          mkdir -p libs
+          exec > >(tee /tmp/probe.log) 2>&1
+          has_cls() { unzip -l "$1" 2>/dev/null | grep -c 'net/caffeinemc/mods/sodium/client/gl/shader/ShaderParser.class' || true; }
+
+          SOD_JSON=$(curl -sG 'https://api.modrinth.com/v2/project/sodium/version' \
+            --data-urlencode 'game_versions=["1.21.1"]' --data-urlencode 'loaders=["neoforge"]')
+          SOD_URL=$(echo "$SOD_JSON" | jq -r '[.[] | select(.version_number|test("0\\.8\\.13"))][0].files[0].url // empty')
+          echo "modrinth sodium url: $SOD_URL"
+          curl -sL -o /tmp/sodium-modrinth.jar "$SOD_URL"
+          echo "outer jar ShaderParser=$(has_cls /tmp/sodium-modrinth.jar)"
+          rm -rf /tmp/sodx && mkdir -p /tmp/sodx && (cd /tmp/sodx && unzip -oq /tmp/sodium-modrinth.jar)
+          BEST=""
+          for cand in $(find /tmp/sodx -name '*.jar' 2>/dev/null) /tmp/sodium-modrinth.jar; do
+            c=$(has_cls "$cand"); echo "candidate $cand -> ShaderParser=$c"
+            if [ "$c" -gt 0 ] && [ -z "$BEST" ]; then BEST="$cand"; fi
+          done
+          echo "BEST=$BEST"
+          if [ -n "$BEST" ]; then cp "$BEST" 'libs/sodium-neoforge-0.8.12-beta.2-mod.jar'; else cp /tmp/sodium-modrinth.jar 'libs/sodium-neoforge-0.8.12-beta.2-mod.jar'; fi
+
+          IRIS_JSON=$(curl -sG 'https://api.modrinth.com/v2/project/iris/version' \
+            --data-urlencode 'game_versions=["1.21.1"]' --data-urlencode 'loaders=["neoforge"]')
+          IRIS_URL=$(echo "$IRIS_JSON" | jq -r '[.[] | select(.version_number|test("1\\.8\\.14"))][0].files[0].url // empty')
+          echo "iris url: $IRIS_URL"
+          curl -sL -o 'libs/iris-neoforge-1.8.14-beta.1.jar' "$IRIS_URL"
+          ls -l libs
+
+      - name: Patch Iris pipeline handling (Immersive Portals fix)
+        working-directory: voxy
+        run: |
+          set -e
+          cat > /tmp/patch.py <<'PYEOF'
+          import io, os, sys
+
+          def patch(path, pairs):
+              with io.open(path, encoding='utf-8') as f:
+                  src = f.read()
+              for old, new in pairs:
+                  if old not in src:
+                      print('!! PATTERN NOT FOUND in ' + path)
+                      print(repr(old))
+                      sys.exit(3)
+                  src = src.replace(old, new, 1)
+              with io.open(path, 'w', encoding='utf-8') as f:
+                  f.write(src)
+              print('patched ' + path)
+
+          base = 'src/main/java/me/cortex/voxy/client/core/'
+
+          old_factory = '''            Logger.info("Creating voxy iris render pipeline");
+                      try {
+                          return new IrisVoxyRenderPipeline(properties, pipeData, nodeManager, nodeCleaner, traversal, frexSupplier);
+                      } catch (Exception e) {
+                          Logger.error("Failed to create iris render pipeline", e);
+                          IrisUtil.disableIrisShaders();
+                          return null;
+                      }'''
+
+          new_factory = '''            if (pipeData.thePipeline != null) {
+                          Logger.info("Iris pipeline data already bound by another voxy render system (secondary world / portal world switch) - using the normal pipeline for this instance, shaders stay enabled");
+                          return null;
+                      }
+                      Logger.info("Creating voxy iris render pipeline");
+                      try {
+                          return new IrisVoxyRenderPipeline(properties, pipeData, nodeManager, nodeCleaner, traversal, frexSupplier);
+                      } catch (Throwable e) {
+                          Logger.error("Failed to create iris render pipeline - keeping shaders ENABLED, falling back to the normal pipeline", e);
+                          pipeData.thePipeline = null;
+                          return null;
+                      }'''
+
+          patch(base + 'RenderPipelineFactory.java', [(old_factory, new_factory)])
+
+          old_field = '''    private final GlBuffer shaderUniforms;'''
+          new_field = '''    private final GlBuffer shaderUniforms;
+              private boolean voxyIrisPipelineFreed = false;'''
+
+          old_free = '''    @Override
+              public void free() {
+                  if (this.data.thePipeline != this) {
+                      throw new IllegalStateException();
+                  }
+                  this.data.thePipeline = null;'''
+
+          new_free = '''    @Override
+              public void free() {
+                  if (this.voxyIrisPipelineFreed) {
+                      return;
+                  }
+                  this.voxyIrisPipelineFreed = true;
+                  if (this.data.thePipeline == this) {
+                      this.data.thePipeline = null;
+                  }'''
+
+          patch(base + 'IrisVoxyRenderPipeline.java', [(old_field, new_field), (old_free, new_free)])
+
+          # 3) MixinIrisRenderingPipeline: inject at HEAD (the activeTexture invoke point
+          #    is gone in Iris 1.8.x) and restore the main render target viewport before
+          #    applying captured parameters (shadow pass leaves a wrong GL viewport).
+          old_begin = '''    @Inject(method = "beginLevelRendering", at = @At(value = "INVOKE", target = "Lcom/mojang/blaze3d/systems/RenderSystem;activeTexture(I)V", shift = At.Shift.BEFORE), remap = false)
+              private void voxy$injectViewportSetup(CallbackInfo ci) {
+                  if (IrisUtil.CAPTURED_VIEWPORT_PARAMETERS != null) {
+                      var renderer = ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).voxy$getRenderSystem();
+                      if (renderer != null) {
+                          IrisUtil.CAPTURED_VIEWPORT_PARAMETERS.apply(renderer);
+                      }
+                  }
+              }'''
+
+          new_begin = '''    @Inject(method = "beginLevelRendering", at = @At("HEAD"), remap = false)
+              private void voxy$injectViewportSetup(CallbackInfo ci) {
+                  if (IrisUtil.CAPTURED_VIEWPORT_PARAMETERS != null) {
+                      var renderer = ((IGetVoxyRenderSystem) Minecraft.getInstance().levelRenderer).voxy$getRenderSystem();
+                      if (renderer != null) {
+                          var rt = Minecraft.getInstance().getMainRenderTarget();
+                          org.lwjgl.opengl.GL11C.glViewport(0, 0, rt.width, rt.height);
+                          IrisUtil.CAPTURED_VIEWPORT_PARAMETERS.apply(renderer);
+                      }
+                  }
+              }'''
+
+          patch(base + '../mixin/iris/MixinIrisRenderingPipeline.java', [(old_begin, new_begin)])
+
+          # 4) MixinDefaultChunkRenderer: always setupViewport from doRender with the
+          #    matrices of the CURRENT render pass (portal views get their own viewport
+          #    instead of a stale one captured at renderLevel HEAD).
+          old_dorender = '''                Viewport<?> viewport = null;
+                          if (IrisUtil.irisShaderPackEnabled()) {
+                              viewport = renderer.getViewport();
+                          } else {
+                              viewport = renderer.setupViewport(matrices.projection(), matrices.modelView(), camera.x, camera.y, camera.z);
+                          }'''
+
+          new_dorender = '''                Viewport<?> viewport = renderer.setupViewport(matrices.projection(), matrices.modelView(), camera.x, camera.y, camera.z);'''
+
+          patch(base + '../mixin/sodium/MixinDefaultChunkRenderer.java', [(old_dorender, new_dorender)])
+
+          # 5) ViewportSelector: do not render LOD into Iris shadow/G-buffer targets
+          #    during the shadow pass (breaks the shadow map -> sunlight disappears);
+          #    renderOpaque(null) is a safe no-op.
+          old_shadow = '''        if (viewport == null && IrisUtil.irisShadowActive()) {
+                      viewport = this.getOrCreate(IRIS_SHADOW_OBJECT);
+                  }'''
+
+          new_shadow = '''        if (viewport == null && IrisUtil.irisShadowActive()) {
+                      return null;
+                  }'''
+
+          patch(base + 'rendering/ViewportSelector.java', [(old_shadow, new_shadow)])
+
+          # 6) IrisVoxyRenderPipeline.finish(): snapshot/restore GL state. The depth blit
+          #    leaves DEPTH_TEST/STENCIL_TEST/depth-func disabled or changed; Immersive
+          #    Portals draws its portal quads right after and relies on sane state, so the
+          #    leak made portals draw through walls and corrupted scene depth/lighting.
+          old_finish = '''    @Override
+              protected void finish(Viewport<?> viewport, int sourceFrameBuffer, int srcWidth, int srcHeight) {
+                  if (this.data.renderToVanillaDepth && srcWidth == viewport.width  && srcHeight == viewport.height) {//We can only depthblit out if destination size is the same
+                      glColorMask(false, false, false, false);
+                      AbstractRenderPipeline.transformBlitDepth(this.depthBlit,
+                              this.fbTranslucent.getDepthTex().id, sourceFrameBuffer,
+                              viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
+                      glColorMask(true, true, true, true);
+                  } else {
+                      // normally disabled by AbstractRenderPipeline but since we are skipping it we do it here
+                      glDisable(GL_STENCIL_TEST);
+                      glDisable(GL_DEPTH_TEST);
+                  }
+              }'''
+
+          new_finish = '''    @Override
+              protected void finish(Viewport<?> viewport, int sourceFrameBuffer, int srcWidth, int srcHeight) {
+                  int prevDepthFunc = org.lwjgl.opengl.GL11C.glGetInteger(org.lwjgl.opengl.GL11C.GL_DEPTH_FUNC);
+                  boolean prevDepthTest = org.lwjgl.opengl.GL11C.glIsEnabled(org.lwjgl.opengl.GL11C.GL_DEPTH_TEST);
+                  boolean prevStencilTest = org.lwjgl.opengl.GL11C.glIsEnabled(org.lwjgl.opengl.GL11C.GL_STENCIL_TEST);
+                  boolean prevCullFace = org.lwjgl.opengl.GL11C.glIsEnabled(org.lwjgl.opengl.GL11C.GL_CULL_FACE);
+                  try {
+                      if (this.data.renderToVanillaDepth && srcWidth == viewport.width  && srcHeight == viewport.height) {//We can only depthblit out if destination size is the same
+                          glColorMask(false, false, false, false);
+                          AbstractRenderPipeline.transformBlitDepth(this.depthBlit,
+                                  this.fbTranslucent.getDepthTex().id, sourceFrameBuffer,
+                                  viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
+                          glColorMask(true, true, true, true);
+                      } else {
+                          // normally disabled by AbstractRenderPipeline but since we are skipping it we do it here
+                          glDisable(GL_STENCIL_TEST);
+                          glDisable(GL_DEPTH_TEST);
+                      }
+                  } finally {
+                      if (prevDepthTest) {
+                          glEnable(GL_DEPTH_TEST);
+                      } else {
+                          glDisable(GL_DEPTH_TEST);
+                      }
+                      if (prevStencilTest) {
+                          glEnable(GL_STENCIL_TEST);
+                      } else {
+                          glDisable(GL_STENCIL_TEST);
+                      }
+                      if (prevCullFace) {
+                          glEnable(GL_CULL_FACE);
+                      } else {
+                          glDisable(GL_CULL_FACE);
+                      }
+                      glDepthFunc(prevDepthFunc);
+                  }
+              }'''
+
+          patch(base + 'IrisVoxyRenderPipeline.java', [(old_finish, new_finish)])
+
+          # 7) PortalViewGuard + skip LOD draws while Immersive Portals renders a portal
+          #    view (the user accepts LOD being invisible through portals).
+          guard_path = base + 'util/PortalViewGuard.java'
+          guard_src = '''package me.cortex.voxy.client.core.util;
+
+          public class PortalViewGuard {
+              private static final java.lang.reflect.Method IS_RENDERING = resolve();
+
+              private static java.lang.reflect.Method resolve() {
+                  String[] classNames = {
+                          "qouteall.imm_ptl.core.render.context_management.PortalRendering",
+                          "qouteall.imm_ptl.core.render.context_management.RenderStates"
+                  };
+                  String[] methodNames = { "isRendering", "isPortalRendering" };
+                  for (String className : classNames) {
+                      try {
+                          Class<?> clazz = Class.forName(className);
+                          for (String methodName : methodNames) {
+                              try {
+                                  return clazz.getMethod(methodName);
+                              } catch (NoSuchMethodException ignored) {
+                              }
+                          }
+                      } catch (Throwable ignored) {
+                      }
+                  }
+                  return null;
+              }
+
+              public static boolean isRenderingPortalView() {
+                  if (IS_RENDERING == null) {
+                      return false;
+                  }
+                  try {
+                      return (Boolean) IS_RENDERING.invoke(null);
+                  } catch (Throwable t) {
+                      return false;
+                  }
+              }
+          }
+          '''
+          os.makedirs(os.path.dirname(guard_path), exist_ok=True)
+          with io.open(guard_path, 'w', encoding='utf-8') as f:
+              f.write(guard_src)
+          print('wrote ' + guard_path)
+
+          # (v5: the portal-view LOD skip from v4 is REVERTED on user request - LOD must
+          #  stay visible inside portal views, as it was in v2/v3)
+
+          # 8) build marker so the running jar can be identified from the log
+          old_marker = '''        //Note this is where will choose/create e.g. IrisRenderPipeline or normal pipeline
+                  AbstractRenderPipeline pipeline = null;'''
+
+          new_marker = '''        Logger.info("arena build marker: iris-ipfix-v5 (conservative depth merge blit)");
+                  //Note this is where will choose/create e.g. IrisRenderPipeline or normal pipeline
+                  AbstractRenderPipeline pipeline = null;'''
+
+          patch(base + 'RenderPipelineFactory.java', [(old_marker, new_marker)])
+
+          # 9) MixinLevelRenderer: do NOT kill shaders when the render system constructor
+          #    throws (second shader-kill path found in voxy$createRenderer catch).
+          old_import = '''import net.minecraft.client.multiplayer.ClientLevel;'''
+          new_import = '''import net.minecraft.client.Minecraft;
+          import net.minecraft.client.multiplayer.ClientLevel;'''
+
+          old_catch = '''        } catch (RuntimeException e) {
+                      if (IrisUtil.irisShaderPackEnabled()) {
+                          IrisUtil.disableIrisShaders();
+                      } else {
+                          throw e;
+                      }
+                  }'''
+
+          new_catch = '''        } catch (RuntimeException e) {
+                      Logger.error("Failed to create voxy render system - keeping shaders ENABLED", e);
+                      this.renderer = null;
+                  }'''
+
+          mlr = base + '../mixin/minecraft/MixinLevelRenderer.java'
+          patch(mlr, [(old_import, new_import), (old_catch, new_catch)])
+
+          # 10) IrisVoxyRenderPipeline.finish(): the depth emit blit inherits whatever depth
+          #     func Iris/Eclipse left active (composite passes commonly leave GL_ALWAYS),
+          #     which makes it OVERWRITE the whole scene depth with LOD depth -> portals draw
+          #     through walls and fog/lighting smears. Force the conservative closer-equal
+          #     compare so the blit only fills pixels where LOD is in front of what is there.
+          old_blit = '''                glColorMask(false, false, false, false);
+                          AbstractRenderPipeline.transformBlitDepth(this.depthBlit,
+                                  this.fbTranslucent.getDepthTex().id, sourceFrameBuffer,
+                                  viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
+                          glColorMask(true, true, true, true);'''
+
+          new_blit = '''                glColorMask(false, false, false, false);
+                          glDepthFunc(this.properties.closerEqualDepthCompare());
+                          AbstractRenderPipeline.transformBlitDepth(this.depthBlit,
+                                  this.fbTranslucent.getDepthTex().id, sourceFrameBuffer,
+                                  viewport, new Matrix4f(viewport.vanillaProjection).mul(viewport.modelView));
+                          glColorMask(true, true, true, true);'''
+
+          patch(base + 'IrisVoxyRenderPipeline.java', [(old_blit, new_blit)])
+
+
+
+          # ================= v9: clear Normal pipeline colour target every frame ========
+          # Root cause of the "WinXP trail" ghosting (user's exact analogy): upstream
+          # NormalRenderPipeline clears only DEPTH_STENCIL of its framebuffer
+          # (initDepthStencil), never COLOUR. Stale LOD pixels from previous frames - and
+          # from the previous dimension after a world switch - survive in colourTex and are
+          # re-blitted into the Iris gbuffer every frame until new draws overwrite them.
+          # IrisVoxyRenderPipeline clears its colour target, which is why first-world /
+          # direct-join sessions look clean.
+          patch(base + 'NormalRenderPipeline.java', [(
+              "            glTextureParameterf(this.fb.getDepthTex().id, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);\n        }",
+              "            glTextureParameterf(this.fb.getDepthTex().id, GL_DEPTH_STENCIL_TEXTURE_MODE, GL_DEPTH_COMPONENT);\n        }\n\n        // v10: the SSAO compute pass uses colourSSAOTex as a READ_WRITE image and only\n        // writes pixels that actually have LOD; every other pixel keeps its previous\n        // content - including pixels from earlier frames or from the previous dimension\n        // (ghost masks over sky/horizon, chunk-shaped grey patches). Clear it per frame.\n        if (this.colourSSAOTex != null) {\n            org.lwjgl.opengl.GL45C.glClearNamedFramebufferfv(this.fbSSAO.id, org.lwjgl.opengl.GL11C.GL_COLOR, 0, new float[]{0.0f, 0.0f, 0.0f, 0.0f});\n        }"
+          ), (
+              "        this.initDepthStencil(sourceFB, this.fb.framebuffer.id, viewport.width, viewport.height, viewport.width, viewport.height);\n\n        return this.fb.getDepthTex().id;",
+              "        this.initDepthStencil(sourceFB, this.fb.framebuffer.id, viewport.width, viewport.height, viewport.width, viewport.height);\n\n        // v9: upstream never clears the colour target of this framebuffer - stale LOD\n        // pixels from earlier frames/worlds persist and get re-blitted (WinXP-trail\n        // ghosting, cross-dimension masks). Depth/stencil are re-initialised above,\n        // so clearing colour here is safe and fixes the ghosting.\n        org.lwjgl.opengl.GL11C.glClearColor(0.0f, 0.0f, 0.0f, 0.0f);\n        org.lwjgl.opengl.GL11C.glClear(org.lwjgl.opengl.GL11C.GL_COLOR_BUFFER_BIT);\n\n        return this.fb.getDepthTex().id;"
+          )])
+
+          # ================= v11: MipGen thread-safety (grey chunks + bakery crash) ======
+          # Crash log (latest-10): ArrayIndexOutOfBoundsException in MipGen.solidify via
+          # ModelFactory.processTextureBakeResult on the "Model factory processor" thread.
+          # SCRATCH/QUEUE are static but EVERY world engine runs its own bakery processing
+          # thread (main world + Immersive Portals secondary worlds) => two threads race in
+          # solidify(): BFS queue underflow (crash) and corrupted distance fills written
+          # into the model texture atlas = grey/white chunk patches.
+          patch(base + 'model/MipGen.java', [(
+              "    private static final short[] SCRATCH = new short[MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE];\n    private static final ByteArrayFIFOQueue QUEUE = new ByteArrayFIFOQueue(MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE);",
+              "    // v11: per-thread instances - multiple ModelFactory processing threads (main world\n    // + Immersive Portals secondary worlds) raced on these statics, corrupting the model\n    // texture atlas (grey/white chunks) and underflowing the BFS queue (AIOOBE crash).\n    private static final ThreadLocal<short[]> SCRATCH_T = ThreadLocal.withInitial(() -> new short[MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE]);\n    private static final ThreadLocal<ByteArrayFIFOQueue> QUEUE_T = ThreadLocal.withInitial(() -> new ByteArrayFIFOQueue(MODEL_TEXTURE_SIZE*MODEL_TEXTURE_SIZE));"
+          ), (
+              "    private static void solidify(long baseAddr, byte msk) {\n        for (int idx = 0; idx < 6; idx++) {",
+              "    private static void solidify(long baseAddr, byte msk) {\n        final short[] SCRATCH = SCRATCH_T.get();\n        final ByteArrayFIFOQueue QUEUE = QUEUE_T.get();\n        for (int idx = 0; idx < 6; idx++) {"
+          ), (
+              "        if (!darkened) {\n            solidify(addr, solidMsk);\n        }",
+              "        if (!darkened) {\n            try {\n                solidify(addr, solidMsk);\n            } catch (Throwable t) {\n                me.cortex.voxy.common.Logger.error(\"v11: solidify failed for a model, skipping solid fill (atlas kept as-is)\", t);\n            }\n        }"
+          )])
+
+          patch(base + 'RenderPipelineFactory.java', [(
+              "        Logger.info(\"arena build marker: iris-ipfix-v5 (conservative depth merge blit)\");",
+              "        Logger.info(\"arena build marker: iris-ipfix-v11 (v10 + MipGen thread-safety: grey chunks and bakery crash fix)\");"
+          )])
+          # v12: promote an existing Normal renderer only after Iris has prepared the
+          # player's current world. Never take a data object owned by another Voxy renderer.
+          patch(base + 'VoxyRenderSystem.java', [(
+              '    private final AbstractRenderPipeline pipeline;',
+              '    private final AbstractRenderPipeline pipeline;\n\n    public boolean arena$usesNormalPipeline() { return this.pipeline instanceof NormalRenderPipeline; }'
+          )])
+          iris_mixin = base + '../mixin/iris/MixinIrisRenderingPipeline.java'
+          patch(iris_mixin, [(
+              '    @Unique IrisShaderPatch patchData;',
+              '    @Unique IrisShaderPatch patchData;\n'
+              '    @Unique private final java.util.Set<Object> arena$attempted = java.util.Collections.newSetFromMap(new java.util.WeakHashMap<>());\n'
+              '    @Unique private static java.lang.reflect.Method arena$portalRendering;\n'
+              '    @Unique private static boolean arena$portalProbeFailed;\n'
+              '    @Unique private static boolean arena$isPortalRender() {\n'
+              '        if (arena$portalProbeFailed) return true;\n'
+              '        try {\n'
+              '            if (arena$portalRendering == null) arena$portalRendering = Class.forName("qouteall.imm_ptl.core.render.context_management.PortalRendering").getMethod("isRendering");\n'
+              '            return Boolean.TRUE.equals(arena$portalRendering.invoke(null));\n'
+              '        } catch (Throwable t) {\n'
+              '            arena$portalProbeFailed = true;\n'
+              '            me.cortex.voxy.common.Logger.error("v12: cannot check portal render state, promotion disabled", t);\n'
+              '            return true;\n'
+              '        }\n'
+              '    }'
+          ), (
+              '    private void voxy$injectViewportSetup(CallbackInfo ci) {\n        if (IrisUtil.CAPTURED_VIEWPORT_PARAMETERS != null) {',
+              '    private void voxy$injectViewportSetup(CallbackInfo ci) {\n'
+              '        var mc = Minecraft.getInstance();\n'
+              '        if (me.cortex.voxy.common.NeoForgePlatform.isModLoaded("immersive_portals_core") && mc.level != null && mc.player != null && mc.player.level() == mc.level && mc.levelRenderer != null && !arena$isPortalRender() && net.irisshaders.iris.Iris.getPipelineManager().getPipelineNullable() == (Object)this && this.pipeline != null && this.pipeline.thePipeline == null) {\n'
+              '            var owner = (IGetVoxyRenderSystem) mc.levelRenderer;\n'
+              '            var oldRenderer = owner.voxy$getRenderSystem();\n'
+              '            if (oldRenderer != null && oldRenderer.arena$usesNormalPipeline() && this.arena$attempted.add(mc.levelRenderer)) {\n'
+              '                me.cortex.voxy.common.Logger.info("v12: promoting main-world Normal pipeline to the prepared Iris pipeline");\n'
+              '                int drawFb = org.lwjgl.opengl.GL11C.glGetInteger(org.lwjgl.opengl.GL30C.GL_DRAW_FRAMEBUFFER_BINDING);\n'
+              '                int readFb = org.lwjgl.opengl.GL11C.glGetInteger(org.lwjgl.opengl.GL30C.GL_READ_FRAMEBUFFER_BINDING);\n'
+              '                int program = org.lwjgl.opengl.GL11C.glGetInteger(org.lwjgl.opengl.GL20C.GL_CURRENT_PROGRAM);\n'
+              '                int vao = org.lwjgl.opengl.GL11C.glGetInteger(org.lwjgl.opengl.GL30C.GL_VERTEX_ARRAY_BINDING);\n'
+              '                int activeTexture = org.lwjgl.opengl.GL11C.glGetInteger(org.lwjgl.opengl.GL13C.GL_ACTIVE_TEXTURE);\n'
+              '                int[] viewport = new int[4];\n'
+              '                org.lwjgl.opengl.GL11C.glGetIntegerv(org.lwjgl.opengl.GL11C.GL_VIEWPORT, viewport);\n'
+              '                try {\n'
+              '                    owner.voxy$shutdownRenderer();\n'
+              '                    owner.voxy$createRenderer();\n'
+              '                    var promoted = owner.voxy$getRenderSystem();\n'
+              '                    me.cortex.voxy.common.Logger.info("v12: main-world promotion result: " + (promoted == null ? "no renderer" : promoted.arena$usesNormalPipeline() ? "Normal" : "Iris"));\n'
+              '                } catch (Throwable t) {\n'
+              '                    me.cortex.voxy.common.Logger.error("v12: main-world promotion failed; no further retries for this world renderer", t);\n'
+              '                } finally {\n'
+              '                    org.lwjgl.opengl.GL30C.glBindFramebuffer(org.lwjgl.opengl.GL30C.GL_DRAW_FRAMEBUFFER, drawFb);\n'
+              '                    org.lwjgl.opengl.GL30C.glBindFramebuffer(org.lwjgl.opengl.GL30C.GL_READ_FRAMEBUFFER, readFb);\n'
+              '                    org.lwjgl.opengl.GL20C.glUseProgram(program);\n'
+              '                    org.lwjgl.opengl.GL30C.glBindVertexArray(vao);\n'
+              '                    org.lwjgl.opengl.GL13C.glActiveTexture(activeTexture);\n'
+              '                    org.lwjgl.opengl.GL11C.glViewport(viewport[0], viewport[1], viewport[2], viewport[3]);\n'
+              '                }\n'
+              '            }\n'
+              '        }\n'
+              '        if (IrisUtil.CAPTURED_VIEWPORT_PARAMETERS != null) {'
+          )])
+          patch(base + 'RenderPipelineFactory.java', [(
+              'iris-ipfix-v11 (v10 + MipGen thread-safety: grey chunks and bakery crash fix)',
+              'iris-ipfix-v12 (main-world promotion without Iris pipeline takeover)'
+          )])
+          PYEOF
+          python3 /tmp/patch.py
+          echo "=== diff ==="
+          git --no-pager diff --stat
+          git --no-pager diff | tee /tmp/patch.diff | head -120
+
+      - name: Gradle build (capture log)
+        working-directory: voxy
+        run: |
+          chmod +x ./gradlew
+          set +e
+          ./gradlew build --console=plain --stacktrace 2>&1 | tee /tmp/build.log
+          code=${PIPESTATUS[0]}
+          echo "GRADLE_EXIT=$code" >> "$GITHUB_ENV"
+          echo "gradle exit code: $code"
+
+      - name: Publish result
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -x
+          {
+            echo "gradle exit: ${{ env.GRADLE_EXIT }}"
+            echo ""
+            echo "== applied patch =="
+            echo '```diff'
+            head -c 20000 /tmp/patch.diff
+            echo '```'
+            echo ""
+            echo "== compile errors =="
+            echo '```'
+            grep -aE "error:|FAILURE|What went wrong|Execution failed|Could not resolve|> Task .* FAILED" /tmp/build.log | head -40
+            echo '```'
+            echo ""
+            echo "== probe (libs/) =="
+            echo '```'
+            head -c 4000 /tmp/probe.log
+            echo '```'
+          } > notes.md
+          if [ "${{ env.GRADLE_EXIT }}" = "0" ]; then
+            ls -l voxy/build/libs || true
+            sha256sum voxy/build/libs/*.jar | tee /tmp/sha.txt || true
+            printf '\n== checksums ==\n```\n' >> notes.md
+            cat /tmp/sha.txt >> notes.md || true
+            printf '```\n' >> notes.md
+            gh release create "voxy-pr45-iris-ipfix-${GITHUB_RUN_ID}" voxy/build/libs/*.jar \
+              --repo "${GITHUB_REPOSITORY}" --draft \
+              --title "Voxy 0.2.15-beta NeoForge + Iris (IP fix) (DRAFT)" --notes-file notes.md \
+              2>&1 | tee /tmp/publish.log || echo "RELEASE CREATE FAILED (see publish.log)"
+          else
+            gh release create "voxy-buildlog-ipfix-${GITHUB_RUN_ID}" \
+              --repo "${GITHUB_REPOSITORY}" --draft \
+              --title "BUILDLOG ipfix (DRAFT)" --notes-file notes.md \
+              2>&1 | tee /tmp/publish.log || echo "RELEASE CREATE FAILED (see publish.log)"
+          fi
+          exit 0
+
+      - name: Stash jar as orphan-commit tag (Google Drive re-upload channel)
+        if: env.GRADLE_EXIT == '0'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -x
+          JAR=$(ls voxy/build/libs/voxy-*.jar | grep -v sources | head -1)
+          rm -rf /tmp/artstage && mkdir -p /tmp/artstage
+          cp "$JAR" /tmp/artstage/voxy.jar
+          sha256sum "$JAR" > /tmp/artstage/sha256.txt
+          cd /tmp/artstage
+          git init -q .
+          git config user.email "arena@users.noreply.github.com"
+          git config user.name "arena-ci"
+          git add voxy.jar sha256.txt
+          git commit -q -m "artifact: voxy jar run ${GITHUB_RUN_ID}"
+          ASHA=$(git rev-parse HEAD)
+          git push -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "$ASHA:refs/tags/arena-artifact-${GITHUB_RUN_ID}"
+          echo "ARTIFACT_TAG=arena-artifact-${GITHUB_RUN_ID} commit=$ASHA"
+
