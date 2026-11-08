@@ -44,7 +44,9 @@ create:fluid/heavy_oil_flow, createdeco BLANK_decal), Win11, Ryzen 7 5700X, RTX 
   IrisVoxyRenderPipeline (создание идёт ПОСЛЕ free старого), NormalRenderPipeline достается ТОЛЬКО
   вторичным портала-мирам IP. Значит ghost в основном виде НЕ из Normal-пайплайна.
 
-## 6. Факты из логов (папка Drive «Arena Minecraft handoff», файлы latest-*.log)
+## 6. Факты из логов (копии: .analysis/evidence/logs-evidence.zip и image-*.jpg в этом репо;
+полноразмерные оригиналы логов/скринов — на Drive в папке «Arena Minecraft handoff», когда
+коннектор google_drive включён; файлы latest-*.log)
 - latest-10 (v10-сессия): краш AIOOBE Index 37/length 32 в MipGen.solidify через
   ModelFactory.processTextureBakeResult на потоке «Model factory processor»; причина — static
   SCRATCH/QUEUE в MipGen при N потоках пекарни (основной + портал-миры) → v11 лечит гонку
