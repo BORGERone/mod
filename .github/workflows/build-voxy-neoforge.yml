@@ -2,6 +2,8 @@ name: Build Voxy NeoForge 1.21.1
 
 on:
   workflow_dispatch:
+  push:
+    branches: [arena/e102897c-mod]
 
 permissions:
   contents: write
@@ -439,6 +441,39 @@ jobs:
           patch(base + 'RenderPipelineFactory.java', [(
               'iris-ipfix-v11 (v10 + MipGen thread-safety: grey chunks and bakery crash fix)',
               'iris-ipfix-v12 (main-world promotion without Iris pipeline takeover)'
+          )])
+          # Diagnostic only: counters at five-second intervals, not a rendering change.
+          patch(base + 'rendering/ChunkBoundRenderer.java', [(
+              '    public void addSection(long pos) {',
+              '    public String arena$boundsStats() { return "tracked=" + this.chunk2idx.size() + ",add=" + this.addQueue.size() + ",remove=" + this.remQueue.size(); }\n\n    public void addSection(long pos) {'
+          )])
+          patch(base + 'util/RingTracker.java', [(
+              '    public void unload() {',
+              '    public int arena$pendingOperations() { int n = 0; for (byte value : this.operations.values()) if (value != 0) n++; return n; }\n\n    public void unload() {'
+          )])
+          patch(base + 'rendering/RenderDistanceTracker.java', [(
+              '    public void setRenderDistance(int renderDistance) {',
+              '    public int arena$pendingOperations() { return this.tracker.arena$pendingOperations(); }\n\n    public void setRenderDistance(int renderDistance) {'
+          )])
+          patch(base + 'VoxyRenderSystem.java', [(
+              '    private final AbstractRenderPipeline pipeline;',
+              '    private long arena$lastMainStats;\n    private long arena$lastPortalStats;\n    private final AbstractRenderPipeline pipeline;'
+          ), (
+              '        GPUTiming.INSTANCE.tick();\n\n        glBindFramebuffer(GlConst.GL_FRAMEBUFFER, oldFB);',
+              '        GPUTiming.INSTANCE.tick();\n'
+              '        boolean portalView = me.cortex.voxy.client.core.util.PortalViewGuard.isRenderingPortalView();\n'
+              '        long now = System.nanoTime();\n'
+              '        long previous = portalView ? this.arena$lastPortalStats : this.arena$lastMainStats;\n'
+              '        if (previous == 0L || now - previous >= 5_000_000_000L) {\n'
+              '            if (portalView) this.arena$lastPortalStats = now; else this.arena$lastMainStats = now;\n'
+              '            var mc = Minecraft.getInstance();\n'
+              '            Logger.info("arena-seam-diag-v1 view=" + (portalView ? "portal" : "main") + " dim=" + (mc.level == null ? "none" : mc.level.dimension().location()) + " levelRenderer=" + System.identityHashCode(mc.levelRenderer) + " voxy=" + System.identityHashCode(this) + " pipeline=" + this.pipeline.getClass().getSimpleName() + " camera=" + (int)viewport.cameraX + "," + (int)viewport.cameraY + "," + (int)viewport.cameraZ + " vanillaDistance=" + mc.options.getEffectiveRenderDistance() + " bounds[" + this.chunkBoundRenderer.arena$boundsStats() + "] ringPending=" + this.renderDistanceTracker.arena$pendingOperations() + " meshTasks=" + this.renderGen.getTaskCount() + " modelTasks=" + this.modelService.getProcessingCount() + " nodeWork=" + this.nodeManager.hasWork() + " sections=" + this.geometryData.getSectionCount());\n'
+              '        }\n\n'
+              '        glBindFramebuffer(GlConst.GL_FRAMEBUFFER, oldFB);'
+          )])
+          patch(base + 'RenderPipelineFactory.java', [(
+              'iris-ipfix-v12 (main-world promotion without Iris pipeline takeover)',
+              'iris-ipfix-v12-seam-diag-v1 (v12 plus portal boundary counters)'
           )])
           PYEOF
           python3 /tmp/patch.py
