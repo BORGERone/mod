@@ -39,6 +39,16 @@
 | settledlands-0.8.0-build406-doors-open-ahead.jar (отозвана: сломала поведение) | `1fpQErDRtTMTmfj7it_GdXtP27CrAPJFy` | `86bb31493c285f908d4b7846e779c4a1b3f93fca7b84c73ad6a34431ef2d8871` |
 | SettledLands-Build406-DoorsOpenAhead-Source.zip | `15RWt2WZ81dN5CzwUh-zJq4x95RYbjpxC` | `6093d8fa460606ff92020c7e48e7cd6677687792bfc8333808c6a6e30ce7c1cd` |
 
+## Build 407 — дверь держится открытой, пока проводник не пройдёт (2026-11-09)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build407-door-kept-open.jar | `11XQVqwcez7i1Bw-OE82ljzSjKB_iBHE6` | `cb33a4e6190dadf8f5c4dd0941b01d1a35b86419262281e296c53e57e0d5d1f4` |
+| SettledLands-Build407-DoorKeptOpen-Source.zip | `1flKz383k2uxmv-9p1P4z0KjzGeBYj_MU` | `4018f8b354a9cb5fd426f8255a3e65327b53da07b9674c8af4c5ed10a574ece0` |
+
+Коммит: `d40a9259824608bd4b85d49c028f7f572f479f5b` (ветка `arena/87bb8788-mod`), база — 404. В игре **не
+проверено**. Зеркало в репозитории: `https://github.com/BORGERone/mod/raw/d40a9259824608bd4b85d49c028f7f572f479f5b/settledlands-0.8.0-build407-door-kept-open.jar`
+
 ## Зеркало в репозитории
 
 `https://github.com/BORGERone/mod/raw/<полный sha из git rev-parse>/<имя файла>`
