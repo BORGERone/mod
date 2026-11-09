@@ -194,9 +194,13 @@ public final class NpcDoors368 {
             // The doors the guide's own path goes through: the exact set it has decided to walk through,
             // opened before it arrives and kept open until it is out (see stopLeftBehind).
             openOnPath(level, npc, now);
-            // And a door right beside a walking guide, in case the path was planned before the door was
-            // ever opened - the path finder only knows about doors standing open when it plans.
-            openAround(level, npc, x, y, z, now, walking ? REACH : STUCK_REACH, walking);
+            // And the doors around a guide, in case the path was planned before the door was ever opened -
+            // the path finder only knows about doors standing open when it plans. Build 410: whether the
+            // door is on the guide's way is decided per door and by the facts (its own path, or the line to
+            // where it was walking), not by the "is it moving this fifth of a second" flag: build 409 passed
+            // that flag here as the verdict, so a locked door was "not on the path" exactly when the guide
+            // had stopped in front of it - and it stood there for ever.
+            openAround(level, npc, id, x, y, z, now, walking ? REACH : STUCK_REACH);
 
             boolean stoodAtDoor = !walking && still >= STUCK_TICKS && still % STUCK_TICKS == 0
                     && pinned;
@@ -308,9 +312,16 @@ public final class NpcDoors368 {
         }
     }
 
-    /** Opens the doors in the three blocks around a guide. */
-    private static BlockPos openAround(ServerLevel level, dev.settledlands.npc.GuideNpc npc, double x,
-            double y, double z, long now, double reach, boolean walking) {
+    /**
+     * Opens the doors around a guide, each one judged by whether it is on the guide's way.
+     *
+     * <p>Build 410: the verdict is not the caller's flag any more. {@link #onTheWay} answers it per door,
+     * from the guide's own path and from the line between it and the place it was walking to - so a door in
+     * front of a standing guide is still a door on its way, which is the case that made build 409's guide
+     * stand in front of a closed one for ever.</p>
+     */
+    private static BlockPos openAround(ServerLevel level, dev.settledlands.npc.GuideNpc npc, UUID id,
+            double x, double y, double z, long now, double reach) {
         int bx = (int) Math.floor(x);
         int by = (int) Math.floor(y);
         int bz = (int) Math.floor(z);
@@ -324,7 +335,7 @@ public final class NpcDoors368 {
                             pos.getZ() + 0.5D);
                     if (distance > reach * reach) continue;
                     if (nearest == null) nearest = pos;
-                    if (openDoor(level, npc, pos, now, walking)) {
+                    if (openDoor(level, npc, pos, now, onTheWay(level, npc, id, pos))) {
                         nearest = pos;
                     }
                 }
@@ -354,8 +365,9 @@ public final class NpcDoors368 {
      * Opens one door for a guide, and remembers it so it is kept open until the guide is through.
      *
      * <p>Three refusals: not a door, already standing open (somebody else's door is none of our business),
-     * and <b>locked</b> - the last one is the rule of build 371 and the reason the log of 406 showed a door
-     * being opened and shut in the same second.</p>
+     * and a <b>locked</b> door that is not on this guide's way. The last one is the author's own line between
+     * his two rules: every door on the guide's path is opened, locked or not, while a locked door the guide
+     * merely stands next to stays shut so the pass does not become a key to the village.</p>
      */
     private static boolean openDoor(ServerLevel level, dev.settledlands.npc.GuideNpc npc, BlockPos pos,
             long now, boolean onPath) {
@@ -375,7 +387,8 @@ public final class NpcDoors368 {
             if (locked(level, pos) && !onPath) {
                 if (saidGuard < 3) {
                     saidGuard++;
-                    LOG.info("door: the locked door at " + pos + " is not on a guide's path - it stays shut");
+                    LOG.info("door: the locked door at " + pos + " is not on a guide's way - it stays shut "
+                            + "(path=" + pathState(npc) + ")");
                 }
                 return false;
             }
@@ -533,6 +546,47 @@ public final class NpcDoors368 {
     }
 
     /**
+     * Build 410: is this door on the guide's way? Two answers, both from facts about the guide rather than
+     * from whether it happens to be moving: a door block on the next nodes of its own path, or a door between
+     * it and the place its navigator was taking it. This is the question a lock is answered with - «нпс
+     * должен открывать все двери на его пути, в т.ч. и запертые» - so it has to stay true while the guide
+     * stands and waits, which is exactly when the door is being decided.
+     */
+    private static boolean onTheWay(ServerLevel level, dev.settledlands.npc.GuideNpc npc, UUID id,
+            BlockPos door) {
+        if (door == null) return false;
+        if (onPathNode(npc, door)) return true;
+        return doorBetween(npc, id, door);
+    }
+
+    /** Is this door block one of the next nodes of the guide's own path? */
+    private static boolean onPathNode(dev.settledlands.npc.GuideNpc npc, BlockPos door) {
+        try {
+            PathNavigation navigation = npc.getNavigation();
+            if (navigation == null || navigation.isDone()) return false;
+            Path path = navigation.getPath();
+            if (path == null) return false;
+            int count = path.getNodeCount();
+            if (count <= 0) return false;
+            int from = Math.max(0, path.getNextNodeIndex() - 1);
+            int to = Math.min(count - 1, path.getNextNodeIndex() + LOOKAHEAD);
+            for (int i = from; i <= to; i++) {
+                BlockPos node = path.getNodePos(i);
+                if (node == null) continue;
+                for (int dy = -1; dy <= 1; dy++) {
+                    if (node.getX() == door.getX() && node.getY() + dy == door.getY()
+                            && node.getZ() == door.getZ()) {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        } catch (Throwable failure) {
+            return false;
+        }
+    }
+
+    /**
      * Does the door stand between the guide and the place it was walking to? That is the test for "it
      * stopped at a door it was trying to pass" - as opposed to "it stopped at a door it lives beside",
      * which nothing should push it through.
@@ -540,7 +594,12 @@ public final class NpcDoors368 {
     private static boolean doorBetween(dev.settledlands.npc.GuideNpc npc, UUID id, BlockPos door) {
         if (door == null) return false;
         Watch watch = WATCH.get(id);
-        if (watch == null || watch.target == null || watch.age > 60) return false;
+        // Build 410: the age of the target was sixty ticks - one second of standing still and the pass
+        // forgot where the guide was going, which is the second half of the 409 deadlock. A target stays
+        // remembered while the guide is standing and its path is unfinished; it is dropped when a new target
+        // arrives and ages normally only for a guide that already has a finished path.
+        if (watch == null || watch.target == null) return false;
+        if (watch.age > 60 && !hasPath(npc)) return false;
         double dx = watch.target.getX() + 0.5D - npc.getX();
         double dz = watch.target.getZ() + 0.5D - npc.getZ();
         double length = Math.sqrt(dx * dx + dz * dz);

@@ -73,3 +73,12 @@
 
 База — 404. Логика дверей байт-в-байт как в 408-й; изменено только тело (`0.675F` → `0.6F`). В игре
 **не проверено**.
+
+## Build 410 — запертая дверь перед стоящим проводником (2026-11-09)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build410-door-on-the-way.jar | `1b3keifJPLw6RRU7QRnXyGhbYBd0NMcTg` | `03e6c07b52da1b7f57de1cde5b9658133d000fb13e88973afefa147ce251f054` |
+| SettledLands-Build410-DoorOnTheWay-Source.zip | `1HHi6hdAapJ0Hd1huKHFPgOTSsIZmswTt` | `87078f3c5f4242adfeea5d2eee826bef7193468e9876d11e122fb594c2cc94a6` |
+
+База — 404. Изменён только `NpcDoors368`; тело 0.6 берётся из 409-й без изменений. В игре **не проверено**.

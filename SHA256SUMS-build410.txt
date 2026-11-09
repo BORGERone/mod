@@ -1,0 +1,2 @@
+03e6c07b52da1b7f57de1cde5b9658133d000fb13e88973afefa147ce251f054  settledlands-0.8.0-build410-door-on-the-way.jar
+87078f3c5f4242adfeea5d2eee826bef7193468e9876d11e122fb594c2cc94a6  SettledLands-Build410-DoorOnTheWay-Source.zip

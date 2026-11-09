@@ -385,9 +385,19 @@ def structural(jar):
             # guide" exists only in the allow branch, "not on a guide's path" only in the refuse branch. A
             # class that carries both cannot be answering the lock with a single yes or a single no.
             npc_bytes = z.read(npc)
-            if b"is not on a guide's path" not in npc_bytes:
+            if b"is not on a guide's way" not in npc_bytes:
                 problems.append("the pass does not refuse a locked door that merely stands next to the guide "
                                 "- the pass would be a key to every locked door in the village (build 408)")
+            # Build 410: the verdict must not be the "is it moving" flag. That flag says a guide standing in
+            # front of a door is not on its way to it, and build 409 answered the lock with exactly that - the
+            # pass then refused the one door the guide was standing at, five times a second, for ever.
+            i = npc_bytes.find(b"openAround")
+            ret = npc_bytes.find(b")Lnet/minecraft/core/BlockPos;", i if i >= 0 else 0)
+            if i >= 0 and ret > 0 and npc_bytes[ret - 1:ret] == b"Z":
+                problems.append("the door pass still takes a boolean (the 'is the guide moving' flag) as the "
+                                "answer to 'is this door on the guide's way' - a guide that has stopped is by "
+                                "definition not moving, so its own door is refused and it stands there for "
+                                "ever (build 410)")
             if b"is on the guide's path" not in npc_bytes:
                 problems.append("the pass does not open a locked door that is on the guide's path - the "
                                 "guide stands in front of its own door, which is the author's 407 report "
