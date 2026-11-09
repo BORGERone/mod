@@ -10,4 +10,12 @@ package net.minecraft.world.level.pathfinder;
 public class NodeEvaluator {
     public void setCanOpenDoors(boolean canOpenDoors) {}
     public boolean canOpenDoors() { return false; }
+
+    /**
+     * Build 414: {@code setCanPassDoors(boolean)} and {@code canPassDoors()} live on {@code NodeEvaluator}
+     * itself in Minecraft 1.21.1 (not on {@code PathNavigation}, where build 407's call threw
+     * {@code NoSuchMethodError} at runtime in the author's 413 log).
+     */
+    public void setCanPassDoors(boolean canPassDoors) {}
+    public boolean canPassDoors() { return false; }
 }

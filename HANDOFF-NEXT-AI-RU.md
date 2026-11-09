@@ -127,6 +127,36 @@ evaluator; дверь на пути открывается и держится, 
 `openAhead`-конус и `pushThrough` удалены. Гейт `door_lock_check.py` теперь **требует** отсутствия толчка и
 наличия всех этих механизмов — на 404-й он падает.
 
+## 4h. Настоящая причина 407–413 из `latest.log` от 413-й — исправлено в 414
+
+Автор прислал `latest.log` запуска 413-й сборки в Minecraft 1.21.1, который снял все догадки 408–413:
+
+1. **Оба входа (`onServerTick` и `GuideDoorPass413Mixin#pass`) в игре РАБОТАЛИ**, и в `02:11:30.517` проход
+   успешно открыл тестовую дверь `{62, 64, -237}` и добавил её в `OPENED`.
+2. **`NoSuchFieldError: NpcDoors368$Open does not have member field 'boolean walkedTo'`** на строках
+   `stopLeftBehind(:554)` и `markWalkedTo(:529)`: скрипты `patch_build407..413.py` заменяли в `.jar` только
+   внешний `NpcDoors368.class`, оставляя внутри старый `NpcDoors368$Open.class` от 404-й сборки без поля
+   `walkedTo`. В 407–411 первое же падение выключало проход на всю сессию (`failed = true`), а в 412–413
+   запись первой двери навсегда застревала в `OPENED`, из-за чего каждый следующий `track()` обрывался на
+   `markWalkedTo` **до** `openOnPath`/`openAround`, а за 40 с выбивался лимит `FAILURE_LIMIT = 200`.
+3. **`NoSuchMethodError: void PathNavigation.setCanPassDoors(boolean)`** на `allowDoorNodes(:347)`: в 1.21.1
+   методы `setCanPassDoors(boolean)` и `canPassDoors()` объявлены на `NodeEvaluator` (рядом с
+   `setCanOpenDoors(boolean)`), а не на `PathNavigation`.
+
+**Что сделано в 414-й (база — 413):**
+* упакованы все 3 класса (`NpcDoors368.class`, `NpcDoors368$Open.class`, `NpcDoors368$Watch.class`) + добавлена
+  самопроверка в `patch_build414.py` по всем `out414/**/*.class`;
+* `setCanPassDoors`/`canPassDoors` перенесены на `NodeEvaluator` (и в `api-src`, и в `CONFIRMED_EXTERNAL`, с
+  удалением ложной записи `PathNavigation#setCanPassDoors`);
+* в `NpcDoors368` добавлены: канонизация нижней половины двери (`baseDoorPos`) для `keepOpen`/`guideOpened`
+  (чтобы `DoorGuard371` не захлопывал верхнюю запертую половину `{x, y+1, z}`), по-проводниковый отсчёт тиков
+  `LAST_TRACK` по `UUID` (чтобы `onServerTick` и `pass()` не сбивали `LAST_POS` двойным вызовом в один тик и
+  не блокировали 2-го проводника), и открытие дверей (включая запертые) строго при `onPath == true`, без
+  повторного открытия за спиной;
+* расширены гейты: `dangling_refs.py` теперь проверяет все внутримодовые `Fieldref`/`Methodref` в классах
+  `.jar` (падает на 413-й), а `door_lock_check.py` + `DoorLock368Probe.java` проверяют `Open.walkedTo` на
+  живой Java 21 JVM. **В игре 414-я ещё не проверена.**
+
 ## 4g. Проход не вызывался вообще — второй вход из тика NPC (413)
 
 Симптом-ключ автора: дверь была открыта ещё при загрузке мира → проводник проходил через неё **много раз и

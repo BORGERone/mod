@@ -84,6 +84,87 @@ INTERNAL = "dev/settledlands/"
 # is enough to walk every descriptor - which is how build 352 died. So both are checked.
 DESCRIPTOR = re.compile(r"L(dev/settledlands/[A-Za-z0-9_$/]+)[;<]")
 
+STDLIB_METHODS = {
+    "java/lang/Object": {
+        ("<init>", "()V"), ("equals", "(Ljava/lang/Object;)Z"), ("hashCode", "()I"),
+        ("toString", "()Ljava/lang/String;"), ("getClass", "()Ljava/lang/Class;"),
+        ("clone", "()Ljava/lang/Object;"), ("notify", "()V"), ("notifyAll", "()V"),
+        ("wait", "()V"), ("wait", "(J)V"), ("wait", "(JI)V"),
+    },
+    "java/lang/Enum": {
+        ("name", "()Ljava/lang/String;"), ("ordinal", "()I"),
+        ("compareTo", "(Ljava/lang/Enum;)I"), ("compareTo", "(Ljava/lang/Object;)I"),
+        ("getDeclaringClass", "()Ljava/lang/Class;"), ("describeConstable", "()Ljava/util/Optional;"),
+        ("valueOf", "(Ljava/lang/Class;Ljava/lang/String;)Ljava/lang/Enum;"),
+    },
+    "java/lang/Record": {
+        ("<init>", "()V"), ("equals", "(Ljava/lang/Object;)Z"),
+        ("hashCode", "()I"), ("toString", "()Ljava/lang/String;"),
+    },
+}
+
+# Pre-existing dead call inside the untouched 0.8.0 base class GuideTomeScreen (never replaced).
+HISTORICAL_INTERNAL_SKIPS = {
+    ("dev/settledlands/npc/client/GuideTomeScreen",
+     "dev/settledlands/npc/GuideNet", "method", "sendToServer",
+     "(Lnet/minecraft/network/protocol/common/custom/CustomPacketPayload;)V"),
+}
+
+
+def unresolved_internal_members(classes):
+    """Build 414: every intra-jar Fieldref/Methodref targeting dev/settledlands/* must exist on its owner.
+
+    Builds 407-413 added `boolean walkedTo` to `NpcDoors368$Open` and referenced it from `NpcDoors368`,
+    but packaged only `NpcDoors368.class` while leaving build 404's `NpcDoors368$Open.class` in the jar.
+    Because `NpcDoors368$Open.class` already existed in the base jar and lost no members relative to the
+    base, both earlier checks stayed green while the game threw `NoSuchFieldError: walkedTo` on every door.
+    """
+    mem_map = {n[:-len(".class")]: members(cf) for n, cf in classes.items()}
+    bad = []
+    for uname, cf in sorted(classes.items()):
+        user = uname[:-len(".class")]
+        for owner, kind, name, desc in refs(cf):
+            if not owner.startswith(INTERNAL) or owner not in mem_map:
+                continue
+            item = (user, owner, kind, name, desc)
+            if item in HISTORICAL_INTERNAL_SKIPS:
+                continue
+            queue = [owner]
+            seen = set()
+            found = False
+            external_ancestor = False
+            while queue and not found:
+                cur = queue.pop(0)
+                if cur in seen:
+                    continue
+                seen.add(cur)
+                if cur in mem_map:
+                    if (kind, name, desc) in mem_map[cur]:
+                        found = True
+                        break
+                    ccf = classes[cur + ".class"]
+                    if "Lorg/spongepowered/asm/mixin/Mixin;" in ccf.annotation_descriptors():
+                        external_ancestor = True
+                    sup = (ccf.super_class if isinstance(ccf.super_class, str)
+                           else ccf.class_name(ccf.super_class))
+                    if sup:
+                        queue.append(sup)
+                    for iface in ccf.interfaces:
+                        iname = iface if isinstance(iface, str) else ccf.class_name(iface)
+                        if iname:
+                            queue.append(iname)
+                elif cur in STDLIB_METHODS:
+                    if kind == "method" and (name, desc) in STDLIB_METHODS[cur]:
+                        found = True
+                        break
+                    if cur != "java/lang/Object":
+                        queue.append("java/lang/Object")
+                else:
+                    external_ancestor = True
+            if not found and not external_ancestor:
+                bad.append(item)
+    return bad
+
 
 def missing_internal(files, classes):
     """(user, missing) for every reference to a dev/settledlands class the jar does not carry."""
@@ -137,6 +218,16 @@ def main(argv):
         print("  classes the jar refers to but does not carry : %d" % len(absent))
         for user, target in absent:
             print("    ! %s refers to %s (no such class in the jar)" % (user, target))
+        return 1
+
+    missing_members = unresolved_internal_members(new)
+    if missing_members:
+        print("dangling_refs: FAIL  %s" % os.path.basename(args.jar))
+        print("  internal members referenced but missing on target class : %d"
+              % len(missing_members))
+        for user, owner, kind, member, desc in missing_members:
+            print("    ! %s refers to missing %s %s.%s:%s (stale inner/helper class in jar?)"
+                  % (user, kind, owner, member, desc))
         return 1
 
     removed = {}

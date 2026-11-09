@@ -50,6 +50,7 @@ import tempfile
 import zipfile
 
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
+import classfile
 import disasm
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
@@ -78,7 +79,8 @@ LANG = ("item.settledlands.door_key", "message.settledlands.door.locked",
 EXPECT = {"FORMAT": "keys=2 round=2 has=true empty=0",
           "DOOR": "isDoor=false isOpen=false parts=0",
           "KEY": "isKey=false",
-          "PARSE": "dim=minecraft:overworld x=12 y=64 z=-30 junk=true"}
+          "PARSE": "dim=minecraft:overworld x=12 y=64 z=-30 junk=true",
+          "GUIDE_PASS": "opened=true heldAhead=true closedBehind=true"}
 
 
 def parse(data):
@@ -346,11 +348,30 @@ def structural(jar):
                        and r[0].endswith("pathfinder/NodeEvaluator") for r in npc_refs):
                 problems.append("the path finder is never told that a closed wooden door may be opened - "
                                 "every path a guide plans goes round the door (build 403)")
+            if any(r[1] == "setCanPassDoors" and r[0]
+                   and r[0].endswith("ai/navigation/PathNavigation") for r in npc_refs):
+                problems.append("NpcDoors368 calls PathNavigation#setCanPassDoors - Minecraft 1.21.1 has no "
+                                "such method on PathNavigation (NoSuchMethodError in the 413 log); call it "
+                                "on NodeEvaluator instead (build 414)")
             if not any(r[1] == "setCanPassDoors" and r[0]
-                       and r[0].endswith("ai/navigation/PathNavigation") for r in npc_refs):
-                problems.append("the path finder is never told that a door standing open is plain floor - "
-                                "the open doorway is still a special node and the guide stops in it "
-                                "(build 407, the author's log of 406)")
+                       and r[0].endswith("pathfinder/NodeEvaluator") for r in npc_refs):
+                problems.append("the path finder is never told on NodeEvaluator that a door standing open is "
+                                "plain floor - the open doorway is still a special node and the guide stops "
+                                "in it (build 407/414)")
+            open_inner = "dev/settledlands/door/NpcDoors368$Open.class"
+            if open_inner not in names:
+                problems.append("NpcDoors368$Open.class is missing from the jar (build 414)")
+            else:
+                open_cf = classfile.parse(z.read(open_inner), open_inner)
+                if not any(f.name == "walkedTo" and f.desc == "Z" for f in open_cf.fields):
+                    problems.append("NpcDoors368$Open.class in the jar has no boolean walkedTo field - "
+                                    "stale inner class packaged from build 404 throws NoSuchFieldError on "
+                                    "every door (build 414, caught in the 413 log)")
+            if not any(r[1] == "baseDoorPos" and r[0] and r[0].endswith("door/NpcDoors368")
+                       for r in npc_refs):
+                problems.append("NpcDoors368 does not canonicalize both halves of a two-block door - "
+                                "DoorGuard371 can shut the upper locked half while the guide walks to the "
+                                "lower half (build 414)")
             if not any(r[1] == "keepOpen" and r[0] and r[0].endswith("door/NpcDoors368")
                        for r in npc_refs):
                 problems.append("a door this pass opened is not remembered - nothing keeps it open until "

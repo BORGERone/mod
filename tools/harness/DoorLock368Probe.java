@@ -1,9 +1,13 @@
 import dev.settledlands.door.DoorKey368;
-import net.minecraft.core.BlockPos;
 import dev.settledlands.door.Doors368;
 import dev.settledlands.door.DoorStore368;
+import dev.settledlands.door.NpcDoors368;
+import java.lang.reflect.Method;
 import java.util.LinkedHashSet;
 import java.util.Set;
+import java.util.UUID;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
 
 /**
  * Build 368 probe: the rules of the door lock that do not need a world.
@@ -38,5 +42,32 @@ public final class DoorLock368Probe {
                 + " y=" + (pos == null ? "-" : pos.getY())
                 + " z=" + (pos == null ? "-" : pos.getZ())
                 + " junk=" + (DoorStore368.positionOf("nonsense") == null));
+
+        // Build 414: live JVM linkage + lifecycle test of NpcDoors368$Open.walkedTo:
+        // keepOpen -> stays open while approaching -> markWalkedTo -> closes right behind in stopLeftBehind.
+        try {
+            ServerLevel level = new ServerLevel();
+            BlockPos door = new BlockPos(62, 64, -237);
+            Method keepOpen = NpcDoors368.class.getDeclaredMethod(
+                    "keepOpen", ServerLevel.class, BlockPos.class, long.class);
+            Method markWalkedTo = NpcDoors368.class.getDeclaredMethod(
+                    "markWalkedTo", ServerLevel.class, UUID.class, double.class, double.class, double.class);
+            Method stopLeftBehind = NpcDoors368.class.getDeclaredMethod("stopLeftBehind", long.class);
+            keepOpen.setAccessible(true);
+            markWalkedTo.setAccessible(true);
+            stopLeftBehind.setAccessible(true);
+
+            keepOpen.invoke(null, level, door, 10L);
+            boolean opened1 = NpcDoors368.openDoors() == 1 && NpcDoors368.guideOpened(level, door);
+            stopLeftBehind.invoke(null, 20L);
+            boolean heldAhead = NpcDoors368.openDoors() == 1;
+            markWalkedTo.invoke(null, level, UUID.randomUUID(), 62.5D, 64.5D, -236.5D);
+            stopLeftBehind.invoke(null, 25L);
+            boolean closedBehind = NpcDoors368.openDoors() == 0 && !NpcDoors368.guideOpened(level, door);
+            System.out.println("GUIDE_PASS opened=" + opened1 + " heldAhead=" + heldAhead
+                    + " closedBehind=" + closedBehind);
+        } catch (Throwable failure) {
+            System.out.println("GUIDE_PASS crashed=" + failure);
+        }
     }
 }

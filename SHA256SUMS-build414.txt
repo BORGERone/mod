@@ -1,0 +1,2 @@
+bac93703267493c1895b9d601888660596563d029a7ef4b2124f1f895eb6495a  settledlands-0.8.0-build414-door-pass-linked.jar
+462964287d878b0190c34d65095ebb75b71ea627d4ef2c00c95347b3aaf6bf15  SettledLands-Build414-DoorPassLinked-Source.zip

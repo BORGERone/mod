@@ -870,17 +870,20 @@ CONFIRMED_EXTERNAL = {
     ("net/minecraft/world/level/pathfinder/Path", "getTarget", "()Lnet/minecraft/core/BlockPos;"):
         "Build 404: the point a partial path was aiming for, said out loud in the stuck line of the log",
     # ---------------------------------------------------------------------------------------
-    # Build 407, the door is part of walking. One more member, and the author's own log of build 406 is
-    # what asked for it: with only `canOpenDoors` set, a wooden door that is *standing open* is still a
-    # special node, and the guide stood against exactly such an open door for 140 ticks ("door at ... open=
-    # true ... against a block=true"). In 1.21 the two switches are siblings on the same node maker and the
-    # mappings list them side by side: `setCanOpenDoors` (m_26440_) / `canOpenDoors` (m_148213_) and
-    # `setCanPassDoors` (m_26443_) / `canPassDoors` (m_148212_) - the published 1.21 method tables of
-    # `PathNavigation` show both pairs, and `WalkNodeEvaluator` publishes both. With pass-doors on, an open
-    # door is `DOOR_OPEN` and is plain floor - no opening step left in the way of the step itself.
-    ("net/minecraft/world/entity/ai/navigation/PathNavigation", "setCanPassDoors", "(Z)V"):
-        "Build 407: let a guide's path finder treat a wooden door standing open as plain floor - the "
-        "second of the two door switches 1.21 keeps on the node maker",
+    # Build 407 / fixed in Build 414: the second door switch on NodeEvaluator.
+    # Build 407 erroneously registered `PathNavigation#setCanPassDoors(boolean)` (removed in Build 414 after
+    # the author's Build 413 `latest.log` caught `java.lang.NoSuchMethodError: 'void net.minecraft.world.
+    # entity.ai.navigation.PathNavigation.setCanPassDoors(boolean)'` at `NpcDoors368.java:347`).
+    # In Minecraft / NeoForge 1.21.1, `PathNavigation` does NOT declare `setCanPassDoors`; `NodeEvaluator`
+    # (`net.minecraft.world.level.pathfinder.NodeEvaluator`, Yarn `PathNodeMaker`) declares the public pair
+    # `public void setCanPassDoors(boolean)` and `public boolean canPassDoors()` right beside
+    # `setCanOpenDoors(boolean)` / `canOpenDoors()` (confirmed by `evaluator.setCanOpenDoors(true)` succeeding
+    # on line 339 of the very same `latest.log` and by the 1.21.1 `NodeEvaluator` / `PathNodeMaker` javadoc).
+    ("net/minecraft/world/level/pathfinder/NodeEvaluator", "setCanPassDoors", "(Z)V"):
+        "Build 414: let a guide's NodeEvaluator treat a wooden door standing open as plain floor (replaces "
+        "build 407's bogus PathNavigation#setCanPassDoors)",
+    ("net/minecraft/world/level/pathfinder/NodeEvaluator", "canPassDoors", "()Z"):
+        "Build 414: read back the pass-doors flag on NodeEvaluator, paired with canOpenDoors()",
 }
 
 

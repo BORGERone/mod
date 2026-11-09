@@ -108,4 +108,17 @@
 | settledlands-0.8.0-build413-run-from-guide-tick.jar | `1l7Hs3JHnSMZr3Z7cFU8WOXtgGGMXr-_o` | `9d3934e6e275d6b370c5661516930461666ca6a37a8ed1d51e10d382bbc2378a` |
 | SettledLands-Build413-GuideTick-Source.zip | `1GlSubIn4nrZj63vvqTuqtSEzkRS9N67P` | `33657fc993af074f7baf4d6eeecaa2e9b41647fa2a1784fad329b3e37e80eb9f` |
 
-База — 404. `NpcDoors368` + новый миксин `GuideDoorPass413Mixin` (45 общих миксинов). В игре **не проверено**.
+База — 404. `NpcDoors368` + новый миксин `GuideDoorPass413Mixin` (45 общих миксинов). По `latest.log` от 413-й
+выявлены `NoSuchFieldError: NpcDoors368$Open.walkedTo` и `NoSuchMethodError: PathNavigation.setCanPassDoors`.
+
+## Build 414 — устранены рантайм-ошибки сцепления в проходе дверей (2026-11-09)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build414-door-pass-linked.jar | `1exvlky8nitXsFaSL5onDam5f12Qk3tXy` | `bac93703267493c1895b9d601888660596563d029a7ef4b2124f1f895eb6495a` |
+| SettledLands-Build414-DoorPassLinked-Source.zip | `17J-7XZ0Sd4v33NxIsp8QBLUsauvR-gdp` | `462964287d878b0190c34d65095ebb75b71ea627d4ef2c00c95347b3aaf6bf15` |
+
+База — 413. Упакованы `NpcDoors368.class`, `NpcDoors368$Open.class` (`walkedTo`) и `NpcDoors368$Watch.class`;
+`setCanPassDoors` перенесён с `PathNavigation` на `NodeEvaluator`; канонизированы обе половины двухблочной
+двери для `DoorGuard371`, отсчёт тиков ведётся отдельно по `UUID` каждого проводника. В игре **не проверено**.
+

@@ -106,17 +106,17 @@ public final class NpcDoors368 {
     private static final long REPLAN_EVERY = 100L;
 
     private static final Map<UUID, double[]> LAST_POS = new HashMap<>();
+    private static final Map<UUID, Long> LAST_TRACK = new HashMap<>();
     private static final Map<UUID, Watch> WATCH = new HashMap<>();
     private static final Map<UUID, int[]> STUCK = new HashMap<>();
     private static final Map<UUID, Long> REPLANNED = new HashMap<>();
-    private static final Map<PathNavigation, Long> PATH_DOORS = new HashMap<>();
     private static final List<Open> OPENED = new ArrayList<>();
 
     /** One door this pass opened, and whether a guide has been up to it since. */
     private static final class Open {
         final ServerLevel level;
         final BlockPos pos;
-        final long at;
+        long at;
         boolean walkedTo;
 
         Open(ServerLevel level, BlockPos pos, long at) {
@@ -135,8 +135,9 @@ public final class NpcDoors368 {
 
     /** How many times the pass threw. It keeps running until this many, then stands down - and says so. */
     private static int failed;
-    /** Build 413: when the pass last ran from a guide's own tick, so both ways in share one pace. */
+    /** Build 413/414: when the pass last ran from a guide's own tick, and when global cleanup last ran. */
     private static long lastOwnPass;
+    private static long lastSweepTick;
     private static final int FAILURE_LIMIT = 200;
     private static int guidesSeen;
     private static int doorsOpened;
@@ -144,6 +145,7 @@ public final class NpcDoors368 {
     private static boolean saidAwake;
     private static boolean saidFlag;
     private static int saidOpen;
+    private static int saidShut;
     private static int saidStuck;
     private static int saidPath;
     private static int saidGuard;
@@ -207,16 +209,22 @@ public final class NpcDoors368 {
      * from the entity's tick cannot make it run faster than once every {@link #PERIOD} ticks.</p>
      */
     public static void pass(dev.settledlands.npc.GuideNpc npc) {
-        if (npc == null) return;
+        if (npc == null || failed > FAILURE_LIMIT) return;
         try {
             if (!(npc.level() instanceof ServerLevel level)) return;
+            UUID id = npc.getUUID();
+            if (id == null) return;
             long now = level.getGameTime();
-            if (now - lastOwnPass < PERIOD) return;
+            Long prev = LAST_TRACK.get(id);
+            if (prev != null && now >= prev && now - prev < PERIOD) return;
             lastOwnPass = now;
-            guidesSeen = 1;
+            if (guidesSeen < 1) guidesSeen = 1;
             track(level, npc, now);
-            stopLeftBehind(now);
-            beat(now, 1, doorsOpened);
+            if (now < lastSweepTick || now - lastSweepTick >= PERIOD) {
+                lastSweepTick = now;
+                stopLeftBehind(now);
+                beat(now, guidesSeen, doorsOpened);
+            }
         } catch (Throwable failure) {
             failed++;
             if (failed <= 3) {
@@ -250,6 +258,7 @@ public final class NpcDoors368 {
         }
         if (LAST_POS.size() > 256) {
             LAST_POS.keySet().removeIf(id -> !seen.contains(id));
+            LAST_TRACK.keySet().removeIf(id -> !seen.contains(id));
             STUCK.keySet().removeIf(id -> !seen.contains(id));
             WATCH.keySet().removeIf(id -> !seen.contains(id));
             REPLANNED.keySet().removeIf(id -> !seen.contains(id));
@@ -258,77 +267,66 @@ public final class NpcDoors368 {
 
     /** Everything the pass does for one guide, in one place, so both ways in run the same code. */
     private static void track(ServerLevel level, dev.settledlands.npc.GuideNpc npc, long now) {
-        {
-            UUID id = npc.getUUID();
-            if (id == null) return;
-            allowDoorNodes(npc);
-            double x = npc.getX();
-            double y = npc.getY();
-            double z = npc.getZ();
-            double[] last = LAST_POS.get(id);
-            if (last == null) {
-                LAST_POS.put(id, new double[] {x, y, z, 0.0D, 0.0D});
+        UUID id = npc.getUUID();
+        if (id == null) return;
+        Long prev = LAST_TRACK.get(id);
+        if (prev != null && now >= prev && now - prev < PERIOD) return;
+        LAST_TRACK.put(id, now);
+        allowDoorNodes(npc);
+        double x = npc.getX();
+        double y = npc.getY();
+        double z = npc.getZ();
+        double[] last = LAST_POS.get(id);
+        if (last == null) {
+            LAST_POS.put(id, new double[] {x, y, z, 0.0D, 0.0D});
+        } else {
+            // Remember where it came from while it is still moving: that is the only heading this pass
+            // can trust, because the guide walks by three different engines (its own scripted step, a
+            // mobility route, and the vanilla navigator) and none of them all the time.
+            double stepX = x - last[0];
+            double stepZ = z - last[2];
+            if (Math.abs(stepX) + Math.abs(stepZ) >= 0.02D) {
+                LAST_POS.put(id, new double[] {x, y, z, stepX, stepZ});
             } else {
-                // Remember where it came from while it is still moving: that is the only heading this pass
-                // can trust, because the guide walks by three different engines (its own scripted step, a
-                // mobility route, and the vanilla navigator) and none of them all the time.
-                double stepX = x - last[0];
-                double stepZ = z - last[2];
-                if (Math.abs(stepX) + Math.abs(stepZ) >= 0.02D) {
-                    LAST_POS.put(id, new double[] {x, y, z, stepX, stepZ});
-                } else {
-                    LAST_POS.put(id, new double[] {x, y, z, last[3], last[4]});
-                }
+                LAST_POS.put(id, new double[] {x, y, z, last[3], last[4]});
             }
-            double moved = last == null
-                    ? 1.0D
-                    : Math.abs(x - last[0]) + Math.abs(y - last[1]) + Math.abs(z - last[2]);
-            boolean walking = moved >= 0.05D;
-            boolean pinned = !walking && hasPath(npc);
-            int[] stood = STUCK.get(id);
-            int still = walking ? 0 : (stood == null ? PERIOD : stood[0] + PERIOD);
-            STUCK.put(id, new int[] {still});
-            rememberTarget(npc, id);
-            markWalkedTo(id, x, y, z);
+        }
+        double moved = last == null
+                ? 1.0D
+                : Math.abs(x - last[0]) + Math.abs(y - last[1]) + Math.abs(z - last[2]);
+        boolean walking = moved >= 0.05D;
+        boolean pinned = !walking && hasPath(npc);
+        int[] stood = STUCK.get(id);
+        int still = walking ? 0 : (stood == null ? PERIOD : stood[0] + PERIOD);
+        STUCK.put(id, new int[] {still});
+        rememberTarget(npc, id);
+        markWalkedTo(level, id, x, y, z);
 
-            // The doors the guide's own path goes through: the exact set it has decided to walk through,
-            // opened before it arrives and kept open until it is out (see stopLeftBehind).
-            openOnPath(level, npc, now);
-            // And the doors around a guide, in case the path was planned before the door was ever opened -
-            // the path finder only knows about doors standing open when it plans. Build 410: whether the
-            // door is on the guide's way is decided per door and by the facts (its own path, or the line to
-            // where it was walking), not by the "is it moving this fifth of a second" flag: build 409 passed
-            // that flag here as the verdict, so a locked door was "not on the path" exactly when the guide
-            // had stopped in front of it - and it stood there for ever.
-            if (openAround(level, npc, id, x, y, z, now, walking ? REACH : STUCK_REACH, walking) != null) {
-                doorsOpened++;
-            }
+        // The doors the guide's own path goes through: the exact set it has decided to walk through,
+        // opened before it arrives and kept open until it is out (see stopLeftBehind).
+        openOnPath(level, npc, now);
+        openAround(level, npc, id, x, y, z, now, walking ? REACH : STUCK_REACH, walking);
 
-            boolean stoodAtDoor = !walking && still >= STUCK_TICKS && still % STUCK_TICKS == 0
-                    && pinned;
-            if (stoodAtDoor) {
-                // A guide with an unfinished path that has not moved, and a door between it and the place
-                // it was walking to: ask the navigator to plan again now that the door is standing open.
-                // This is a replan, not a step - the guide still walks where its own movement drives it.
-                BlockPos door = doorInReach(level, npc, x, y, z);
-                boolean planned = door != null && doorBetween(npc, id, door) && replan(npc, id, now);
-                traceStuck(level, npc, x, y, z, door, planned ? "path planned again" : "nothing to do");
-            }
+        boolean stoodAtDoor = !walking && still >= STUCK_TICKS && still % STUCK_TICKS == 0
+                && pinned;
+        if (stoodAtDoor) {
+            // A guide with an unfinished path that has not moved, and a door between it and the place
+            // it was walking to: ask the navigator to plan again now that the door is standing open.
+            // This is a replan, not a step - the guide still walks where its own movement drives it.
+            BlockPos door = doorInReach(level, npc, x, y, z);
+            boolean planned = door != null && doorBetween(npc, id, door) && replan(npc, id, now);
+            traceStuck(level, npc, x, y, z, door, planned ? "path planned again" : "nothing to do");
         }
     }
 
     /**
      * Tells the guide's node maker that doors are doorways.
      *
-     * <p>Two switches, and both are needed: {@code canOpenDoors} makes a <b>closed</b> wooden door a node
-     * that may be walked (the pass will have opened it by the time the guide gets there), and
-     * {@code canPassDoors} makes a wooden door <b>standing open</b> plain floor. Without the second one the
-     * step into the doorway is still special, and the step is what the author watches.</p>
-     *
-     * <p>It is set on every pass rather than once, because a navigator may hand out a fresh node maker
-     * whenever it likes. The log line is said once per navigator, so a session cannot fill the file with it.
-     * Build 403's finding stands: in 1.21 this question does not live on the mob - {@code Mob} has no
-     * {@code canOpenDoors} at all - which is why build 368's mob mixin never answered anything.</p>
+     * <p>Two switches, and both live on {@link NodeEvaluator} in Minecraft 1.21.1: {@code canOpenDoors} makes
+     * a <b>closed</b> wooden door a node that may be walked (the pass will have opened it by the time the
+     * guide gets there), and {@code canPassDoors} makes a wooden door <b>standing open</b> plain floor.
+     * Build 407 called {@code setCanPassDoors} on {@code PathNavigation}, where 1.21.1 has no such method
+     * ({@code NoSuchMethodError} in the 413 log); build 414 sets both directly on {@code NodeEvaluator}.</p>
      */
     private static void allowDoorNodes(dev.settledlands.npc.GuideNpc npc) {
         try {
@@ -336,22 +334,19 @@ public final class NpcDoors368 {
             if (navigation == null) return;
             NodeEvaluator evaluator = navigation.getNodeEvaluator();
             if (evaluator == null) return;
-            if (!evaluator.canOpenDoors()) evaluator.setCanOpenDoors(true);
-            Long known = PATH_DOORS.get(navigation);
-            long now = npc.level() instanceof ServerLevel server ? server.getGameTime() : 0L;
-            if (known != null && now - known < 200L) return;
-            PATH_DOORS.put(navigation, now);
-            // Build 407: the second switch. Reading it back is not possible without a second external
-            // member, so this is said once per navigator and the effect is visible where it matters: the
-            // guide either walks through the open doorway or it does not.
-            navigation.setCanPassDoors(true);
-            if (!saidFlag) {
+            boolean changed = false;
+            if (!evaluator.canOpenDoors()) {
+                evaluator.setCanOpenDoors(true);
+                changed = true;
+            }
+            if (!evaluator.canPassDoors()) {
+                evaluator.setCanPassDoors(true);
+                changed = true;
+            }
+            if (changed && !saidFlag) {
                 saidFlag = true;
                 LOG.info("door: a guide's own path finding treats a door as a doorway now - a closed wooden "
                         + "door as a door it may open, a door standing open as plain floor");
-            }
-            if (PATH_DOORS.size() > 64) {
-                PATH_DOORS.keySet().removeIf(nav -> nav == null || nav.isDone() && nav.getPath() == null);
             }
         } catch (Throwable failure) {
             if (failure != null) {
@@ -385,12 +380,18 @@ public final class NpcDoors368 {
             if (path == null) return null;
             int count = path.getNodeCount();
             if (count <= 0) return null;
-            int from = Math.max(0, path.getNextNodeIndex() - 1);
-            int to = Math.min(count - 1, path.getNextNodeIndex() + LOOKAHEAD);
+            int next = path.getNextNodeIndex();
+            int from = Math.max(0, next - 1);
+            int to = Math.min(count - 1, next + LOOKAHEAD);
             BlockPos opened = null;
             for (int i = from; i <= to; i++) {
                 BlockPos node = path.getNodePos(i);
                 if (node == null) continue;
+                if (i < next) {
+                    double ndx = node.getX() + 0.5D - npc.getX();
+                    double ndz = node.getZ() + 0.5D - npc.getZ();
+                    if (ndx * ndx + ndz * ndz > 1.2D * 1.2D) continue;
+                }
                 BlockPos hit = openDoorAt(level, npc, node, now);
                 if (hit != null && opened == null) opened = hit;
             }
@@ -463,17 +464,11 @@ public final class NpcDoors368 {
             if (pos == null) return false;
             if (!Doors368.isDoor(level.getBlockState(pos))) return false;
             if (Doors368.anyOpen(level, pos)) {
-                keepOpen(level, pos, now);
+                if (onPath) keepOpen(level, pos, now);
                 return false;
             }
-            // Build 408: a locked door is the author's rule, and he settled it in one sentence - «нпс
-            // должен открывать все двери на его пути, в т.ч. и запертые». So the lock is not an answer by
-            // itself: a door the guide's own path runs through is opened locked or not (368/403 said the
-            // same: a guide is allowed to open a locked door and walk through it), while a locked door that
-            // merely stands next to the guide is nobody's doorway and stays shut. Build 407 refused both,
-            // and the guide that had opened that very door in the log of 406 stopped dead in front of it.
-            if (locked(level, pos) && !onPath) {
-                if (saidGuard < 3) {
+            if (!onPath) {
+                if (locked(level, pos) && saidGuard < 3) {
                     saidGuard++;
                     LOG.info("door: the locked door at " + pos + " is not on a guide's way - it stays shut "
                             + "(path=" + pathState(npc) + ")");
@@ -486,6 +481,7 @@ public final class NpcDoors368 {
                         + "and shut again behind it");
             }
             if (!Doors368.setOpen(level, pos, true)) return false;
+            doorsOpened++;
             keepOpen(level, pos, now);
             if (saidOpen < 6) {
                 saidOpen++;
@@ -511,22 +507,34 @@ public final class NpcDoors368 {
         return false;
     }
 
+    /** Canonical bottom half of a two-block door, so both halves share one entry and one guard verdict. */
+    private static BlockPos baseDoorPos(Level level, BlockPos pos) {
+        if (level == null || pos == null) return pos;
+        BlockPos below = new BlockPos(pos.getX(), pos.getY() - 1, pos.getZ());
+        if (Doors368.isDoor(level.getBlockState(below))) return below;
+        return pos;
+    }
+
     /** Remembers a door as one this pass keeps open (the list is bounded - a session cannot grow it for ever). */
     private static void keepOpen(ServerLevel level, BlockPos pos, long now) {
+        BlockPos base = baseDoorPos(level, pos);
         for (int i = 0; i < OPENED.size(); i++) {
             Open open = OPENED.get(i);
-            if (open.level == level && open.pos != null && open.pos.equals(pos)) return;
+            if (open.level == level && open.pos != null && open.pos.equals(base)) {
+                open.at = now;
+                return;
+            }
         }
         if (OPENED.size() >= 64) OPENED.remove(0);
-        OPENED.add(new Open(level, pos, now));
+        OPENED.add(new Open(level, base, now));
     }
 
     /** Build 407: marks a door opened ahead as "walked through", once a guide has actually been in it. */
-    private static void markWalkedTo(UUID id, double x, double y, double z) {
+    private static void markWalkedTo(ServerLevel level, UUID id, double x, double y, double z) {
         if (OPENED.isEmpty()) return;
         for (int i = 0; i < OPENED.size(); i++) {
             Open open = OPENED.get(i);
-            if (open.walkedTo || open.pos == null) continue;
+            if (open.walkedTo || open.level != level || open.pos == null) continue;
             double dx = open.pos.getX() + 0.5D - x;
             double dz = open.pos.getZ() + 0.5D - z;
             double dy = open.pos.getY() + 0.5D - y;
@@ -558,6 +566,11 @@ public final class NpcDoors368 {
                 OPENED.remove(i);
                 if (Doors368.anyOpen(open.level, open.pos)) {
                     Doors368.setOpen(open.level, open.pos, false);
+                    if (saidShut < 6) {
+                        saidShut++;
+                        LOG.info("door: the guide pass shut " + open.pos
+                                + (open.walkedTo ? " behind the guide" : " after waiting"));
+                    }
                 }
             }
         }
@@ -668,18 +681,20 @@ public final class NpcDoors368 {
             double dz = door.getZ() + 0.5D - npc.getZ();
             double away = Math.sqrt(dx * dx + dz * dz);
             if (away > 1.6D) return false;
-            if (!walking) return true;
             double[] last = LAST_POS.get(id);
-            if (last == null) return true;
+            if (last == null) return hasPath(npc);
             double headingX = last[3];
             double headingZ = last[4];
             double heading = Math.sqrt(headingX * headingX + headingZ * headingZ);
-            if (heading < 0.001D) return true;
-            // How far ahead along its own heading the door is, and how far off that line: a cone of about
-            // sixty degrees, which is one doorway wide at arm's length and nothing else.
+            if (heading < 0.001D) {
+                Watch watch = WATCH.get(id);
+                return hasPath(npc) || (watch != null && watch.target != null);
+            }
+            // How far ahead along its own heading the door is (-0.35 covers a door leaf on the far edge of
+            // the block the guide just stepped into, while excluding doors 1.7+ blocks behind it).
             double ahead = (dx * headingX + dz * headingZ) / heading;
             double off = Math.abs(dx * headingZ - dz * headingX) / heading;
-            return ahead >= 0.2D && off <= ahead + 0.35D;
+            return ahead >= -0.35D && off <= Math.max(0.55D, ahead + 0.35D);
         } catch (Throwable failure) {
             return false;
         }
@@ -694,11 +709,17 @@ public final class NpcDoors368 {
             if (path == null) return false;
             int count = path.getNodeCount();
             if (count <= 0) return false;
-            int from = Math.max(0, path.getNextNodeIndex() - 1);
-            int to = Math.min(count - 1, path.getNextNodeIndex() + LOOKAHEAD);
+            int next = path.getNextNodeIndex();
+            int from = Math.max(0, next - 1);
+            int to = Math.min(count - 1, next + LOOKAHEAD);
             for (int i = from; i <= to; i++) {
                 BlockPos node = path.getNodePos(i);
                 if (node == null) continue;
+                if (i < next) {
+                    double ndx = node.getX() + 0.5D - npc.getX();
+                    double ndz = node.getZ() + 0.5D - npc.getZ();
+                    if (ndx * ndx + ndz * ndz > 1.2D * 1.2D) continue;
+                }
                 for (int dy = -1; dy <= 1; dy++) {
                     if (node.getX() == door.getX() && node.getY() + dy == door.getY()
                             && node.getZ() == door.getZ()) {
@@ -733,7 +754,7 @@ public final class NpcDoors368 {
         double gx = door.getX() + 0.5D - npc.getX();
         double gz = door.getZ() + 0.5D - npc.getZ();
         double along = (gx * dx + gz * dz) / length;              // how far along the way the door is
-        if (along < 0.2D || along > length + 1.0D) return false;  // behind the guide, or past the target
+        if (along < -0.35D || along > length + 1.0D) return false; // behind the guide, or past the target
         double across = Math.abs(gx * dz - gz * dx) / length;     // how far off that line the door is
         return across <= 1.4D;
     }
@@ -797,12 +818,14 @@ public final class NpcDoors368 {
         return false;
     }
 
-    /** Did this pass open that very door? The guard asks, so it does not fight the pass over a door. */
+    /** Did this pass open that very door (either half)? The guard asks, so it does not fight the pass. */
     public static boolean guideOpened(Level level, BlockPos pos) {
-        if (level == null || pos == null) return false;
+        if (level == null || pos == null || OPENED.isEmpty()) return false;
+        BlockPos base = baseDoorPos(level, pos);
         for (int i = 0; i < OPENED.size(); i++) {
             Open open = OPENED.get(i);
-            if (open.level == level && open.pos != null && open.pos.equals(pos)) return true;
+            if (open.level != level || open.pos == null) continue;
+            if (open.pos.equals(pos) || open.pos.equals(base)) return true;
         }
         return false;
     }

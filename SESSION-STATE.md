@@ -10,12 +10,28 @@
 >
 > Текущая база: `settledlands-0.8.0-build404-through-the-doorway.jar`.
 
-Обновлено: 2026-11-04. Ветка: `arena/5618404a-mod` (ранее `arena/99d7691a-mod`).
+Обновлено: 2026-11-09. Ветка: `arena/78029e2d-mod`.
 
 > **Сначала читать `HANDOFF-NEXT-AI-RU.md`** — там текущая задача, открытый дефект, порядок действий и
 > ловушки. Этот файл — история и хронология.
 
 ## Текущая сборка
+
+`settledlands-0.8.0-build414-door-pass-linked.jar` (sha256 `bac93703267493c1895b9d601888660596563d029a7ef4b2124f1f895eb6495a`,
+база — **build 413**) — **исправлены обе рантайм-ошибки сцепления классов в `NpcDoors368`**, обнаруженные в
+`latest.log` запуска 413-й сборки:
+* упакованы обновлённые вложенные классы `NpcDoors368$Open.class` (с полем `boolean walkedTo`, отсутствие
+  которого в jar 407–413 вызывало `NoSuchFieldError` в `stopLeftBehind` и `markWalkedTo`) и
+  `NpcDoors368$Watch.class`;
+* вызов `setCanPassDoors(true)` перенесён с `PathNavigation` (где в MC 1.21.1 его нет — `NoSuchMethodError`)
+  на `NodeEvaluator` (`setCanPassDoors` / `canPassDoors`);
+* согласованы обе половины двухблочной двери (`baseDoorPos`) для `DoorGuard371#guideOpened`, разделён отсчёт
+  тиков по `UUID` каждого проводника (`LAST_TRACK`) между `GuideDoorPass413Mixin` и `onServerTick`, и двери
+  (как обычные, так и запертые) открываются строго на пути проводника с немедленным закрытием за спиной;
+* расширены `tools/dangling_refs.py` (проверка внутримодовых полей/методов в jar) и `tools/door_lock_check.py`
+  (живая JVM-проба `DoorLock368Probe`). 35/35 гейтов PASS, `verify_jar --base 413` PASS.
+**В игре не подтверждено.**
+
 
 `settledlands-0.8.0-build404-through-the-doorway.jar` — **проводник идёт через открытый проём**. Отчёт после
 403: «доходит до двери, теперь открывает, но дальше открытой двери не проходит».
