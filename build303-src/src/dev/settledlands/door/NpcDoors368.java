@@ -179,7 +179,20 @@ public final class NpcDoors368 {
             double y = npc.getY();
             double z = npc.getZ();
             double[] last = LAST_POS.get(id);
-            LAST_POS.put(id, new double[] {x, y, z});
+            if (last == null) {
+                LAST_POS.put(id, new double[] {x, y, z, 0.0D, 0.0D});
+            } else {
+                // Remember where it came from while it is still moving: that is the only heading this pass
+                // can trust, because the guide walks by three different engines (its own scripted step, a
+                // mobility route, and the vanilla navigator) and none of them all the time.
+                double stepX = x - last[0];
+                double stepZ = z - last[2];
+                if (Math.abs(stepX) + Math.abs(stepZ) >= 0.02D) {
+                    LAST_POS.put(id, new double[] {x, y, z, stepX, stepZ});
+                } else {
+                    LAST_POS.put(id, new double[] {x, y, z, last[3], last[4]});
+                }
+            }
             double moved = last == null
                     ? 1.0D
                     : Math.abs(x - last[0]) + Math.abs(y - last[1]) + Math.abs(z - last[2]);
@@ -200,7 +213,7 @@ public final class NpcDoors368 {
             // where it was walking), not by the "is it moving this fifth of a second" flag: build 409 passed
             // that flag here as the verdict, so a locked door was "not on the path" exactly when the guide
             // had stopped in front of it - and it stood there for ever.
-            openAround(level, npc, id, x, y, z, now, walking ? REACH : STUCK_REACH);
+            openAround(level, npc, id, x, y, z, now, walking ? REACH : STUCK_REACH, walking);
 
             boolean stoodAtDoor = !walking && still >= STUCK_TICKS && still % STUCK_TICKS == 0
                     && pinned;
@@ -315,13 +328,12 @@ public final class NpcDoors368 {
     /**
      * Opens the doors around a guide, each one judged by whether it is on the guide's way.
      *
-     * <p>Build 410: the verdict is not the caller's flag any more. {@link #onTheWay} answers it per door,
-     * from the guide's own path and from the line between it and the place it was walking to - so a door in
-     * front of a standing guide is still a door on its way, which is the case that made build 409's guide
-     * stand in front of a closed one for ever.</p>
+     * <p>Build 410: the verdict is not the caller's flag any more. Build 411 adds the third answer,
+     * {@link #inFrontOf}: the guide walks by three engines and the vanilla navigator is not always one of
+     * them, so path-and-target can both be empty - and then every door was off its way and it opened none.</p>
      */
     private static BlockPos openAround(ServerLevel level, dev.settledlands.npc.GuideNpc npc, UUID id,
-            double x, double y, double z, long now, double reach) {
+            double x, double y, double z, long now, double reach, boolean walking) {
         int bx = (int) Math.floor(x);
         int by = (int) Math.floor(y);
         int bz = (int) Math.floor(z);
@@ -335,7 +347,8 @@ public final class NpcDoors368 {
                             pos.getZ() + 0.5D);
                     if (distance > reach * reach) continue;
                     if (nearest == null) nearest = pos;
-                    if (openDoor(level, npc, pos, now, onTheWay(level, npc, id, pos))) {
+                    if (openDoor(level, npc, pos, now,
+                            onTheWay(level, npc, id, pos) || inFrontOf(level, npc, id, pos, walking))) {
                         nearest = pos;
                     }
                 }
@@ -557,6 +570,44 @@ public final class NpcDoors368 {
         if (door == null) return false;
         if (onPathNode(npc, door)) return true;
         return doorBetween(npc, id, door);
+    }
+
+    /**
+     * Build 411: is the door straight in front of the guide, at arm's length?
+     *
+     * <p>The other two answers can both be silent, and that is what the author met in 410 («разучился их сам
+     * открывать»): the guide walks by its own scripted step and by its own mobility routes, so the vanilla
+     * navigator's path and target are often empty - and then "on the way" was false for every door, so a
+     * locked door was never opened, and a walk that had to go through one stopped dead.</p>
+     *
+     * <p>This one is physics instead of bookkeeping: while the guide is moving, the door must lie ahead of
+     * it within a narrow cone and within arm's length - the door it is about to walk into. While it stands,
+     * the door must be close enough to touch, because a guide that has stopped is standing at a doorway, not
+     * beside a wall.</p>
+     */
+    private static boolean inFrontOf(ServerLevel level, dev.settledlands.npc.GuideNpc npc, UUID id,
+            BlockPos door, boolean walking) {
+        if (door == null) return false;
+        try {
+            double dx = door.getX() + 0.5D - npc.getX();
+            double dz = door.getZ() + 0.5D - npc.getZ();
+            double away = Math.sqrt(dx * dx + dz * dz);
+            if (away > 1.6D) return false;
+            if (!walking) return true;
+            double[] last = LAST_POS.get(id);
+            if (last == null) return true;
+            double headingX = last[3];
+            double headingZ = last[4];
+            double heading = Math.sqrt(headingX * headingX + headingZ * headingZ);
+            if (heading < 0.001D) return true;
+            // How far ahead along its own heading the door is, and how far off that line: a cone of about
+            // sixty degrees, which is one doorway wide at arm's length and nothing else.
+            double ahead = (dx * headingX + dz * headingZ) / heading;
+            double off = Math.abs(dx * headingZ - dz * headingX) / heading;
+            return ahead >= 0.2D && off <= ahead + 0.35D;
+        } catch (Throwable failure) {
+            return false;
+        }
     }
 
     /** Is this door block one of the next nodes of the guide's own path? */

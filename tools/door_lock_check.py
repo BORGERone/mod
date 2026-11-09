@@ -391,13 +391,17 @@ def structural(jar):
             # Build 410: the verdict must not be the "is it moving" flag. That flag says a guide standing in
             # front of a door is not on its way to it, and build 409 answered the lock with exactly that - the
             # pass then refused the one door the guide was standing at, five times a second, for ever.
-            i = npc_bytes.find(b"openAround")
-            ret = npc_bytes.find(b")Lnet/minecraft/core/BlockPos;", i if i >= 0 else 0)
-            if i >= 0 and ret > 0 and npc_bytes[ret - 1:ret] == b"Z":
-                problems.append("the door pass still takes a boolean (the 'is the guide moving' flag) as the "
-                                "answer to 'is this door on the guide's way' - a guide that has stopped is by "
-                                "definition not moving, so its own door is refused and it stands there for "
-                                "ever (build 410)")
+            # Build 410/411. What must never happen is a door being judged by the "is the guide moving" flag
+            # ALONE - build 409 did exactly that and a guide standing in front of a door was told the door
+            # was not on its way, for ever. The flag coming back as an argument is fine (build 411 uses it to
+            # narrow a cone); what is not fine is the verdict being that flag and nothing else. So: the pass
+            # must offer at least one fact about the door itself - its own path, the target it walks to, or
+            # its place in front of the guide's nose.
+            facts = [marker for marker in (b"onTheWay", b"onPathNode", b"inFrontOf") if marker in npc_bytes]
+            if b"openAround" in npc_bytes and not facts:
+                problems.append("the door pass judges a door by the 'is the guide moving' flag and by nothing "
+                                "else - a guide that has stopped is by definition not moving, so its own door "
+                                "is refused and it stands there for ever (build 409/410)")
             if b"is on the guide's path" not in npc_bytes:
                 problems.append("the pass does not open a locked door that is on the guide's path - the "
                                 "guide stands in front of its own door, which is the author's 407 report "

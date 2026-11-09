@@ -82,3 +82,12 @@
 | SettledLands-Build410-DoorOnTheWay-Source.zip | `1HHi6hdAapJ0Hd1huKHFPgOTSsIZmswTt` | `87078f3c5f4242adfeea5d2eee826bef7193468e9876d11e122fb594c2cc94a6` |
 
 База — 404. Изменён только `NpcDoors368`; тело 0.6 берётся из 409-й без изменений. В игре **не проверено**.
+
+## Build 411 — дверь, в которую он идёт (2026-11-09)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build411-opens-doors-itself.jar | `1cxEJsAGR0QcpnI_KY7ASPXQqmjw451_w` | `1116cdb6c000887b2825670b07c21b7bffe57a65674d0825989a810042a20e8b` |
+| SettledLands-Build411-OpensDoorsItself-Source.zip | `1SkiYuMeZ7tGh6mXCjpa67XcVmSK1RQEb` | `367b85c30cca6597395cad9739b058c090722e325c5701455e5743df12b5def8` |
+
+База — 404. Изменён только `NpcDoors368` (третий факт `inFrontOf`); тело 0.6 из 409-й. В игре **не проверено**.

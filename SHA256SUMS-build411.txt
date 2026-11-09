@@ -1,0 +1,2 @@
+1116cdb6c000887b2825670b07c21b7bffe57a65674d0825989a810042a20e8b  settledlands-0.8.0-build411-opens-doors-itself.jar
+367b85c30cca6597395cad9739b058c090722e325c5701455e5743df12b5def8  SettledLands-Build411-OpensDoorsItself-Source.zip
