@@ -2,6 +2,8 @@ name: Build Voxy NeoForge 1.21.1
 
 on:
   workflow_dispatch:
+  push:
+    branches: [arena/e102897c-mod]
 
 permissions:
   contents: write
@@ -440,66 +442,59 @@ jobs:
               'iris-ipfix-v11 (v10 + MipGen thread-safety: grey chunks and bakery crash fix)',
               'iris-ipfix-v12 (main-world promotion without Iris pipeline takeover)'
           )])
-          # v13: IP x Sable 0.5.0 stores chunks in its own map and removes them
-          # before notifying Sodium. Voxy's vanilla-storage unload lookup misses them.
-          # Ingest once before IP deletes the chunk, preserving its lighting snapshot.
-          plugin = base + '../mixin/ClientVoxyMixinPlugin.java'
-          patch(plugin, [(
-              '        if (voxyWorldGenInstalled) {',
-              '        if (isModLoaded("immersive_portals_core")) { mixins.add("compat.MixinIPClientChunkUnload"); }\n\n        if (voxyWorldGenInstalled) {'
-          )])
-          compat = base + '../mixin/compat/MixinIPClientChunkUnload.java'
-          os.makedirs(os.path.dirname(compat), exist_ok=True)
-          with io.open(compat, 'w', encoding='utf-8') as f:
-              f.write("""package me.cortex.voxy.client.mixin.compat;
-
-          import me.cortex.voxy.client.config.VoxyConfig;
-          import me.cortex.voxy.common.Logger;
-          import me.cortex.voxy.common.world.service.VoxelIngestService;
-          import net.minecraft.client.multiplayer.ClientChunkCache;
-          import net.minecraft.world.level.ChunkPos;
-          import net.minecraft.world.level.chunk.status.ChunkStatus;
-          import org.spongepowered.asm.mixin.Mixin;
-          import org.spongepowered.asm.mixin.Pseudo;
-          import org.spongepowered.asm.mixin.Unique;
-          import org.spongepowered.asm.mixin.injection.At;
-          import org.spongepowered.asm.mixin.injection.Inject;
-          import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
-
-          @Pseudo
-          @Mixin(targets = "qouteall.imm_ptl.core.chunk_loading.ImmPtlClientChunkMap", remap = false)
-          public abstract class MixinIPClientChunkUnload {
-              @Unique private static boolean arena$reportedIngest;
-              @Unique private static boolean arena$reportedSkipped;
-              @Unique private static boolean arena$reportedFailure;
-
-              @Inject(method = "drop(Lnet/minecraft/world/level/ChunkPos;)V", at = @At(value = "INVOKE", target = "Lqouteall/imm_ptl/core/chunk_loading/ImmPtlClientChunkMap;modifyChunkMap(Ljava/util/function/Consumer;)V", remap = false), remap = false, require = 0)
-              private void arena$ingestBeforeIPRemovesChunk(ChunkPos pos, CallbackInfo ci) {
-                  if (!VoxyConfig.CONFIG.ingestEnabled) return;
-                  try {
-                      var cache = (ClientChunkCache)(Object)this;
-                      var chunk = cache.getChunk(pos.x, pos.z, ChunkStatus.FULL, false);
-                      boolean valid = chunk != null && chunk.getPos().x == pos.x && chunk.getPos().z == pos.z;
-                      boolean accepted = valid && VoxelIngestService.tryAutoIngestChunk(chunk);
-                      if (accepted && !arena$reportedIngest) {
-                          arena$reportedIngest = true;
-                          Logger.info("v13: IP chunk captured before unload and queued for Voxy ingest");
-                      } else if (!accepted && !arena$reportedSkipped) {
-                          arena$reportedSkipped = true;
-                          Logger.warn("v13: an IP chunk could not be queued for ingest (chunk absent or lighting/engine unavailable)");
-                      }
-                  } catch (RuntimeException e) {
-                      if (!arena$reportedFailure) {
-                          arena$reportedFailure = true;
-                          Logger.error("v13: IP chunk unload ingest failed; continuing without it", e);
+          # Targeted diagnostic: rebuild all sections of one already-loaded
+          # overworld chunk, without global allChanged or shader reload.
+          commands = 'src/main/java/me/cortex/voxy/client/VoxyCommands.java'
+          patch(commands, [(
+              '                .then(imports);',
+              '                .then(Commands.literal("rebuild_overworld_chunk")\n'
+              '                        .then(Commands.argument("chunkX", com.mojang.brigadier.arguments.IntegerArgumentType.integer())\n'
+              '                                .then(Commands.argument("chunkZ", com.mojang.brigadier.arguments.IntegerArgumentType.integer())\n'
+              '                                        .executes(VoxyCommands::arenaRebuildOverworldChunk))))\n'
+              '                .then(imports);'
+          ), (
+              '    private static int reloadInstance(CommandContext<CommandSourceStack> ctx) {',
+              """    private static int arenaRebuildOverworldChunk(CommandContext<CommandSourceStack> ctx) {
+              int x = com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "chunkX");
+              int z = com.mojang.brigadier.arguments.IntegerArgumentType.getInteger(ctx, "chunkZ");
+              try {
+                  var loader = Class.forName("qouteall.imm_ptl.core.ClientWorldLoader");
+                  var worlds = (java.util.Collection<?>) loader.getMethod("getClientWorlds").invoke(null);
+                  net.minecraft.client.multiplayer.ClientLevel target = null;
+                  for (Object obj : worlds) {
+                      if (obj instanceof net.minecraft.client.multiplayer.ClientLevel world && world.dimension().equals(net.minecraft.world.level.Level.OVERWORLD)) {
+                          target = world;
+                          break;
                       }
                   }
+                  if (target == null) {
+                      ctx.getSource().sendFailure(Component.literal("Overworld client world not available; look through the portal first."));
+                      return 0;
+                  }
+                  var chunk = target.getChunkSource().getChunk(x, z, net.minecraft.world.level.chunk.status.ChunkStatus.FULL, false);
+                  if (chunk == null || chunk.getPos().x != x || chunk.getPos().z != z) {
+                      ctx.getSource().sendFailure(Component.literal("Chunk not loaded on client: " + x + ", " + z));
+                      return 0;
+                  }
+                  var renderer = (net.minecraft.client.renderer.LevelRenderer) loader.getMethod("getWorldRenderer", net.minecraft.resources.ResourceKey.class).invoke(null, target.dimension());
+                  int min = target.getMinBuildHeight() >> 4;
+                  int max = (target.getMinBuildHeight() + target.getHeight()) >> 4;
+                  for (int y = min; y < max; y++) renderer.setSectionDirty(x, y, z);
+                  Logger.info("arena-target-rebuild: scheduled overworld chunk " + x + "," + z + " sections " + min + ".." + (max-1));
+                  ctx.getSource().sendSuccess(() -> Component.literal("Scheduled overworld chunk " + x + ", " + z + " for section rebuild; see latest.log."), false);
+                  return 1;
+              } catch (ReflectiveOperationException | RuntimeException e) {
+                  Logger.error("arena-target-rebuild: failed", e);
+                  ctx.getSource().sendFailure(Component.literal("Target rebuild failed; see latest.log."));
+                  return 0;
               }
           }
-          """)
+
+              private static int reloadInstance(CommandContext<CommandSourceStack> ctx) {"""
+          )])
           patch(base + 'RenderPipelineFactory.java', [(
               'iris-ipfix-v12 (main-world promotion without Iris pipeline takeover)',
-              'iris-ipfix-v13 (IP chunk pre-unload Voxy ingest)'
+              'iris-ipfix-v12-targeted-rebuild-diagnostic'
           )])
           PYEOF
           python3 /tmp/patch.py
