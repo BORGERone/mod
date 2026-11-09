@@ -31,16 +31,6 @@ public class BlockState {
 
     public boolean is(Block block) { return false; }
 
-    /**
-     * Build 405: is this the air block? The one question a guide's next cell is asked before that guide is
-     * moved into it, and it comes from {@code BlockBehaviour.BlockStateBase#isAir()} - {@code ()Z}, no
-     * arguments, published by the game exactly like this (NeoForge 1.21.1 javadoc, {@code BlockStateBase},
-     * method {@code isAir}). Anything that is not air is treated as an obstacle: a plant, a torch, water, a
-     * slab and a wall are all "the guide does not step there", which is the safe reading for a move that
-     * has no path behind it.
-     */
-    public boolean isAir() { return false; }
-
     public boolean hasProperty(Property<?> property) { return false; }
 
     /**

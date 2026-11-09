@@ -869,14 +869,10 @@ CONFIRMED_EXTERNAL = {
         "Build 404: where the navigator is taking the guide - the direction the doors ahead are opened in",
     ("net/minecraft/world/level/pathfinder/Path", "getTarget", "()Lnet/minecraft/core/BlockPos;"):
         "Build 404: the point a partial path was aiming for, said out loud in the stuck line of the log",
-    # Build 405, the cell a guide is moved into. The base jar never asked whether a block is air (its
-    # movement is the game's navigator), so this one has to be confirmed. The published NeoForge 1.21.1
-    # javadoc (lexxie.dev/neoforge/1.21.1, BlockBehaviour.BlockStateBase) lists `boolean isAir()` among the
-    # methods, next to the `private final boolean isAir` field it returns, and BlockState is its only direct
-    # subclass - so the call resolves through the subclass exactly as it is compiled here. It is asked only
-    # before moving a guide that is stuck in a doorway, and a false answer means "do not move it".
-    ("net/minecraft/world/level/block/state/BlockState", "isAir", "()Z"):
-        "Build 405: is the cell a guide would be moved into empty (1.21.1 javadoc, BlockStateBase#isAir)",
+    # Build 406 removed the build-405 entry for BlockState#isAir: it existed only for the 0.85-block move
+    # of a guide out of a doorway, and that move is gone - the author's video shows exactly what it looked
+    # like ("телепортируется между дверьми"). An allowlist entry that outlives the call it was written for
+    # is a hole in the gate, which is why it goes with the call.
 }
 
 

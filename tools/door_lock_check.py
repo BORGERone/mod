@@ -25,6 +25,9 @@ What this gate asks the shipped jar:
     (a door opened when the guide is already at it is opened one plan too late), and a guide that stopped
     at an open door is walked through it - a short path past the doorway, and the step itself on the move
     control when the path finder still refuses;
+  * build 406: no teleport (the 0.85-block move of 405 is not in the class, nor the `isAir` call written for
+    it), the doors ahead are chosen on the line to the guide's navigator target up to twelve blocks away, and
+    such a door is not shut again while it still stands on somebody's line;
   * build 405: nothing closes a door a guide is standing in (the ten-second rule of build 404 is gone from
     the class altogether), the door under a guide's feet is opened again on every pass, and a guide that
     does not walk out of a doorway is moved out of it - along the way it was going, and only into a cell
@@ -355,10 +358,26 @@ def structural(jar):
                        for r in npc_refs):
                 problems.append("a guide that does not walk out of a doorway is not taken out of it - the "
                                 "author would see it standing in the door again (build 405)")
-            if not any(r[1] == "isAir" and r[0]
-                       and r[0].endswith("world/level/block/state/BlockState") for r in npc_refs):
-                problems.append("a guide is moved without asking what is in the cell it is moved into - "
-                                "that is how a body ends up inside a wall (build 405)")
+            # Build 406: «телепортируется между дверьми». The 0.85-block move of build 405 is gone from the
+            # class, and with it the only reason it asked whether a cell is air. A guide is walked, never
+            # moved, and the mistake is not allowed back in: no "nudge", no isAir.
+            if b"nudge" in z.read(npc):
+                problems.append("the teleport of build 405 is back in the class - a guide is moved instead "
+                                "of walked (the author saw it: «телепортируется между дверьми»)")
+            if b"isAir" in z.read(npc):
+                problems.append("the class asks whether a cell is air again - that call existed only for "
+                                "the move of build 405 (build 406)")
+            # Build 406: the door has to be open before the leg is planned, which means a dozen blocks ahead
+            # and on the line to the guide's target - and such a door must not be shut on the next pass
+            # just because the guide is still far from it.
+            if not any(r[1] == "inCorridor" and r[0] and r[0].endswith("door/NpcDoors368")
+                       for r in npc_refs):
+                problems.append("the doors ahead are not chosen by the line the guide is walking - a door "
+                                "off that line is opened for nothing, a door on it too late (build 406)")
+            if not any(r[1] == "needed" and r[0] and r[0].endswith("door/NpcDoors368")
+                       for r in npc_refs):
+                problems.append("a door opened ahead is shut again before the guide gets there - the guide "
+                                "walks up to a closed door exactly as in 403-405 (build 406)")
             if "dev/settledlands/door/NpcDoors368$Cross.class" not in names:
                 problems.append("no walk-out state at all: the latch that carries a guide out of a doorway "
                                 "was never compiled into the jar (build 405)")

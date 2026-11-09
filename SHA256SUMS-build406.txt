@@ -1,0 +1,4 @@
+# SettledLands build 406 - 0.8.0-build406-doors-open-ahead
+# base: settledlands-0.8.0-build405-door-held-open.jar
+86bb31493c285f908d4b7846e779c4a1b3f93fca7b84c73ad6a34431ef2d8871  settledlands-0.8.0-build406-doors-open-ahead.jar
+6093d8fa460606ff92020c7e48e7cd6677687792bfc8333808c6a6e30ce7c1cd  SettledLands-Build406-DoorsOpenAhead-Source.zip
