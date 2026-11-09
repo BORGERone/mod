@@ -2,6 +2,8 @@ name: Build Voxy NeoForge 1.21.1
 
 on:
   workflow_dispatch:
+  push:
+    branches: [arena/e102897c-mod]
 
 permissions:
   contents: write
@@ -440,93 +442,66 @@ jobs:
               'iris-ipfix-v11 (v10 + MipGen thread-safety: grey chunks and bakery crash fix)',
               'iris-ipfix-v12 (main-world promotion without Iris pipeline takeover)'
           )])
-          # Diagnostic only: counters at five-second intervals, not a rendering change.
-          patch(base + 'rendering/ChunkBoundRenderer.java', [(
-              '    public void addSection(long pos) {',
-              '    public String arena$boundsStats() { return "tracked=" + this.chunk2idx.size() + ",add=" + this.addQueue.size() + ",remove=" + this.remQueue.size(); }\n\n    public void addSection(long pos) {'
+          # v13: IP x Sable 0.5.0 stores chunks in its own map and removes them
+          # before notifying Sodium. Voxy's vanilla-storage unload lookup misses them.
+          # Ingest once before IP deletes the chunk, preserving its lighting snapshot.
+          plugin = base + '../mixin/ClientVoxyMixinPlugin.java'
+          patch(plugin, [(
+              '        if (voxyWorldGenInstalled) {',
+              '        if (isModLoaded("immersive_portals_core")) { mixins.add("compat.MixinIPClientChunkUnload"); }\n\n        if (voxyWorldGenInstalled) {'
           )])
-          patch(base + 'util/RingTracker.java', [(
-              '    public void unload() {',
-              '    public int arena$pendingOperations() { int n = 0; for (byte value : this.operations.values()) if (value != 0) n++; return n; }\n\n    public void unload() {'
-          )])
-          patch(base + 'rendering/RenderDistanceTracker.java', [(
-              '    public void setRenderDistance(int renderDistance) {',
-              '    public int arena$pendingOperations() { return this.tracker.arena$pendingOperations(); }\n\n    public void setRenderDistance(int renderDistance) {'
-          )])
-          patch(base + 'VoxyRenderSystem.java', [(
-              '    private final AbstractRenderPipeline pipeline;',
-              '    private long arena$lastMainStats;\n    private long arena$lastPortalStats;\n    private final AbstractRenderPipeline pipeline;'
-          ), (
-              '        GPUTiming.INSTANCE.tick();\n\n        glBindFramebuffer(GlConst.GL_FRAMEBUFFER, oldFB);',
-              '        GPUTiming.INSTANCE.tick();\n'
-              '        boolean portalView = me.cortex.voxy.client.core.util.PortalViewGuard.isRenderingPortalView();\n'
-              '        long now = System.nanoTime();\n'
-              '        long previous = portalView ? this.arena$lastPortalStats : this.arena$lastMainStats;\n'
-              '        if (previous == 0L || now - previous >= 5_000_000_000L) {\n'
-              '            if (portalView) this.arena$lastPortalStats = now; else this.arena$lastMainStats = now;\n'
-              '            var mc = Minecraft.getInstance();\n'
-              '            Logger.info("arena-seam-diag-v1 view=" + (portalView ? "portal" : "main") + " dim=" + (mc.level == null ? "none" : mc.level.dimension().location()) + " levelRenderer=" + System.identityHashCode(mc.levelRenderer) + " voxy=" + System.identityHashCode(this) + " pipeline=" + this.pipeline.getClass().getSimpleName() + " camera=" + (int)viewport.cameraX + "," + (int)viewport.cameraY + "," + (int)viewport.cameraZ + " vanillaDistance=" + mc.options.getEffectiveRenderDistance() + " bounds[" + this.chunkBoundRenderer.arena$boundsStats() + "] ringPending=" + this.renderDistanceTracker.arena$pendingOperations() + " meshTasks=" + this.renderGen.getTaskCount() + " modelTasks=" + this.modelService.getProcessingCount() + " nodeWork=" + this.nodeManager.hasWork() + " sections=" + this.geometryData.getSectionCount());\n'
-              '        }\n\n'
-              '        glBindFramebuffer(GlConst.GL_FRAMEBUFFER, oldFB);'
-          )])
+          compat = base + '../mixin/compat/MixinIPClientChunkUnload.java'
+          os.makedirs(os.path.dirname(compat), exist_ok=True)
+          with io.open(compat, 'w', encoding='utf-8') as f:
+              f.write("""package me.cortex.voxy.client.mixin.compat;
+
+          import me.cortex.voxy.client.config.VoxyConfig;
+          import me.cortex.voxy.common.Logger;
+          import me.cortex.voxy.common.world.service.VoxelIngestService;
+          import net.minecraft.client.multiplayer.ClientChunkCache;
+          import net.minecraft.world.level.ChunkPos;
+          import net.minecraft.world.level.chunk.status.ChunkStatus;
+          import org.spongepowered.asm.mixin.Mixin;
+          import org.spongepowered.asm.mixin.Pseudo;
+          import org.spongepowered.asm.mixin.Unique;
+          import org.spongepowered.asm.mixin.injection.At;
+          import org.spongepowered.asm.mixin.injection.Inject;
+          import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+          @Pseudo
+          @Mixin(targets = "qouteall.imm_ptl.core.chunk_loading.ImmPtlClientChunkMap", remap = false)
+          public abstract class MixinIPClientChunkUnload {
+              @Unique private static boolean arena$reportedIngest;
+              @Unique private static boolean arena$reportedSkipped;
+              @Unique private static boolean arena$reportedFailure;
+
+              @Inject(method = "drop(Lnet/minecraft/world/level/ChunkPos;)V", at = @At(value = "INVOKE", target = "Lqouteall/imm_ptl/core/chunk_loading/ImmPtlClientChunkMap;modifyChunkMap(Ljava/util/function/Consumer;)V", remap = false), remap = false, require = 0)
+              private void arena$ingestBeforeIPRemovesChunk(ChunkPos pos, CallbackInfo ci) {
+                  if (!VoxyConfig.CONFIG.ingestEnabled) return;
+                  try {
+                      var cache = (ClientChunkCache)(Object)this;
+                      var chunk = cache.getChunk(pos.x, pos.z, ChunkStatus.FULL, false);
+                      boolean valid = chunk != null && chunk.getPos().x == pos.x && chunk.getPos().z == pos.z;
+                      boolean accepted = valid && VoxelIngestService.tryAutoIngestChunk(chunk);
+                      if (accepted && !arena$reportedIngest) {
+                          arena$reportedIngest = true;
+                          Logger.info("v13: IP chunk captured before unload and queued for Voxy ingest");
+                      } else if (!accepted && !arena$reportedSkipped) {
+                          arena$reportedSkipped = true;
+                          Logger.warn("v13: an IP chunk could not be queued for ingest (chunk absent or lighting/engine unavailable)");
+                      }
+                  } catch (RuntimeException e) {
+                      if (!arena$reportedFailure) {
+                          arena$reportedFailure = true;
+                          Logger.error("v13: IP chunk unload ingest failed; continuing without it", e);
+                      }
+                  }
+              }
+          }
+          """)
           patch(base + 'RenderPipelineFactory.java', [(
               'iris-ipfix-v12 (main-world promotion without Iris pipeline takeover)',
-              'iris-ipfix-v12-seam-diag-v1 (v12 plus portal boundary counters)'
-          )])
-          # Seam diagnostic v2: compare Sodium's actual visible geometry list with
-          # Voxy's section-bound map, rate-limited and without changing rendering.
-          patch(base + 'rendering/ChunkBoundRenderer.java', [(
-              '    public void addSection(long pos) {',
-              '    public boolean arena$hasBound(long pos) { return this.chunk2idx.containsKey(pos); }\n'
-              '    public int arena$boundCount() { return this.chunk2idx.size(); }\n'
-              '    public int arena$boundsAbsentFrom(java.util.Set<Long> visible) { int n = 0; for (long pos : this.chunk2idx.keySet()) if (!visible.contains(pos)) n++; return n; }\n\n'
-              '    public void addSection(long pos) {'
-          )])
-          sodium_mixin = base + '../mixin/sodium/MixinDefaultChunkRenderer.java'
-          patch(sodium_mixin, [(
-              '    @Unique\n    private void doRender(ChunkRenderMatrices matrices, TerrainRenderPass renderPass, CameraTransform camera) {',
-              '    @Unique private long arena$lastListDiag;\n'
-              '    @Unique private boolean arena$listDiagFailed;\n'
-              '    @Unique private void arena$compareLists(ChunkRenderListIterable lists, TerrainRenderPass pass) {\n'
-              '        if (pass != DefaultTerrainRenderPasses.CUTOUT || this.arena$listDiagFailed || !me.cortex.voxy.client.core.util.PortalViewGuard.isRenderingPortalView()) return;\n'
-              '        long now = System.nanoTime();\n'
-              '        if (this.arena$lastListDiag != 0L && now - this.arena$lastListDiag < 5_000_000_000L) return;\n'
-              '        this.arena$lastListDiag = now;\n'
-              '        try {\n'
-              '            var mc = Minecraft.getInstance();\n'
-              '            var vrs = ((IGetVoxyRenderSystem)mc.levelRenderer).voxy$getRenderSystem();\n'
-              '            if (vrs == null) return;\n'
-              '            var visible = new java.util.HashSet<Long>();\n'
-              '            int regions = 0, visibleInBounds = 0, visibleOutsideBounds = 0, invalid = 0;\n'
-              '            var outer = lists.iterator(false);\n'
-              '            while (outer.hasNext()) {\n'
-              '                var list = outer.next(); regions++;\n'
-              '                var region = list.getRegion();\n'
-              '                var sections = list.sectionsWithGeometryIterator(false);\n'
-              '                if (sections == null) continue;\n'
-              '                while (sections.hasNext()) {\n'
-              '                    var section = region.getSection(sections.nextByteAsInt());\n'
-              '                    if (section == null) { invalid++; continue; }\n'
-              '                    long pos = net.minecraft.core.SectionPos.asLong(section.getChunkX(), section.getChunkY(), section.getChunkZ());\n'
-              '                    if (!visible.add(pos)) continue;\n'
-              '                    if (vrs.chunkBoundRenderer.arena$hasBound(pos)) visibleInBounds++; else visibleOutsideBounds++;\n'
-              '                }\n'
-              '            }\n'
-              '            int offList = vrs.chunkBoundRenderer.arena$boundsAbsentFrom(visible);\n'
-              '            me.cortex.voxy.common.Logger.info("arena-seam-list-v2 dim=" + (mc.level == null ? "none" : mc.level.dimension().location()) + " voxy=" + System.identityHashCode(vrs) + " regions=" + regions + " visibleGeometry=" + visible.size() + " visibleTracked=" + visibleInBounds + " visibleUntracked=" + visibleOutsideBounds + " trackedTotal=" + vrs.chunkBoundRenderer.arena$boundCount() + " trackedNotInList=" + offList + " nullSections=" + invalid);\n'
-              '        } catch (Throwable t) {\n'
-              '            this.arena$listDiagFailed = true;\n'
-              '            me.cortex.voxy.common.Logger.error("arena-seam-list-v2 comparison unavailable; rendering unchanged", t);\n'
-              '        }\n'
-              '    }\n'
-              '    @Unique\n    private void doRender(ChunkRenderMatrices matrices, TerrainRenderPass renderPass, CameraTransform camera) {'
-          ), (
-              '        this.doRender(matrices, renderPass, camera);\n    }\n\n    @Unique private long arena$lastListDiag;',
-              '        this.doRender(matrices, renderPass, camera);\n        this.arena$compareLists(renderLists, renderPass);\n    }\n\n    @Unique private long arena$lastListDiag;'
-          )])
-          patch(base + 'RenderPipelineFactory.java', [(
-              'iris-ipfix-v12-seam-diag-v1 (v12 plus portal boundary counters)',
-              'iris-ipfix-v12-seam-diag-v2 (portal section-list comparison)'
+              'iris-ipfix-v13 (IP chunk pre-unload Voxy ingest)'
           )])
           PYEOF
           python3 /tmp/patch.py
