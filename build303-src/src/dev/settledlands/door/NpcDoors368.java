@@ -12,7 +12,6 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.Mob;
 import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
-import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.pathfinder.NodeEvaluator;
 import net.minecraft.world.level.pathfinder.Path;
 import net.neoforged.bus.api.SubscribeEvent;
@@ -40,77 +39,16 @@ import org.slf4j.LoggerFactory;
  *       changes nothing about a path that is already finished. The doors are now opened <b>ahead</b>
  *       ({@value #REACH_AHEAD} blocks, in the direction the navigator is taking the guide,
  *       {@link #openAhead}), so the next leg is planned against an open doorway;</li>
- *   <li>and when a guide does stop at a door it has just opened, it is now walked through it: a short
- *       path to the point just past the doorway, and, if the pathfinder still refuses, the step ordered
- *       straight on the move control - a mob is moved by its move control, not by its opinion. (Build 405
- *       replaced that one step with the latch of {@link #crossStep}, because one order is one order and a
- *       guide that cannot walk needs to be taken through, not asked once.)</li>
+ *   <li>and when a guide does stop at a door it has just opened, it is now walked through it
+ *       ({@link #pushThrough}): a short path to the point just past the doorway, and, if the pathfinder
+ *       still refuses, the step ordered straight on the move control - a mob is moved by its move control,
+ *       not by its opinion. It is a walk, not a teleport: the guide still collides with everything.</li>
  * </ul>
  *
  * <p>The stuck line now says what the navigator thinks ({@link #pathState}): how many nodes the path has,
  * which node is next, where it was taking the guide, and whether the guide is against a block. That is the
  * difference between "the path ended at the door" and "the path goes through and something else holds it",
  * and it is in the log rather than in another guess.</p>
- *
- * <h2>Build 405: «стоит перед открытой дверью, открывает и закрывает её»</h2>
- *
- * <p>The author's report is not "the door does not open" any more. It is a door that opens and shuts
- * over and over while the guide stands in it, and a guide that skips the point afterwards. Read as one
- * thing, that is this pass's own ten-second rule of build 404:</p>
- *
- * <ul>
- *   <li>the guide walks into the doorway <b>while it is open</b> - an open door has no collision, so the
- *       doorway is a normal block to stand in;</li>
- *   <li>ten seconds later the record of the open door went <b>stale</b> and
- *       {@link #closeLeftBehind} closed it - <b>with the guide inside it</b>. A living body inside a solid
- *       door block cannot walk out: every horizontal move is a collision, the game only slowly pushes it
- *       towards the closest free space. So the guide stands in a shut door;</li>
- *   <li>the pass sees a guide standing at a door and opens it again ({@link #openAround}), the guide takes
- *       a step, the record goes stale again ten seconds later, the door shuts on it again - the author's
- *       «открывает и закрывает»; and every attempt counts as a failed step of the guide's own walk, so
- *       after ten of them the engine drops the point - the author's «а потом пропускает точку».</li>
- * </ul>
- *
- * <p>Build 405 removes the cause and adds the two things that make it impossible to come back:</p>
- *
- * <ol>
- *   <li><b>a door is never closed while a guide is at it.</b> The ten-second rule is gone: a door opened
- *       for a guide is closed when no guide is inside {@link #GUIDE_SAFE} any more, and not one tick
- *       earlier, however long that takes. A guide that died in a doorway no longer counts as a guide, so
- *       the door still does not stay open for ever;</li>
- *   <li><b>the door a guide is standing in is held open</b> ({@link #holdOccupied}) - the feet block and
- *       the head block of every guide, every pass. Even a door somebody else shuts between two passes is
- *       open again before the guide can be trapped by it;</li>
- *   <li><b>and a guide that does not walk out of a doorway is walked out of it</b> ({@link #crossStep}).
- *       A latch per guide: the step is ordered again on every pass, in the direction the guide was
- *       going.</li>
- * </ol>
- *
- * <h2>Build 406: «телепортируется между дверьми, то возвращается назад»</h2>
- *
- * <p>The author's video of build 405 shows a patrol guide that walks, stands in a doorway, <b>jumps</b>,
- * walks back, and now and then arrives. The jumps were build 405's own doing: when ordering the step did
- * not move the guide, it moved the body 0.85 blocks.</p>
- *
- * <ul>
- *   <li><b>there is no teleport any more.</b> {@code nudge}, its free-cell test and the {@code isAir} call
- *       that only existed for it are gone from this class. The latch only ever <b>orders</b> a step, and a
- *       step that does not take leaves the guide where it is;</li>
- *   <li><b>the real cause was that the door was opened too late, again.</b> Every build so far opened it
- *       when the guide was already close: 1.9 blocks (403), 4 inside a half-circle (404), 2.5 (405). A leg
- *       of the walk is planned when the leg starts, up to a dozen blocks before the door, and a path
- *       planned at a closed door either goes round the house or ends at the door. That is why it «через
- *       раз и доходит»: it depends on whether the door happened to be open at planning time. The door is
- *       now opened {@value #AHEAD} blocks ahead of the guide, on the line to the point its navigator is
- *       taking it ({@link #openAhead} / {@link #inCorridor});</li>
- *   <li>and such a door is <b>not shut</b> on the next pass just because the guide is still far from it
- *       ({@link #needed}): a door is closed when no guide is at it <b>and</b> it stands on nobody's line
- *       any more. Build 405 would have shut the twelve-block door immediately - it was outside
- *       {@link #GUIDE_SAFE} - and the guide would have walked up to a closed door again.</li>
- * </ul>
- *
- * <p>The latch that remains is the answer to "the door is open and the guide is not moving"; the answer to
- * "the guide arrives half the time" is the twelve blocks.</p>
  *
  * <h2>Build 403: «они не проходят даже через открытые»</h2>
  *
@@ -144,8 +82,8 @@ import org.slf4j.LoggerFactory;
  * next {@value #LOOKAHEAD} nodes are checked, so a door is open before the guide reaches it instead of
  * the tick after it is already pressed against it ({@link #openOnPath}).</p>
  *
- * <p>The door is still closed behind the guide ({@value #CLOSE_RANGE} blocks, and only there), a door a
- * player closed stays closed, and {@link DoorGuard371} no longer
+ * <p>The door is still closed behind the guide ({@value #CLOSE_RANGE} blocks, or after
+ * {@value #CLOSE_AFTER} ticks), a door a player closed stays closed, and {@link DoorGuard371} no longer
  * slams a locked one while a guide is walking through it.</p>
  *
  * <p>Cost: a list walk of the guides four times a second, one block lookup per closed door candidate,
@@ -182,44 +120,16 @@ public final class NpcDoors368 {
      * opening it when the guide is already pressed against it is one plan too late, because the path that
      * ended at the closed door is the path it is following.
      */
-    /**
-     * Build 406: how far ahead a door is opened for a guide, <b>along the line its navigator is taking
-     * it</b>. Build 404 opened at four blocks in a half-circle and build 405 narrowed that to 2.5; both
-     * were still too late. The author's video of build 405 shows a patrol guide that walks, then stands in
-     * a doorway, then jumps, then walks back - and every second crossing this pass had to carry it, because
-     * by the time the door was open the guide had already planned its path at a closed one (or its path
-     * ended at the door). A per-leg path is computed when the leg starts, which can be a dozen blocks
-     * before the door: so the door is now opened while the guide is still that far away, as long as it
-     * stands on the line the guide is walking. Twelve blocks is more than any leg this mod plans.
-     */
-    private static final double AHEAD = 12.0D;
-
-    /**
-     * Build 406: how far off that line a door may stand and still be opened. A doorway is on the line; a
-     * door in the wall beside it is not. This replaces the cone of builds 404-405, which opened doors the
-     * guide was merely walking past - the author's «открывает и закрывает» had that in it too.
-     */
-    private static final double CORRIDOR = 1.6D;
+    private static final double REACH_AHEAD = 4.0D;
 
     /** Build 404: an open door this close to a guide that is stuck is a doorway it should be walking through. */
     private static final double PUSH_RANGE = 2.0D;
 
-    /**
-     * Build 405: how long one attempt to walk a guide out of one doorway may take (7 s). Bounded on
-     * purpose: a guide is not to be dragged across the world by a latch that never expires.
-     */
-    private static final int CROSS_TICKS = 140;
-
-    /** Build 405: how far past the doorway counts as through it. */
-    private static final double THROUGH = 0.7D;
-
-    /**
-     * Build 405: a door opened by a guide and left behind is closed once no guide is near it - and only
-     * then. Build 404 also had a ten-second rule, and that rule is what the author saw: a guide standing
-     * inside an open doorway for longer than ten seconds had the door shut <b>on it</b>, and a body inside
-     * a solid door block cannot walk out. The clock is gone; the distance is the whole rule now.
-     */
+    /** How far a guide has to get from a door it opened before the door is closed again. */
     private static final double CLOSE_RANGE = 3.0D;
+
+    /** A door opened by a guide and left behind is closed after this many ticks (10 s). */
+    private static final long CLOSE_AFTER = 200L;
 
     /**
      * Build 403: while any guide is inside this radius of a door, nothing closes it - not this pass, not
@@ -237,7 +147,6 @@ public final class NpcDoors368 {
     private static final Map<UUID, Watch> WATCH = new HashMap<>();
     private static final Map<UUID, long[]> PUSHED = new HashMap<>();
     private static final Map<UUID, int[]> STUCK = new HashMap<>();
-    private static final Map<UUID, Cross> CROSS = new HashMap<>();
     private static final List<Open> OPENED = new ArrayList<>();
 
     /**
@@ -254,42 +163,12 @@ public final class NpcDoors368 {
     private static final class Open {
         final ServerLevel level;
         final BlockPos pos;
-        long at;
+        final long at;
 
         Open(ServerLevel level, BlockPos pos, long at) {
             this.level = level;
             this.pos = pos;
             this.at = at;
-        }
-    }
-
-    /**
-     * Build 405: one attempt to get one guide out of one doorway.
-     *
-     * <p>{@code fx}/{@code fz} is a unit vector: the way the guide was going when it walked into the
-     * doorway. Every pass either sees the guide move by itself (which is what should happen now that the
-     * door is opened a dozen blocks ahead and cannot be shut under it) or orders the next step. The latch
-     * ends when the guide is past the doorway, or when {@value #CROSS_TICKS} ticks have passed. Build 405
-     * also <b>moved</b> the body here; build 406 never does - the author saw those jumps.</p>
-     */
-    private static final class Cross {
-        final ServerLevel level;
-        final BlockPos door;
-        final double fx;
-        final double fz;
-        final long startedAt;
-        double lastX;
-        double lastZ;
-        int steps;
-
-        Cross(ServerLevel level, BlockPos door, double fx, double fz, long startedAt, double x, double z) {
-            this.level = level;
-            this.door = door;
-            this.fx = fx;
-            this.fz = fz;
-            this.startedAt = startedAt;
-            this.lastX = x;
-            this.lastZ = z;
         }
     }
 
@@ -299,8 +178,6 @@ public final class NpcDoors368 {
     private static int saidOpen;
     private static int saidStuck;
     private static int saidPath;
-    private static int saidCross;
-    private static int saidThrough;
 
     private NpcDoors368() {}
 
@@ -351,19 +228,6 @@ public final class NpcDoors368 {
             STUCK.put(id, new int[] {still});
             rememberTarget(npc, id);
 
-            // Build 405: the door a guide is standing in is held open before anything else happens. A
-            // body inside a shut door block cannot walk out, so this is the one state that must never
-            // exist for a single tick.
-            BlockPos underfoot = holdOccupied(level, npc, now);
-
-            // Build 405: a latch that is already carrying this guide out of a doorway does the work of
-            // this pass. It ends by itself - past the doorway, or after CROSS_TICKS.
-            Cross live = CROSS.get(id);
-            if (live != null && !crossStep(live, npc, now)) {
-                CROSS.remove(id);
-                live = null;
-            }
-
             // Build 404: the doors ahead, in the direction the navigator is taking it - so the next path
             // it plans meets an open doorway instead of a wall.
             openAhead(level, npc, now);
@@ -374,42 +238,26 @@ public final class NpcDoors368 {
             BlockPos around = openAround(level, npc, x, y, z, now, pinned ? STUCK_REACH : REACH,
                     walking);
             BlockPos door = onPath != null ? onPath : around;
-            if (door == null) door = underfoot;
 
-            BlockPos through = openDoorInReach(level, npc, x, y, z);
-            if (through == null) through = underfoot;
-
-            // Build 404: a guide that stops at a door it has just opened is the author's report of that
-            // build («доходит до двери, теперь открывает, но дальше открытой двери не проходит»), and
-            // the honest reading is that its path ended at the door and the next plan never reaches past
-            // it. Build 405 found the second half of that report - «открывает и закрывает» - in this
-            // pass's own ten-second rule, and answers both the same way: plan again, then start the latch
-            // that walks the guide out of the doorway and keeps walking it until it is past.
             boolean stoodAtDoor = !walking && still >= STUCK_TICKS && still % STUCK_TICKS == 0
-                    && (pinned || doorBetween(npc, id, through) || underfoot != null);
-            // A guide standing inside a doorway is not waited for: that is the state the door may shut on.
-            boolean inDoorway = underfoot != null && !walking;
-            // Build 406: and a guide that is merely standing still next to a door it is not walking at is
-            // not latched either - that was the other half of "то возвращается назад": a latch pushed it
-            // wherever a stale target pointed. Build 405 could start one on `pinned` alone, and a guide
-            // turning round at the far end of a patrol is pinned. Now the latch needs the doorway itself
-            // (the guide is inside it) or a door that stands on the line to its target.
-            boolean crossingMatters = inDoorway || (stoodAtDoor && doorBetween(npc, id, through));
-            String push = through == null ? "no open door at hand"
-                    : (live != null ? "still crossing" : "already tried");
-            if (live == null && through != null && crossingMatters && mayPush(id, through, now)) {
+                    && (pinned || doorBetween(npc, id, openDoorInReach(level, npc, x, y, z)));
+            if (stoodAtDoor) {
+                // Build 404: a guide that stops at a door it has just opened is the author's report
+                // exactly («доходит до двери, теперь открывает, но дальше открытой двери не проходит»),
+                // and the honest reading is that its path ended at the door and the next plan never
+                // reaches past it. So: plan again, and if the plan still leads nowhere, walk it through
+                // the doorway step by step - the door is open, the guide is 1.5 blocks from it, and the
+                // only thing missing is somebody telling its feet to keep going.
                 boolean planned = recompute(npc);
-                double[] dir = travelDir(npc, id, through);
-                CROSS.put(id, new Cross(level, through, dir[0], dir[1], now, x, z));
-                push = planned ? "path replanned and a cross started" : "a cross started";
-                if (saidCross < 6) {
-                    saidCross++;
-                    LOG.info("door: the guide " + id + " is being walked out of the doorway at " + through
-                            + " - " + String.format(java.util.Locale.ROOT, "direction %.2f %.2f",
-                                    dir[0], dir[1]) + ", door open=" + Doors368.anyOpen(level, through));
+                BlockPos through = openDoorInReach(level, npc, x, y, z);
+                String push = "no open door at hand";
+                if (through != null && mayPush(id, through, now)) {
+                    push = pushThrough(level, npc, through)
+                            ? (planned ? "path replanned and a step ordered" : "a step ordered")
+                            : "failed";
+                } else if (through != null) {
+                    push = "already tried";
                 }
-            }
-            if (crossingMatters || (stoodAtDoor && through != null)) {
                 traceStuck(level, npc, x, y, z, door, push);
             }
         }
@@ -585,24 +433,12 @@ public final class NpcDoors368 {
     }
 
     /**
-     * Build 406: opens the closed doors that stand <b>on the line the guide is walking</b>, up to
-     * {@value #AHEAD} blocks ahead.
+     * Build 404: opens the closed doors <b>ahead</b> of a walking guide - within {@value #REACH_AHEAD}
+     * blocks and inside a cone around the direction the navigator is taking it.
      *
-     * <p>Builds 403-405 all opened a door <b>late</b>: 403 at the guide's arm's length and on the nodes of
-     * a path it had already planned, 404 four blocks ahead inside a half-circle, 405 two and a half. The
-     * author's video of 405 is what "too late" looks like from the outside - a patrol guide that walks,
-     * stops in a doorway, and is then carried through it (or not) depending on whether the door happened
-     * to be open when that leg of the walk was planned. That is why it «через раз и доходит».</p>
-     *
-     * <p>A leg is planned when the leg starts, which can be a dozen blocks before the door, so the door has
-     * to be open a dozen blocks before the door. The line is the navigator's own target
-     * ({@code PathNavigation#getTargetPos}), and a door counts as "on it" at up to {@value #CORRIDOR}
-     * blocks to the side - a doorway is on the line, the door in the wall beside it is not. Nothing is
-     * opened behind the guide, nothing past its target, and nothing off the line: a door that opens and
-     * shuts as a guide walks past was half of the author's complaint in build 405.</p>
-     *
-     * <p>The walk is sampled along the line instead of scanning a cube, so the cost of a twelve-block
-     * look-ahead is about seventy block lookups, not three thousand.</p>
+     * <p>Why a cone and not a radius: a door ten blocks behind the guide or behind a wall is nobody's
+     * business, while the door it is about to plan a path through is everybody's. Opening it a second
+     * before the plan is what makes the plan go through the doorway instead of around it or up to it.</p>
      */
     private static void openAhead(ServerLevel level, dev.settledlands.npc.GuideNpc npc, long now) {
         try {
@@ -616,18 +452,25 @@ public final class NpcDoors368 {
             double tz = target.getZ() + 0.5D - z;
             double length = Math.sqrt(tx * tx + tz * tz);
             if (length < 1.0D) return;
-            double reach = Math.min(length, AHEAD);
+            tx /= length;
+            tz /= length;
+            int bx = (int) Math.floor(x);
             int by = (int) Math.floor(y);
-            for (double step = 0.5D; step <= reach; step += 0.5D) {
-                int bx = (int) Math.floor(x + tx / length * step);
-                int bz = (int) Math.floor(z + tz / length * step);
-                for (int dy = -1; dy <= 1; dy++) {
-                    BlockPos pos = new BlockPos(bx, by + dy, bz);
-                    BlockState state = level.getBlockState(pos);
-                    if (state == null || !Doors368.isDoor(state)) continue;
-                    if (Doors368.isOpen(state)) continue;
-                    if (!inCorridor(x, z, target, pos)) continue;
-                    openDoor(level, pos, now, true);
+            int bz = (int) Math.floor(z);
+            int span = (int) Math.ceil(REACH_AHEAD);
+            for (int dx = -span; dx <= span; dx++) {
+                for (int dy = -2; dy <= 2; dy++) {
+                    for (int dz = -span; dz <= span; dz++) {
+                        BlockPos pos = new BlockPos(bx + dx, by + dy, bz + dz);
+                        if (!Doors368.isDoor(level.getBlockState(pos))) continue;
+                        double vx = pos.getX() + 0.5D - x;
+                        double vz = pos.getZ() + 0.5D - z;
+                        double distance = Math.sqrt(vx * vx + vz * vz);
+                        if (distance > REACH_AHEAD || distance < 0.01D) continue;
+                        if ((vx * tx + vz * tz) / distance < 0.5D) continue;   // roughly ahead
+                        if (Doors368.isOpen(level.getBlockState(pos))) continue;
+                        openDoor(level, pos, now, true);
+                    }
                 }
             }
         } catch (Throwable failure) {
@@ -635,59 +478,6 @@ public final class NpcDoors368 {
                 LOG.warn("could not open the doors ahead of a guide", failure);
             }
         }
-    }
-
-    /**
-     * Build 406: does this door stand on the straight line from the guide to the point its navigator is
-     * taking it? The same reading as {@link #doorBetween}, without the remembered target: this one is asked
-     * of the <b>live</b> target, because the door has to be open before that target is planned at all.
-     */
-    private static boolean inCorridor(double x, double z, BlockPos target, BlockPos door) {
-        if (target == null || door == null) return false;
-        double dx = target.getX() + 0.5D - x;
-        double dz = target.getZ() + 0.5D - z;
-        double length = Math.sqrt(dx * dx + dz * dz);
-        if (length < 1.0D) return false;
-        double gx = door.getX() + 0.5D - x;
-        double gz = door.getZ() + 0.5D - z;
-        double along = (gx * dx + gz * dz) / length;
-        if (along < -1.0D || along > length + 1.0D) return false;
-        double across = Math.abs(gx * dz - gz * dx) / length;
-        return across <= CORRIDOR;
-    }
-
-    /**
-     * Build 406: is this door still <b>somebody's</b> doorway - a guide within arm's length of it, or a
-     * guide walking at a point with this door on the line? A door opened twelve blocks ahead is outside
-     * {@link #GUIDE_SAFE} for a while, and build 405 would have shut it again in the very next pass, which
-     * is the "late again" the author keeps seeing. This is the question {@link #closeLeftBehind} asks
-     * instead of "how long has it been open".
-     */
-    private static boolean needed(ServerLevel level, BlockPos pos) {
-        if (level == null || pos == null) return false;
-        try {
-            Iterable<Entity> bodies = level.getAllEntities();
-            if (bodies == null) return false;
-            // Build 406: the radius has to cover the twelve blocks a door is opened from, or this method
-            // would answer "nobody needs it" for the very door openAhead just opened - and it would be shut
-            // on the next pass, which is the build-403 bug with extra steps.
-            double wide = AHEAD + 2.0D;
-            for (Entity body : bodies) {
-                if (!(body instanceof dev.settledlands.npc.GuideNpc npc)) continue;
-                double distance = body.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D,
-                        pos.getZ() + 0.5D);
-                if (distance > wide * wide) continue;
-                if (distance <= CLOSE_RANGE * CLOSE_RANGE) return true;
-                PathNavigation navigation = npc.getNavigation();
-                BlockPos target = navigation == null ? null : navigation.getTargetPos();
-                if (inCorridor(npc.getX(), npc.getZ(), target, pos)) return true;
-            }
-        } catch (Throwable failure) {
-            if (failure != null) {
-                LOG.warn("could not ask whether a door is still needed", failure);
-            }
-        }
-        return false;
     }
 
     /** The open door a stuck guide is standing at, if any. */
@@ -713,188 +503,40 @@ public final class NpcDoors368 {
     }
 
     /**
-     * Build 405: the door a guide is standing <b>in</b>, opened if it is shut, and kept in the ledger so
-     * nothing shuts it while the guide is there.
+     * Build 404: walks a guide through an open doorway it is standing at.
      *
-     * <p>This is the state the author's report is made of: a body whose feet block is a door block. An
-     * open door has no collision, so a guide walking through a doorway spends a few ticks with its feet
-     * inside the door block - and if the door shuts in that moment, the body is inside a solid block, every
-     * horizontal move is a collision, and the game can only push it out along the shortest axis. The guide
-     * stands there, the pass opens the door, the guide takes half a step, and it happens again. Opening
-     * the door under the guide on every pass ends that picture before it can form.</p>
+     * <p>The guide's own movement is the game's navigator ({@code GuideNpc#stepCustomMovement} calls
+     * {@code PathNavigation#moveTo}), so a path that ends at the door means the guide stops at the door -
+     * the door being open changes nothing once the path is done. This asks for a short path to the point
+     * just <b>past</b> the doorway; if the pathfinder still refuses, the step itself is ordered on the
+     * move control, which is what actually moves a mob. No teleport: the mob still walks, and still
+     * collides with anything in the way.</p>
      */
-    private static BlockPos holdOccupied(ServerLevel level, dev.settledlands.npc.GuideNpc npc, long now) {
-        if (level == null || npc == null) return null;
+    private static boolean pushThrough(ServerLevel level, dev.settledlands.npc.GuideNpc npc, BlockPos door) {
+        if (level == null || npc == null || door == null) return false;
+        double cx = door.getX() + 0.5D;
+        double cz = door.getZ() + 0.5D;
+        double dx = cx - npc.getX();
+        double dz = cz - npc.getZ();
+        double length = Math.sqrt(dx * dx + dz * dz);
+        if (length < 1.0E-3D) return false;
+        double fx = cx + dx / length * 1.1D;
+        double fz = cz + dz / length * 1.1D;
+        double fy = npc.getY();
         try {
-            int bx = (int) Math.floor(npc.getX());
-            int by = (int) Math.floor(npc.getY());
-            int bz = (int) Math.floor(npc.getZ());
-            for (int dy = 0; dy <= 1; dy++) {
-                BlockPos pos = new BlockPos(bx, by + dy, bz);
-                BlockState state = level.getBlockState(pos);
-                if (state == null || !Doors368.isDoor(state)) continue;
-                if (Doors368.isOpen(state)) {
-                    note(level, pos, now);
-                    return pos;
-                }
-                if (Doors368.setOpen(level, pos, true)) {
-                    note(level, pos, now);
-                    if (saidThrough < 4) {
-                        saidThrough++;
-                        LOG.info("door: the door at " + pos + " was opened under a guide - a body may not "
-                                + "be left inside a shut door");
-                    }
-                }
-                return pos;
-            }
-        } catch (Throwable failure) {
-            if (failure != null) {
-                LOG.warn("could not hold the door a guide is standing in", failure);
-            }
-        }
-        return null;
-    }
-
-    /**
-     * Build 405: remembers that this door is open on a guide's account, refreshing the record instead of
-     * piling up a second one for the same door.
-     */
-    private static void note(ServerLevel level, BlockPos pos, long now) {
-        if (level == null || pos == null) return;
-        for (int i = 0; i < OPENED.size(); i++) {
-            Open open = OPENED.get(i);
-            if (open.level == level && pos.equals(open.pos)) {
-                open.at = now;
-                return;
-            }
-        }
-        OPENED.add(new Open(level, pos, now));
-    }
-
-    /**
-     * Build 405: one pass of the latch that gets a guide out of a doorway.
-     *
-     * <p>Three cases, in this order: the guide is past the doorway (the latch is done), the guide is
-     * walking by itself (nothing to do - an open door on the line of the walk was the whole problem), or
-     * the guide has not moved since the last pass (order the next step again). Build 406 removed the move
-     * of the body that build 405 did here: the author saw those jumps and they were not a fix.</p>
-     *
-     * @return true when the latch should live another pass
-     */
-    private static boolean crossStep(Cross cross, dev.settledlands.npc.GuideNpc npc, long now) {
-        if (cross == null || npc == null) return false;
-        try {
-            if (now - cross.startedAt > CROSS_TICKS) {
-                return report(cross, npc, "gave up after " + CROSS_TICKS + " ticks");
-            }
-            if (through(npc, cross)) {
-                return report(cross, npc, "through the doorway after " + cross.steps + " step(s)");
-            }
-            double x = npc.getX();
-            double z = npc.getZ();
-            if (Math.abs(x - cross.lastX) + Math.abs(z - cross.lastZ) >= 0.05D) {
-                // The guide is walking: the door being held open was all it needed.
-                cross.lastX = x;
-                cross.lastZ = z;
-                return true;
-            }
-            cross.steps++;
-            // Build 406: the step is <b>ordered</b> again on every pass, and that is all. Build 405 moved
-            // the body 0.85 blocks when the order did not take, and the author's video shows exactly that:
-            // a guide that jumps between doorways. A door problem is not worth a teleport, and a teleport
-            // is not a fix - it is a different bug that hides this one.
-            steer(cross, npc);
-            cross.lastX = npc.getX();
-            cross.lastZ = npc.getZ();
-            return true;
-        } catch (Throwable failure) {
-            if (failure != null) {
-                LOG.warn("the walk out of a doorway failed", failure);
-            }
-            return false;
-        }
-    }
-
-    /** Build 405: is the guide on the far side of the doorway, and out of the door block? */
-    private static boolean through(dev.settledlands.npc.GuideNpc npc, Cross cross) {
-        if (npc == null || cross == null || cross.door == null) return false;
-        double dx = npc.getX() - (cross.door.getX() + 0.5D);
-        double dz = npc.getZ() - (cross.door.getZ() + 0.5D);
-        if (dx * cross.fx + dz * cross.fz < THROUGH) return false;
-        BlockPos feet = new BlockPos((int) Math.floor(npc.getX()), (int) Math.floor(npc.getY()),
-                (int) Math.floor(npc.getZ()));
-        BlockState state = cross.level == null ? null : cross.level.getBlockState(feet);
-        return state == null || !Doors368.isDoor(state);
-    }
-
-    /** Ends a latch and says once what it cost. Returns false - the latch is over. */
-    private static boolean report(Cross cross, dev.settledlands.npc.GuideNpc npc, String what) {
-        if (saidThrough < 8) {
-            saidThrough++;
-            LOG.info("door: the guide " + (npc == null ? "?" : npc.getUUID()) + " is " + what
-                    + " at " + (cross == null ? "?" : cross.door));
-        }
-        return false;
-    }
-
-    /**
-     * Build 405: orders the step itself, 1.6 blocks along the way the guide was going. The navigator first
-     * (a mob follows a path), and the move control when the navigator will not plan one - which is what
-     * actually moves a mob.
-     */
-    private static boolean steer(Cross cross, dev.settledlands.npc.GuideNpc npc) {
-        if (npc == null || cross == null) return false;
-        double fx = cross.fx;
-        double fz = cross.fz;
-        try {
-            double tx = npc.getX() + fx * 1.6D;
-            double ty = npc.getY();
-            double tz = npc.getZ() + fz * 1.6D;
             PathNavigation navigation = npc.getNavigation();
-            // Build 406: the first order of a latch asks the navigator. From the second pass on it does
-            // not: a path that ends at the doorway is exactly what the navigator keeps producing here, and
-            // while a path is active it overwrites the move control every tick. So the path is cleared
-            // first, and the step is ordered on the move control - the object that actually moves a mob.
-            if (cross.steps <= 1 && navigation != null && navigation.moveTo(tx, ty, tz, 1.0D)) return true;
+            if (navigation != null && navigation.moveTo(fx, fy, fz, 1.0D)) return true;
             if (navigation != null) navigation.stop();
             MoveControl control = ((Mob) npc).getMoveControl();
             if (control == null) return false;
-            control.setWantedPosition(tx, ty, tz, 0.9D);
+            control.setWantedPosition(fx, fy, fz, 0.9D);
             return true;
         } catch (Throwable failure) {
             if (failure != null) {
-                LOG.warn("could not order a guide a step out of a doorway", failure);
+                LOG.warn("could not walk a guide through an open door", failure);
             }
             return false;
         }
-    }
-
-    /**
-     * Build 405: the way the guide was going when it walked into the doorway.
-     *
-     * <p>Build 404 aimed at "1.1 blocks past the door centre, away from the guide" - and a guide standing
-     * <b>in</b> the doorway has no "away from" worth speaking of: the direction was the half block between
-     * its feet and the middle of the door, so the step it ordered pointed sideways along the door. This one
-     * asks the navigator where it was taking the guide, then the door, then the guide's own facing.</p>
-     */
-    private static double[] travelDir(dev.settledlands.npc.GuideNpc npc, UUID id, BlockPos door) {
-        double x = npc.getX();
-        double z = npc.getZ();
-        Watch watch = WATCH.get(id);
-        if (watch != null && watch.target != null && watch.age <= 80) {
-            double dx = watch.target.getX() + 0.5D - x;
-            double dz = watch.target.getZ() + 0.5D - z;
-            double length = Math.sqrt(dx * dx + dz * dz);
-            if (length >= 0.5D) return new double[] {dx / length, dz / length};
-        }
-        if (door != null) {
-            double dx = door.getX() + 0.5D - x;
-            double dz = door.getZ() + 0.5D - z;
-            double length = Math.sqrt(dx * dx + dz * dz);
-            if (length >= 0.35D) return new double[] {dx / length, dz / length};
-        }
-        double yaw = Math.toRadians(npc.getYRot());
-        return new double[] {-Math.sin(yaw), Math.cos(yaw)};
     }
 
     /** A door block on a path node, its doorstep or the block above it. */
@@ -911,7 +553,7 @@ public final class NpcDoors368 {
     private static boolean openDoor(ServerLevel level, BlockPos pos, long now, boolean onPath) {
         try {
             if (!Doors368.setOpen(level, pos, true)) return false;
-            note(level, pos, now);
+            OPENED.add(new Open(level, pos, now));
             if (saidOpen < 6) {
                 saidOpen++;
                 LOG.info("door: the guide pass opened " + pos + " in level " + level.dimension()
@@ -992,32 +634,20 @@ public final class NpcDoors368 {
     }
 
     /**
-     * Closes the doors the guides opened and left.
-     *
-     * <p>Build 405: <b>the clock is gone</b>. Build 368-404 also closed a door that had been open for ten
-     * seconds, "so a guide that died in a doorway does not leave the door open for ever" - but a guide
-     * that died is not a guide, and {@link #guideNear} already answers for it, while a guide that is
-     * <b>alive and standing in the doorway</b> was shut in: a body inside a solid door block cannot walk
-     * out, so the door was opened again on the next pass, the guide took half a step, and ten seconds
-     * later it was shut in again. That is the author's «стоит перед открытой дверью, открывает и
-     * закрывает её». A door opened for a guide is now closed exactly when there is no guide near it, and
-     * at no other moment.</p>
-     *
-     * <p>The rest is unchanged: a door somebody else closed in the meantime is not touched twice, and a
-     * door the author locked is closed again just like any other - the lock is not a state of the door,
-     * it is a rule about who may open it.</p>
+     * Closes the doors the guides opened and left. A door is closed when no guide stands next to it any
+     * more, or when it has been open longer than {@link #CLOSE_AFTER} ticks - a guide that died in a
+     * doorway must not leave the door open for ever. A door somebody else closed in the meantime is not
+     * touched twice, and a door the author locked is closed again just like any other: the lock is not
+     * a state of the door, it is a rule about who may open it.
      */
     private static void closeLeftBehind(long now) {
         if (OPENED.isEmpty()) return;
-        int kept = 0;
         for (int i = OPENED.size() - 1; i >= 0; i--) {
             Open open = OPENED.get(i);
-            // Build 405: nothing closes a door a guide is at - not an age, not a counter, not a budget.
-            // Build 406: and nothing closes a door a guide is walking at either, however far it opened it
-            // from. A door opened twelve blocks ahead is outside GUIDE_SAFE for the whole walk up to it,
-            // and shutting it there would put the guide back exactly where builds 403-405 left it.
-            if (needed(open.level, open.pos)) {
-                kept++;
+            long age = now - open.at;
+            boolean stale = age > CLOSE_AFTER || age < 0L;
+            if (!stale && (guideNear(open.level, open.pos, CLOSE_RANGE)
+                    || guideNear(open.level, open.pos, GUIDE_SAFE))) {
                 continue;
             }
             OPENED.remove(i);
@@ -1025,18 +655,7 @@ public final class NpcDoors368 {
                 Doors368.setOpen(open.level, open.pos, false);
             }
         }
-        becauseUntouched(kept);
         if (OPENED.size() > 512) OPENED.clear();
-    }
-
-    private static int saidKept;
-
-    /** One line for the case build 404 got wrong: doors that were left open only because a guide is there. */
-    private static void becauseUntouched(int kept) {
-        if (kept <= 0 || saidKept >= 4) return;
-        saidKept++;
-        LOG.info("door: " + kept + " door(s) left open - a guide is still at them (build 405 no longer "
-                + "closes a door a guide stands in)");
     }
 
     /**
