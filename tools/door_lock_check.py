@@ -22,9 +22,14 @@ What this gate asks the shipped jar:
     steps back while a guide is at the door - a lock that is shut on a guide's back is the author's
     «не проходят даже через открытые»;
   * build 404: doors are opened **ahead** of a walking guide, in the direction its navigator is taking it
-    (a door opened when the guide is already at it is opened one plan too late), and a guide that stopped
-    at an open door is walked through it - a short path past the doorway, and the step itself on the move
-    control when the path finder still refuses.
+    (a door opened when the guide is already at it is opened one plan too late);
+  * build 407: the author's `latest.log` of build 406 showed that walking a guide through an open door on
+    the move control did nothing at all for two seconds - a guide's own movement asks the navigator again
+    every tick, so a wanted position set from outside is overwritten before it is used. The pass now keeps
+    the door **open until the guide is through it** instead: the guide's path finder is told both that a
+    closed wooden door may be opened (`setCanOpenDoors`) and that an open wooden door is plain floor
+    (`setCanPassDoors`), a locked door is never opened, and a door opened ahead is not shut before a guide
+    reaches it. The checks below ask for exactly that, and for the absence of the push.
 
     python3 tools/door_lock_check.py settledlands-0.8.0-build368-door-lock.jar
 
@@ -322,14 +327,46 @@ def structural(jar):
                        and r[0].endswith("ai/navigation/PathNavigation") for r in npc_refs):
                 problems.append("the pass never asks where the navigator is taking the guide - the doors "
                                 "ahead cannot be opened before the guide plans its next leg (build 404)")
-            if not any(r[1] == "getMoveControl" and r[0] and r[0].endswith("entity/Mob")
+            # Build 407: the log of 406 is the evidence. A wanted position on the move control was set
+            # twice and the guide did not move a hundredth of a block for two seconds, so the push is gone
+            # and the door is kept open instead. Both halves are checked: the push must NOT be there, and
+            # the two door switches of the node maker must be.
+            if any(r[1] == "setWantedPosition" and r[0]
+                   and r[0].endswith("ai/control/MoveControl") for r in npc_refs):
+                problems.append("the pass still orders a step on the move control - the log of build 406 "
+                                "shows it doing nothing (a guide's own movement asks the navigator again "
+                                "every tick), so the door must be kept open instead (build 407)")
+            if not any(r[1] == "setCanOpenDoors" and r[0]
+                       and r[0].endswith("pathfinder/NodeEvaluator") for r in npc_refs):
+                problems.append("the path finder is never told that a closed wooden door may be opened - "
+                                "every path a guide plans goes round the door (build 403)")
+            if not any(r[1] == "setCanPassDoors" and r[0]
+                       and r[0].endswith("ai/navigation/PathNavigation") for r in npc_refs):
+                problems.append("the path finder is never told that a door standing open is plain floor - "
+                                "the open doorway is still a special node and the guide stops in it "
+                                "(build 407, the author's log of 406)")
+            if not any(r[1] == "keepOpen" and r[0] and r[0].endswith("door/NpcDoors368")
                        for r in npc_refs):
-                problems.append("a guide stopped at an open door cannot be walked through it - nothing "
-                                "orders the step on the move control (build 404)")
-            if not any(r[1] == "setWantedPosition" and r[0]
-                       and r[0].endswith("ai/control/MoveControl") for r in npc_refs):
-                problems.append("the move control is read but never asked to move - the guide would still "
-                                "stand at the open door")
+                problems.append("a door this pass opened is not remembered - nothing keeps it open until "
+                                "the guide is through it, and it is shut again on the next pass (build 407)")
+            if not any(r[1] == "stopLeftBehind" and r[0] and r[0].endswith("door/NpcDoors368")
+                       for r in npc_refs):
+                problems.append("nothing closes the doors behind the guide - the author asked for a door "
+                                "that is shut right behind it (build 407)")
+            if not any(r[1] == "markWalkedTo" and r[0] and r[0].endswith("door/NpcDoors368")
+                       for r in npc_refs):
+                problems.append("a door opened ahead can be shut before a guide reaches it - that is the "
+                                "open/shut loop the log of build 406 is made of (build 407)")
+            # Build 407: one radius, one meaning. A door was claimed "walked through" inside 2.2 blocks
+            # and shut once nobody was inside 1.7 - so it was shut in the guide's face half a block before
+            # the doorway, which is the author's complaint exactly. Both numbers must be the same one.
+            if b"IN_DOORWAY" not in z.read(npc):
+                problems.append("the doorway radius is not shared between \"a guide has been in it\" and "
+                                "\"a guide is in it\" - a door can be claimed walked through and then shut "
+                                "in front of the guide (build 407)")
+            if b"WAS_AT_IT" in z.read(npc):
+                problems.append("a second doorway radius is back - two distances for one doorway is what "
+                                "shuts the door in the guide's face (build 407)")
             if not any(r[1] == "getTarget" and r[0] and r[0].endswith("pathfinder/Path")
                        for r in npc_refs):
                 problems.append("the stuck line cannot say where the finished path was aiming - the log "

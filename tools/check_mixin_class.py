@@ -869,6 +869,18 @@ CONFIRMED_EXTERNAL = {
         "Build 404: where the navigator is taking the guide - the direction the doors ahead are opened in",
     ("net/minecraft/world/level/pathfinder/Path", "getTarget", "()Lnet/minecraft/core/BlockPos;"):
         "Build 404: the point a partial path was aiming for, said out loud in the stuck line of the log",
+    # ---------------------------------------------------------------------------------------
+    # Build 407, the door is part of walking. One more member, and the author's own log of build 406 is
+    # what asked for it: with only `canOpenDoors` set, a wooden door that is *standing open* is still a
+    # special node, and the guide stood against exactly such an open door for 140 ticks ("door at ... open=
+    # true ... against a block=true"). In 1.21 the two switches are siblings on the same node maker and the
+    # mappings list them side by side: `setCanOpenDoors` (m_26440_) / `canOpenDoors` (m_148213_) and
+    # `setCanPassDoors` (m_26443_) / `canPassDoors` (m_148212_) - the published 1.21 method tables of
+    # `PathNavigation` show both pairs, and `WalkNodeEvaluator` publishes both. With pass-doors on, an open
+    # door is `DOOR_OPEN` and is plain floor - no opening step left in the way of the step itself.
+    ("net/minecraft/world/entity/ai/navigation/PathNavigation", "setCanPassDoors", "(Z)V"):
+        "Build 407: let a guide's path finder treat a wooden door standing open as plain floor - the "
+        "second of the two door switches 1.21 keeps on the node maker",
 }
 
 

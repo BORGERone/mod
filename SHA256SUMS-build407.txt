@@ -1,0 +1,2 @@
+cb33a4e6190dadf8f5c4dd0941b01d1a35b86419262281e296c53e57e0d5d1f4  settledlands-0.8.0-build407-door-kept-open.jar
+4018f8b354a9cb5fd426f8255a3e65327b53da07b9674c8af4c5ed10a574ece0  SettledLands-Build407-DoorKeptOpen-Source.zip

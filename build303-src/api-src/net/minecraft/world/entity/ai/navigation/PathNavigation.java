@@ -29,4 +29,13 @@ public class PathNavigation {
      * The door pass reads it to open the doors <b>ahead</b>, not only the ones at the mob's feet.
      */
     public net.minecraft.core.BlockPos getTargetPos() { return null; }
+
+    /**
+     * Build 407: {@code public void setCanPassDoors(boolean)}. On {@code PathNavigation} in 1.21 it forwards
+     * to the same node maker {@link #getNodeEvaluator()} hands out - the mappings list it next to
+     * {@code setCanOpenDoors} (m_26443_ / m_148212_ family), and {@code WalkNodeEvaluator} publishes both.
+     * With pass-doors on, a wooden door that is <b>standing open</b> is typed {@code DOOR_OPEN} and is
+     * simply floor: no opening step, no delay between the opening and the step.
+     */
+    public void setCanPassDoors(boolean canPassDoors) {}
 }
