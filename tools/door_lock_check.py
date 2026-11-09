@@ -397,6 +397,17 @@ def structural(jar):
             # narrow a cone); what is not fine is the verdict being that flag and nothing else. So: the pass
             # must offer at least one fact about the door itself - its own path, the target it walks to, or
             # its place in front of the guide's nose.
+            # Build 412: the pass must not be able to delete itself. `if (failed) return;` at the top meant
+            # one exception anywhere switched every door off for the rest of the session, and from inside
+            # the game that is indistinguishable from a pass that was never written. A failure counter keeps
+            # the pass alive; a latch does not.
+            if b"failed" in npc_bytes and b"FAILURE_LIMIT" not in npc_bytes:
+                problems.append("the door pass still has its old kill switch: one exception anywhere and it "
+                                "never runs again for the session, so every door is a plain closed door and "
+                                "nothing says so (build 412)")
+            if b"beat" not in npc_bytes:
+                problems.append("the door pass never says it is alive - a pass that never ran, one that found "
+                                "nothing and one that switched itself off look identical in the log (build 412)")
             facts = [marker for marker in (b"onTheWay", b"onPathNode", b"inFrontOf") if marker in npc_bytes]
             if b"openAround" in npc_bytes and not facts:
                 problems.append("the door pass judges a door by the 'is the guide moving' flag and by nothing "

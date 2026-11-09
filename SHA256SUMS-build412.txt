@@ -1,0 +1,2 @@
+243a1533231b37dbaf7f256762cd4957a91640c81f899f3b7fc6d3467d1fa312  settledlands-0.8.0-build412-pass-cannot-switch-itself-off.jar
+20fba1d19fa97ef691b3d5e27706e360cd11dbc6efbcc1b188a895474535899f  SettledLands-Build412-PassStaysAlive-Source.zip

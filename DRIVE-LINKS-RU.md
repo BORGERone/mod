@@ -91,3 +91,12 @@
 | SettledLands-Build411-OpensDoorsItself-Source.zip | `1SkiYuMeZ7tGh6mXCjpa67XcVmSK1RQEb` | `367b85c30cca6597395cad9739b058c090722e325c5701455e5743df12b5def8` |
 
 База — 404. Изменён только `NpcDoors368` (третий факт `inFrontOf`); тело 0.6 из 409-й. В игре **не проверено**.
+
+## Build 412 — проход дверей не выключает себя (2026-11-09)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build412-pass-cannot-switch-itself-off.jar | `1TUjNkbBHSDKHOVbQInxgLOIw2nPoBfi1` | `243a1533231b37dbaf7f256762cd4957a91640c81f899f3b7fc6d3467d1fa312` |
+| SettledLands-Build412-PassStaysAlive-Source.zip | `1eEXmYP4cjy3r8Jli51v786fAjk54fdam` | `20fba1d19fa97ef691b3d5e27706e360cd11dbc6efbcc1b188a895474535899f` |
+
+База — 404. Изменён только `NpcDoors368`. В игре **не проверено**.

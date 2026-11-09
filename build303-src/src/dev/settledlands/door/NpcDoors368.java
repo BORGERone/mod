@@ -133,7 +133,12 @@ public final class NpcDoors368 {
         int age;
     }
 
-    private static boolean failed;
+    /** How many times the pass threw. It keeps running until this many, then stands down - and says so. */
+    private static int failed;
+    private static final int FAILURE_LIMIT = 200;
+    private static int guidesSeen;
+    private static int doorsOpened;
+    private static long saidAliveAt;
     private static boolean saidAwake;
     private static boolean saidFlag;
     private static int saidOpen;
@@ -145,7 +150,13 @@ public final class NpcDoors368 {
 
     @SubscribeEvent
     public static void onServerTick(ServerTickEvent.Post event) {
-        if (failed) return;
+        // Build 412: the pass no longer switches itself off for the session. Until now one exception
+        // anywhere in the pass set a flag and every later pass returned at the first line - silently, apart
+        // from a single warning in the log. Every build since 368 added code to this pass (path reading, the
+        // target watch, the on-the-way tests, the lock rule), so any one failure - in mine or in somebody
+        // else's class it calls - turned every door into a plain closed door for the rest of the session:
+        // «через открытые проходит, а сам открывать разучился». A pass that dies must say so and come back.
+        if (failed > FAILURE_LIMIT) return;
         MinecraftServer server = event == null ? null : event.getServer();
         if (server == null) return;
         ServerLevel overworld = server.overworld();
@@ -155,12 +166,27 @@ public final class NpcDoors368 {
                 walk(level, overworld.getGameTime());
             }
             stopLeftBehind(overworld.getGameTime());
+            beat(overworld.getGameTime(), guidesSeen, doorsOpened);
         } catch (Throwable failure) {
-            failed = true;
-            if (failure != null) {
-                LOG.warn("the guide door pass switched off for this session", failure);
+            failed++;
+            if (failed <= 3) {
+                LOG.warn("the guide door pass failed this pass (failure " + failed + " of "
+                        + FAILURE_LIMIT + ") - it keeps running", failure);
             }
         }
+    }
+
+    /**
+     * Build 412: once a minute the pass says it is alive, how many guides it can see and how many doors it
+     * has opened in all. Every report after 408 needed this and none of them had it: a pass that never ran,
+     * a pass that ran and found nothing, and a pass that had switched itself off all looked exactly the same
+     * in the author's log. One line a minute is cheap and it turns the next report into a fact.
+     */
+    private static void beat(long now, int guides, int opened) {
+        if (now - saidAliveAt < 1200L) return;
+        saidAliveAt = now;
+        LOG.info("door: the guide door pass is alive - " + guides + " guide(s) in sight, " + opened
+                + " door(s) opened since the game started, " + failed + " failed pass(es)");
     }
 
     private static void walk(ServerLevel level, long now) {
@@ -213,7 +239,9 @@ public final class NpcDoors368 {
             // where it was walking), not by the "is it moving this fifth of a second" flag: build 409 passed
             // that flag here as the verdict, so a locked door was "not on the path" exactly when the guide
             // had stopped in front of it - and it stood there for ever.
-            openAround(level, npc, id, x, y, z, now, walking ? REACH : STUCK_REACH, walking);
+            if (openAround(level, npc, id, x, y, z, now, walking ? REACH : STUCK_REACH, walking) != null) {
+                doorsOpened++;
+            }
 
             boolean stoodAtDoor = !walking && still >= STUCK_TICKS && still % STUCK_TICKS == 0
                     && pinned;
@@ -226,13 +254,14 @@ public final class NpcDoors368 {
                 traceStuck(level, npc, x, y, z, door, planned ? "path planned again" : "nothing to do");
             }
         }
+        guidesSeen = guides;
         // One line to say the pass is alive, once there is a guide to look after. A pass that never ran and
         // a pass that ran and found nothing looked identical in every log the author sent.
         if (!saidAwake && guides > 0) {
             saidAwake = true;
             LOG.info("door: the guide door pass is armed - " + guides + " guide(s) in level "
-                    + level.dimension() + "; a door on a guide's path is opened and stays open until the "
-                    + "guide is through it, and every door on that path is opened, locked or not");
+                    + level.dimension() + "; a door on a guide's way is opened and stays open until the "
+                    + "guide is through it, and a locked one on that way is opened too");
         }
         if (LAST_POS.size() > 256) {
             LAST_POS.keySet().removeIf(id -> !seen.contains(id));
