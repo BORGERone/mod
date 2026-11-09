@@ -135,6 +135,8 @@ public final class NpcDoors368 {
 
     /** How many times the pass threw. It keeps running until this many, then stands down - and says so. */
     private static int failed;
+    /** Build 413: when the pass last ran from a guide's own tick, so both ways in share one pace. */
+    private static long lastOwnPass;
     private static final int FAILURE_LIMIT = 200;
     private static int guidesSeen;
     private static int doorsOpened;
@@ -189,6 +191,41 @@ public final class NpcDoors368 {
                 + " door(s) opened since the game started, " + failed + " failed pass(es)");
     }
 
+    /**
+     * Build 413: the same pass, for one guide, called from that guide's own tick.
+     *
+     * <p>The author's report of 412 settled a question I had been treating as a matter of taste: with a door
+     * already standing open the guide walked through it for minutes and never closed it behind itself, and
+     * with the door shut it never opened it. Opening and closing are the same few lines in this class, so the
+     * conclusion is not a matter of opinion - this pass never ran for that guide. The server tick is the one
+     * place it used to run from, and if that hook is not firing (an event class the game no longer posts, a
+     * static handler the event bus never registered) nothing here can ever run, and no gate can see it: the
+     * code is all present and correct in the jar.</p>
+     *
+     * <p>So the pass now has a second way in, one that cannot go missing: the guide's own tick, through
+     * {@code GuideGuideDoor413Mixin}. Both ways go through `track`, which keeps its own clock, so calling it
+     * from the entity's tick cannot make it run faster than once every {@link #PERIOD} ticks.</p>
+     */
+    public static void pass(dev.settledlands.npc.GuideNpc npc) {
+        if (npc == null) return;
+        try {
+            if (!(npc.level() instanceof ServerLevel level)) return;
+            long now = level.getGameTime();
+            if (now - lastOwnPass < PERIOD) return;
+            lastOwnPass = now;
+            guidesSeen = 1;
+            track(level, npc, now);
+            stopLeftBehind(now);
+            beat(now, 1, doorsOpened);
+        } catch (Throwable failure) {
+            failed++;
+            if (failed <= 3) {
+                LOG.warn("the guide door pass failed in a guide's own tick (failure " + failed + " of "
+                        + FAILURE_LIMIT + ") - it keeps running", failure);
+            }
+        }
+    }
+
     private static void walk(ServerLevel level, long now) {
         Iterable<Entity> bodies = level.getAllEntities();
         if (bodies == null) return;
@@ -200,6 +237,30 @@ public final class NpcDoors368 {
             if (id == null) continue;
             seen.add(id);
             guides++;
+            track(level, npc, now);
+        }
+        guidesSeen = guides;
+        // One line to say the pass is alive, once there is a guide to look after. A pass that never ran and
+        // a pass that ran and found nothing looked identical in every log the author sent.
+        if (!saidAwake && guides > 0) {
+            saidAwake = true;
+            LOG.info("door: the guide door pass is armed - " + guides + " guide(s) in level "
+                    + level.dimension() + "; a door on a guide's way is opened and stays open until the "
+                    + "guide is through it, and a locked one on that way is opened too");
+        }
+        if (LAST_POS.size() > 256) {
+            LAST_POS.keySet().removeIf(id -> !seen.contains(id));
+            STUCK.keySet().removeIf(id -> !seen.contains(id));
+            WATCH.keySet().removeIf(id -> !seen.contains(id));
+            REPLANNED.keySet().removeIf(id -> !seen.contains(id));
+        }
+    }
+
+    /** Everything the pass does for one guide, in one place, so both ways in run the same code. */
+    private static void track(ServerLevel level, dev.settledlands.npc.GuideNpc npc, long now) {
+        {
+            UUID id = npc.getUUID();
+            if (id == null) return;
             allowDoorNodes(npc);
             double x = npc.getX();
             double y = npc.getY();
@@ -253,21 +314,6 @@ public final class NpcDoors368 {
                 boolean planned = door != null && doorBetween(npc, id, door) && replan(npc, id, now);
                 traceStuck(level, npc, x, y, z, door, planned ? "path planned again" : "nothing to do");
             }
-        }
-        guidesSeen = guides;
-        // One line to say the pass is alive, once there is a guide to look after. A pass that never ran and
-        // a pass that ran and found nothing looked identical in every log the author sent.
-        if (!saidAwake && guides > 0) {
-            saidAwake = true;
-            LOG.info("door: the guide door pass is armed - " + guides + " guide(s) in level "
-                    + level.dimension() + "; a door on a guide's way is opened and stays open until the "
-                    + "guide is through it, and a locked one on that way is opened too");
-        }
-        if (LAST_POS.size() > 256) {
-            LAST_POS.keySet().removeIf(id -> !seen.contains(id));
-            STUCK.keySet().removeIf(id -> !seen.contains(id));
-            WATCH.keySet().removeIf(id -> !seen.contains(id));
-            REPLANNED.keySet().removeIf(id -> !seen.contains(id));
         }
     }
 

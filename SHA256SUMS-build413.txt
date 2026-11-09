@@ -1,0 +1,2 @@
+9d3934e6e275d6b370c5661516930461666ca6a37a8ed1d51e10d382bbc2378a  settledlands-0.8.0-build413-run-from-guide-tick.jar
+33657fc993af074f7baf4d6eeecaa2e9b41647fa2a1784fad329b3e37e80eb9f  SettledLands-Build413-GuideTick-Source.zip

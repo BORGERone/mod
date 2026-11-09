@@ -100,3 +100,12 @@
 | SettledLands-Build412-PassStaysAlive-Source.zip | `1eEXmYP4cjy3r8Jli51v786fAjk54fdam` | `20fba1d19fa97ef691b3d5e27706e360cd11dbc6efbcc1b188a895474535899f` |
 
 База — 404. Изменён только `NpcDoors368`. В игре **не проверено**.
+
+## Build 413 — проход из тика проводника (2026-11-09)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build413-run-from-guide-tick.jar | `1l7Hs3JHnSMZr3Z7cFU8WOXtgGGMXr-_o` | `9d3934e6e275d6b370c5661516930461666ca6a37a8ed1d51e10d382bbc2378a` |
+| SettledLands-Build413-GuideTick-Source.zip | `1GlSubIn4nrZj63vvqTuqtSEzkRS9N67P` | `33657fc993af074f7baf4d6eeecaa2e9b41647fa2a1784fad329b3e37e80eb9f` |
+
+База — 404. `NpcDoors368` + новый миксин `GuideDoorPass413Mixin` (45 общих миксинов). В игре **не проверено**.
