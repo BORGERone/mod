@@ -63,3 +63,13 @@
 База — 404. В игре **не проверено**. Это замена 407-й: в 407-й проводник перестал открывать СВОЮ дверь,
 потому что она заперта (запрет всех запертых дверей был ошибкой). Зеркало:
 `https://github.com/BORGERone/mod/raw/<полный sha из git rev-parse HEAD>/settledlands-0.8.0-build408-locked-on-path.jar`
+
+## Build 409 — тело проводника 0.6 блока (2026-11-09)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build409-body-fits-doorway.jar | `11_v-YpuusnFCyhds9DuKzwzWcPJAAL2q` | `fa04a3dfe1900f76cde5867ebe576f4f9f95584c50fa29a26328b51ce0f99b1a` |
+| SettledLands-Build409-BodyFitsDoorway-Source.zip | `1gUHl3DgWE1r5KAQiO9VyXWNo4UYkRw39` | `6bba195b6caa3bb74f4272efcaa43d12a40faa254fccb417ef82659c12edad16` |
+
+База — 404. Логика дверей байт-в-байт как в 408-й; изменено только тело (`0.675F` → `0.6F`). В игре
+**не проверено**.

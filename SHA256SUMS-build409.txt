@@ -1,0 +1,2 @@
+fa04a3dfe1900f76cde5867ebe576f4f9f95584c50fa29a26328b51ce0f99b1a  settledlands-0.8.0-build409-body-fits-doorway.jar
+6bba195b6caa3bb74f4272efcaa43d12a40faa254fccb417ef82659c12edad16  SettledLands-Build409-BodyFitsDoorway-Source.zip

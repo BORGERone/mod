@@ -392,6 +392,23 @@ def structural(jar):
                 problems.append("the pass does not open a locked door that is on the guide's path - the "
                                 "guide stands in front of its own door, which is the author's 407 report "
                                 "(build 408)")
+
+        # Build 409: the body. Vanilla's WalkNodeEvaluator treats a wooden door as a walkable doorway only
+        # for a mob **under 0.6** blocks wide, so a guide 0.675 wide never had a door in its path no matter
+        # what was set on the node maker - and the body only passes an open doorway dead centre. The
+        # author's 409 report is what separates body from door: stuck *inside* the doorway, door open.
+        content = "dev/settledlands/npc/NpcContent.class"
+        if content not in names:
+            problems.append("no NpcContent: nothing declares the guide's size")
+        else:
+            data = z.read(content)
+            if struct.pack(">f", 0.675) in data:
+                problems.append("the guide's body is still 0.675 blocks wide - a mob that wide does not walk "
+                                "through doors at all in this game, and an open doorway is a squeeze for it "
+                                "(build 409: the author got stuck IN the doorway)")
+            if struct.pack(">f", 0.6) not in data:
+                problems.append("the guide's body is not 0.6 blocks wide - 0.6 is the width the path finder "
+                                "calls a mob that walks through doors (build 409)")
             if not any(r[1] == "getTarget" and r[0] and r[0].endswith("pathfinder/Path")
                        for r in npc_refs):
                 problems.append("the stuck line cannot say where the finished path was aiming - the log "
