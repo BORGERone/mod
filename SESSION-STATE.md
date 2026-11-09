@@ -28,6 +28,11 @@
 (в `CONFIRMED_EXTERNAL`, javadoc 1.21.1 `BlockStateBase#isAir`). Патч `tools/patch_build405.py`, классы из
 `build303-src/out405` (заменены `NpcDoors368`, `$Open`, `$Watch`; добавлен `$Cross`).
 `door_lock_check` расширен и **падает на 404-й** (в классе не должно быть `CLOSE_AFTER` вообще).
+> **Ссылки для автора — Google Drive, файл «прямое скачивание»:** `DRIVE-LINKS-RU.md` (405:
+> `https://drive.google.com/uc?export=download&id=1oZvwa-jujxDqYTh57baL7FVxy28sRQOX`). Автор попросил
+> заливать сборки на Диск и давать прямую ссылку — правило «только GitHub raw» больше не действует.
+> Коммит 405: `c7dc844f99290044c20dcb334e4f140e107c0c40` (короткий `c7dc844`; в ответе я один раз
+> раскрыл его вручную и дал битую ссылку — **полный sha брать только из `git rev-parse`**).
 **В игре не подтверждено.**
 
 `settledlands-0.8.0-build404-through-the-doorway.jar` — **проводник идёт через открытый проём**. Отчёт после
