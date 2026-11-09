@@ -26,6 +26,10 @@ import org.slf4j.LoggerFactory;
  * ({@code NpcDoors368.guideOpened}): the author asked for guides to pass, not for doors to be sealed.
  * A door this mod itself cracked open is left alone while a player is at it (build 395) and closed again
  * once the room is empty - not eight seconds after the panel was solved, which is what the author saw.</p>
+ *
+ * <p>Build 403: the guard also steps back for a guide. A guide is allowed to open a locked door and walk
+ * through it, and closing it behind the guide's back - on the tick after it opened - is precisely the
+ * "the NPC cannot use a door" the author reported.</p>
  */
 @EventBusSubscriber(modid = "settledlands")
 public final class DoorGuard371 {
@@ -43,6 +47,7 @@ public final class DoorGuard371 {
     private static long builtAt = Long.MIN_VALUE;
     private static boolean failed;
     private static int closed;
+    private static int waited;
 
     private DoorGuard371() {}
 
@@ -100,6 +105,20 @@ public final class DoorGuard371 {
             // seconds build 377 guessed. The author saw that guess run out: «дверь после взлома сама
             // закрывается через секунд 5-10». A door the player walked away from is a locked door standing
             // open in an empty room, and this guard closes it - which is what 371 is for.
+            // Build 403: and not while a guide is at it. Build 368 lets guides pass their own locked
+            // doors, and the stock open-door goal opens one for a guide standing against it; before this
+            // line the guard shut that door again on the very next pass, so the door the guide had just
+            // opened for itself was closed in its face and the guide never moved - «они не проходят даже
+            // через открытые». A door with a guide inside GUIDE_SAFE is that guide's doorway, and this
+            // guard waits: the guide's own pass closes it once nobody is there (NpcDoors368).
+            if (NpcDoors368.guideNear(level, pos, NpcDoors368.GUIDE_SAFE)) {
+                if (waited < 3) {
+                    waited++;
+                    LOG.info("door: the guard left the locked door at " + pos + " open - a guide is "
+                            + "walking through it");
+                }
+                continue;
+            }
             if (DoorHack377.crackedOpen(level, pos)) continue;
             Doors368.setOpen(level, pos, false);
             if (closed < 3) {

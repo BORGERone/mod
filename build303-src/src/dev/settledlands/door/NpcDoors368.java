@@ -2,7 +2,6 @@ package dev.settledlands.door;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
@@ -10,6 +9,9 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.ai.navigation.PathNavigation;
+import net.minecraft.world.level.pathfinder.NodeEvaluator;
+import net.minecraft.world.level.pathfinder.Path;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
@@ -21,43 +23,93 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Vanilla mobs do this with an AI goal, which only runs when the mob's own goal selector decides to
  * walk somewhere. A guide is not driven that way: it is walked by the mod itself - a mobility point, an
- * escort, a scene - so a goal would open a door the guide never asked for, or open nothing at all. This
- * is a small pass instead, on the same server tick the rest of the mod already uses:</p>
+ * escort, a scene - so the pass below is what opens the guide's doors, on the same server tick the rest
+ * of the mod already uses.</p>
  *
- * <ul>
- *   <li>every {@value #PERIOD} ticks, for every guide that has <b>moved</b> since the last look (that
- *       is what "while moving" means: the door of a guide that stands still is nobody's business);</li>
- *   <li>a door within {@value #REACH} blocks that is closed is opened, and remembered as opened by this
- *       guide;</li>
- *   <li>a door a guide opened is closed again once no guide is near it ({@value #CLOSE_RANGE} blocks),
- *       and only if it is still open - a door a player closed stays closed.</li>
- * </ul>
+ * <h2>Build 403: «они не проходят даже через открытые»</h2>
  *
- * <p>A locked door is opened here like any other: the lock is a rule for players and monsters
- * ({@link DoorEvents368}), and the author asked for the guides to keep walking through their own
- * doors.</p>
+ * <p>The author is right, and the pass of 368 had three holes that each look exactly like "the NPC cannot
+ * use a door":</p>
  *
- * <p>Cost: a list walk of the guides twice a second, one block lookup per closed door candidate, and no
- * block write unless a door is actually in the way.</p>
+ * <ol>
+ *   <li><b>the path finder was never told that a guide may open doors.</b> Build 368 answered the
+ *       question on the <b>mob</b> ({@code GuideNpcDoor368Mixin} adds {@code canOpenDoors()}), but in
+ *       1.21 that question does not live on a mob at all: {@code Mob} has no {@code canOpenDoors}, and the
+ *       flag the path finder reads is {@code NodeEvaluator#canOpenDoors}, reached through
+ *       {@code PathNavigation#getNodeEvaluator()}. The method the mixin adds is never called by anything,
+ *       so every path a guide computed went <b>round</b> a closed door - or stopped at it -
+ *       and the door the pass opened was never on the way. Fixed by
+ *       {@link #allowDoorNodes}: the flag is now set on the guide's own node maker, on every pass, so a
+ *       closed wooden door is a doorway in the next path it computes;</li>
+ *   <li><b>the pass needed the guide to be moving.</b> A guide standing against a closed door does not
+ *       move, so {@code moved < 0.05} skipped it every single time: the one mob the pass was written for
+ *       was the one mob it never looked at. The movement gate is gone - every guide is looked at, and a
+ *       guide with an unfinished path that has not moved is looked at <b>further</b>
+ *       ({@value #STUCK_REACH} blocks);</li>
+ *   <li><b>a path computed at a closed door stays ended at the closed door.</b> Opening a door does not
+ *       extend a path that was computed while it was shut, so the guide stands at the open doorway with a
+ *       finished path and goes nowhere. Now, when a guide has stood still with an unfinished path and a
+ *       door in reach, the pass opens the door <b>and recomputes the guide's path to the same target</b>
+ *       ({@code PathNavigation#recomputePath}) - which is the step that turns "the door is open" into
+ *       "the guide is walking through it".</li>
+ * </ol>
+ *
+ * <p>And the pass opens the doors <b>on the guide's path</b>, not only the ones within arm's reach: the
+ * next {@value #LOOKAHEAD} nodes are checked, so a door is open before the guide reaches it instead of
+ * the tick after it is already pressed against it ({@link #openOnPath}).</p>
+ *
+ * <p>The door is still closed behind the guide ({@value #CLOSE_RANGE} blocks, or after
+ * {@value #CLOSE_AFTER} ticks), a door a player closed stays closed, and {@link DoorGuard371} no longer
+ * slams a locked one while a guide is walking through it.</p>
+ *
+ * <p>Cost: a list walk of the guides four times a second, one block lookup per closed door candidate,
+ * and no block write unless a door is actually in the way.</p>
  */
 @EventBusSubscriber(modid = "settledlands")
 public final class NpcDoors368 {
 
     private static final Logger LOG = LoggerFactory.getLogger("SettledLands/NpcDoors368");
 
-    /** Twice a second: a walking guide covers a third of a block in that time. */
-    private static final int PERIOD = 10;
+    /**
+     * Four times a second. Build 368 looked twice a second and only at guides that had moved; a guide
+     * pressed against a door moves a hundredth of a block, and a guide that has to be seen to be helped
+     * cannot wait for a fifth of a second.
+     */
+    private static final int PERIOD = 5;
 
-    /** How close a door has to be to be opened for the guide. */
-    private static final double REACH = 1.6D;
+    /** How close a door has to be to be opened for a guide that is walking. */
+    private static final double REACH = 1.9D;
+
+    /**
+     * Build 403: how close a door has to be for a guide that is <b>stuck</b> - a guide with an
+     * unfinished path that has not moved. It stands in the middle of the block in front of the door, so
+     * the door can be up to a block and a half away; this reaches the door diagonally too.
+     */
+    private static final double STUCK_REACH = 3.0D;
+
+    /** How many nodes of the guide's own path are checked for a door. */
+    private static final int LOOKAHEAD = 4;
 
     /** How far a guide has to get from a door it opened before the door is closed again. */
-    private static final double CLOSE_RANGE = 2.4D;
+    private static final double CLOSE_RANGE = 3.0D;
 
-    /** A door opened by a guide and left behind is closed after this many ticks anyway. */
-    private static final long CLOSE_AFTER = 100L;
+    /** A door opened by a guide and left behind is closed after this many ticks (10 s). */
+    private static final long CLOSE_AFTER = 200L;
+
+    /**
+     * Build 403: while any guide is inside this radius of a door, nothing closes it - not this pass, not
+     * {@link DoorGuard371}. This is the answer to «не проходят даже через открытые»: a door that stands
+     * open for a player and is slammed the moment the player turns away is a closed door again for the
+     * guide walking up to it, and no amount of opening on approach helps a mob whose path was computed
+     * before the door appeared. It is public because the guard reads it.
+     */
+    public static final double GUIDE_SAFE = 4.0D;
+
+    /** How long a guide has to stand still with an unfinished path before the pass steps in. */
+    private static final int STUCK_TICKS = 20;
 
     private static final Map<UUID, double[]> LAST_POS = new HashMap<>();
+    private static final Map<UUID, int[]> STUCK = new HashMap<>();
     private static final List<Open> OPENED = new ArrayList<>();
 
     /** One door a guide opened, and when. */
@@ -74,6 +126,11 @@ public final class NpcDoors368 {
     }
 
     private static boolean failed;
+    private static boolean saidAwake;
+    private static boolean saidFlag;
+    private static int saidOpen;
+    private static int saidStuck;
+    private static int saidPath;
 
     private NpcDoors368() {}
 
@@ -101,32 +158,130 @@ public final class NpcDoors368 {
         Iterable<Entity> bodies = level.getAllEntities();
         if (bodies == null) return;
         List<UUID> seen = new ArrayList<>();
+        int guides = 0;
         for (Entity body : bodies) {
             if (!(body instanceof dev.settledlands.npc.GuideNpc npc)) continue;
             UUID id = npc.getUUID();
             if (id == null) continue;
             seen.add(id);
-            double[] last = LAST_POS.get(id);
+            guides++;
+            allowDoorNodes(npc);
             double x = npc.getX();
             double y = npc.getY();
             double z = npc.getZ();
+            double[] last = LAST_POS.get(id);
             LAST_POS.put(id, new double[] {x, y, z});
-            if (last == null) continue;
-            double moved = Math.abs(x - last[0]) + Math.abs(y - last[1]) + Math.abs(z - last[2]);
-            if (moved < 0.05D) continue;   // standing still: nothing to open for it
-            openAround(level, npc, x, y, z, now);
+            double moved = last == null
+                    ? 1.0D
+                    : Math.abs(x - last[0]) + Math.abs(y - last[1]) + Math.abs(z - last[2]);
+            boolean walking = moved >= 0.05D;
+            boolean pinned = !walking && hasPath(npc);
+            int[] stood = STUCK.get(id);
+            int still = pinned ? (stood == null ? PERIOD : stood[0] + PERIOD) : 0;
+            STUCK.put(id, new int[] {still});
+
+            // Build 403: the doors on the guide's own path first - they are the ones it is going through.
+            BlockPos onPath = openOnPath(level, npc, now);
+            // Build 403: and then the doors around it, without asking whether it has moved. The movement
+            // gate of build 368 is what froze every guide that stood still against a closed door.
+            BlockPos around = openAround(level, npc, x, y, z, now, pinned ? STUCK_REACH : REACH,
+                    walking);
+            BlockPos door = onPath != null ? onPath : around;
+
+            if (pinned && still >= STUCK_TICKS && still % STUCK_TICKS == 0) {
+                recompute(npc);
+                traceStuck(level, npc, x, y, z, door);
+            }
+        }
+        // Build 403: one line to say the pass is alive, once there is a guide to look after. A pass that
+        // never ran and a pass that ran and found nothing looked identical in every log the author sent.
+        if (!saidAwake && guides > 0) {
+            saidAwake = true;
+            LOG.info("door: the guide door pass is armed - " + guides + " guide(s) in level "
+                    + level.dimension() + ", a door is opened for whoever stands at it, moving or not");
         }
         if (LAST_POS.size() > 256) {
             LAST_POS.keySet().removeIf(id -> !seen.contains(id));
+            STUCK.keySet().removeIf(id -> !seen.contains(id));
         }
     }
 
-    /** Opens the doors in the three blocks around a walking guide. */
-    private static void openAround(ServerLevel level, Entity npc, double x, double y, double z,
-            long now) {
+    /**
+     * Build 403: tells the guide's node maker that a closed wooden door is a doorway.
+     *
+     * <p>This is the switch build 368 tried to throw on the mob and could not: in 1.21 {@code Mob} has no
+     * {@code canOpenDoors} (see the class javadoc), the flag lives on {@code NodeEvaluator} and the public
+     * way to it is {@code PathNavigation#getNodeEvaluator()}. It is set on every pass rather than once,
+     * because a navigator that has not been asked for a path yet may hand out a fresh node maker
+     * whenever it likes; one virtual call four times a second is nothing.</p>
+     */
+    private static void allowDoorNodes(dev.settledlands.npc.GuideNpc npc) {
+        try {
+            PathNavigation navigation = npc.getNavigation();
+            if (navigation == null) return;
+            NodeEvaluator evaluator = navigation.getNodeEvaluator();
+            if (evaluator == null) return;
+            if (evaluator.canOpenDoors()) return;
+            evaluator.setCanOpenDoors(true);
+            if (!saidFlag) {
+                saidFlag = true;
+                LOG.info("door: guides may open doors in their own path finding now (the flag lives on "
+                        + "the node evaluator in this game version, not on the mob)");
+            }
+        } catch (Throwable failure) {
+            if (failure != null) {
+                LOG.warn("could not allow door nodes for a guide", failure);
+            }
+        }
+    }
+
+    /** True when the guide's navigator still has somewhere to go. */
+    private static boolean hasPath(dev.settledlands.npc.GuideNpc npc) {
+        try {
+            PathNavigation navigation = npc.getNavigation();
+            return navigation != null && !navigation.isDone();
+        } catch (Throwable failure) {
+            return false;
+        }
+    }
+
+    /**
+     * Build 403: opens the doors that sit on the next nodes of the guide's own path.
+     *
+     * <p>A path that goes through a doorway puts a node on the door block, so this is the exact set of
+     * doors the guide has decided to walk through - no guessing by distance, and the door is open before
+     * the guide is pressed against it. Returns the door it opened, if any.</p>
+     */
+    private static BlockPos openOnPath(ServerLevel level, dev.settledlands.npc.GuideNpc npc, long now) {
+        try {
+            PathNavigation navigation = npc.getNavigation();
+            if (navigation == null || navigation.isDone()) return null;
+            Path path = navigation.getPath();
+            if (path == null) return null;
+            int count = path.getNodeCount();
+            if (count <= 0) return null;
+            int from = Math.max(0, path.getNextNodeIndex() - 1);
+            int to = Math.min(count - 1, path.getNextNodeIndex() + LOOKAHEAD);
+            BlockPos opened = null;
+            for (int i = from; i <= to; i++) {
+                BlockPos node = path.getNodePos(i);
+                if (node == null) continue;
+                BlockPos hit = openDoorAt(level, node, now, true);
+                if (hit != null && opened == null) opened = hit;
+            }
+            return opened;
+        } catch (Throwable failure) {
+            return null;
+        }
+    }
+
+    /** Opens the doors in the three blocks around a guide. */
+    private static BlockPos openAround(ServerLevel level, Entity npc, double x, double y, double z,
+            long now, double reach, boolean walking) {
         int bx = (int) Math.floor(x);
         int by = (int) Math.floor(y);
         int bz = (int) Math.floor(z);
+        BlockPos nearest = null;
         for (int dx = -1; dx <= 1; dx++) {
             for (int dy = -1; dy <= 1; dy++) {
                 for (int dz = -1; dz <= 1; dz++) {
@@ -134,13 +289,86 @@ public final class NpcDoors368 {
                     if (!Doors368.isDoor(level.getBlockState(pos))) continue;
                     double distance = npc.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D,
                             pos.getZ() + 0.5D);
-                    if (distance > REACH * REACH) continue;
-                    if (Doors368.setOpen(level, pos, true)) {
-                        OPENED.add(new Open(level, pos, now));
+                    if (distance > reach * reach) continue;
+                    if (nearest == null) nearest = pos;
+                    if (openDoor(level, pos, now, walking)) {
+                        nearest = pos;
                     }
                 }
             }
         }
+        return nearest;
+    }
+
+    /** A door block on a path node, its doorstep or the block above it. */
+    private static BlockPos openDoorAt(ServerLevel level, BlockPos node, long now, boolean onPath) {
+        for (int dy = -1; dy <= 1; dy++) {
+            BlockPos at = new BlockPos(node.getX(), node.getY() + dy, node.getZ());
+            if (!Doors368.isDoor(level.getBlockState(at))) continue;
+            if (openDoor(level, at, now, onPath)) return at;
+            return at;
+        }
+        return null;
+    }
+
+    private static boolean openDoor(ServerLevel level, BlockPos pos, long now, boolean onPath) {
+        try {
+            if (!Doors368.setOpen(level, pos, true)) return false;
+            OPENED.add(new Open(level, pos, now));
+            if (saidOpen < 6) {
+                saidOpen++;
+                LOG.info("door: the guide pass opened " + pos + " in level " + level.dimension()
+                        + (onPath ? " on a guide's path" : " next to a guide"));
+            }
+            return true;
+        } catch (Throwable failure) {
+            if (failure != null) {
+                LOG.warn("could not open a door for a guide", failure);
+            }
+            return false;
+        }
+    }
+
+    /**
+     * Build 403: recomputes the guide's path to the target it already had.
+     *
+     * <p>A path computed while the door was closed ends at the closed door. Opening the door does not
+     * lengthen that path, and a guide with a finished path stands still - which is the other half of
+     * "the NPC cannot use a door". {@code PathNavigation#recomputePath()} asks the navigator to plan again
+     * to the same target, and the target has not changed: only the door did.</p>
+     */
+    private static void recompute(dev.settledlands.npc.GuideNpc npc) {
+        try {
+            PathNavigation navigation = npc.getNavigation();
+            if (navigation == null) return;
+            navigation.recomputePath();
+            if (saidPath < 4) {
+                saidPath++;
+                LOG.info("door: a guide stood at a door, so its path was planned again now that the "
+                        + "door is open");
+            }
+        } catch (Throwable failure) {
+            if (failure != null) {
+                LOG.warn("could not recompute a guide's path at a door", failure);
+            }
+        }
+    }
+
+    /**
+     * Build 403: one line for a guide that has stood still with an unfinished path - the case the author
+     * has now reported twice. It names the door in reach and whether that door is open, so a log can tell
+     * "the door was closed and we did not open it" from "the door was open and the guide still would not
+     * walk", which are different bugs.
+     */
+    private static void traceStuck(ServerLevel level, dev.settledlands.npc.GuideNpc npc, double x,
+            double y, double z, BlockPos door) {
+        if (saidStuck >= 6) return;
+        saidStuck++;
+        String where = door == null ? "no door within reach"
+                : "door at " + door + " open=" + Doors368.anyOpen(level, door);
+        LOG.info("door: the guide " + npc.getUUID() + " has stood still with an unfinished path for "
+                + STUCK_TICKS + " ticks at "
+                + String.format(java.util.Locale.ROOT, "%.1f %.1f %.1f", x, y, z) + " - " + where);
     }
 
     /**
@@ -156,7 +384,10 @@ public final class NpcDoors368 {
             Open open = OPENED.get(i);
             long age = now - open.at;
             boolean stale = age > CLOSE_AFTER || age < 0L;
-            if (!stale && guidedNear(open.level, open.pos)) continue;
+            if (!stale && (guideNear(open.level, open.pos, CLOSE_RANGE)
+                    || guideNear(open.level, open.pos, GUIDE_SAFE))) {
+                continue;
+            }
             OPENED.remove(i);
             if (Doors368.anyOpen(open.level, open.pos)) {
                 Doors368.setOpen(open.level, open.pos, false);
@@ -165,14 +396,21 @@ public final class NpcDoors368 {
         if (OPENED.size() > 512) OPENED.clear();
     }
 
-    /** True when a guide is still walking through that doorway. */
-    private static boolean guidedNear(ServerLevel level, BlockPos pos) {
-        Iterable<Entity> bodies = level.getAllEntities();
+    /**
+     * Build 403: is a guide inside {@code range} of this door block? Public because the locked-door guard
+     * asks it before closing anything: a locked door standing open while a guide walks through it is not
+     * a door that should be shut.
+     */
+    public static boolean guideNear(net.minecraft.world.level.Level level, BlockPos pos, double range) {
+        if (level == null || pos == null || range <= 0D) return false;
+        ServerLevel server = level instanceof ServerLevel sl ? sl : null;
+        if (server == null) return false;
+        Iterable<Entity> bodies = server.getAllEntities();
         if (bodies == null) return false;
+        double limit = range * range;
         for (Entity body : bodies) {
             if (!(body instanceof dev.settledlands.npc.GuideNpc)) continue;
-            if (body.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D)
-                    <= CLOSE_RANGE * CLOSE_RANGE) {
+            if (body.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D) <= limit) {
                 return true;
             }
         }
@@ -181,7 +419,7 @@ public final class NpcDoors368 {
 
     /**
      * Build 371: did a guide open this very door? The guard asks, so a locked door a guide is walking
-     * through is not slammed in its face a tick later.
+     * through is not slammed in its face a tick later. Build 403 adds {@link #guideNear} beside it.
      */
     public static boolean guideOpened(net.minecraft.world.level.Level level, BlockPos pos) {
         if (level == null || pos == null) return false;

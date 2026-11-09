@@ -1,9 +1,26 @@
 package net.minecraft.world.entity.ai.navigation;
 
+import net.minecraft.world.level.pathfinder.NodeEvaluator;
+import net.minecraft.world.level.pathfinder.Path;
+
 public class PathNavigation {
     public void stop() {}
     public boolean isDone() { return true; }
+    public boolean isInProgress() { return false; }
     public void setSpeedModifier(double speed) {}
     public boolean moveTo(double x, double y, double z, double speed) { return false; }
     public boolean moveTo(double x, double y, double z, int offset, double speed) { return false; }
+
+    /**
+     * Build 403: the node maker this navigator asks about doors. Its {@code setCanOpenDoors(true)} is the
+     * switch that makes the path finder treat a closed wooden door as a doorway instead of a wall - the
+     * switch the mod used to look for on the mob, where this game version no longer keeps it.
+     */
+    public NodeEvaluator getNodeEvaluator() { return null; }
+
+    /** Build 403: the path this navigator is walking; its nodes are the doors a guide is going through. */
+    public Path getPath() { return null; }
+
+    /** Build 403: recompute the current path to the same target - after a door on it was opened. */
+    public void recomputePath() {}
 }

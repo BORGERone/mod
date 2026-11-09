@@ -1,0 +1,4 @@
+# SettledLands build 403 - 0.8.0-build403-doors-on-path
+# base: settledlands-0.8.0-build402-open-after-close.jar
+d659d5e62663c41ed0c095baa83af55d9a7d4caf833979462dd858236f4cd140  settledlands-0.8.0-build403-doors-on-path.jar
+391b35ac9986320a1ab3c1290315abdbe0cfce216b87a2404680b39e6ee63dec  SettledLands-Build403-DoorsOnPath-Source.zip

@@ -816,6 +816,43 @@ CONFIRMED_EXTERNAL = {
     ("net/minecraft/client/gui/screens/Screen", "tick", "()V"):
         "Build 401: the per-tick hook of a screen - vanilla `Minecraft#tick` calls `Screen#tick()` for the"
         " screen in front",
+    # ---------------------------------------------------------------------------------------
+    # Build 403, the guides walk through doors. Eight game members, and again none of them is in the
+    # base jar (it opened doors by distance and never read a path), so the rule "backed by code that
+    # already runs in game" cannot be met from there. Two published sources, both read for this build:
+    #
+    #   * the NeoForge 1.21.x javadoc (nekoyue.github.io/ForgeJavaDocs-NG/javadoc/1.21.x-neoforge):
+    #     PathNavigation declares `public Path getPath()`, `public NodeEvaluator getNodeEvaluator()`,
+    #     `public void recomputePath()`, `public boolean isDone()`, `public boolean isInProgress()`;
+    #     Path declares `public int getNodeCount()`, `public int getNextNodeIndex()`,
+    #     `public BlockPos getNodePos(int)`, `public BlockPos getTarget()`; NodeEvaluator declares
+    #     `setCanOpenDoors(boolean)` (and `canOpenDoors()`, inherited members listed by WalkNodeEvaluator);
+    #   * the Yarn 1.21 javadoc of PathNodeMaker (= NodeEvaluator) lists `public void setCanOpenDoors(boolean)`
+    #     and `public boolean canOpenDoors()` next to canPassDoors/canFloat/canWalkOverFences.
+    #
+    # This is also the finding of build 403: `Mob` has no `canOpenDoors` in 1.21 (the NeoForge javadoc of
+    # Mob lists canAttackType, canBeLeashed, canHoldItem, canPickUpLoot, canTakeItem - and no door answer),
+    # which is why the 368 mixin's method is never called and why this flag is set here instead.
+    ("net/minecraft/world/entity/ai/navigation/PathNavigation", "getNodeEvaluator",
+     "()Lnet/minecraft/world/level/pathfinder/NodeEvaluator;"):
+        "Build 403: the node maker of a guide's navigator - the object that decides whether a closed door "
+        "is a wall",
+    ("net/minecraft/world/entity/ai/navigation/PathNavigation", "getPath",
+     "()Lnet/minecraft/world/level/pathfinder/Path;"):
+        "Build 403: the path a guide is walking, so the doors on it can be opened before it arrives",
+    ("net/minecraft/world/entity/ai/navigation/PathNavigation", "recomputePath", "()V"):
+        "Build 403: plan the same path again after the door on it was opened (vanilla calls it when the "
+        "world changes under a walking mob)",
+    ("net/minecraft/world/level/pathfinder/NodeEvaluator", "setCanOpenDoors", "(Z)V"):
+        "Build 403: let a guide's path finder treat a closed wooden door as a doorway",
+    ("net/minecraft/world/level/pathfinder/NodeEvaluator", "canOpenDoors", "()Z"):
+        "Build 403: read the same flag back, so the pass sets it once and says so in the log",
+    ("net/minecraft/world/level/pathfinder/Path", "getNodeCount", "()I"):
+        "Build 403: how many nodes a guide's current path has",
+    ("net/minecraft/world/level/pathfinder/Path", "getNextNodeIndex", "()I"):
+        "Build 403: where along that path the guide is, so only the next few nodes are looked at",
+    ("net/minecraft/world/level/pathfinder/Path", "getNodePos", "(I)Lnet/minecraft/core/BlockPos;"):
+        "Build 403: the block of a path node - a door the guide has decided to walk through",
 }
 
 

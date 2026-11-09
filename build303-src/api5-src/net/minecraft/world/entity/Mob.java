@@ -8,6 +8,11 @@ import net.minecraft.world.item.ItemStack;
  * <p>{@code setItemSlot(EquipmentSlot, ItemStack)} is the setter the game itself uses when it puts a
  * stack on a mob; the client learns about it through the equipment packet the server entity tracker
  * sends, so no packet of our own is involved.</p>
+ *
+ * <p>Build 403 note: the {@code goalSelector} field is deliberately <b>not</b> mirrored. In the game it
+ * is package-private ({@code final GoalSelector goalSelector}), so a mod in its own package cannot read
+ * it; build 403 opens doors from the navigator instead, which is public all the way down
+ * ({@code getNavigation().getNodeEvaluator()}, {@code getPath()}, {@code getNodePos}).</p>
  */
 public class Mob extends LivingEntity {
     public void setItemSlot(EquipmentSlot slot, ItemStack stack) {

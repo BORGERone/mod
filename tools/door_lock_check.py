@@ -16,7 +16,11 @@ What this gate asks the shipped jar:
     is created but never registered is an item that does not exist;
   * the asset and the four strings of the item are in the jar, so the key has a name and a picture;
   * the format of the lock file survives a write and a read, and the null-safe answers of the rules are
-    the quiet ones - `tools/harness/DoorLock368Probe.java` is compiled against this jar and run.
+    the quiet ones - `tools/harness/DoorLock368Probe.java` is compiled against this jar and run;
+  * build 403: the guide pass reads the guide's own path and opens the doors on it, tells the node maker
+    that a closed door is a doorway, plans the path again once the door is open, and the locked-door guard
+    steps back while a guide is at the door - a lock that is shut on a guide's back is the author's
+    «не проходят даже через открытые».
 
     python3 tools/door_lock_check.py settledlands-0.8.0-build368-door-lock.jar
 
@@ -264,6 +268,49 @@ def structural(jar):
             if not any(r[1] == "setOpen" and r[0] and r[0].endswith("door/Doors368")
                        for r in guard_refs):
                 problems.append("the guard never closes a door")
+
+        # Build 403: «они не проходят даже через открытые». Three mechanisms, and every one of them is a
+        # call to the game, not a promise in a comment:
+        #
+        #   * the path finder has to be told that a guide may open a door - in 1.21 that flag lives on the
+        #     node evaluator (PathNavigation#getNodeEvaluator().setCanOpenDoors), not on the mob, so the
+        #     368 answer on the mob is a method the game never asks for;
+        #   * the doors that are opened have to be the ones on the guide's own path, which means the path
+        #     and its nodes are read at all;
+        #   * a path planned at a closed door has to be planned again once the door is open, or the guide
+        #     stands in an open doorway with nowhere left to go.
+        npc = "dev/settledlands/door/NpcDoors368.class"
+        if npc not in names:
+            problems.append("no guide door pass at all")
+        else:
+            npc_cls, npc_refs = parse(z.read(npc))
+            if not any(r[1] == "setCanOpenDoors" and r[0]
+                       and r[0].endswith("pathfinder/NodeEvaluator") for r in npc_refs):
+                problems.append("the guide's node maker is never told it may open doors - a closed door "
+                                "stays a wall in every path it plans (build 403)")
+            if not any(r[1] == "getNodeEvaluator" and r[0]
+                       and r[0].endswith("ai/navigation/PathNavigation") for r in npc_refs):
+                problems.append("the pass does not reach the node maker at all")
+            if not any(r[1] == "getPath" and r[0]
+                       and r[0].endswith("ai/navigation/PathNavigation") for r in npc_refs):
+                problems.append("the pass never reads the guide's path - the doors it opens are a guess "
+                                "by distance, not the door on the way (build 403)")
+            if not any(r[1] == "getNodePos" and r[0]
+                       and r[0].endswith("pathfinder/Path") for r in npc_refs):
+                problems.append("the pass never looks at a path node - it cannot open the door on the path")
+            if not any(r[1] == "recomputePath" and r[0]
+                       and r[0].endswith("ai/navigation/PathNavigation") for r in npc_refs):
+                problems.append("a path planned at a closed door is never planned again - opening the "
+                                "door leaves the guide where it stood (build 403)")
+            if not any(r[1] == "guideNear" and r[0] and r[0].endswith("door/NpcDoors368")
+                       for r in set(npc_refs) | set(guard_refs)):
+                problems.append("nothing but this pass knows where the guides are - the guard cannot ask "
+                                "it before shutting a door")
+        if guard in names:
+            if not any(r[1] == "guideNear" and r[0] and r[0].endswith("door/NpcDoors368")
+                       for r in guard_refs):
+                problems.append("the guard still shuts a locked door while a guide is walking through it "
+                                "- the guide opens it and it is slammed on the next tick (build 403)")
 
         # Build 376: the client may not refuse every door - that was 375, and the author paid for it with
         # a round trip on every ordinary door ("the top half opens with a delay"). It has to know which
