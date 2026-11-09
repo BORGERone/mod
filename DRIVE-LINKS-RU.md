@@ -20,8 +20,13 @@
 ## Сборка 406 — `0.8.0-build406-doors-open-ahead`
 
 * **jar** — 605 записей, 555 классов
+  Drive id: `1fpQErDRtTMTmfj7it_GdXtP27CrAPJFy`
+  Прямое скачивание: https://drive.google.com/uc?export=download&id=1fpQErDRtTMTmfj7it_GdXtP27CrAPJFy
   sha256: `86bb31493c285f908d4b7846e779c4a1b3f93fca7b84c73ad6a34431ef2d8871`
-  Прямое скачивание: (заполняется после загрузки)
 * **исходники** — 559 записей
+  Drive id: `15RWt2WZ81dN5CzwUh-zJq4x95RYbjpxC`
+  Прямое скачивание: https://drive.google.com/uc?export=download&id=15RWt2WZ81dN5CzwUh-zJq4x95RYbjpxC
   sha256: `6093d8fa460606ff92020c7e48e7cd6677687792bfc8333808c6a6e30ce7c1cd`
-  Прямое скачивание: (заполняется после загрузки)
+
+Зеркало 406 в репозитории:
+`https://github.com/BORGERone/mod/raw/99620264e409a4f728c92a672d21f30591145609/settledlands-0.8.0-build406-doors-open-ahead.jar`
