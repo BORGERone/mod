@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Gate: a locked door is closed to players and monsters, and open to guides.
+"""Gate: a locked door is closed to players and monsters, and open to a guide on its path.
 
 Build 368 has two halves that are easy to ship half-done: a lock nothing enforces (the door opens on a
 right click anyway, or a zombie removes it) and a guide that never gets through its own door (the path
@@ -28,8 +28,14 @@ What this gate asks the shipped jar:
     every tick, so a wanted position set from outside is overwritten before it is used. The pass now keeps
     the door **open until the guide is through it** instead: the guide's path finder is told both that a
     closed wooden door may be opened (`setCanOpenDoors`) and that an open wooden door is plain floor
-    (`setCanPassDoors`), a locked door is never opened, and a door opened ahead is not shut before a guide
-    reaches it. The checks below ask for exactly that, and for the absence of the push.
+    (`setCanPassDoors`), and a door opened ahead is not shut before a guide reaches it. The checks below ask
+    for exactly that, and for the absence of the push;
+  * build 408: the lock. 407 refused every locked door and the guide stopped in front of its own test door,
+    which is locked. The author's rule is one sentence - «нпс должен открывать все двери на его пути, в т.ч.
+    и запертые» - so a locked door **on the guide's path** is opened for it (`locked` and `onPath` in the
+    same condition, and the path branch passing `onPath = true`), while a locked door that merely stands next
+    to the guide is still refused. Both halves are checked: a pass that opens every locked door it sees is as
+    wrong as the one that opens none.
 
     python3 tools/door_lock_check.py settledlands-0.8.0-build368-door-lock.jar
 
@@ -367,6 +373,25 @@ def structural(jar):
             if b"WAS_AT_IT" in z.read(npc):
                 problems.append("a second doorway radius is back - two distances for one doorway is what "
                                 "shuts the door in the guide's face (build 407)")
+            # Build 408: the lock, both directions. A locked door ON THE GUIDE'S PATH is opened for the guide
+            # (the author: «нпс должен открывать все двери на его пути, в т.ч. и запертые» - and 368/403 said
+            # the same); a locked door the guide merely stands next to is not. 407 refused both and stopped
+            # the guide in front of the door it had just opened in the log of 406, so the check is that the
+            # two cases are told apart, not that locks are refused.
+            if b"locked" not in z.read(npc):
+                problems.append("the pass never asks whether a door is locked - a locked door on the guide's "
+                                "path stays shut and the guide stands in front of it (build 408)")
+            # The two branches are told apart by their own log lines: "on the guide's path - opened for the
+            # guide" exists only in the allow branch, "not on a guide's path" only in the refuse branch. A
+            # class that carries both cannot be answering the lock with a single yes or a single no.
+            npc_bytes = z.read(npc)
+            if b"is not on a guide's path" not in npc_bytes:
+                problems.append("the pass does not refuse a locked door that merely stands next to the guide "
+                                "- the pass would be a key to every locked door in the village (build 408)")
+            if b"is on the guide's path" not in npc_bytes:
+                problems.append("the pass does not open a locked door that is on the guide's path - the "
+                                "guide stands in front of its own door, which is the author's 407 report "
+                                "(build 408)")
             if not any(r[1] == "getTarget" and r[0] and r[0].endswith("pathfinder/Path")
                        for r in npc_refs):
                 problems.append("the stuck line cannot say where the finished path was aiming - the log "

@@ -1,0 +1,2 @@
+da06d3073d20caa6e8ed79c7ecccd383659766328277277f74bedb9e83b7596b  settledlands-0.8.0-build408-locked-on-path.jar
+548aca61bc3e763fc4c402e269e12c0081f3902cb11e3f9e4f3cb57f7281e849  SettledLands-Build408-LockedOnPath-Source.zip

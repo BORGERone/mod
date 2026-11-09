@@ -53,3 +53,13 @@
 
 `https://github.com/BORGERone/mod/raw/<полный sha из git rev-parse>/<имя файла>`
 (короткий sha руками не раскрывать — так я один раз отдал битую ссылку).
+## Build 408 — запертая дверь на пути проводника открывается (2026-11-09)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build408-locked-on-path.jar | `14Hx7ZOjvV-4fn2M3ZCqZrqQaQaDh35qJ` | `da06d3073d20caa6e8ed79c7ecccd383659766328277277f74bedb9e83b7596b` |
+| SettledLands-Build408-LockedOnPath-Source.zip | `1epiNfs4zSPCkafXRegEDXzUNomtIu6rY` | `548aca61bc3e763fc4c402e269e12c0081f3902cb11e3f9e4f3cb57f7281e849` |
+
+База — 404. В игре **не проверено**. Это замена 407-й: в 407-й проводник перестал открывать СВОЮ дверь,
+потому что она заперта (запрет всех запертых дверей был ошибкой). Зеркало:
+`https://github.com/BORGERone/mod/raw/<полный sha из git rev-parse HEAD>/settledlands-0.8.0-build408-locked-on-path.jar`

@@ -54,10 +54,11 @@ import org.slf4j.LoggerFactory;
  *       <b>stays open until the guide is through it</b> - not for a fixed time, not until the pass looks
  *       again, but until a guide has actually come up to it and walked away from it;</li>
  *   <li>and only then is it shut - behind the guide, with nobody in the doorway ({@link #stopLeftBehind});</li>
- *   <li>a <b>locked</b> door is never opened, not for a tick: the lock is a rule, and the guard of build 371
- *       is right to slam it. The log showed exactly that happening - the pass opened a locked door, the
- *       guard swore to leave it alone "a guide is walking through it", and the pass's own close then shut it
- *       on the guide. Nothing here opens a locked door at all.</li>
+ *   <li>a <b>locked</b> door: build 407 refused every one of them, and that was wrong - it stopped a guide
+ *       in front of the very door it had opened in the log of 406, because the author's test door is locked.
+ *       Build 408 follows the author's own sentence, «нпс должен открывать все двери на его пути, в т.ч. и
+ *       запертые»: a locked door <b>on the guide's path</b> is opened for it and shut again behind it, while
+ *       a locked door that merely stands next to the guide is nobody's doorway and stays shut.</li>
  * </ol>
  *
  * <p>What is <b>not</b> here any more, and why: build 405's body moves (the author saw the guide teleport -
@@ -214,7 +215,7 @@ public final class NpcDoors368 {
             saidAwake = true;
             LOG.info("door: the guide door pass is armed - " + guides + " guide(s) in level "
                     + level.dimension() + "; a door on a guide's path is opened and stays open until the "
-                    + "guide is through it, a locked door is never opened");
+                    + "guide is through it, and every door on that path is opened, locked or not");
         }
         if (LAST_POS.size() > 256) {
             LAST_POS.keySet().removeIf(id -> !seen.contains(id));
@@ -333,11 +334,10 @@ public final class NpcDoors368 {
     }
 
     /**
-     * A door block on a path node, its doorstep or the block above it.
-     *
-     * <p>Every door this pass opens goes through {@link #openDoor}, which refuses a locked one: a door the
-     * author locked is not a doorway, and opening it - even for a tick - is what gave the 406 log its
-     * open/shut rhythm with the guard slamming it in between.</p>
+     * A door block on a path node, its doorstep or the block above it - a door the guide's path goes
+     * through, which is the one kind of door a lock does not stop (build 408). The {@code onPath} argument
+     * handed to {@link #openDoor} is what lets it tell "a door on the way" from "a locked door that merely
+     * stands next to the guide".
      */
     private static BlockPos openDoorAt(ServerLevel level, dev.settledlands.npc.GuideNpc npc, BlockPos node,
             long now) {
@@ -366,13 +366,23 @@ public final class NpcDoors368 {
                 keepOpen(level, pos, now);
                 return false;
             }
-            if (locked(level, pos)) {
+            // Build 408: a locked door is the author's rule, and he settled it in one sentence - «нпс
+            // должен открывать все двери на его пути, в т.ч. и запертые». So the lock is not an answer by
+            // itself: a door the guide's own path runs through is opened locked or not (368/403 said the
+            // same: a guide is allowed to open a locked door and walk through it), while a locked door that
+            // merely stands next to the guide is nobody's doorway and stays shut. Build 407 refused both,
+            // and the guide that had opened that very door in the log of 406 stopped dead in front of it.
+            if (locked(level, pos) && !onPath) {
                 if (saidGuard < 3) {
                     saidGuard++;
-                    LOG.info("door: the locked door at " + pos + " stays shut for a guide - a locked door is "
-                            + "never opened, not even for a tick");
+                    LOG.info("door: the locked door at " + pos + " is not on a guide's path - it stays shut");
                 }
                 return false;
+            }
+            if (locked(level, pos) && saidGuard < 6) {
+                saidGuard++;
+                LOG.info("door: the locked door at " + pos + " is on the guide's path - opened for the guide, "
+                        + "and shut again behind it");
             }
             if (!Doors368.setOpen(level, pos, true)) return false;
             keepOpen(level, pos, now);
