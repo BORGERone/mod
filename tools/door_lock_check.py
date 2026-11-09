@@ -24,7 +24,11 @@ What this gate asks the shipped jar:
   * build 404: doors are opened **ahead** of a walking guide, in the direction its navigator is taking it
     (a door opened when the guide is already at it is opened one plan too late), and a guide that stopped
     at an open door is walked through it - a short path past the doorway, and the step itself on the move
-    control when the path finder still refuses.
+    control when the path finder still refuses;
+  * build 405: nothing closes a door a guide is standing in (the ten-second rule of build 404 is gone from
+    the class altogether), the door under a guide's feet is opened again on every pass, and a guide that
+    does not walk out of a doorway is moved out of it - along the way it was going, and only into a cell
+    that was checked first (feet, head, floor), which is the one new game call of this build.
 
     python3 tools/door_lock_check.py settledlands-0.8.0-build368-door-lock.jar
 
@@ -335,6 +339,29 @@ def structural(jar):
                 problems.append("the stuck line cannot say where the finished path was aiming - the log "
                                 "would not tell a path that ended at the door from a path that went "
                                 "through (build 404)")
+            # Build 405: «стоит в ней открывает и закрывает, а потом пропускает точку». The door that
+            # opened and shut on the guide was this pass's own ten-second rule, so the rule must be gone
+            # from the class - not merely unused - and the two mechanisms that replace it must be there:
+            # the door under a guide's feet is held open, and a guide that does not leave the doorway is
+            # taken out of it, into cells that were checked before the move.
+            if b"CLOSE_AFTER" in z.read(npc):
+                problems.append("the ten-second rule that shut the door on a guide standing in it is still "
+                                "in the class - a body inside a solid door block cannot walk out (build 405)")
+            if not any(r[1] == "holdOccupied" and r[0] and r[0].endswith("door/NpcDoors368")
+                       for r in npc_refs):
+                problems.append("nothing holds open the door a guide is standing in - a door shut between "
+                                "two passes traps the guide inside a solid block (build 405)")
+            if not any(r[1] == "crossStep" and r[0] and r[0].endswith("door/NpcDoors368")
+                       for r in npc_refs):
+                problems.append("a guide that does not walk out of a doorway is not taken out of it - the "
+                                "author would see it standing in the door again (build 405)")
+            if not any(r[1] == "isAir" and r[0]
+                       and r[0].endswith("world/level/block/state/BlockState") for r in npc_refs):
+                problems.append("a guide is moved without asking what is in the cell it is moved into - "
+                                "that is how a body ends up inside a wall (build 405)")
+            if "dev/settledlands/door/NpcDoors368$Cross.class" not in names:
+                problems.append("no walk-out state at all: the latch that carries a guide out of a doorway "
+                                "was never compiled into the jar (build 405)")
         if guard in names:
             if not any(r[1] == "guideNear" and r[0] and r[0].endswith("door/NpcDoors368")
                        for r in guard_refs):

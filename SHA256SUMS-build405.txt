@@ -1,0 +1,4 @@
+# SettledLands build 405 - 0.8.0-build405-door-held-open
+# base: settledlands-0.8.0-build404-through-the-doorway.jar
+bc7c404d0f223e8bac2391876369cdd9c868bed5bf49598e0d39bc5749ba1563  settledlands-0.8.0-build405-door-held-open.jar
+fc9ceabd332ceeede8663c26bd5b601d1c239a9991c8e5b107e7a5c756ce1c87  SettledLands-Build405-DoorHeldOpen-Source.zip

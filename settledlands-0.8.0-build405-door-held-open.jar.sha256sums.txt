@@ -1,0 +1,1 @@
+bc7c404d0f223e8bac2391876369cdd9c868bed5bf49598e0d39bc5749ba1563  settledlands-0.8.0-build405-door-held-open.jar
