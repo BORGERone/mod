@@ -9,6 +9,8 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.Mob;
+import net.minecraft.world.entity.ai.control.MoveControl;
 import net.minecraft.world.entity.ai.navigation.PathNavigation;
 import net.minecraft.world.level.pathfinder.NodeEvaluator;
 import net.minecraft.world.level.pathfinder.Path;
@@ -25,6 +27,28 @@ import org.slf4j.LoggerFactory;
  * walk somewhere. A guide is not driven that way: it is walked by the mod itself - a mobility point, an
  * escort, a scene - so the pass below is what opens the guide's doors, on the same server tick the rest
  * of the mod already uses.</p>
+ *
+ * <h2>Build 404: «доходит до двери, открывает, но дальше не проходит»</h2>
+ *
+ * <p>The pass now opens the door, and the guide still stopped at it. Two things were wrong, and both are
+ * about <b>when</b> a door is open, never about whether the pass runs:</p>
+ *
+ * <ul>
+ *   <li>a door was opened when the guide was already at it ({@value #REACH} blocks). By then the path the
+ *       guide is following was planned at a closed door and it <b>ends</b> at the door - the door opening
+ *       changes nothing about a path that is already finished. The doors are now opened <b>ahead</b>
+ *       ({@value #REACH_AHEAD} blocks, in the direction the navigator is taking the guide,
+ *       {@link #openAhead}), so the next leg is planned against an open doorway;</li>
+ *   <li>and when a guide does stop at a door it has just opened, it is now walked through it
+ *       ({@link #pushThrough}): a short path to the point just past the doorway, and, if the pathfinder
+ *       still refuses, the step ordered straight on the move control - a mob is moved by its move control,
+ *       not by its opinion. It is a walk, not a teleport: the guide still collides with everything.</li>
+ * </ul>
+ *
+ * <p>The stuck line now says what the navigator thinks ({@link #pathState}): how many nodes the path has,
+ * which node is next, where it was taking the guide, and whether the guide is against a block. That is the
+ * difference between "the path ended at the door" and "the path goes through and something else holds it",
+ * and it is in the log rather than in another guess.</p>
  *
  * <h2>Build 403: «они не проходят даже через открытые»</h2>
  *
@@ -90,6 +114,17 @@ public final class NpcDoors368 {
     /** How many nodes of the guide's own path are checked for a door. */
     private static final int LOOKAHEAD = 4;
 
+    /**
+     * Build 404: how far ahead a door is opened for a guide that is walking, in the direction the
+     * navigator is taking it. A door has to be open <b>before</b> the pathfinder plans the next leg -
+     * opening it when the guide is already pressed against it is one plan too late, because the path that
+     * ended at the closed door is the path it is following.
+     */
+    private static final double REACH_AHEAD = 4.0D;
+
+    /** Build 404: an open door this close to a guide that is stuck is a doorway it should be walking through. */
+    private static final double PUSH_RANGE = 2.0D;
+
     /** How far a guide has to get from a door it opened before the door is closed again. */
     private static final double CLOSE_RANGE = 3.0D;
 
@@ -109,8 +144,20 @@ public final class NpcDoors368 {
     private static final int STUCK_TICKS = 20;
 
     private static final Map<UUID, double[]> LAST_POS = new HashMap<>();
+    private static final Map<UUID, Watch> WATCH = new HashMap<>();
+    private static final Map<UUID, long[]> PUSHED = new HashMap<>();
     private static final Map<UUID, int[]> STUCK = new HashMap<>();
     private static final List<Open> OPENED = new ArrayList<>();
+
+    /**
+     * Build 404: the last place a guide's navigator was taking it, and how long ago that was. A guide that
+     * stops for ever at an open door is one that was walking at a point the door stands between - without
+     * remembering that point there is nothing to compare the door with.
+     */
+    private static final class Watch {
+        BlockPos target;
+        int age;
+    }
 
     /** One door a guide opened, and when. */
     private static final class Open {
@@ -177,9 +224,13 @@ public final class NpcDoors368 {
             boolean walking = moved >= 0.05D;
             boolean pinned = !walking && hasPath(npc);
             int[] stood = STUCK.get(id);
-            int still = pinned ? (stood == null ? PERIOD : stood[0] + PERIOD) : 0;
+            int still = walking ? 0 : (stood == null ? PERIOD : stood[0] + PERIOD);
             STUCK.put(id, new int[] {still});
+            rememberTarget(npc, id);
 
+            // Build 404: the doors ahead, in the direction the navigator is taking it - so the next path
+            // it plans meets an open doorway instead of a wall.
+            openAhead(level, npc, now);
             // Build 403: the doors on the guide's own path first - they are the ones it is going through.
             BlockPos onPath = openOnPath(level, npc, now);
             // Build 403: and then the doors around it, without asking whether it has moved. The movement
@@ -188,9 +239,26 @@ public final class NpcDoors368 {
                     walking);
             BlockPos door = onPath != null ? onPath : around;
 
-            if (pinned && still >= STUCK_TICKS && still % STUCK_TICKS == 0) {
-                recompute(npc);
-                traceStuck(level, npc, x, y, z, door);
+            boolean stoodAtDoor = !walking && still >= STUCK_TICKS && still % STUCK_TICKS == 0
+                    && (pinned || doorBetween(npc, id, openDoorInReach(level, npc, x, y, z)));
+            if (stoodAtDoor) {
+                // Build 404: a guide that stops at a door it has just opened is the author's report
+                // exactly («доходит до двери, теперь открывает, но дальше открытой двери не проходит»),
+                // and the honest reading is that its path ended at the door and the next plan never
+                // reaches past it. So: plan again, and if the plan still leads nowhere, walk it through
+                // the doorway step by step - the door is open, the guide is 1.5 blocks from it, and the
+                // only thing missing is somebody telling its feet to keep going.
+                boolean planned = recompute(npc);
+                BlockPos through = openDoorInReach(level, npc, x, y, z);
+                String push = "no open door at hand";
+                if (through != null && mayPush(id, through, now)) {
+                    push = pushThrough(level, npc, through)
+                            ? (planned ? "path replanned and a step ordered" : "a step ordered")
+                            : "failed";
+                } else if (through != null) {
+                    push = "already tried";
+                }
+                traceStuck(level, npc, x, y, z, door, push);
             }
         }
         // Build 403: one line to say the pass is alive, once there is a guide to look after. A pass that
@@ -203,6 +271,8 @@ public final class NpcDoors368 {
         if (LAST_POS.size() > 256) {
             LAST_POS.keySet().removeIf(id -> !seen.contains(id));
             STUCK.keySet().removeIf(id -> !seen.contains(id));
+            WATCH.keySet().removeIf(id -> !seen.contains(id));
+            PUSHED.keySet().removeIf(id -> !seen.contains(id));
         }
     }
 
@@ -300,6 +370,175 @@ public final class NpcDoors368 {
         return nearest;
     }
 
+    /** Build 404: remembers where the guide's navigator was taking it, and how long ago that was. */
+    private static void rememberTarget(dev.settledlands.npc.GuideNpc npc, UUID id) {
+        try {
+            Watch watch = WATCH.get(id);
+            if (watch == null) {
+                watch = new Watch();
+                WATCH.put(id, watch);
+            }
+            PathNavigation navigation = npc.getNavigation();
+            BlockPos target = navigation == null ? null : navigation.getTargetPos();
+            if (target != null) {
+                watch.target = target;
+                watch.age = 0;
+            } else if (watch.age < 10000) {
+                watch.age += PERIOD;
+            }
+        } catch (Throwable ignored) {
+            // a guide without a navigator is simply a guide this pass knows nothing about
+        }
+    }
+
+    /**
+     * Build 404: does the door stand between the guide and the place it was walking to? That is the test
+     * for "it stopped at a door it was trying to pass" - as opposed to "it stopped at a door it lives
+     * beside", which nothing should push it through.
+     */
+    private static boolean doorBetween(dev.settledlands.npc.GuideNpc npc, UUID id, BlockPos door) {
+        if (door == null) return false;
+        Watch watch = WATCH.get(id);
+        if (watch == null || watch.target == null || watch.age > 60) return false;
+        double dx = watch.target.getX() + 0.5D - npc.getX();
+        double dz = watch.target.getZ() + 0.5D - npc.getZ();
+        double length = Math.sqrt(dx * dx + dz * dz);
+        if (length < 1.0D) return false;
+        double gx = door.getX() + 0.5D - npc.getX();
+        double gz = door.getZ() + 0.5D - npc.getZ();
+        double along = (gx * dx + gz * dz) / length;             // how far along the way the door is
+        if (along < 0.2D || along > length + 1.0D) return false;  // behind the guide, or past the target
+        double across = Math.abs(gx * dz - gz * dx) / length;      // how far off that line the door is
+        return across <= 1.4D;
+    }
+
+    /**
+     * Build 404: a guide is walked through a doorway at most once per second and three times per door -
+     * enough to get it through, not enough to turn a wrong direction into a fight.
+     */
+    private static boolean mayPush(UUID id, BlockPos door, long now) {
+        long[] last = PUSHED.get(id);
+        long key = ((long) door.getX() & 0x3FFFFFFL) << 38
+                | ((long) door.getZ() & 0x3FFFFFFL) << 12 | (door.getY() & 0xFFFL);
+        if (last != null && last[0] == key) {
+            if (now - last[1] < 20L) return false;
+            if (last[2] >= 3L && now - last[1] < 200L) return false;
+            if (now - last[1] >= 200L) last[2] = 0L;
+        }
+        long[] next = last != null && last[0] == key ? last : new long[] {key, now, 0L};
+        next[1] = now;
+        next[2] = next[2] + 1L;
+        PUSHED.put(id, next);
+        return true;
+    }
+
+    /**
+     * Build 404: opens the closed doors <b>ahead</b> of a walking guide - within {@value #REACH_AHEAD}
+     * blocks and inside a cone around the direction the navigator is taking it.
+     *
+     * <p>Why a cone and not a radius: a door ten blocks behind the guide or behind a wall is nobody's
+     * business, while the door it is about to plan a path through is everybody's. Opening it a second
+     * before the plan is what makes the plan go through the doorway instead of around it or up to it.</p>
+     */
+    private static void openAhead(ServerLevel level, dev.settledlands.npc.GuideNpc npc, long now) {
+        try {
+            PathNavigation navigation = npc.getNavigation();
+            BlockPos target = navigation == null ? null : navigation.getTargetPos();
+            if (target == null) return;
+            double x = npc.getX();
+            double y = npc.getY();
+            double z = npc.getZ();
+            double tx = target.getX() + 0.5D - x;
+            double tz = target.getZ() + 0.5D - z;
+            double length = Math.sqrt(tx * tx + tz * tz);
+            if (length < 1.0D) return;
+            tx /= length;
+            tz /= length;
+            int bx = (int) Math.floor(x);
+            int by = (int) Math.floor(y);
+            int bz = (int) Math.floor(z);
+            int span = (int) Math.ceil(REACH_AHEAD);
+            for (int dx = -span; dx <= span; dx++) {
+                for (int dy = -2; dy <= 2; dy++) {
+                    for (int dz = -span; dz <= span; dz++) {
+                        BlockPos pos = new BlockPos(bx + dx, by + dy, bz + dz);
+                        if (!Doors368.isDoor(level.getBlockState(pos))) continue;
+                        double vx = pos.getX() + 0.5D - x;
+                        double vz = pos.getZ() + 0.5D - z;
+                        double distance = Math.sqrt(vx * vx + vz * vz);
+                        if (distance > REACH_AHEAD || distance < 0.01D) continue;
+                        if ((vx * tx + vz * tz) / distance < 0.5D) continue;   // roughly ahead
+                        if (Doors368.isOpen(level.getBlockState(pos))) continue;
+                        openDoor(level, pos, now, true);
+                    }
+                }
+            }
+        } catch (Throwable failure) {
+            if (failure != null) {
+                LOG.warn("could not open the doors ahead of a guide", failure);
+            }
+        }
+    }
+
+    /** The open door a stuck guide is standing at, if any. */
+    private static BlockPos openDoorInReach(ServerLevel level, Entity npc, double x, double y, double z) {
+        int bx = (int) Math.floor(x);
+        int by = (int) Math.floor(y);
+        int bz = (int) Math.floor(z);
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dy = -1; dy <= 2; dy++) {
+                for (int dz = -2; dz <= 2; dz++) {
+                    BlockPos pos = new BlockPos(bx + dx, by + dy, bz + dz);
+                    if (!Doors368.isDoor(level.getBlockState(pos))) continue;
+                    if (!Doors368.isOpen(level.getBlockState(pos))) continue;
+                    if (npc.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D)
+                            > PUSH_RANGE * PUSH_RANGE) {
+                        continue;
+                    }
+                    return pos;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * Build 404: walks a guide through an open doorway it is standing at.
+     *
+     * <p>The guide's own movement is the game's navigator ({@code GuideNpc#stepCustomMovement} calls
+     * {@code PathNavigation#moveTo}), so a path that ends at the door means the guide stops at the door -
+     * the door being open changes nothing once the path is done. This asks for a short path to the point
+     * just <b>past</b> the doorway; if the pathfinder still refuses, the step itself is ordered on the
+     * move control, which is what actually moves a mob. No teleport: the mob still walks, and still
+     * collides with anything in the way.</p>
+     */
+    private static boolean pushThrough(ServerLevel level, dev.settledlands.npc.GuideNpc npc, BlockPos door) {
+        if (level == null || npc == null || door == null) return false;
+        double cx = door.getX() + 0.5D;
+        double cz = door.getZ() + 0.5D;
+        double dx = cx - npc.getX();
+        double dz = cz - npc.getZ();
+        double length = Math.sqrt(dx * dx + dz * dz);
+        if (length < 1.0E-3D) return false;
+        double fx = cx + dx / length * 1.1D;
+        double fz = cz + dz / length * 1.1D;
+        double fy = npc.getY();
+        try {
+            PathNavigation navigation = npc.getNavigation();
+            if (navigation != null && navigation.moveTo(fx, fy, fz, 1.0D)) return true;
+            if (navigation != null) navigation.stop();
+            MoveControl control = ((Mob) npc).getMoveControl();
+            if (control == null) return false;
+            control.setWantedPosition(fx, fy, fz, 0.9D);
+            return true;
+        } catch (Throwable failure) {
+            if (failure != null) {
+                LOG.warn("could not walk a guide through an open door", failure);
+            }
+            return false;
+        }
+    }
+
     /** A door block on a path node, its doorstep or the block above it. */
     private static BlockPos openDoorAt(ServerLevel level, BlockPos node, long now, boolean onPath) {
         for (int dy = -1; dy <= 1; dy++) {
@@ -337,20 +576,22 @@ public final class NpcDoors368 {
      * "the NPC cannot use a door". {@code PathNavigation#recomputePath()} asks the navigator to plan again
      * to the same target, and the target has not changed: only the door did.</p>
      */
-    private static void recompute(dev.settledlands.npc.GuideNpc npc) {
+    private static boolean recompute(dev.settledlands.npc.GuideNpc npc) {
         try {
             PathNavigation navigation = npc.getNavigation();
-            if (navigation == null) return;
+            if (navigation == null) return false;
             navigation.recomputePath();
             if (saidPath < 4) {
                 saidPath++;
                 LOG.info("door: a guide stood at a door, so its path was planned again now that the "
                         + "door is open");
             }
+            return true;
         } catch (Throwable failure) {
             if (failure != null) {
                 LOG.warn("could not recompute a guide's path at a door", failure);
             }
+            return false;
         }
     }
 
@@ -361,14 +602,35 @@ public final class NpcDoors368 {
      * walk", which are different bugs.
      */
     private static void traceStuck(ServerLevel level, dev.settledlands.npc.GuideNpc npc, double x,
-            double y, double z, BlockPos door) {
+            double y, double z, BlockPos door, String push) {
         if (saidStuck >= 6) return;
         saidStuck++;
         String where = door == null ? "no door within reach"
                 : "door at " + door + " open=" + Doors368.anyOpen(level, door);
-        LOG.info("door: the guide " + npc.getUUID() + " has stood still with an unfinished path for "
-                + STUCK_TICKS + " ticks at "
-                + String.format(java.util.Locale.ROOT, "%.1f %.1f %.1f", x, y, z) + " - " + where);
+        LOG.info("door: the guide " + npc.getUUID() + " has stood still at "
+                + String.format(java.util.Locale.ROOT, "%.1f %.1f %.1f", x, y, z) + " - " + where
+                + "; " + pathState(npc) + "; against a block=" + npc.horizontalCollision
+                + "; walk-through=" + push);
+    }
+
+    /**
+     * Build 404: what the guide's navigator thinks it is doing - the part of the report the author cannot
+     * see. "no path" and "a path of five nodes, next node nought" are different bugs, and until this
+     * build every log line looked the same for both.
+     */
+    private static String pathState(dev.settledlands.npc.GuideNpc npc) {
+        try {
+            PathNavigation navigation = npc.getNavigation();
+            if (navigation == null) return "no navigator";
+            Path path = navigation.getPath();
+            String done = navigation.isDone() ? "done" : "walking";
+            if (path == null) return "no path, " + done;
+            return "path " + path.getNodeCount() + " node(s), next " + path.getNextNodeIndex()
+                    + ", target " + path.getTarget() + ", nav target " + navigation.getTargetPos()
+                    + ", " + done;
+        } catch (Throwable failure) {
+            return "path unknown";
+        }
     }
 
     /**

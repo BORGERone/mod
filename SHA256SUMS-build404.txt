@@ -1,0 +1,4 @@
+# SettledLands build 404 - 0.8.0-build404-through-the-doorway
+# base: settledlands-0.8.0-build403-doors-on-path.jar
+c2dcc73a75286e5059d9d85a11a4ecb61d867ea47eda4407204ff3e33033fb72  settledlands-0.8.0-build404-through-the-doorway.jar
+81b7875b3381c658f60aae20d3631ffbe16111b31d4c21c232e83b5bb9d7f8c3  SettledLands-Build404-ThroughTheDoorway-Source.zip

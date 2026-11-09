@@ -4,6 +4,12 @@ import net.minecraft.world.level.Level;
 import java.util.UUID;
 public class Entity {
     public int tickCount;
+
+    /**
+     * Build 404: true while the entity is pressed against something horizontally - the same field the
+     * game's own door goals read ({@code DoorInteractGoal#canUse}). Public on {@code Entity}.
+     */
+    public boolean horizontalCollision;
     public boolean isAlive() { return true; }
     public boolean isRemoved() { return false; }
     public boolean isPassenger() { return false; }

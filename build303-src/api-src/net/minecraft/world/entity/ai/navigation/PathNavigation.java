@@ -23,4 +23,10 @@ public class PathNavigation {
 
     /** Build 403: recompute the current path to the same target - after a door on it was opened. */
     public void recomputePath() {}
+
+    /**
+     * Build 404: where this navigator is taking the mob right now ({@code public BlockPos getTargetPos()}).
+     * The door pass reads it to open the doors <b>ahead</b>, not only the ones at the mob's feet.
+     */
+    public net.minecraft.core.BlockPos getTargetPos() { return null; }
 }

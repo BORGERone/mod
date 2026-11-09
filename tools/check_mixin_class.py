@@ -853,6 +853,22 @@ CONFIRMED_EXTERNAL = {
         "Build 403: where along that path the guide is, so only the next few nodes are looked at",
     ("net/minecraft/world/level/pathfinder/Path", "getNodePos", "(I)Lnet/minecraft/core/BlockPos;"):
         "Build 403: the block of a path node - a door the guide has decided to walk through",
+    # ---------------------------------------------------------------------------------------
+    # Build 404, the doorway itself. Three more, and the same situation: the base jar never asked a mob
+    # where its move control is (it only ever called getNavigation), never asked a navigator where it is
+    # taking the mob, and never read a path's target. Confirmed against the published NeoForge 1.21.x
+    # javadoc read for this build: Mob lists `MoveControl getMoveControl()`, PathNavigation lists
+    # `BlockPos getTargetPos()`, Path lists `public BlockPos getTarget()` and `getTarget` is the point a
+    # partial path was aiming for - which is exactly the question build 404 needs answered.
+    ("net/minecraft/world/entity/Mob", "getMoveControl",
+     "()Lnet/minecraft/world/entity/ai/control/MoveControl;"):
+        "Build 404: the object that actually moves a mob, so a guide standing at an open door can be "
+        "walked through it when the path finder refuses to plan past the door",
+    ("net/minecraft/world/entity/ai/navigation/PathNavigation", "getTargetPos",
+     "()Lnet/minecraft/core/BlockPos;"):
+        "Build 404: where the navigator is taking the guide - the direction the doors ahead are opened in",
+    ("net/minecraft/world/level/pathfinder/Path", "getTarget", "()Lnet/minecraft/core/BlockPos;"):
+        "Build 404: the point a partial path was aiming for, said out loud in the stuck line of the log",
 }
 
 

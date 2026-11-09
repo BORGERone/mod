@@ -20,7 +20,11 @@ What this gate asks the shipped jar:
   * build 403: the guide pass reads the guide's own path and opens the doors on it, tells the node maker
     that a closed door is a doorway, plans the path again once the door is open, and the locked-door guard
     steps back while a guide is at the door - a lock that is shut on a guide's back is the author's
-    «не проходят даже через открытые».
+    «не проходят даже через открытые»;
+  * build 404: doors are opened **ahead** of a walking guide, in the direction its navigator is taking it
+    (a door opened when the guide is already at it is opened one plan too late), and a guide that stopped
+    at an open door is walked through it - a short path past the doorway, and the step itself on the move
+    control when the path finder still refuses.
 
     python3 tools/door_lock_check.py settledlands-0.8.0-build368-door-lock.jar
 
@@ -306,6 +310,31 @@ def structural(jar):
                        for r in set(npc_refs) | set(guard_refs)):
                 problems.append("nothing but this pass knows where the guides are - the guard cannot ask "
                                 "it before shutting a door")
+            # Build 404: «доходит до двери, открывает, но дальше открытой двери не проходит». A door that is
+            # opened when the guide is already at it is opened one plan too late - the path it is walking
+            # ends at the door. Two mechanisms are asked for here, and both are calls to the game:
+            #
+            #   * read where the navigator is taking the guide and open the doors AHEAD of it, so the next
+            #     leg is planned against an open doorway;
+            #   * walk a guide that stopped at an open door through it - a short path past the doorway, and
+            #     the step itself on the move control when the path finder still refuses.
+            if not any(r[1] == "getTargetPos" and r[0]
+                       and r[0].endswith("ai/navigation/PathNavigation") for r in npc_refs):
+                problems.append("the pass never asks where the navigator is taking the guide - the doors "
+                                "ahead cannot be opened before the guide plans its next leg (build 404)")
+            if not any(r[1] == "getMoveControl" and r[0] and r[0].endswith("entity/Mob")
+                       for r in npc_refs):
+                problems.append("a guide stopped at an open door cannot be walked through it - nothing "
+                                "orders the step on the move control (build 404)")
+            if not any(r[1] == "setWantedPosition" and r[0]
+                       and r[0].endswith("ai/control/MoveControl") for r in npc_refs):
+                problems.append("the move control is read but never asked to move - the guide would still "
+                                "stand at the open door")
+            if not any(r[1] == "getTarget" and r[0] and r[0].endswith("pathfinder/Path")
+                       for r in npc_refs):
+                problems.append("the stuck line cannot say where the finished path was aiming - the log "
+                                "would not tell a path that ended at the door from a path that went "
+                                "through (build 404)")
         if guard in names:
             if not any(r[1] == "guideNear" and r[0] and r[0].endswith("door/NpcDoors368")
                        for r in guard_refs):
