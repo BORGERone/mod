@@ -17,6 +17,20 @@
 
 ## Текущая сборка
 
+`settledlands-0.8.0-build419-esc-immediate-close.jar` (sha256 `43e7d97312e08ca0dc591a9bf11a6831197b5958ae316e4d26b71c05109c7036`,
+база — **build 418**) — **ESC сразу же закрывает меню взлома (`HackPanel377`) во всех состояниях**:
+* по запросу автора («Сделай так чтобы ESC сразу же закрывал меню»): в `HackPanel377` удалён 800-мс таймер
+  удержания `ESC` (`ESC_HOLD_MS`, `escHeldSince`, `escHeldTick()`, `settledlands$escDown()`, `settledlands$escHeld()`);
+* `keyPressed(256)` и `keyReleased(256)` больше не блокируют `ESC` при `solved` / `aborted` и сразу вызывают
+  `Screen#keyPressed` / `#keyReleased`, закрывая панель с первого нажатия; подсказка на экране обновлена на
+  «ESC - закрыть меню сразу»; защита `allReleased()` (+450 мс при срыве) для не-ESC клавиш сохранена;
+* обновлены `tools/panel_release_check.py`, `tools/illegal_hack_check.py` и `tools/harness/AbortPanel418Probe.java`
+  (живая JVM-проба проверяет мгновенное закрытие по одиночному `ESC` при `aborted`, `solved` и в процессе взлома
+  с `!cancel`). 37/37 гейтов PASS, `check_mixin_class.py --base 418` OK (`0` новых внешних ссылок),
+  `verify_jar.py --base 418` PASS (`0` оборванных ссылок).
+**В игре не проверено.**
+
+
 `settledlands-0.8.0-build418-abort-panel-key-guard.jar` (sha256 `1272604acbc5257bb9ceeadd4412f7987a02b2d0233325771433e920c3fa0cbb`,
 база — **build 417**) — **защита от утечки клавиш (`P` / Социальные взаимодействия) при срыве незаконного взлома**:
 * выявлена причина ванильного сообщения «Социальные взаимодействия доступны только в сетевой игре» при срыве

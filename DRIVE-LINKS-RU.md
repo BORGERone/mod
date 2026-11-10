@@ -169,3 +169,16 @@ NPC проходил в двери с блоком сверху и проход�
 нажатия/повторы (включая одиночный `ESC`, с аварийным удержанием `ESC` 800 мс) и закрывает экран только
 после `allReleased()` и паузы реакции 450 мс. Расширен гейт `tools/illegal_hack_check.py` + добавлена
 живая JVM-проба `tools/harness/AbortPanel418Probe.java`. 37/37 гейтов PASS. В игре **не проверено**.
+
+## Build 419 — ESC сразу же закрывает меню взлома (2026-11-10)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build419-esc-immediate-close.jar | `11HMF7MX8vzJCs3LR8spRvR0cGWQdhMjD` | `43e7d97312e08ca0dc591a9bf11a6831197b5958ae316e4d26b71c05109c7036` |
+| SettledLands-Build419-EscImmediateClose-Source.zip | `1fl6qL2bskBUNqZ1ce3LdtceMl6NxWLZF` | `8eefb2f05c1487365657fcd8aafe20d07a54b27ad2d8803262e00cf6091430bb` |
+
+База — 418. В `HackPanel377` убран 800-мс таймер удержания `ESC` (`ESC_HOLD_MS` / `escHeldTick()`):
+`keyPressed(256)` и `keyReleased(256)` передают `ESC` в `Screen` безусловно, поэтому первое же нажатие
+`ESC` закрывает меню сразу (и во время взлома, и при «ВЗЛОМ ПРИНЯТ», и при «ВЗЛОМ ПРЕРВАН»), при
+сохранении защиты от утечки зажатых не-ESC клавиш (`allReleased()`). 37/37 гейтов PASS. В игре **не проверено**.
+

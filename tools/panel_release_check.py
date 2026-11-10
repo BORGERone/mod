@@ -16,13 +16,14 @@ What this gate asks of the jar, all of it structural, because that is what a jar
     opened and therefore never sent a press;
   * in `render()` the close comes **after** `allReleased()` and after the hack was sent: the instruction
     order is the assertion. On the build that had the bug, `onClose` follows `send` directly;
-  * the escape hatch of a solved panel is a hold of ESC - 800 ms of it, timed in `tick()` on the hardware
-    (`InputConstants#isKeyDown`, build 401) - and never a tap: a tap is how a player leaves a screen.
+  * build 419: ESC closes the menu **immediately** on the very first press (`keyPressed(256, ...)` hands
+    256 directly to `Screen#keyPressed` with no `solved`/`aborted` guard and no `escHeldSince` hold timer),
+    while non-ESC held keys still hold the screen until released.
 
-    python3 tools/panel_release_check.py settledlands-0.8.0-build387-panel-release.jar
+    python3 tools/panel_release_check.py settledlands-0.8.0-build419-esc-immediate-close.jar
 
-Exit 0 = a solved panel closes only after every held key is released, and a tap cannot escape it while
-a held ESC still can.
+Exit 0 = a solved panel closes only after every held key is released unless the player presses ESC, in
+which case ESC closes the menu immediately.
 """
 import pathlib
 import struct
@@ -119,43 +120,29 @@ def main(argv):
         return fail("a solved panel does not count the keys still held, so the player cannot tell why it"
                     " has not closed yet")
 
-    # ---- the escape hatch is a hold, not a tap -------------------------------------------
-    # Build 401: the hold is timed in tick(), on the hardware. It used to be timed in keyPressed from key
-    # *repeats*, and the author's report was «проблемы с закрытием взлома на ESC, срабатывает через раз» -
-    # repeats are the window manager's business, so the hold sometimes ended by itself and sometimes never
-    # arrived.
+    # ---- build 419: ESC closes the panel immediately in every state -------------------------
     if "tick" not in names:
-        return fail("HackPanel377 has no tick() - its ESC hold is timed on key repeats, and that is the"
-                    " «срабатывает через раз» of build 401")
-    tick = method_listing(parsed, "tick")
-    if "escHeldTick(" not in tick:
-        return fail("tick() does not ask for the ESC hold - a tap would escape a solved panel")
-    hold = method_listing(parsed, "escHeldTick")
-    if "escHeldSince" not in hold:
-        return fail("escHeldTick() does not time the ESC hold - a tap would escape a solved panel")
-    # The hardware read may sit in the helper tick() calls (settledlands$escDown), so ask the class: the
-    # tick must reach the hardware, directly or through exactly that helper.
-    if "InputConstants.isKeyDown(" not in hold:
-        helper = method_listing(parsed, "settledlands$escDown")
-        if "settledlands$escDown(" not in hold or "InputConstants.isKeyDown(" not in helper:
-            return fail("tick() asks nothing about the keyboard - the hold would be a timer, not a hold")
-    if "HackPanel377.onClose(" not in hold:
-        return fail("tick() never closes the panel it was asked to close")
-    if "escHeldSince" in press:
-        return fail("keyPressed still times the ESC hold as well - two clocks on one key is how the panel"
-                    " closed «через раз»")
+        return fail("HackPanel377 has no tick() override")
     if "Screen.keyPressed(" not in press:
-        return fail("keyPressed never hands ESC to the screen - an unsolved panel could not be closed")
+        return fail("keyPressed never hands ESC to the screen - the panel could not be closed")
+    esc_call_at = press.find("Screen.keyPressed(")
+    if esc_call_at < 0:
+        return fail("keyPressed never calls Screen.keyPressed")
+    pre_esc = press[:esc_call_at]
+    if "solved" in pre_esc or "aborted" in pre_esc:
+        return fail("keyPressed gates ESC behind solved/aborted - ESC does not close the menu immediately")
+    if "escHeldTick" in names or "escHeldSince" in press or "escHeldTick(" in render:
+        return fail("HackPanel377 still carries the 800 ms ESC hold timer - ESC must close immediately")
 
     text = " ".join(str(v[1]) for v in cp if v and v[0] == 1)
-    for line in ("ВЗЛОМ ПРИНЯТ", "отпусти"):
+    for line in ("ВЗЛОМ ПРИНЯТ", "отпусти", "ESC - закрыть меню сразу"):
         if line not in text:
-            return fail("the solved panel does not say «%s» - it has to explain why it is still here" % line)
+            return fail("the solved panel does not say «%s» - it has to explain its controls" % line)
+    if "удержи ~1 с" in text:
+        return fail("HackPanel377 still tells the player to hold ESC ~1 s")
 
-    print("panel_release_check: OK  %s  (a solved panel keeps the keyboard: the keys it saw go down and"
-          " not up live in a set, allReleased() prunes that set against the hardware and checks the"
-          " panel's own keys, render() asks that question before it closes, and ESC only escapes when"
-          " it is held)" % jar.name)
+    print("panel_release_check: OK  %s  (a solved panel keeps held keys via pressed/allReleased()/"
+          "stillDown() until released, and ESC closes the menu immediately in every state)" % jar.name)
     return 0
 
 

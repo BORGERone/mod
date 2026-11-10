@@ -554,6 +554,7 @@ public class Screen {
     public Font font = new Font();
     protected Screen(Component title) {}
     protected void init() {}
+    public void initForTests() { init(); }
     public boolean isPauseScreen() { return false; }
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == 256) {
@@ -611,6 +612,7 @@ public class Minecraft {
             this.screen.removed();
         }
         this.screen = s;
+        if (s != null) s.initForTests();
     }
 }
 """,
@@ -803,9 +805,9 @@ def run_jvm_probe(blobs, jar_path):
         if run_abort.returncode != 0:
             raise RuntimeError("AbortPanel418Probe run failed:\n" + run_abort.stderr + "\n" + run_abort.stdout)
         abort_expected = (
-            "ABORT_HELD_KEYS kept=true swallowedP=true swallowedEsc=true text=true stayedWithP=true closedOnRelease=true noCancel=true",
+            "ABORT_HELD_KEYS kept=true swallowedP=true text=true stayedWithP=true closedOnRelease=true noCancel=true",
             "ABORT_GUARD preHeld=true grace=true latePSwallowed=true",
-            "ABORT_ESC_HATCH escHoldEscaped=true normalEscCancel=true",
+            "ESC_IMMEDIATE aborted=true solved=true normalCancel=true",
         )
         abort_lines = [ln.strip() for ln in run_abort.stdout.splitlines() if ln.strip()]
         for want in abort_expected:
@@ -930,6 +932,12 @@ def main(argv):
     abort_cls = pre_send.find("HackPanel377.onClose(")
     if abort_rel < 0 or abort_cls < 0 or abort_rel > abort_cls:
         return fail("HackPanel377#render does not guard aborted close behind allReleased()")
+    press_code = method_listing(panel_bytes, "keyPressed")
+    esc_super = press_code.find("Screen.keyPressed(")
+    if esc_super < 0:
+        return fail("HackPanel377#keyPressed never delegates ESC to Screen#keyPressed")
+    if "solved" in press_code[:esc_super] or "aborted" in press_code[:esc_super]:
+        return fail("HackPanel377#keyPressed still blocks immediate ESC close when solved or aborted")
 
     # 3) Live Java 21 JVM execution of IllegalHack417Probe + AbortPanel418Probe + NoHns417Probe.
     try:
@@ -939,7 +947,7 @@ def main(argv):
 
     print("illegal_hack_check: OK  %s  (Door & Chest «Незаконно» saved in Node#varLocal, inspector"
           " toggles distinct & clash-free, start-refusal + mid-hack abort + abort held-key guard"
-          " + ESC cleanup + solve guard + no-HnS fallback verified in live Java 21 JVM)" % jar_path.name)
+          " + immediate ESC close + ESC cleanup + solve guard + no-HnS fallback verified in live Java 21 JVM)" % jar_path.name)
     return 0
 
 

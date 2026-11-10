@@ -83,13 +83,6 @@ public class HackPanel377 extends Screen {
     /** The key ESC, and the only key this panel lets through to the screen under it. */
     private static final int ESC = 256;
 
-    /**
-     * Build 387: how long ESC has to be held before a <b>solved</b> panel closes anyway. A tap must not
-     * do it - that is the whole point of the build - but a key that is stuck down in hardware must not
-     * leave the player locked inside a panel either.
-     */
-    private static final long ESC_HOLD_MS = 800L;
-
     private static final int MIN_BUTTONS = 4;
     private static final int MAX_BUTTONS = 10;
 
@@ -149,18 +142,6 @@ public class HackPanel377 extends Screen {
      * hardware as well ({@link #held()}); between the two, every key the player is holding is known.
      */
     private final java.util.Set<Integer> pressed = new java.util.LinkedHashSet<>();
-
-    /**
-     * Build 401: since when ESC is held down after the hack was accepted - the escape hatch needs a
-     * deliberate hold.
-     *
-     * <p>The hold used to be measured from the {@code keyPressed} events, which only repeat while the window
-     * manager feels like repeating them: on the author's machine ESC closed the panel «через раз» («проблемы с
-     * закрытием взлома на ESC, срабатывает через раз»). The key is now read on the <b>hardware</b> every tick
-     * ({@code InputConstants#isKeyDown}), the same call the panel already trusts for the keys it holds, so a
-     * hold is a hold whether or not a repeat event ever arrives.</p>
-     */
-    private long escHeldSince;
 
     /**
      * Build 398: when the answer went out and how many times it has been sent. A chest's prize is a window
@@ -363,14 +344,8 @@ public class HackPanel377 extends Screen {
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == ESC) {
-            // Build 387/418: before the hack is solved or aborted, ESC is the player's way out - it
-            // closes the panel and nothing else; the door stays shut. After either solve or abort,
-            // the panel has to leave the player free of the keyboard before it goes, so ESC is
-            // swallowed unless it is held on purpose.
-            if (!solved && !aborted) return super.keyPressed(keyCode, scanCode, modifiers);
-            // Build 401: the hold is timed in tick(), on the hardware. Here ESC is only swallowed, so the
-            // game never sees an ESC that belongs to the panel.
-            return true;
+            // Build 419: ESC closes the menu immediately in every state (in progress, solved, aborted).
+            return super.keyPressed(keyCode, scanCode, modifiers);
         }
         if (keyCode >= 0) pressed.add(Integer.valueOf(keyCode));
         return true;
@@ -380,8 +355,7 @@ public class HackPanel377 extends Screen {
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
         if (keyCode == ESC) {
-            if (!solved && !aborted) return super.keyReleased(keyCode, scanCode, modifiers);
-            return true;
+            return super.keyReleased(keyCode, scanCode, modifiers);
         }
         pressed.remove(Integer.valueOf(keyCode));
         return true;
@@ -451,7 +425,6 @@ public class HackPanel377 extends Screen {
     private void markAborted() {
         if (!this.aborted) {
             this.abortedAt = System.currentTimeMillis();
-            this.escHeldSince = 0L;
         }
         this.aborted = true;
         this.solved = false;
@@ -506,75 +479,12 @@ public class HackPanel377 extends Screen {
     }
 
     /**
-     * Build 401: the escape hatch of a solved panel, measured on the hardware.
-     *
-     * <p>A solved panel closes itself the moment every key is up, and that is the normal way out. The escape
-     * hatch exists for the other case - a key the keyboard never reports as released - and it is a deliberate
-     * hold of ESC, not a tap: a tap is how a player leaves a screen, and this screen must not be left before
-     * its answer is out. The hold is read from {@code InputConstants#isKeyDown} on every call, because the
-     * {@code keyPressed} repeats it used to rely on arrived «через раз» and the panel with them.</p>
+     * Build 419: ESC closes the panel immediately via {@link #keyPressed}; {@code tick()} stays
+     * overridden for Screen lifecycle compatibility.
      */
     @Override
     public void tick() {
         super.tick();
-        escHeldTick();
-    }
-
-    /**
-     * The same question, asked again from {@code render}: a screen's tick is the game's business, its frame is
-     * not. Two chances per frame at a key hold cost nothing and remove the one way this fix could be invisible.
-     */
-    private void escHeldTick() {
-        try {
-            if ((!solved && !aborted) || escHoldDisabled()) {
-                escHeldSince = 0L;
-                return;
-            }
-            long now = System.currentTimeMillis();
-            if (!settledlands$escDown()) {
-                escHeldSince = 0L;
-                return;
-            }
-            if (escHeldSince == 0L) escHeldSince = now;
-            if (now - escHeldSince >= ESC_HOLD_MS) {
-                escHeldSince = 0L;
-                LOG.info((chest ? "chest" : "door") + ": ESC was held for " + ESC_HOLD_MS
-                        + " ms - the panel leaves"
-                        + (aborted ? ", the lockpick was aborted"
-                                   : ", the answer is already with the server"));
-                this.onClose();
-            }
-        } catch (Throwable ignored) {
-            // a frame must never cost the screen
-        }
-    }
-
-    /** True when the hardware cannot be asked (no window, no client) - the hold simply does not count. */
-    private boolean escHoldDisabled() {
-        try {
-            Minecraft mc = Minecraft.getInstance();
-            return mc == null || mc.getWindow() == null;
-        } catch (Throwable failure) {
-            return true;
-        }
-    }
-
-    /** Is ESC down right now, as the keyboard itself says? */
-    private boolean settledlands$escDown() {
-        try {
-            Minecraft mc = Minecraft.getInstance();
-            if (mc == null || mc.getWindow() == null) return false;
-            return InputConstants.isKeyDown(mc.getWindow().getWindow(), ESC);
-        } catch (Throwable failure) {
-            return false;
-        }
-    }
-
-    /** How much of the hold is behind the player, 0..1 - what the panel draws so the hold is not a guess. */
-    private float settledlands$escHeld() {
-        if (escHeldSince == 0L) return 0.0F;
-        float part = (System.currentTimeMillis() - escHeldSince) / (float) ESC_HOLD_MS;
-        return Math.max(0.0F, Math.min(1.0F, part));
     }
 
     private boolean allReleased() {
@@ -666,8 +576,6 @@ public class HackPanel377 extends Screen {
     @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
         super.render(graphics, mouseX, mouseY, partialTick);
-        // Build 401: the ESC hold is asked here as well as in tick() - see escHeldTick().
-        escHeldTick();
         long now = System.currentTimeMillis();
         // Build 387/418: a solved or aborted panel has no clock - the keys are the only thing left to watch.
         if (!solved && !aborted && now - rolledAt > this.rollMs) {
@@ -709,18 +617,11 @@ public class HackPanel377 extends Screen {
                     center, panelTop + 60, LABEL);
             graphics.drawCenteredString(this.font, Component.literal("ещё зажато: " + still),
                     center, panelTop + 80, SWAP);
-            float escPart = settledlands$escHeld();
-            if (escPart > 0.0F) {
-                graphics.drawCenteredString(this.font,
-                        Component.literal("ESC: " + Math.round(escPart * 100.0F) + "% - панель уйдёт"),
-                        center, panelTop + 100, SWAP);
-            } else {
-                graphics.drawCenteredString(this.font,
-                        Component.literal("пока панель здесь, клавиатура заблокирована"),
-                        center, panelTop + 100, DIM);
-            }
             graphics.drawCenteredString(this.font,
-                    Component.literal("ESC удержи ~1 с, если клавиша залипла"),
+                    Component.literal("пока панель здесь, клавиатура заблокирована"),
+                    center, panelTop + 100, DIM);
+            graphics.drawCenteredString(this.font,
+                    Component.literal("ESC - закрыть меню сразу"),
                     center, panelTop + 118, DIM);
             return;
         }
@@ -767,19 +668,11 @@ public class HackPanel377 extends Screen {
                     center, panelTop + 60, LABEL);
             graphics.drawCenteredString(this.font, Component.literal("ещё зажато: " + still),
                     center, panelTop + 80, SWAP);
-            // Build 401: the escape hatch shows itself. A hold that is measured but never drawn is the same
-            // «срабатывает через раз» as before - the player cannot tell a hold in progress from a dead key.
-            float escPart = settledlands$escHeld();
-            if (escPart > 0.0F) {
-                graphics.drawCenteredString(this.font,
-                        Component.literal("ESC: " + Math.round(escPart * 100.0F) + "% - панель уйдёт"),
-                        center, panelTop + 100, SWAP);
-            }
             graphics.drawCenteredString(this.font,
                     Component.literal("пока панель здесь, клавиатура заблокирована"),
                     center, panelTop + 100, DIM);
             graphics.drawCenteredString(this.font,
-                    Component.literal("ESC удержи ~1 с, если клавиша залипла"),
+                    Component.literal("ESC - закрыть меню сразу"),
                     center, panelTop + 118, DIM);
             return;
         }

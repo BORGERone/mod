@@ -2,6 +2,7 @@ import com.mojang.blaze3d.platform.InputConstants;
 import dev.settledlands.door.DoorHack377;
 import dev.settledlands.door.DoorSync375;
 import dev.settledlands.door.HackPanel377;
+import java.lang.reflect.Field;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.player.LocalPlayer;
@@ -10,11 +11,11 @@ import net.minecraft.world.level.Level;
 import net.neoforged.neoforge.network.PacketDistributor;
 
 /**
- * Build 418 live JVM probe for {@link HackPanel377} abort behavior on {@code DoorSync375("X|")}.
- *
- * Verifies against the real compiled {@code HackPanel377.class}, {@code DoorSync375.class}, and
- * {@code DoorHack377.class} inside the target jar that getting spotted mid-lockpick does not drop
- * the screen while keys (especially {@code P}=80, {@code W}=87, {@code Q}=81) are held or in-flight.
+ * Build 418/419 live JVM probe for {@link HackPanel377}:
+ * 1) Abort on {@code DoorSync375("X|")} keeps held non-ESC keys ({@code P}=80, {@code W}=87, {@code Q}=81)
+ *    trapped until released (+450 ms reaction guard) so held keys do not bleed into vanilla bindings.
+ * 2) ESC (256) closes the menu IMMEDIATELY on a single press in all three states: aborted, solved,
+ *    and in-progress (with {@code !cancel} sent only for an in-progress cancel).
  */
 public final class AbortPanel418Probe {
 
@@ -28,8 +29,8 @@ public final class AbortPanel418Probe {
         mc.player = new LocalPlayer(new Level());
         BlockPos pos = new BlockPos(10, 64, -5);
 
-        // 1) Holding P/W/Q when DoorSync375("X|") arrives -> panel MUST stay up, swallow P repeats
-        //    and single-tap ESC, and close ONLY once all held keys are physically released (+ grace).
+        // 1) Holding P/W/Q when DoorSync375("X|") arrives -> panel MUST stay up, swallow P repeats,
+        //    and close ONLY once all held non-ESC keys are physically released (+ grace).
         InputConstants.clearAllForTests();
         mc.setScreen(null);
         PacketDistributor.clearSent();
@@ -45,12 +46,12 @@ public final class AbortPanel418Probe {
         DoorSync375.apply("X|"); // triggers HackPanel377.abortFromServer()
         boolean keptScreenImmediately = (mc.screen == p1);
         boolean swallowedPRepeat = p1.keyPressed(KEY_P, 0, 0);
-        boolean swallowedEscTap = p1.keyPressed(KEY_ESC, 0, 0) && (mc.screen == p1);
 
         GuiGraphics gfx = new GuiGraphics();
         p1.render(gfx, 0, 0, 0.0F);
         boolean renderedAbortText = gfx.containsText("ВЗЛОМ ПРЕРВАН")
-                && gfx.containsText("за вами наблюдают");
+                && gfx.containsText("за вами наблюдают")
+                && gfx.containsText("ESC - закрыть меню сразу");
 
         // Wait past ABORT_GRACE_MS (450ms) while P is STILL held down.
         Thread.sleep(480L);
@@ -69,7 +70,6 @@ public final class AbortPanel418Probe {
         boolean noCancelSentOnAbort = (PacketDistributor.lastPayload() == null);
         System.out.println("ABORT_HELD_KEYS kept=" + keptScreenImmediately
                 + " swallowedP=" + swallowedPRepeat
-                + " swallowedEsc=" + swallowedEscTap
                 + " text=" + renderedAbortText
                 + " stayedWithP=" + stayedUpWhilePHeld
                 + " closedOnRelease=" + closedAfterRelease
@@ -112,29 +112,54 @@ public final class AbortPanel418Probe {
                 + " grace=" + graceKeptUp
                 + " latePSwallowed=" + (latePSwallowed && latePStillBlocking && latePClosed));
 
-        // 3) ESC hardware-hold escape hatch on stuck aborted panel + normal ESC cancel before abort.
+        // 3) Build 419: ESC closes the menu IMMEDIATELY on first press in all three states:
+        //    (a) aborted (even at 0ms while P is still held),
+        //    (b) solved (even while all lockpick keys are still held),
+        //    (c) normal unsolved (sends !cancel).
         InputConstants.clearAllForTests();
         mc.setScreen(null);
+        PacketDistributor.clearSent();
         HackPanel377.openForChest("minecraft:overworld@10,64,-5", pos, 4, 5, 1);
         HackPanel377 p4 = (HackPanel377) mc.screen;
         InputConstants.setDownForTests(KEY_P, true);
         p4.keyPressed(KEY_P, 0, 0);
         DoorSync375.apply("X|");
-        InputConstants.setDownForTests(KEY_ESC, true);
-        p4.tick();
-        Thread.sleep(850L);
-        p4.tick();
-        boolean escHoldEscaped = (mc.screen == null);
+        boolean abortedEscImmediate = p4.keyPressed(KEY_ESC, 0, 0)
+                && (mc.screen == null)
+                && (PacketDistributor.lastPayload() == null);
 
         InputConstants.clearAllForTests();
+        mc.setScreen(null);
+        PacketDistributor.clearSent();
+        HackPanel377.open(pos);
+        HackPanel377 p5 = (HackPanel377) mc.screen;
+        Field keysField = HackPanel377.class.getDeclaredField("keys");
+        keysField.setAccessible(true);
+        int[] board = (int[]) keysField.get(p5);
+        for (int k : board) {
+            InputConstants.setDownForTests(k, true);
+            p5.keyPressed(k, 0, 0);
+        }
+        p5.render(gfx, 0, 0, 0.0F); // enters solved=true, keeps screen while keys held
+        boolean solvedStayedFirst = (mc.screen == p5)
+                && (PacketDistributor.lastPayload() instanceof DoorHack377);
+        PacketDistributor.clearSent();
+        boolean solvedEscImmediate = p5.keyPressed(KEY_ESC, 0, 0)
+                && (mc.screen == null)
+                && (PacketDistributor.lastPayload() == null);
+
+        InputConstants.clearAllForTests();
+        mc.setScreen(null);
         PacketDistributor.clearSent();
         HackPanel377.openForChest("minecraft:overworld@10,64,-5", pos, 4, 5, 1);
-        HackPanel377 p5 = (HackPanel377) mc.screen;
-        p5.keyPressed(KEY_ESC, 0, 0);
-        boolean normalEscClosed = (mc.screen == null)
+        HackPanel377 p6 = (HackPanel377) mc.screen;
+        boolean normalEscCancel = p6.keyPressed(KEY_ESC, 0, 0)
+                && (mc.screen == null)
                 && (PacketDistributor.lastPayload() instanceof DoorHack377 dh)
                 && DoorHack377.CANCEL_KEY.equals(dh.key());
-        System.out.println("ABORT_ESC_HATCH escHoldEscaped=" + escHoldEscaped
-                + " normalEscCancel=" + normalEscClosed);
+
+        System.out.println("ESC_IMMEDIATE aborted=" + abortedEscImmediate
+                + " solved=" + (solvedStayedFirst && solvedEscImmediate)
+                + " normalCancel=" + normalEscCancel);
     }
 }

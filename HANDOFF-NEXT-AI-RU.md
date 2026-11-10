@@ -349,7 +349,7 @@ pass(es)`. Гейт `door_lock_check.py` падает, если вернулся
 
 ---
 
-## 8. Актуальное обновление (2026-11-10, ветка `arena/a5f430cc-mod`, сборки 413–418)
+## 8. Актуальное обновление (2026-11-10, ветка `arena/a5f430cc-mod`, сборки 413–419)
 
 * **Проблема дверей полностью решена и подтверждена автором в игре в сборке 415**
   (`settledlands-0.8.0-build415-door-at-hand-and-2block-height.jar`, sha256 `50f8be9ab...`): проход дверей
@@ -366,12 +366,16 @@ pass(es)`. Гейт `door_lock_check.py` падает, если вернулся
   «За вами наблюдают». Выявлен побочный баг: мгновенный `mc.setScreen(null)` в `abortFromServer()` пропускал
   зажатую клавишу `P` (из `ROW_TOP`) в ванильный `key.socialInteractions` -> «Социальные взаимодействия доступны
   только в сетевой игре».
-* **Текущая сборка — Build 418** (`settledlands-0.8.0-build418-abort-panel-key-guard.jar`,
+* **Сборка 418** (`settledlands-0.8.0-build418-abort-panel-key-guard.jar`,
   sha256 `1272604acbc5257bb9ceeadd4412f7987a02b2d0233325771433e920c3fa0cbb`, база — 417): в `HackPanel377`
-  `abortFromServer()` переведён на состояние срыва `markAborted()` — фиксирует зажатые аппаратно клавиши
-  (включая зажатые до открытия и при `roll()`), поглощает нажатия/повторы/одиночный `ESC` (с аварийным
-  выходом по удержанию `ESC` 800 мс) и закрывает панель только после `allReleased()` и паузы 450 мс. 37/37
-  гейтов PASS (включая расширенный `tools/illegal_hack_check.py` + `AbortPanel418Probe`).
+  `abortFromServer()` переведён на состояние срыва `markAborted()` — фиксирует зажатые аппаратно клавиши,
+  поглощает повторы и закрывает панель после `allReleased()` и паузы 450 мс.
+* **Текущая сборка — Build 419** (`settledlands-0.8.0-build419-esc-immediate-close.jar`,
+  sha256 `43e7d97312e08ca0dc591a9bf11a6831197b5958ae316e4d26b71c05109c7036`, база — 418): по запросу автора
+  в `HackPanel377` убран 800-мс таймер удержания `ESC` — одиночное нажатие `ESC` закрывает меню взлома
+  **мгновенно** во всех состояниях (во время взлома, при «ВЗЛОМ ПРИНЯТ» и при «ВЗЛОМ ПРЕРВАН»), при
+  сохранении защиты `allReleased()` для не-ESC клавиш. 37/37 гейтов PASS (расширены `panel_release_check.py`
+  и `illegal_hack_check.py` + `AbortPanel418Probe.java`).
 * **Критическая ловушка компиляции `@Redirect` и `lambda$N`:** старый `build303-src/stubs/org/spongepowered/asm/mixin/injection/Redirect.java`
   объявлял `At[] at()` (массив `0x5b`) вместо `At at()` (одиночная аннотация `0x40`), из-за чего Mixin молча
   игнорировал `@Redirect` в рантайме. Всегда ставь `build303-src/api416` **перед** `stubs-out` в `-cp`, а в

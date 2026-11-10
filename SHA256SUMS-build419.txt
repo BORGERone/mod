@@ -1,0 +1,2 @@
+43e7d97312e08ca0dc591a9bf11a6831197b5958ae316e4d26b71c05109c7036  settledlands-0.8.0-build419-esc-immediate-close.jar
+8eefb2f05c1487365657fcd8aafe20d07a54b27ad2d8803262e00cf6091430bb  SettledLands-Build419-EscImmediateClose-Source.zip
