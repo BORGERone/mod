@@ -455,6 +455,23 @@ def structural(jar):
             if struct.pack(">f", 0.6) not in data:
                 problems.append("the guide's body is not 0.6 blocks wide - 0.6 is the width the path finder "
                                 "calls a mob that walks through doors (build 409)")
+            # Build 415: the guide's height. At 2.1F the hitbox is taller than a 2-block doorway (and
+            # WalkNodeEvaluator computes entityHeight = floor(2.1 + 1.0) = 3 blocks), so any door with a
+            # lintel block above it - i.e. any 2-block-high passage - blocks the guide. 1.8F (player height)
+            # fits 2-block doorways and passages even over carpets.
+            if struct.pack(">f", 2.1) in data:
+                problems.append("the guide's body is still 2.1 blocks tall - taller than a 2-block doorway, "
+                                "so a block above the door stops the guide (build 415)")
+            if struct.pack(">f", 1.8) not in data:
+                problems.append("the guide's body is not 1.8 blocks tall - must fit 2-block passages and "
+                                "doorways with a block above the door (build 415)")
+            if npc in names:
+                npc_raw = z.read(npc)
+                if struct.pack(">d", 3.0) in npc_raw:
+                    problems.append("NpcDoors368 still carries a 3.0-block reach - opens doors 3 blocks "
+                                    "before the guide arrives instead of right at the door (build 415)")
+                if struct.pack(">d", 1.25) not in npc_raw:
+                    problems.append("NpcDoors368 is missing the close-up 1.25-block opening reach (build 415)")
             if not any(r[1] == "getTarget" and r[0] and r[0].endswith("pathfinder/Path")
                        for r in npc_refs):
                 problems.append("the stuck line cannot say where the finished path was aiming - the log "

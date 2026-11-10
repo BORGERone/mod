@@ -118,7 +118,18 @@
 | settledlands-0.8.0-build414-door-pass-linked.jar | `1exvlky8nitXsFaSL5onDam5f12Qk3tXy` | `bac93703267493c1895b9d601888660596563d029a7ef4b2124f1f895eb6495a` |
 | SettledLands-Build414-DoorPassLinked-Source.zip | `17J-7XZ0Sd4v33NxIsp8QBLUsauvR-gdp` | `462964287d878b0190c34d65095ebb75b71ea627d4ef2c00c95347b3aaf6bf15` |
 
-База — 413. Упакованы `NpcDoors368.class`, `NpcDoors368$Open.class` (`walkedTo`) и `NpcDoors368$Watch.class`;
-`setCanPassDoors` перенесён с `PathNavigation` на `NodeEvaluator`; канонизированы обе половины двухблочной
-двери для `DoorGuard371`, отсчёт тиков ведётся отдельно по `UUID` каждого проводника. В игре **не проверено**.
+База — 413. **В игре подтверждено**: открытие и закрытие дверей работают. Два замечания автора: открывает за
+~3 блока заранее и не проходит в проём высотой 2 блока, если над дверью есть блок (исправлено в 415-й).
+
+## Build 415 — открытие вплотную у двери и высота 1.8 блока для двухблочных проёмов (2026-11-09)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build415-door-at-hand-and-2block-height.jar | `1quGDemhwEaL0iRN3M8p8AkNjadpsAu4v` | `50f8be9ab2ae0ac34e56034141fb5ad406a715e8d2be26efcf1c6dfcedc8b808` |
+| SettledLands-Build415-DoorAtHandAnd2BlockHeight-Source.zip | `1JBOzTULGVnE2NBD38nW2RqQndghYxmQC` | `b99bee9f70700ea21ff9622d3c79461d447ec98e51a38666f3a1eb713dfb738a` |
+
+База — 414. Дистанция открытия уменьшена до `1.25` блока по горизонтали (`PERIOD = 3` тика, `openOnPath` тоже
+ограничен по расстоянию), а высота хитбокса в `NpcContent` уменьшена с `2.1F` до `1.8F` (высота игрока), чтобы
+NPC проходил в двери с блоком сверху и проходы высотой 2 блока. В игре **не проверено**.
+
 

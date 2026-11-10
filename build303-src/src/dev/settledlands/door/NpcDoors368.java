@@ -72,20 +72,19 @@ public final class NpcDoors368 {
 
     private static final Logger LOG = LoggerFactory.getLogger("SettledLands/NpcDoors368");
 
-    /** Four times a second: a walking guide covers a quarter of a block in that time. */
-    private static final int PERIOD = 5;
+    /** Build 415: every 3 ticks (0.15 s) so a door can wait until the guide is right at it without a bump. */
+    private static final int PERIOD = 3;
 
-    /** How close a door has to be to be opened for a guide that is walking. */
-    private static final double REACH = 1.9D;
+    /** Build 415: horizontal distance at which a walking guide opens a door - right at the doorway, not 3 blocks early. */
+    private static final double REACH = 1.25D;
 
     /**
-     * How close a door has to be for a guide that is <b>stuck</b> - a guide with an unfinished path that
-     * has not moved. It stands in the middle of the block in front of the door, so the door can be up to a
-     * block and a half away; this reaches the door diagonally too.
+     * Build 415: horizontal distance for a guide that has stopped at a doorway (e.g. diagonally), still right
+     * at the door and strictly inside {@link #IN_DOORWAY}.
      */
-    private static final double STUCK_REACH = 3.0D;
+    private static final double STUCK_REACH = 1.55D;
 
-    /** How many nodes of the guide's own path are checked for a door. */
+    /** How many nodes of the guide's own path are checked to know whether a door lies on its route. */
     private static final int LOOKAHEAD = 4;
 
     /**
@@ -99,8 +98,8 @@ public final class NpcDoors368 {
     /** A door kept open for a guide is shut anyway after this many ticks (5 s) - a guide may die or leave. */
     private static final long CLOSE_AFTER = 100L;
 
-    /** How long a guide has to stand still with an unfinished path before the pass looks closer. */
-    private static final int STUCK_TICKS = 20;
+    /** How long a guide has to stand still with an unfinished path before the pass replans (multiple of PERIOD). */
+    private static final int STUCK_TICKS = 18;
 
     /** One replan per guide per this many ticks, when it stands still at a door on its way. */
     private static final long REPLAN_EVERY = 100L;
@@ -285,7 +284,7 @@ public final class NpcDoors368 {
             // mobility route, and the vanilla navigator) and none of them all the time.
             double stepX = x - last[0];
             double stepZ = z - last[2];
-            if (Math.abs(stepX) + Math.abs(stepZ) >= 0.02D) {
+            if (Math.abs(stepX) + Math.abs(stepZ) >= 0.015D) {
                 LAST_POS.put(id, new double[] {x, y, z, stepX, stepZ});
             } else {
                 LAST_POS.put(id, new double[] {x, y, z, last[3], last[4]});
@@ -294,7 +293,7 @@ public final class NpcDoors368 {
         double moved = last == null
                 ? 1.0D
                 : Math.abs(x - last[0]) + Math.abs(y - last[1]) + Math.abs(z - last[2]);
-        boolean walking = moved >= 0.05D;
+        boolean walking = moved >= 0.03D;
         boolean pinned = !walking && hasPath(npc);
         int[] stood = STUCK.get(id);
         int still = walking ? 0 : (stood == null ? PERIOD : stood[0] + PERIOD);
@@ -302,10 +301,11 @@ public final class NpcDoors368 {
         rememberTarget(npc, id);
         markWalkedTo(level, id, x, y, z);
 
-        // The doors the guide's own path goes through: the exact set it has decided to walk through,
-        // opened before it arrives and kept open until it is out (see stopLeftBehind).
-        openOnPath(level, npc, now);
-        openAround(level, npc, id, x, y, z, now, walking ? REACH : STUCK_REACH, walking);
+        // Build 415: open doors on the route only once the guide has come right up to the doorway (reach),
+        // never 3-4 blocks ahead along the path.
+        double openReach = walking ? REACH : STUCK_REACH;
+        openOnPath(level, npc, now, openReach);
+        openAround(level, npc, id, x, y, z, now, openReach, walking);
 
         boolean stoodAtDoor = !walking && still >= STUCK_TICKS && still % STUCK_TICKS == 0
                 && pinned;
@@ -372,7 +372,8 @@ public final class NpcDoors368 {
      * doors the guide has decided to walk through - no guessing by distance, and the door is open before the
      * guide is pressed against it. Returns the door it opened, if any.</p>
      */
-    private static BlockPos openOnPath(ServerLevel level, dev.settledlands.npc.GuideNpc npc, long now) {
+    private static BlockPos openOnPath(ServerLevel level, dev.settledlands.npc.GuideNpc npc,
+            long now, double reach) {
         try {
             PathNavigation navigation = npc.getNavigation();
             if (navigation == null || navigation.isDone()) return null;
@@ -383,15 +384,16 @@ public final class NpcDoors368 {
             int next = path.getNextNodeIndex();
             int from = Math.max(0, next - 1);
             int to = Math.min(count - 1, next + LOOKAHEAD);
+            double limit = reach * reach;
             BlockPos opened = null;
             for (int i = from; i <= to; i++) {
                 BlockPos node = path.getNodePos(i);
                 if (node == null) continue;
-                if (i < next) {
-                    double ndx = node.getX() + 0.5D - npc.getX();
-                    double ndz = node.getZ() + 0.5D - npc.getZ();
-                    if (ndx * ndx + ndz * ndz > 1.2D * 1.2D) continue;
-                }
+                double ndx = node.getX() + 0.5D - npc.getX();
+                double ndz = node.getZ() + 0.5D - npc.getZ();
+                double horizSqr = ndx * ndx + ndz * ndz;
+                if (i < next && horizSqr > 1.2D * 1.2D) continue;
+                if (horizSqr > limit) continue;
                 BlockPos hit = openDoorAt(level, npc, node, now);
                 if (hit != null && opened == null) opened = hit;
             }
@@ -413,15 +415,18 @@ public final class NpcDoors368 {
         int bx = (int) Math.floor(x);
         int by = (int) Math.floor(y);
         int bz = (int) Math.floor(z);
+        double limit = reach * reach;
         BlockPos nearest = null;
         for (int dx = -1; dx <= 1; dx++) {
             for (int dy = -1; dy <= 1; dy++) {
                 for (int dz = -1; dz <= 1; dz++) {
                     BlockPos pos = new BlockPos(bx + dx, by + dy, bz + dz);
                     if (!Doors368.isDoor(level.getBlockState(pos))) continue;
-                    double distance = npc.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D,
-                            pos.getZ() + 0.5D);
-                    if (distance > reach * reach) continue;
+                    BlockPos base = baseDoorPos(level, pos);
+                    if (Math.abs(base.getY() - y) > 1.5D) continue;
+                    double hdx = base.getX() + 0.5D - x;
+                    double hdz = base.getZ() + 0.5D - z;
+                    if (hdx * hdx + hdz * hdz > limit) continue;
                     if (nearest == null) nearest = pos;
                     if (openDoor(level, npc, pos, now,
                             onTheWay(level, npc, id, pos) || inFrontOf(level, npc, id, pos, walking))) {
@@ -614,8 +619,11 @@ public final class NpcDoors368 {
                 for (int dz = -2; dz <= 2; dz++) {
                     BlockPos pos = new BlockPos(bx + dx, by + dy, bz + dz);
                     if (!Doors368.isDoor(level.getBlockState(pos))) continue;
-                    if (npc.distanceToSqr(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D)
-                            > STUCK_REACH * STUCK_REACH) {
+                    BlockPos base = baseDoorPos(level, pos);
+                    if (Math.abs(base.getY() - y) > 1.5D) continue;
+                    double hdx = base.getX() + 0.5D - x;
+                    double hdz = base.getZ() + 0.5D - z;
+                    if (hdx * hdx + hdz * hdz > STUCK_REACH * STUCK_REACH) {
                         continue;
                     }
                     return pos;
@@ -680,7 +688,7 @@ public final class NpcDoors368 {
             double dx = door.getX() + 0.5D - npc.getX();
             double dz = door.getZ() + 0.5D - npc.getZ();
             double away = Math.sqrt(dx * dx + dz * dz);
-            if (away > 1.6D) return false;
+            if (away > (walking ? REACH : STUCK_REACH)) return false;
             double[] last = LAST_POS.get(id);
             if (last == null) return hasPath(npc);
             double headingX = last[3];

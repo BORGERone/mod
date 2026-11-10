@@ -1,0 +1,2 @@
+50f8be9ab2ae0ac34e56034141fb5ad406a715e8d2be26efcf1c6dfcedc8b808  settledlands-0.8.0-build415-door-at-hand-and-2block-height.jar
+b99bee9f70700ea21ff9622d3c79461d447ec98e51a38666f3a1eb713dfb738a  SettledLands-Build415-DoorAtHandAnd2BlockHeight-Source.zip
