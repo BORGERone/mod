@@ -349,7 +349,7 @@ pass(es)`. Гейт `door_lock_check.py` падает, если вернулся
 
 ---
 
-## 8. Актуальное обновление (2026-11-09, ветка `arena/78029e2d-mod`, сборки 413–417)
+## 8. Актуальное обновление (2026-11-10, ветка `arena/a5f430cc-mod`, сборки 413–418)
 
 * **Проблема дверей полностью решена и подтверждена автором в игре в сборке 415**
   (`settledlands-0.8.0-build415-door-at-hand-and-2block-height.jar`, sha256 `50f8be9ab...`): проход дверей
@@ -358,12 +358,20 @@ pass(es)`. Гейт `door_lock_check.py` падает, если вернулся
 * **Сборка 416 также проверена автором в игре** (`settledlands-0.8.0-build416-hns-stealth-gaze.jar`,
   sha256 `c2d05abc69e0ddf75eee1b3009b0b3d535756629a0e64431b8a89e82bf9cb079`, база — 415): совместимость
   автоматического поворота головы НПС и глазика скрытности с модом **Hackers 'n Slashers** (`net.dndats.hackersandslashers`).
-* **Текущая сборка — Build 417** (`settledlands-0.8.0-build417-illegal-lockpick-watch.jar`,
+* **Сборка 417** (`settledlands-0.8.0-build417-illegal-lockpick-watch.jar`,
   sha256 `48fe987640aa8a838c3d5860568e8d54fd5cb386445e7c552706792d0a8636fa`, база — 416): переключатель
   «Незаконно: да/нет» (`Node#varLocal`) на карточках запертой двери и запертого сундука, серверная проверка
   свидетелей (`NpcIllegalHack417`, живые `GuideNpc` в радиусе 32 блоков + `NpcHnsStealth416#canSeeOrBypassMasking`),
-  отказ старта взлома и мгновенное закрытие открытой мини-игры (`DoorSync375("X|")`) с action-bar сообщением
-  «За вами наблюдают». 37/37 гейтов PASS (`tools/illegal_hack_check.py`).
+  отказ старта взлома и мгновенное прерывание открытой мини-игры (`DoorSync375("X|")`) с action-bar сообщением
+  «За вами наблюдают». Выявлен побочный баг: мгновенный `mc.setScreen(null)` в `abortFromServer()` пропускал
+  зажатую клавишу `P` (из `ROW_TOP`) в ванильный `key.socialInteractions` -> «Социальные взаимодействия доступны
+  только в сетевой игре».
+* **Текущая сборка — Build 418** (`settledlands-0.8.0-build418-abort-panel-key-guard.jar`,
+  sha256 `1272604acbc5257bb9ceeadd4412f7987a02b2d0233325771433e920c3fa0cbb`, база — 417): в `HackPanel377`
+  `abortFromServer()` переведён на состояние срыва `markAborted()` — фиксирует зажатые аппаратно клавиши
+  (включая зажатые до открытия и при `roll()`), поглощает нажатия/повторы/одиночный `ESC` (с аварийным
+  выходом по удержанию `ESC` 800 мс) и закрывает панель только после `allReleased()` и паузы 450 мс. 37/37
+  гейтов PASS (включая расширенный `tools/illegal_hack_check.py` + `AbortPanel418Probe`).
 * **Критическая ловушка компиляции `@Redirect` и `lambda$N`:** старый `build303-src/stubs/org/spongepowered/asm/mixin/injection/Redirect.java`
   объявлял `At[] at()` (массив `0x5b`) вместо `At at()` (одиночная аннотация `0x40`), из-за чего Mixin молча
   игнорировал `@Redirect` в рантайме. Всегда ставь `build303-src/api416` **перед** `stubs-out` в `-cp`, а в

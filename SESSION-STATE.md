@@ -10,12 +10,28 @@
 >
 > Текущая база: `settledlands-0.8.0-build404-through-the-doorway.jar`.
 
-Обновлено: 2026-11-09. Ветка: `arena/78029e2d-mod`.
+Обновлено: 2026-11-10. Ветка: `arena/a5f430cc-mod`.
 
 > **Сначала читать `HANDOFF-NEXT-AI-RU.md`** — там текущая задача, открытый дефект, порядок действий и
 > ловушки. Этот файл — история и хронология.
 
 ## Текущая сборка
+
+`settledlands-0.8.0-build418-abort-panel-key-guard.jar` (sha256 `1272604acbc5257bb9ceeadd4412f7987a02b2d0233325771433e920c3fa0cbb`,
+база — **build 417**) — **защита от утечки клавиш (`P` / Социальные взаимодействия) при срыве незаконного взлома**:
+* выявлена причина ванильного сообщения «Социальные взаимодействия доступны только в сетевой игре» при срыве
+  взлома в сборке 417: `ROW_TOP` содержит `P` (`80` = ванильный бинд `key.socialInteractions`), а
+  `HackPanel377#abortFromServer()` вызывал `mc.setScreen(null)` мгновенно, пока клавиши ещё были зажаты, и
+  автоповтор/дожатие `P` падали в `Minecraft#handleKeybinds()`, перебивая «За вами наблюдают»;
+* в `HackPanel377` `abortFromServer()` переведён на `markAborted()` с фиксацией всех зажатых аппаратно клавиш
+  пула (`captureHeldPoolKeys()`, а также в `roll()` перед заменой клавиши), поглощением любых клавиш и
+  одиночного `ESC` в `aborted`, аварийным удержанием `ESC` 800 мс и отложенным закрытием `onClose()` только
+  после `allReleased()` и защитной паузы 450 мс (`ABORT_GRACE_MS`);
+* расширен 37-й гейт `tools/illegal_hack_check.py` (структурная проверка `HackPanel377#abortFromServer` и
+  `render()`, клиентские стабы + живая JVM-проба `tools/harness/AbortPanel418Probe.java`). 37/37 гейтов PASS,
+  `check_mixin_class.py --base 417` OK (`0` новых внешних ссылок), `verify_jar.py --base 417` PASS.
+**В игре не проверено.**
+
 
 `settledlands-0.8.0-build417-illegal-lockpick-watch.jar` (sha256 `48fe987640aa8a838c3d5860568e8d54fd5cb386445e7c552706792d0a8636fa`,
 база — **build 416**) — **галочка «Незаконно» для взлома дверей и сундуков с проверкой наблюдающих НПС и стелса Hackers 'n Slashers**:

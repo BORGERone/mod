@@ -116,6 +116,15 @@ public class HackPanel377 extends Screen {
     private static final int BTN_ON_EDGE = 0xFF7BE0A0;
     private static final int SWAP = 0xFFD8A030;
     private static final int BAR = 0xFF3A7BD5;
+    private static final int ABORT_EDGE = 0xFFE05A5A;
+    private static final int ABORT_TITLE = 0xFFFF7A7A;
+
+    /**
+     * Build 418: brief reaction guard after a server-side witness abort so a keystroke already
+     * mid-motion (especially {@code P} / Social Interactions on {@link #ROW_TOP}) is still caught by
+     * this panel instead of landing straight into vanilla gameplay.
+     */
+    private static final long ABORT_GRACE_MS = 450L;
 
     private static final int BTN = 34;
     private static final int GAP = 8;
@@ -189,6 +198,7 @@ public class HackPanel377 extends Screen {
 
     /** Build 417: true when an NPC spotted the player and the server aborted this panel. */
     private boolean aborted;
+    private long abortedAt;
     private boolean cancelSent;
 
     private HackPanel377(BlockPos pos, int count, int[] keys, long rollMs, int difficulty) {
@@ -353,10 +363,11 @@ public class HackPanel377 extends Screen {
     @Override
     public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
         if (keyCode == ESC) {
-            // Build 387: before the hack is in, ESC is the player's way out - it closes the panel and
-            // nothing else; the door stays shut. After it, the panel has to leave the player free of
-            // the keyboard before it goes, so ESC is swallowed unless it is held on purpose.
-            if (!solved) return super.keyPressed(keyCode, scanCode, modifiers);
+            // Build 387/418: before the hack is solved or aborted, ESC is the player's way out - it
+            // closes the panel and nothing else; the door stays shut. After either solve or abort,
+            // the panel has to leave the player free of the keyboard before it goes, so ESC is
+            // swallowed unless it is held on purpose.
+            if (!solved && !aborted) return super.keyPressed(keyCode, scanCode, modifiers);
             // Build 401: the hold is timed in tick(), on the hardware. Here ESC is only swallowed, so the
             // game never sees an ESC that belongs to the panel.
             return true;
@@ -369,7 +380,7 @@ public class HackPanel377 extends Screen {
     @Override
     public boolean keyReleased(int keyCode, int scanCode, int modifiers) {
         if (keyCode == ESC) {
-            if (!solved) return super.keyReleased(keyCode, scanCode, modifiers);
+            if (!solved && !aborted) return super.keyReleased(keyCode, scanCode, modifiers);
             return true;
         }
         pressed.remove(Integer.valueOf(keyCode));
@@ -421,16 +432,45 @@ public class HackPanel377 extends Screen {
         }
     }
 
-    /** Build 417, client side: immediately closes any open lockpick panel when spotted by an NPC. */
+    /**
+     * Build 417/418, client side: aborts an open lockpick panel when spotted by an NPC, keeping the
+     * panel open until every held key is released (plus {@link #ABORT_GRACE_MS}) so held lockpick keys
+     * such as {@code P} (Social Interactions), {@code Q}, {@code W}, {@code E} cannot bleed into
+     * vanilla keybinds and overwrite «За вами наблюдают».
+     */
     public static void abortFromServer() {
         try {
             DoorHack377.clearPending();
             Minecraft mc = Minecraft.getInstance();
             if (mc == null || !(mc.screen instanceof HackPanel377 panel)) return;
-            panel.aborted = true;
-            panel.solved = false;
-            mc.setScreen(null);
+            panel.markAborted();
         } catch (Throwable ignored) {
+        }
+    }
+
+    private void markAborted() {
+        if (!this.aborted) {
+            this.abortedAt = System.currentTimeMillis();
+            this.escHeldSince = 0L;
+        }
+        this.aborted = true;
+        this.solved = false;
+        captureHeldPoolKeys();
+    }
+
+    private void captureHeldPoolKeys() {
+        try {
+            captureHeldFrom(ROW_TOP);
+            captureHeldFrom(ROW_HOME);
+            captureHeldFrom(ROW_BOTTOM);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private void captureHeldFrom(int[] row) {
+        for (int i = 0; i < row.length; i++) {
+            int code = row[i];
+            if (isDown(code)) this.pressed.add(Integer.valueOf(code));
         }
     }
 
@@ -486,7 +526,7 @@ public class HackPanel377 extends Screen {
      */
     private void escHeldTick() {
         try {
-            if (!solved || escHoldDisabled()) {
+            if ((!solved && !aborted) || escHoldDisabled()) {
                 escHeldSince = 0L;
                 return;
             }
@@ -499,7 +539,9 @@ public class HackPanel377 extends Screen {
             if (now - escHeldSince >= ESC_HOLD_MS) {
                 escHeldSince = 0L;
                 LOG.info((chest ? "chest" : "door") + ": ESC was held for " + ESC_HOLD_MS
-                        + " ms - the panel leaves, the answer is already with the server");
+                        + " ms - the panel leaves"
+                        + (aborted ? ", the lockpick was aborted"
+                                   : ", the answer is already with the server"));
                 this.onClose();
             }
         } catch (Throwable ignored) {
@@ -602,6 +644,7 @@ public class HackPanel377 extends Screen {
             }
         }
         if (fresh == keys[index]) return;
+        if (isDown(keys[index])) pressed.add(Integer.valueOf(keys[index]));
         keys[index] = fresh;
         swaps++;
         flash = "клавиша сменилась";
@@ -626,8 +669,8 @@ public class HackPanel377 extends Screen {
         // Build 401: the ESC hold is asked here as well as in tick() - see escHeldTick().
         escHeldTick();
         long now = System.currentTimeMillis();
-        // Build 387: a solved panel has no clock - the keys are the only thing left to watch.
-        if (!solved && now - rolledAt > this.rollMs) {
+        // Build 387/418: a solved or aborted panel has no clock - the keys are the only thing left to watch.
+        if (!solved && !aborted && now - rolledAt > this.rollMs) {
             roll();
         }
         int down = held();
@@ -639,11 +682,48 @@ public class HackPanel377 extends Screen {
         int panelTop = this.height / 2 - 78;
         int panelBottom = panelTop + 138;
 
+        int edgeColor = aborted ? ABORT_EDGE : PANEL_EDGE;
         graphics.fill(panelLeft, panelTop, panelRight, panelBottom, PANEL_BG);
-        graphics.fill(panelLeft, panelTop, panelRight, panelTop + 1, PANEL_EDGE);
-        graphics.fill(panelLeft, panelBottom - 1, panelRight, panelBottom, PANEL_EDGE);
-        graphics.fill(panelLeft, panelTop, panelLeft + 1, panelBottom, PANEL_EDGE);
-        graphics.fill(panelRight - 1, panelTop, panelRight, panelBottom, PANEL_EDGE);
+        graphics.fill(panelLeft, panelTop, panelRight, panelTop + 1, edgeColor);
+        graphics.fill(panelLeft, panelBottom - 1, panelRight, panelBottom, edgeColor);
+        graphics.fill(panelLeft, panelTop, panelLeft + 1, panelBottom, edgeColor);
+        graphics.fill(panelRight - 1, panelTop, panelRight, panelBottom, edgeColor);
+
+        if (aborted) {
+            // Build 418: check allReleased() first so `pressed` is pruned against live hardware every frame
+            // before counting `stillDown()`, then wait until both keys are up and the reaction guard passed.
+            boolean keysUp = allReleased();
+            if (keysUp && now - abortedAt >= ABORT_GRACE_MS) {
+                LOG.info((chest ? "chest" : "door") + ": every key is up - the aborted panel closes");
+                this.onClose();
+                return;
+            }
+            graphics.fill(panelLeft + 1, panelTop + 1, panelRight - 1, panelBottom - 1, PANEL_BG);
+            int still = stillDown();
+            graphics.drawCenteredString(this.font, Component.literal("ВЗЛОМ ПРЕРВАН"),
+                    center, panelTop + 16, ABORT_TITLE);
+            graphics.drawCenteredString(this.font, Component.literal("за вами наблюдают"),
+                    center, panelTop + 36, LABEL);
+            graphics.drawCenteredString(this.font,
+                    Component.literal("отпусти все клавиши - и панель уйдёт сама"),
+                    center, panelTop + 60, LABEL);
+            graphics.drawCenteredString(this.font, Component.literal("ещё зажато: " + still),
+                    center, panelTop + 80, SWAP);
+            float escPart = settledlands$escHeld();
+            if (escPart > 0.0F) {
+                graphics.drawCenteredString(this.font,
+                        Component.literal("ESC: " + Math.round(escPart * 100.0F) + "% - панель уйдёт"),
+                        center, panelTop + 100, SWAP);
+            } else {
+                graphics.drawCenteredString(this.font,
+                        Component.literal("пока панель здесь, клавиатура заблокирована"),
+                        center, panelTop + 100, DIM);
+            }
+            graphics.drawCenteredString(this.font,
+                    Component.literal("ESC удержи ~1 с, если клавиша залипла"),
+                    center, panelTop + 118, DIM);
+            return;
+        }
 
         if (!solved && down == count) {
             solved = true;

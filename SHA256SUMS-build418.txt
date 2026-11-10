@@ -1,0 +1,2 @@
+1272604acbc5257bb9ceeadd4412f7987a02b2d0233325771433e920c3fa0cbb  settledlands-0.8.0-build418-abort-panel-key-guard.jar
+70491fc7e44404c5ca0ee96ad32139b2b67bd77c525555b4f02b52ee25ae98dd  SettledLands-Build418-AbortPanelKeyGuard-Source.zip

@@ -38,6 +38,7 @@ if not JAVA.is_file():
     JAVA = pathlib.Path(jdk4py.JAVA_HOME) / "bin" / "java"
 ECJ = ROOT / "tools" / "vendor" / "ecj-3.46.100.jar"
 PROBE = ROOT / "tools" / "harness" / "IllegalHack417Probe.java"
+ABORT_PROBE = ROOT / "tools" / "harness" / "AbortPanel418Probe.java"
 
 REQ_CLASSES = (
     "dev/settledlands/npc/NpcIllegalHack417.class",
@@ -496,6 +497,128 @@ public final class GuideDialogue {
     public static boolean isInDialogue(ServerPlayer p) { return false; }
 }
 """,
+    "com/mojang/blaze3d/platform/Window.java": """\
+package com.mojang.blaze3d.platform;
+public class Window {
+    public long getWindow() { return 1L; }
+}
+""",
+    "com/mojang/blaze3d/platform/InputConstants.java": """\
+package com.mojang.blaze3d.platform;
+import java.util.HashSet;
+import java.util.Set;
+public final class InputConstants {
+    private static final Set<Integer> DOWN = new HashSet<>();
+    public static void setDownForTests(int key, boolean down) {
+        if (down) DOWN.add(Integer.valueOf(key));
+        else DOWN.remove(Integer.valueOf(key));
+    }
+    public static void clearAllForTests() { DOWN.clear(); }
+    public static boolean isKeyDown(long window, int key) {
+        return window != 0L && DOWN.contains(Integer.valueOf(key));
+    }
+}
+""",
+    "net/minecraft/client/gui/Font.java": """\
+package net.minecraft.client.gui;
+public class Font {}
+""",
+    "net/minecraft/client/gui/GuiGraphics.java": """\
+package net.minecraft.client.gui;
+import java.util.ArrayList;
+import java.util.List;
+import net.minecraft.network.chat.Component;
+public class GuiGraphics {
+    private final List<String> texts = new ArrayList<>();
+    public void fill(int x1, int y1, int x2, int y2, int color) {}
+    public void drawCenteredString(Font font, Component text, int x, int y, int color) {
+        if (text != null) texts.add(text.getString());
+    }
+    public boolean containsText(String sub) {
+        for (String s : texts) {
+            if (s != null && s.contains(sub)) return true;
+        }
+        return false;
+    }
+}
+""",
+    "net/minecraft/client/gui/screens/Screen.java": """\
+package net.minecraft.client.gui.screens;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.Font;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.network.chat.Component;
+public class Screen {
+    public int width = 800;
+    public int height = 450;
+    public Font font = new Font();
+    protected Screen(Component title) {}
+    protected void init() {}
+    public boolean isPauseScreen() { return false; }
+    public boolean keyPressed(int keyCode, int scanCode, int modifiers) {
+        if (keyCode == 256) {
+            onClose();
+            return true;
+        }
+        return false;
+    }
+    public boolean keyReleased(int keyCode, int scanCode, int modifiers) { return false; }
+    public void removed() {}
+    public void onClose() { Minecraft.getInstance().setScreen(null); }
+    public void tick() {}
+    public void renderBackground(GuiGraphics g, int mx, int my, float pt) {}
+    public void render(GuiGraphics g, int mx, int my, float pt) {}
+}
+""",
+    "net/minecraft/world/inventory/AbstractContainerMenu.java": """\
+package net.minecraft.world.inventory;
+public class AbstractContainerMenu {}
+""",
+    "net/minecraft/world/inventory/InventoryMenu.java": """\
+package net.minecraft.world.inventory;
+public class InventoryMenu extends AbstractContainerMenu {}
+""",
+    "net/minecraft/client/player/LocalPlayer.java": """\
+package net.minecraft.client.player;
+import java.util.UUID;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.inventory.AbstractContainerMenu;
+import net.minecraft.world.inventory.InventoryMenu;
+import net.minecraft.world.level.Level;
+public class LocalPlayer extends Player {
+    public InventoryMenu inventoryMenu = new InventoryMenu();
+    public AbstractContainerMenu containerMenu = inventoryMenu;
+    public LocalPlayer(Level level) {
+        super(level, UUID.randomUUID(), 0.0D, 64.0D, 0.0D);
+    }
+}
+""",
+    "net/minecraft/client/Minecraft.java": """\
+package net.minecraft.client;
+import com.mojang.blaze3d.platform.Window;
+import net.minecraft.client.gui.screens.Screen;
+import net.minecraft.client.player.LocalPlayer;
+public class Minecraft {
+    private static final Minecraft INSTANCE = new Minecraft();
+    public Screen screen;
+    public LocalPlayer player;
+    public net.minecraft.client.multiplayer.ClientLevel level;
+    private final Window window = new Window();
+    public static Minecraft getInstance() { return INSTANCE; }
+    public Window getWindow() { return window; }
+    public void setScreen(Screen s) {
+        if (this.screen != null && this.screen != s) {
+            this.screen.removed();
+        }
+        this.screen = s;
+    }
+}
+""",
+    "net/minecraft/client/multiplayer/ClientLevel.java": """\
+package net.minecraft.client.multiplayer;
+import net.minecraft.world.level.Level;
+public class ClientLevel extends Level {}
+""",
 }
 
 HNS_STUBS = {
@@ -556,10 +679,23 @@ JAR_EXTRACT_FOR_PROBE = (
     "dev/settledlands/npc/BlockName359.class",
     "dev/settledlands/door/DoorGraph382.class",
     "dev/settledlands/door/DoorSync375.class",
+    "dev/settledlands/door/DoorHack377.class",
     "dev/settledlands/door/HackPanel377.class",
     "dev/settledlands/chest/ChestGraph396.class",
     "dev/settledlands/chest/ChestLock397.class",
 )
+
+
+def method_listing(raw, name):
+    parsed = disasm.parse_class(raw)
+    cp = parsed["cp"]
+    for _acc, name_idx, _desc, attrs in parsed["methods"]:
+        if cp[name_idx][1] == name:
+            co = disasm.code_of(attrs, cp)
+            if co is not None:
+                listing, _ = disasm.disasm(co["code"], cp)
+                return listing
+    return ""
 
 
 def fail(msg):
@@ -629,11 +765,11 @@ def run_jvm_probe(blobs, jar_path):
         if r2.returncode != 0:
             raise RuntimeError("hns compile failed:\n" + r2.stderr)
 
-        # Compile IllegalHack417Probe against extracted real classes + stubs.
+        # Compile IllegalHack417Probe and AbortPanel418Probe against extracted real classes + stubs.
         cp_compile = "%s:%s:%s" % (jar_extract, hns_out, stub_out)
         r3 = subprocess.run(
             [str(JAVA), "-jar", str(ECJ), "-21", "-proc:none", "-nowarn",
-             "-cp", cp_compile, "-d", str(probe_out), str(PROBE)],
+             "-cp", cp_compile, "-d", str(probe_out), str(PROBE), str(ABORT_PROBE)],
             capture_output=True, text=True)
         if r3.returncode != 0:
             raise RuntimeError("probe compile failed:\n" + r3.stderr)
@@ -659,6 +795,23 @@ def run_jvm_probe(blobs, jar_path):
         for want in expected:
             if want not in lines:
                 raise RuntimeError("missing probe assertion %r in:\n%s" % (want, run1.stdout))
+
+        # Run Build 418 abort-panel held-key guard probe against real HackPanel377 + DoorSync375 + DoorHack377.
+        run_abort = subprocess.run(
+            [str(JAVA), "-cp", cp_run, "AbortPanel418Probe"],
+            capture_output=True, text=True)
+        if run_abort.returncode != 0:
+            raise RuntimeError("AbortPanel418Probe run failed:\n" + run_abort.stderr + "\n" + run_abort.stdout)
+        abort_expected = (
+            "ABORT_HELD_KEYS kept=true swallowedP=true swallowedEsc=true text=true stayedWithP=true closedOnRelease=true noCancel=true",
+            "ABORT_GUARD preHeld=true grace=true latePSwallowed=true",
+            "ABORT_ESC_HATCH escHoldEscaped=true normalEscCancel=true",
+        )
+        abort_lines = [ln.strip() for ln in run_abort.stdout.splitlines() if ln.strip()]
+        for want in abort_expected:
+            if want not in abort_lines:
+                raise RuntimeError("missing AbortPanel418Probe assertion %r in:\n%s"
+                                   % (want, run_abort.stdout))
 
         # Also verify clean operation when Hackers 'n Slashers classes are completely absent!
         no_hns_src = tmp_path / "NoHns417Probe.java"
@@ -759,15 +912,34 @@ def main(argv):
                for o, n, _ in gmrefs):
         return fail("GuideNpcStealth416Mixin does not call NpcIllegalHack417#onNpcServerTick")
 
-    # 3) Live Java 21 JVM execution of IllegalHack417Probe + NoHns417Probe.
+    # Build 418 structural guard: HackPanel377#abortFromServer must NOT call Minecraft#setScreen(null)
+    # directly while keys may be held (which leaked 'P' -> Social Interactions in singleplayer);
+    # instead it must transition via markAborted() and close in render() only after allReleased().
+    panel_bytes = blobs["dev/settledlands/door/HackPanel377.class"]
+    abort_code = method_listing(panel_bytes, "abortFromServer")
+    if not abort_code or "markAborted(" not in abort_code:
+        return fail("HackPanel377#abortFromServer does not call markAborted()")
+    if "Minecraft.setScreen(" in abort_code:
+        return fail("HackPanel377#abortFromServer calls Minecraft#setScreen directly (Build 417 held-key bleed bug)")
+    render_code = method_listing(panel_bytes, "render")
+    send_at = render_code.find("DoorHack377.send(")
+    if send_at < 0:
+        return fail("HackPanel377#render missing DoorHack377.send")
+    pre_send = render_code[:send_at]
+    abort_rel = pre_send.find("HackPanel377.allReleased(")
+    abort_cls = pre_send.find("HackPanel377.onClose(")
+    if abort_rel < 0 or abort_cls < 0 or abort_rel > abort_cls:
+        return fail("HackPanel377#render does not guard aborted close behind allReleased()")
+
+    # 3) Live Java 21 JVM execution of IllegalHack417Probe + AbortPanel418Probe + NoHns417Probe.
     try:
         run_jvm_probe(blobs, jar_path)
     except Exception as exc:
         return fail(str(exc))
 
     print("illegal_hack_check: OK  %s  (Door & Chest «Незаконно» saved in Node#varLocal, inspector"
-          " toggles distinct & clash-free, start-refusal + mid-hack abort + ESC cleanup + solve guard"
-          " + no-HnS fallback verified in live Java 21 JVM)" % jar_path.name)
+          " toggles distinct & clash-free, start-refusal + mid-hack abort + abort held-key guard"
+          " + ESC cleanup + solve guard + no-HnS fallback verified in live Java 21 JVM)" % jar_path.name)
     return 0
 
 
