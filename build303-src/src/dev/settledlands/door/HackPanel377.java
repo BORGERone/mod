@@ -187,6 +187,10 @@ public class HackPanel377 extends Screen {
     /** Build 397: the key of the chest this panel was opened for - the string the server compares. */
     private final String chestKey;
 
+    /** Build 417: true when an NPC spotted the player and the server aborted this panel. */
+    private boolean aborted;
+    private boolean cancelSent;
+
     private HackPanel377(BlockPos pos, int count, int[] keys, long rollMs, int difficulty) {
         this(pos, count, keys, rollMs, difficulty, null);
     }
@@ -414,6 +418,28 @@ public class HackPanel377 extends Screen {
                     && mc.player.containerMenu != mc.player.inventoryMenu;
         } catch (Throwable failure) {
             return false;
+        }
+    }
+
+    /** Build 417, client side: immediately closes any open lockpick panel when spotted by an NPC. */
+    public static void abortFromServer() {
+        try {
+            DoorHack377.clearPending();
+            Minecraft mc = Minecraft.getInstance();
+            if (mc == null || !(mc.screen instanceof HackPanel377 panel)) return;
+            panel.aborted = true;
+            panel.solved = false;
+            mc.setScreen(null);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    @Override
+    public void removed() {
+        super.removed();
+        if (!this.solved && !this.aborted && !this.cancelSent) {
+            this.cancelSent = true;
+            DoorHack377.sendCancel();
         }
     }
 

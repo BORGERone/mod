@@ -82,11 +82,27 @@ public record DoorHack377(String key) implements CustomPacketPayload {
     private static final java.util.Map<String, long[]> PENDING =
             new java.util.concurrent.ConcurrentHashMap<String, long[]>();
 
+    /** Build 417: client -> server marker notifying that {@link HackPanel377} closed unsolved. */
+    public static final String CANCEL_KEY = "!cancel";
+
     private static int said;
 
     @Override
     public CustomPacketPayload.Type<DoorHack377> type() {
         return TYPE;
+    }
+
+    /** Build 417, client side: tell the server the lockpick screen closed without solving. */
+    public static void sendCancel() {
+        try {
+            PacketDistributor.sendToServer(new DoorHack377(CANCEL_KEY));
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /** Build 417, client side: drop any pending retry when the server aborts an illegal hack. */
+    public static void clearPending() {
+        PENDING.clear();
     }
 
     /**
@@ -121,6 +137,10 @@ public record DoorHack377(String key) implements CustomPacketPayload {
                 note("door: door_hack arrived without a player - the packet was ignored");
                 return;
             }
+            if (CANCEL_KEY.equals(payload.key())) {
+                dev.settledlands.npc.NpcIllegalHack417.endSession(player);
+                return;
+            }
             note("door: door_hack arrived from " + player.getName().getString()
                     + ": key=" + payload.key());
             if (player.level() == null || !(player.level() instanceof ServerLevel server)) {
@@ -151,10 +171,15 @@ public record DoorHack377(String key) implements CustomPacketPayload {
                 return;
             }
             if (!near(player, pos)) {
+                dev.settledlands.npc.NpcIllegalHack417.endSession(player);
                 note("door: a solved panel named " + payload.key()
                         + ", but the player was too far away - nothing opened");
                 player.displayClientMessage(Component.literal(
                         "Взлом прошёл, но до двери далеко - подойди и попробуй снова"), true);
+                return;
+            }
+            if (!dev.settledlands.npc.NpcIllegalHack417.checkBeforeComplete(
+                    player, server, pos, DoorGraph382.illegalAt(server, pos))) {
                 return;
             }
             boolean opened = Doors368.setOpen(server, pos, true);

@@ -141,7 +141,20 @@ NPC проходил в двери с блоком сверху и проход�
 
 База — 415. Добавлены `NpcHnsStealth416`, общие миксины `GuideNpcStealth416Mixin`, `NpcAutoAiStealth416Mixin`,
 `GuideCorpseStealth416Mixin` и встроенные датапаки `data/settledlands/mob_behavior_override/{guide_trigger,guide_corpse}.json`.
-В игре **не проверено**.
+**В игре подтверждено автором.**
+
+## Build 417 — галочка «Незаконно» для взлома дверей и сундуков с проверкой наблюдающих НПС и HnS (2026-11-09)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build417-illegal-lockpick-watch.jar | `1fjIfFKRIy5tO0mNVqKXqdT4Mzh8MHh08` | `48fe987640aa8a838c3d5860568e8d54fd5cb386445e7c552706792d0a8636fa` |
+| SettledLands-Build417-IllegalLockpickWatch-Source.zip | `1il_VPAnNQOhxthOgh_TiD7p8Z8zUHNbE` | `db904776fe535d223d38d659f5930fe6d69c97c888a89a5f26dba32b2812da0e` |
+
+База — 416. Добавлен `NpcIllegalHack417` (`+$Session`), переключатель «Незаконно: да/нет» (`Node#varLocal`) в
+инспекторах запертой двери и запертого сундука, блокировка старта незаконного взлома и мгновенное прерывание
+открытой мини-игры (`DoorSync375("X|")`) с сообщением «За вами наблюдают» при обнаружении игрока живыми `GuideNpc`
+в радиусе 32 блоков (с учётом `sightLevel` мода Hackers 'n Slashers и прямой видимости). В игре **не проверено**.
+
 
 
 

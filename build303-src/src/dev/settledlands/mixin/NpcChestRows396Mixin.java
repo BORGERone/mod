@@ -58,8 +58,8 @@ public abstract class NpcChestRows396Mixin {
     /** One row of the inspector: a slider is 20 px tall, a button 16, the stock gap is 2. */
     private static final int ROW = 22;
 
-    /** The four rows, their title, and the three lines of fact under them. */
-    private static final int CONTENT = 12 + ROW + ROW + ROW + 20 + 12 + 12 + 12;
+    /** The five rows, their title, and the three lines of fact under them. */
+    private static final int CONTENT = 12 + ROW + ROW + ROW + 20 + 20 + 12 + 12 + 12;
 
     @Shadow
     private NpcDialogueGraph graph;
@@ -138,6 +138,7 @@ public abstract class NpcChestRows396Mixin {
             y = settledlands$lockSlider(node, x, y, width, top, bottom, false);
             y = settledlands$lockDifficulty(node, x, y, width, top, bottom);
             y = settledlands$lock(node, x, y, width, top, bottom);
+            y = settledlands$chestIllegal(node, x, y, width, top, bottom);
 
             // The facts that were the whole of the 396 panel, kept under the controls: how many times the
             // chest was opened, who opened it last, and what the two sockets on the right of the card are.
@@ -281,5 +282,33 @@ public abstract class NpcChestRows396Mixin {
     /** «Закрыта (только взлом)» or «Открыта (обычный клик)», read from the node as it is right now. */
     private static Component settledlands$lockWord(NpcDialogueGraph.Node node) {
         return Component.translatable(ChestLock397.stateKey(node));
+    }
+
+    /** Build 417: «Незаконно: да / нет» toggle for chest lockpicking witness checks. */
+    private int settledlands$chestIllegal(NpcDialogueGraph.Node node, int x, int y, int width,
+            int top, int bottom) {
+        final Button[] self = new Button[1];
+        final NpcDialogueGraph.Node[] card = new NpcDialogueGraph.Node[1];
+        card[0] = node;
+        final byte[] chestTag = new byte[1];
+        Button toggle = button(dev.settledlands.npc.NpcIllegalHack417.ILLEGAL_KEY, x, y, width, 16, () -> {
+            if (chestTag.length >= 0) {
+                propertyChange(() -> {
+                    if (chestTag.length >= 0) {
+                        ChestLock397.setIllegal(card[0], !ChestLock397.illegal(card[0]));
+                    }
+                });
+                if (self[0] != null) self[0].setMessage(settledlands$chestIllegalWord(card[0]));
+            }
+        });
+        if (toggle == null) return y;
+        self[0] = toggle;
+        toggle.setMessage(settledlands$chestIllegalWord(node));
+        toggle.visible = y >= top && y + toggle.getHeight() <= bottom;
+        return y + 20;
+    }
+
+    private static Component settledlands$chestIllegalWord(NpcDialogueGraph.Node node) {
+        return Component.translatable(ChestLock397.illegalKey(node));
     }
 }

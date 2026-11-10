@@ -349,17 +349,24 @@ pass(es)`. Гейт `door_lock_check.py` падает, если вернулся
 
 ---
 
-## 8. Актуальное обновление (2026-11-09, ветка `arena/78029e2d-mod`, сборки 413–416)
+## 8. Актуальное обновление (2026-11-09, ветка `arena/78029e2d-mod`, сборки 413–417)
 
 * **Проблема дверей полностью решена и подтверждена автором в игре в сборке 415**
   (`settledlands-0.8.0-build415-door-at-hand-and-2block-height.jar`, sha256 `50f8be9ab...`): проход дверей
   вызывается из тика проводника (`GuideDoorPass413Mixin`), все внутренние классы сцеплены, дистанция открытия
   `1.25` блока, высота `GuideNpc` `1.8F` (проходит в двухблочные проёмы с блоком над дверью).
-* **Текущая сборка — Build 416** (`settledlands-0.8.0-build416-hns-stealth-gaze.jar`,
+* **Сборка 416 также проверена автором в игре** (`settledlands-0.8.0-build416-hns-stealth-gaze.jar`,
   sha256 `c2d05abc69e0ddf75eee1b3009b0b3d535756629a0e64431b8a89e82bf9cb079`, база — 415): совместимость
   автоматического поворота головы НПС и глазика скрытности с модом **Hackers 'n Slashers** (`net.dndats.hackersandslashers`).
-* **Критическая ловушка компиляции `@Redirect`:** старый `build303-src/stubs/org/spongepowered/asm/mixin/injection/Redirect.java`
+* **Текущая сборка — Build 417** (`settledlands-0.8.0-build417-illegal-lockpick-watch.jar`,
+  sha256 `48fe987640aa8a838c3d5860568e8d54fd5cb386445e7c552706792d0a8636fa`, база — 416): переключатель
+  «Незаконно: да/нет» (`Node#varLocal`) на карточках запертой двери и запертого сундука, серверная проверка
+  свидетелей (`NpcIllegalHack417`, живые `GuideNpc` в радиусе 32 блоков + `NpcHnsStealth416#canSeeOrBypassMasking`),
+  отказ старта взлома и мгновенное закрытие открытой мини-игры (`DoorSync375("X|")`) с action-bar сообщением
+  «За вами наблюдают». 37/37 гейтов PASS (`tools/illegal_hack_check.py`).
+* **Критическая ловушка компиляции `@Redirect` и `lambda$N`:** старый `build303-src/stubs/org/spongepowered/asm/mixin/injection/Redirect.java`
   объявлял `At[] at()` (массив `0x5b`) вместо `At at()` (одиночная аннотация `0x40`), из-за чего Mixin молча
-  игнорировал `@Redirect` в рантайме. Всегда ставь `build303-src/api416` **перед** `stubs-out` в `-cp` при
-  компиляции любых новых `@Redirect` (`check_mixin_class.py` теперь ловит эту ошибку автоматически).
+  игнорировал `@Redirect` в рантайме. Всегда ставь `build303-src/api416` **перед** `stubs-out` в `-cp`, а в
+  миксинах на `NpcDialogueGraphScreen` используй различные типы захваченных аргументов у новых `lambda$N`
+  (`short[]` vs `byte[]`), чтобы не столкнуться с `tools/mixin_clash_check.py`.
 

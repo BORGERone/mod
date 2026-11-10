@@ -296,10 +296,15 @@ public final class ChestNet397 {
                 return;
             }
             if (!ChestLock397.near(player, pos)) {
+                dev.settledlands.npc.NpcIllegalHack417.endSession(player);
                 note("chest: a solved panel named " + key + ", but the player was too far away - "
                         + "nothing opened");
                 player.displayClientMessage(Component.translatable("message.settledlands.chest.far"),
                         true);
+                return;
+            }
+            if (!dev.settledlands.npc.NpcIllegalHack417.checkBeforeComplete(
+                    player, level, pos, ChestLock397.illegal(level, pos))) {
                 return;
             }
             // Build 401: the chain FIRST, the chest after it.

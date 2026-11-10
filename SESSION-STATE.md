@@ -17,6 +17,25 @@
 
 ## Текущая сборка
 
+`settledlands-0.8.0-build417-illegal-lockpick-watch.jar` (sha256 `48fe987640aa8a838c3d5860568e8d54fd5cb386445e7c552706792d0a8636fa`,
+база — **build 416**) — **галочка «Незаконно» для взлома дверей и сундуков с проверкой наблюдающих НПС и стелса Hackers 'n Slashers**:
+* в карточках запертой двери (`DoorGraph382`, `NpcDoorRows382Mixin`) и запертого сундука (`ChestLock397`,
+  `NpcChestRows396Mixin`) добавлен переключатель **«Незаконно: нет / да»**, хранимый в `NpcDialogueGraph$Node#varLocal`
+  (`NBT 'VarLocal'`, дефолт `false`) и синхронизируемый для дверей в `DoorSync375` (`P|...|<illegal>`, удаление `R|<key>`);
+* в `NpcIllegalHack417` + `NpcHnsStealth416#canSeeOrBypassMasking`: живые `GuideNpc` (кроме `GuideTriggerNpc` и
+  `GuideCorpseNpc`) в радиусе 32 блоков при прямой видимости и обнаружении в Hackers 'n Slashers (`sightLevel >= 75.0`
+  или пробитии маскировки; без HnS — по прямой видимости и невидимости; работает одинаково в Выживании и Креативе)
+  считаются свидетелями незаконного взлома;
+* при попытке начать незаконный взлом под наблюдением сервер не открывает мини-игру (у дверей открытие переведено на
+  серверный пакет `DoorSync375("O|...")`) и показывает сообщение над хотбаром **«За вами наблюдают»**; если НПС
+  заметил игрока уже во время открытой мини-игры, в `GuideNpcStealth416Mixin#customServerAiStep` сессия прерывается
+  пакетом `DoorSync375("X|")`, закрывающим `HackPanel377` с сообщением **«За вами наблюдают»** (плюс очистка сессии
+  при закрытии по ESC через `!cancel` и повторная проверка свидетелей в `DoorHack377` / `ChestNet397` перед решением);
+* добавлен 37-й гейт `tools/illegal_hack_check.py` + `IllegalHack417Probe.java` (37/37 гейтов PASS,
+  `verify_jar --base 416` PASS, 0 новых внешних обращений к игре).
+**В игре не проверено.**
+
+
 `settledlands-0.8.0-build416-hns-stealth-gaze.jar` (sha256 `c2d05abc69e0ddf75eee1b3009b0b3d535756629a0e64431b8a89e82bf9cb079`,
 база — **build 415**) — **совместимость поворота головы НПС и глазика скрытности с модом Hackers 'n Slashers**:
 * в `NpcHnsStealth416` + `GuideNpcStealth416Mixin` + `NpcAutoAiStealth416Mixin`: вне активного диалога НПС
@@ -33,7 +52,7 @@
   положен корректный `Redirect.java`, а `tools/check_mixin_class.py` теперь проверяет `@Redirect` (тег `0x40`
   и дескриптор обработчика); добавлен гейт `tools/hns_stealth_check.py` + `HnsStealth416Probe.java` (36/36 гейтов PASS,
   `verify_jar --base 415` PASS). Нода «В радиусе» и активное «Преследование» не менялись по согласованию с автором.
-**В игре не проверено.**
+**В игре подтверждено автором.**
 
 
 `settledlands-0.8.0-build415-door-at-hand-and-2block-height.jar` (sha256 `50f8be9ab2ae0ac34e56034141fb5ad406a715e8d2be26efcf1c6dfcedc8b808`,

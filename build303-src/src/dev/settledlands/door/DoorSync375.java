@@ -139,6 +139,18 @@ public record DoorSync375(String data) implements CustomPacketPayload {
                 putSettings(body);
                 return;
             }
+            if (op == 'R') {
+                if (!body.isEmpty()) SETTINGS.remove(body);
+                return;
+            }
+            if (op == 'O') {
+                openDoorPanel(body);
+                return;
+            }
+            if (op == 'X') {
+                HackPanel377.abortFromServer();
+                return;
+            }
             if (op == 'U') {
                 if (!body.isEmpty()) LOCKS.remove(body);
                 return;
@@ -177,12 +189,32 @@ public record DoorSync375(String data) implements CustomPacketPayload {
                 int count = Integer.parseInt(values[0].trim());
                 int seconds = Integer.parseInt(values[1].trim());
                 int difficulty = values.length > 2 ? Integer.parseInt(values[2].trim()) : 1;
+                int illegal = values.length > 3 ? Integer.parseInt(values[3].trim()) : 0;
                 SETTINGS.put(pair.substring(0, eq), new int[] {count, seconds,
-                        HackPanel377.clampDifficulty(difficulty)});
+                        HackPanel377.clampDifficulty(difficulty), illegal != 0 ? 1 : 0});
             } catch (NumberFormatException notANumber) {
                 // a bad pair costs one door its numbers, never the packet
             }
         }
+    }
+
+    private static void openDoorPanel(String body) {
+        if (body == null || body.isEmpty()) return;
+        String[] parts = body.split(",");
+        if (parts.length < 3) return;
+        try {
+            int x = Integer.parseInt(parts[0].trim());
+            int y = Integer.parseInt(parts[1].trim());
+            int z = Integer.parseInt(parts[2].trim());
+            HackPanel377.open(new BlockPos(x, y, z));
+        } catch (NumberFormatException ignored) {
+        }
+    }
+
+    /** Build 417, client side: true when this door's synced graph marks lockpicking as illegal. */
+    public static boolean isIllegal(Level level, BlockPos pos) {
+        int[] s = settings(level, pos);
+        return s != null && s.length > 3 && s[3] != 0;
     }
 
     /**
@@ -222,7 +254,9 @@ public record DoorSync375(String data) implements CustomPacketPayload {
                 String key = keys.get(i);
                 int[] settings = DoorGraph382.settings(store.graph(key));
                 if (settings == null) continue;
-                String pair = key + "=" + settings[0] + ":" + settings[1] + ":" + settings[3];
+                int illegal = settings.length > 4 ? settings[4] : 0;
+                String pair = key + "=" + settings[0] + ":" + settings[1] + ":" + settings[3]
+                        + ":" + illegal;
                 if (chunk.length() + pair.length() + 1 > CHUNK) {
                     broadcast(players, "P|" + chunk);
                     chunk.setLength(0);
@@ -251,7 +285,9 @@ public record DoorSync375(String data) implements CustomPacketPayload {
                 String key = keys.get(i);
                 int[] settings = DoorGraph382.settings(store.graph(key));
                 if (settings == null) continue;
-                String pair = key + "=" + settings[0] + ":" + settings[1] + ":" + settings[3];
+                int illegal = settings.length > 4 ? settings[4] : 0;
+                String pair = key + "=" + settings[0] + ":" + settings[1] + ":" + settings[3]
+                        + ":" + illegal;
                 if (chunk.length() + pair.length() + 1 > CHUNK) {
                     send(player, "P|" + chunk);
                     chunk.setLength(0);
@@ -264,6 +300,28 @@ public record DoorSync375(String data) implements CustomPacketPayload {
             LOG.warn("door: the door settings could not be sent to " + player.getName().getString()
                     + ": " + failure);
         }
+    }
+
+    /** Build 417, server side: drop one cleared door graph's settings on connected clients. */
+    public static void sendClearParam(ServerLevel level, String key) {
+        if (level == null || key == null || key.isEmpty()) return;
+        MinecraftServer server = level.getServer();
+        List<ServerPlayer> players = server == null ? level.players()
+                : server.getPlayerList().getPlayers();
+        if (players == null || players.isEmpty()) return;
+        broadcast(players, "R|" + key);
+    }
+
+    /** Build 417, server side: tell one unseen player to open {@link HackPanel377} on a door. */
+    public static void sendOpenDoorHack(ServerPlayer player, BlockPos pos) {
+        if (player == null || pos == null) return;
+        send(player, "O|" + pos.getX() + "," + pos.getY() + "," + pos.getZ());
+    }
+
+    /** Build 417, server side: abort any open {@link HackPanel377} on the client when spotted. */
+    public static void sendAbortHack(ServerPlayer player) {
+        if (player == null) return;
+        send(player, "X|");
     }
 
     private static void broadcast(List<ServerPlayer> players, String text) {

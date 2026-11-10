@@ -168,6 +168,11 @@ public final class ChestGraph396Events {
                 } catch (Throwable missing) {
                     ChestGraph396.fail(missing);
                 }
+                if (ChestLock397.illegal(level, pos)
+                        && !dev.settledlands.npc.NpcIllegalHack417.beginIllegalHack(
+                                player, level, pos, true, key)) {
+                    return;
+                }
                 player.displayClientMessage(
                         Component.translatable("message.settledlands.chest.locked"), true);
                 ChestNet397.sendPanel(player, level, pos, key, panel);

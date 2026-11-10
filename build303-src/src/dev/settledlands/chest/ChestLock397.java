@@ -139,6 +139,21 @@ public final class ChestLock397 {
                 : "gui.settledlands.chest.state_open";
     }
 
+    /** Build 417: true when picking this chest's lock is illegal (witnessed by live GuideNpc). */
+    public static boolean illegal(NpcDialogueGraph.Node node) {
+        return card(node) && node.varLocal;
+    }
+
+    public static void setIllegal(NpcDialogueGraph.Node node, boolean value) {
+        if (card(node)) node.varLocal = value;
+    }
+
+    public static String illegalKey(NpcDialogueGraph.Node node) {
+        return illegal(node)
+                ? dev.settledlands.npc.NpcIllegalHack417.ILLEGAL_ON
+                : dev.settledlands.npc.NpcIllegalHack417.ILLEGAL_OFF;
+    }
+
     /**
      * A card that was never configured gets the door's defaults written into it - 6 keys, five seconds,
      * difficulty 1, unlocked - so the first save stores real numbers instead of a row of zeroes, and the
@@ -180,6 +195,12 @@ public final class ChestLock397 {
         if (level == null || pos == null) return false;
         NpcDialogueGraph.Node card = cardAt(level, pos);
         return locked(card);
+    }
+
+    /** Build 417: true when this chest's card marks lockpicking as illegal. */
+    public static boolean illegal(Level level, BlockPos pos) {
+        if (level == null || pos == null) return false;
+        return illegal(cardAt(level, pos));
     }
 
     /** True when this block is a chest whose card says it is locked, by the key the store uses. */

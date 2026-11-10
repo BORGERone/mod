@@ -1,0 +1,2 @@
+48fe987640aa8a838c3d5860568e8d54fd5cb386445e7c552706792d0a8636fa  settledlands-0.8.0-build417-illegal-lockpick-watch.jar
+db904776fe535d223d38d659f5930fe6d69c97c888a89a5f26dba32b2812da0e  SettledLands-Build417-IllegalLockpickWatch-Source.zip

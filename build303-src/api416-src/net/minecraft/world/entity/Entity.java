@@ -20,6 +20,7 @@ public class Entity {
     public boolean isRemoved() { return false; }
     public boolean isPassenger() { return false; }
     public boolean isInvisible() { return false; }
+    public boolean isShiftKeyDown() { return false; }
     public Level level() { return null; }
     public double getX() { return 0; }
     public double getY() { return 0; }

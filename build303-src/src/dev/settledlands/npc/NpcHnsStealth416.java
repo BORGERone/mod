@@ -235,6 +235,20 @@ public final class NpcHnsStealth416 {
         }
     }
 
+    /** Build 417: true when {@code player} is currently a bodiless spectator/spirit in SettledLands. */
+    public static boolean isPlayerBodiless(Player player) {
+        return safeIsBodiless(player);
+    }
+
+    /** Build 417: true when {@code npc} is already visually tracking {@code player}'s head position. */
+    public static boolean isTrackingPlayer(GuideNpc npc, Player player) {
+        if (npc == null || player == null) {
+            return false;
+        }
+        UUID tracked = TRACKED_LOOK.get(npc);
+        return tracked != null && tracked.equals(player.getUUID());
+    }
+
     private static boolean safeIsInDialogue(ServerPlayer player) {
         try {
             return GuideDialogue.isInDialogue(player);

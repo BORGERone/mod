@@ -50,8 +50,8 @@ public abstract class NpcDoorRows382Mixin {
     /** One row of the inspector: a slider is 20 px tall, a button 16, the stock gap is 2. */
     private static final int ROW = 22;
 
-    /** What the four rows plus their title take, in the same units the stock rows count in. */
-    private static final int CONTENT = 12 + ROW + ROW + ROW + 20;
+    /** What the five rows plus their title take, in the same units the stock rows count in. */
+    private static final int CONTENT = 12 + ROW + ROW + ROW + 20 + 20;
 
     @Shadow
     private NpcDialogueGraph graph;
@@ -138,6 +138,7 @@ public abstract class NpcDoorRows382Mixin {
                 y = settledlands$slider(node, x, y, width, top, bottom, false);
                 y = settledlands$difficulty(node, x, y, width, top, bottom);
                 y = settledlands$seal(node, x, y, width, top, bottom);
+                y = settledlands$doorIllegal(node, x, y, width, top, bottom);
                 // Build 392: the two outputs of the door are sockets of this card, so the panel names them
                 // where the card cannot: what each socket is, and who the blue one hands over right now.
                 label(Component.translatable("gui.settledlands.door.pin_out_hint").getString(), x, y);
@@ -243,5 +244,31 @@ public abstract class NpcDoorRows382Mixin {
     private static Component settledlands$sealWord(NpcDialogueGraph.Node node) {
         return Component.translatable(DoorGraph382.sealed(node)
                 ? "gui.settledlands.door.sealed" : "gui.settledlands.door.unsealed");
+    }
+
+    /** Build 417: «Незаконно: да / нет» toggle for door lockpicking witness checks. */
+    private int settledlands$doorIllegal(NpcDialogueGraph.Node node, int x, int y, int width,
+            int top, int bottom) {
+        final Button[] self = new Button[1];
+        final short[] doorTag = new short[1];
+        Button toggle = button(dev.settledlands.npc.NpcIllegalHack417.ILLEGAL_KEY, x, y, width, 16, () -> {
+            if (doorTag.length >= 0) {
+                propertyChange(() -> {
+                    if (doorTag.length >= 0) {
+                        DoorGraph382.setIllegal(node, !DoorGraph382.illegal(node));
+                    }
+                });
+                if (self[0] != null) self[0].setMessage(settledlands$doorIllegalWord(node));
+            }
+        });
+        if (toggle == null) return y;
+        self[0] = toggle;
+        toggle.setMessage(settledlands$doorIllegalWord(node));
+        toggle.visible = y >= top && y + toggle.getHeight() <= bottom;
+        return y + 20;
+    }
+
+    private static Component settledlands$doorIllegalWord(NpcDialogueGraph.Node node) {
+        return Component.translatable(DoorGraph382.illegalKey(node));
     }
 }

@@ -2,6 +2,7 @@ package dev.settledlands.mixin;
 
 import dev.settledlands.npc.GuideNpc;
 import dev.settledlands.npc.NpcHnsStealth416;
+import dev.settledlands.npc.NpcIllegalHack417;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.level.Level;
@@ -29,7 +30,9 @@ public abstract class GuideNpcStealth416Mixin {
 
     @Inject(method = "customServerAiStep()V", at = @At("HEAD"), require = 0, remap = false)
     private void settledlands$clearBlindSightOnTick(CallbackInfo info) {
-        NpcHnsStealth416.clearBlindEntitySight((GuideNpc) (Object) this);
+        GuideNpc self = (GuideNpc) (Object) this;
+        NpcHnsStealth416.clearBlindEntitySight(self);
+        NpcIllegalHack417.onNpcServerTick(self);
     }
 
     @Redirect(

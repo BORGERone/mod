@@ -177,7 +177,7 @@ public final class DoorGraph382 {
      */
     public static final String FIELD_NOTE =
             "door node: varValue = keys, varCompare = seconds, varOp = sealed (1/0),"
-                    + " checkTarget = difficulty (1..3)";
+                    + " checkTarget = difficulty (1..3), varLocal = illegal (true/false)";
 
     /** The three node fields this build stores, in the order {@link #FIELD_NOTE} names them. */
     public static final String[] FIELDS = {"varValue", "varCompare", "varOp", "checkTarget"};
@@ -531,6 +531,36 @@ public final class DoorGraph382 {
         if (isDoorNode(node)) node.checkTarget = clamp(value, MIN_DIFFICULTY, MAX_DIFFICULTY);
     }
 
+    /** Build 417: true when picking this door's lock is illegal (witnessed by live GuideNpc). */
+    public static boolean illegal(NpcDialogueGraph.Node node) {
+        return isDoorNode(node) && node.varLocal;
+    }
+
+    public static void setIllegal(NpcDialogueGraph.Node node, boolean value) {
+        if (isDoorNode(node)) node.varLocal = value;
+    }
+
+    public static String illegalKey(NpcDialogueGraph.Node node) {
+        return illegal(node)
+                ? dev.settledlands.npc.NpcIllegalHack417.ILLEGAL_ON
+                : dev.settledlands.npc.NpcIllegalHack417.ILLEGAL_OFF;
+    }
+
+    /** Server-side lookup: true when the door at {@code pos} has a graph card marked «Незаконно». */
+    public static boolean illegalAt(ServerLevel level, BlockPos pos) {
+        if (level == null || pos == null) return false;
+        try {
+            DoorGraph382Store store = DoorGraph382Store.get(level.getServer());
+            if (store == null) return false;
+            String key = DoorGraph382Store.lowerKey(level, pos);
+            if (key == null || key.isEmpty()) return false;
+            return illegal(doorNode(store.graph(key)));
+        } catch (Throwable failure) {
+            fail(failure);
+            return false;
+        }
+    }
+
     /**
      * Build 384: gives a door node that has never been written the three values it should start with.
      *
@@ -552,14 +582,13 @@ public final class DoorGraph382 {
     }
 
     /**
-     * The numbers of a door graph - keys, seconds, sealed, difficulty - or null when the graph has no
-     * door node. Build 385 added the fourth; the transport of build 382 carries it as one more field of
-     * the same {@code key=count:seconds:difficulty} pair.
+     * The numbers of a door graph - keys, seconds, sealed, difficulty, illegal - or null when the graph
+     * has no door node. Build 385 added difficulty and Build 417 added illegal (1/0).
      */
     public static int[] settings(NpcDialogueGraph graph) {
         NpcDialogueGraph.Node node = doorNode(graph);
         return node == null ? null : new int[] {keys(node), speed(node), sealed(node) ? 1 : 0,
-                difficulty(node)};
+                difficulty(node), illegal(node) ? 1 : 0};
     }
 
     /**
@@ -576,6 +605,7 @@ public final class DoorGraph382 {
             setSpeed(node, DEFAULT_SPEED);
             setSealed(node, sealed);
             setDifficulty(node, DEFAULT_DIFFICULTY);
+            setIllegal(node, false);
             // Build 392: «Начало» stands on the card, because the card is where the chain of a door
             // starts - the execution socket is its own output port. Nothing else is added: the two
             // sockets of the card cost no node, so a fresh door is one card and nothing beside it.
@@ -707,6 +737,7 @@ public final class DoorGraph382 {
                 DoorGraph382Store store = DoorGraph382Store.get(player.getServer());
                 if (store != null) store.put(key, null);
                 applySeal(level, pos, false);
+                DoorSync375.sendClearParam(level, key);
                 DoorSync375.sendParams(level);
                 player.displayClientMessage(Component.translatable(
                         "message.settledlands.door.graph_cleared", Component.literal(coords(pos))),

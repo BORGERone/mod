@@ -125,7 +125,8 @@ public final class DoorEvents368 {
             // an empty hand, or anything that is not the key and not the wand, cracks a lock.
             if (DoorSync375.synced() && DoorSync375.isLocked(level, pos)
                     && !DoorKey368.isKey(event.getItemStack())
-                    && !DoorGraph382Events.isWand(event.getItemStack())) {
+                    && !DoorGraph382Events.isWand(event.getItemStack())
+                    && !DoorSync375.isIllegal(level, pos)) {
                 HackPanel377.open(pos);
             }
             event.setCanceled(true);
@@ -196,6 +197,19 @@ public final class DoorEvents368 {
                 shut(server, pos);
                 note("door: the click on the locked door at " + pos + " was refused (useBlock="
                         + "DENY), open now=" + Doors368.anyOpen(server, pos));
+                if (event.getHand() == net.minecraft.world.InteractionHand.MAIN_HAND
+                        && event.getEntity() instanceof ServerPlayer clicker
+                        && !DoorGraph382Events.isWand(stack)
+                        && DoorGraph382.illegalAt(server, pos)) {
+                    BlockPos lowPos = DoorGraph382.lower(server, pos);
+                    String doorKey = DoorGraph382Store.lowerKey(server, pos);
+                    if (dev.settledlands.npc.NpcIllegalHack417.beginIllegalHack(
+                            clicker, server, lowPos, false, doorKey)) {
+                        say(clicker);
+                        DoorSync375.sendOpenDoorHack(clicker, pos);
+                    }
+                    return;
+                }
                 say(event.getEntity());
                 return;
             }
