@@ -17,6 +17,25 @@
 
 ## Текущая сборка
 
+`settledlands-0.8.0-build416-hns-stealth-gaze.jar` (sha256 `c2d05abc69e0ddf75eee1b3009b0b3d535756629a0e64431b8a89e82bf9cb079`,
+база — **build 415**) — **совместимость поворота головы НПС и глазика скрытности с модом Hackers 'n Slashers**:
+* в `NpcHnsStealth416` + `GuideNpcStealth416Mixin` + `NpcAutoAiStealth416Mixin`: вне активного диалога НПС
+  поворачивает голову (`yHeadRot`) на игрока только при прямой видимости (`hasLineOfSight`), отсутствии зелья
+  невидимости (кроме `hasTrueVision`) и — когда активен стелс Hackers 'n Slashers — только при обнаружении
+  (`sightLevel >= 90.0` захват, `>= 40.0` удержание), поэтому голова НПС больше не крутится на 360° сквозь
+  стены и не срывает стелс со спины; скрытый рядом игрок больше не замораживает idle-осматривание и не
+  перекрывает более далёкого видимого игрока;
+* для `GuideTriggerNpc` и `GuideCorpseNpc` добавлены `data/settledlands/mob_behavior_override/{guide_trigger,guide_corpse}.json`
+  (`visionRange=0`, `listeningRange=0`, `fieldOfView=0`) и ежетиковая очистка `sightLevel`/подозрений
+  (`GuideNpcStealth416Mixin`, `GuideCorpseStealth416Mixin`), чтобы маркеры и трупы не открывали глазик скрытности;
+* обнаружен и закрыт баг старого стаба `build303-src/stubs/org/spongepowered/asm/mixin/injection/Redirect.java`
+  (`At[] at()` вместо одиночного `At at()`, из-за чего Mixin игнорировал `@Redirect`): в `build303-src/api416`
+  положен корректный `Redirect.java`, а `tools/check_mixin_class.py` теперь проверяет `@Redirect` (тег `0x40`
+  и дескриптор обработчика); добавлен гейт `tools/hns_stealth_check.py` + `HnsStealth416Probe.java` (36/36 гейтов PASS,
+  `verify_jar --base 415` PASS). Нода «В радиусе» и активное «Преследование» не менялись по согласованию с автором.
+**В игре не проверено.**
+
+
 `settledlands-0.8.0-build415-door-at-hand-and-2block-height.jar` (sha256 `50f8be9ab2ae0ac34e56034141fb5ad406a715e8d2be26efcf1c6dfcedc8b808`,
 база — **build 414**) — **открытие двери непосредственно при подходе (1.25 блока) и высота проводника 1.8
 блока для проходов высотой 2 блока** (по отзыву автора после успешной проверки 414-й в игре):
@@ -28,7 +47,7 @@
   `entityHeight = floor(1.8 + 1.0) = 2` вместо `3`);
 * `tools/door_lock_check.py` расширен проверками высоты `1.8F` (и запретом `2.1F`) и дистанции `1.25` (и
   запретом `3.0`). 35/35 гейтов PASS, `verify_jar --base 414` PASS.
-**В игре не проверено.**
+**В игре подтверждено автором (двери и проходы 2 блока полностью закрыты).**
 
 
 `settledlands-0.8.0-build414-door-pass-linked.jar` (sha256 `bac93703267493c1895b9d601888660596563d029a7ef4b2124f1f895eb6495a`,

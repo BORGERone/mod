@@ -130,6 +130,18 @@
 
 База — 414. Дистанция открытия уменьшена до `1.25` блока по горизонтали (`PERIOD = 3` тика, `openOnPath` тоже
 ограничен по расстоянию), а высота хитбокса в `NpcContent` уменьшена с `2.1F` до `1.8F` (высота игрока), чтобы
-NPC проходил в двери с блоком сверху и проходы высотой 2 блока. В игре **не проверено**.
+NPC проходил в двери с блоком сверху и проходы высотой 2 блока. **В игре подтверждено автором.**
+
+## Build 416 — совместимость поворота головы НПС и глазика скрытности с Hackers 'n Slashers (2026-11-09)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build416-hns-stealth-gaze.jar | `1Bt31lmNjy211x1BhYJISdWSBB6FzXdBa` | `c2d05abc69e0ddf75eee1b3009b0b3d535756629a0e64431b8a89e82bf9cb079` |
+| SettledLands-Build416-HnsStealthGaze-Source.zip | `17iiE9QaCBZoXpIMCP9UdfAPtsDTAQ8jB` | `c57183847646742e052500cf9e10852d69e734553cf0660a06419e96091f444c` |
+
+База — 415. Добавлены `NpcHnsStealth416`, общие миксины `GuideNpcStealth416Mixin`, `NpcAutoAiStealth416Mixin`,
+`GuideCorpseStealth416Mixin` и встроенные датапаки `data/settledlands/mob_behavior_override/{guide_trigger,guide_corpse}.json`.
+В игре **не проверено**.
+
 
 

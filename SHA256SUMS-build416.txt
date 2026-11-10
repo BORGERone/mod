@@ -1,0 +1,2 @@
+c2d05abc69e0ddf75eee1b3009b0b3d535756629a0e64431b8a89e82bf9cb079  settledlands-0.8.0-build416-hns-stealth-gaze.jar
+c57183847646742e052500cf9e10852d69e734553cf0660a06419e96091f444c  SettledLands-Build416-HnsStealthGaze-Source.zip

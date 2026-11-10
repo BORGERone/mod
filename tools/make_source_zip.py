@@ -31,8 +31,13 @@ def collect(readme, mixin_sources):
     for base in (ROOT / "build303-src" / "src", ROOT / "build303-src" / "api3-src",
                  ROOT / "build303-src" / "api4-src", ROOT / "build303-src" / "stubs345-src",
                  ROOT / "build303-src" / "api-src", ROOT / "build303-src" / "api5-src",
+                 ROOT / "build303-src" / "api416-src",
                  ROOT / "build303-src" / "stubs", ROOT / "build303-src" / "stubs396-src"):
         for path in sorted(base.rglob("*.java")):
+            files.append((path.relative_to(ROOT).as_posix(), path))
+    data416 = ROOT / "build303-src" / "data416"
+    if data416.is_dir():
+        for path in sorted(data416.rglob("*.json")):
             files.append((path.relative_to(ROOT).as_posix(), path))
     # The compile mirrors of the mixin annotations and the JVM harness are part of how a build is
     # made: build 335 could not express its injection point without At.Shift in tools/api271.

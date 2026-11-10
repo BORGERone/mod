@@ -1,0 +1,13 @@
+{
+  "priority": 0,
+  "perception": {
+    "hasTrueVision": false,
+    "visionRange": 0,
+    "listeningRange": 0,
+    "fieldOfView": 0,
+    "collectivePerception": false,
+    "canSearch": false,
+    "canLookAround": false,
+    "canChangeTarget": false
+  }
+}

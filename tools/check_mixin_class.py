@@ -454,15 +454,121 @@ def check_targets(cf, entry, classes, problems, external, verbose):
                     continue
                 tname, tcf, tm = found
                 if want == "inject":
-                    # @Redirect / @ModifyArg / @ModifyVariable handlers have a
-                    # different signature rule (args + target return value, no
-                    # CallbackInfo), so only @Inject is checked here.
                     check_callback(cf, m, tm, tname, entry, want, problems)
+                if want == "redirect":
+                    check_redirect(cf, m, tm, tname, tcf, entry, a, problems)
                 if want == "modifyconstant":
                     check_constant(cf, m, tm, tname, entry, a, problems)
                 if verbose:
                     print("    ok  %s.%s -> %s#%s%s" % (entry, m.name, tname,
                                                         tm.name, tm.desc))
+
+
+def _extract_at_annotations(val):
+    if val is None:
+        return []
+    if val[0] == "annotation":
+        return [val]
+    if val[0] == "array":
+        return [v for v in val[1] if v and v[0] == "annotation"]
+    return []
+
+
+def _parse_invoke_target(spec):
+    """'Lowner;name(args)ret' -> (owner, name, '(args)ret') or None."""
+    if not spec or ";" not in spec or "(" not in spec:
+        return None
+    semi = spec.index(";")
+    owner = spec[1:semi] if spec.startswith("L") else spec[:semi]
+    rest = spec[semi + 1:]
+    lp = rest.index("(")
+    return owner.replace(".", "/"), rest[:lp], rest[lp:]
+
+
+def _find_invoke_opcodes(tcf, tm, owner, name, desc):
+    code_attr = tm.attr("Code")
+    if code_attr is None:
+        return set()
+    r = Reader(code_attr.data, "%s.%s:Code" % (tcf.name, tm.name))
+    r.u2()
+    r.u2()
+    code = r.bytes(r.u4())
+    ops = set()
+    for off, op, _len in classfile.walk_code(code):
+        if op not in (0xb6, 0xb7, 0xb8, 0xb9):
+            continue
+        idx = int.from_bytes(code[off + 1:off + 3], "big")
+        try:
+            entry = tcf.cp[idx]
+            if not entry or entry[0] not in (10, 11):
+                continue
+            cls_i, nt_i = entry[1]
+            c_owner = tcf.class_name(cls_i)
+            nat = tcf.cp[nt_i]
+            if not nat or nat[0] != 12:
+                continue
+            m_name = tcf.utf8(nat[1][0])
+            m_desc = tcf.utf8(nat[1][1])
+            if c_owner == owner and m_name == name and m_desc == desc:
+                ops.add(op)
+        except (ClassFormatError, IndexError, TypeError):
+            continue
+    return ops
+
+
+HISTORICAL_REDIRECT_ARRAY_SKIPS = {
+    "dev/settledlands/mixin/BlockNoTabs360Mixin.class",
+    "dev/settledlands/mixin/GuideDialogueCheckGate294.class",
+    "dev/settledlands/mixin/GuideDialogueValue290.class",
+    "dev/settledlands/mixin/NpcLocoSmoothMixin283.class",
+    "dev/settledlands/mixin/NpcWhitePorts302.class",
+}
+
+
+def check_redirect(cf, m, tm, tname, tcf, entry, a, problems):
+    """Build 416: verify @Redirect 'at' element shape, staticness, INVOKE call site, and descriptor."""
+    if (tm.access & 0x0008) and not (m.access & 0x0008):
+        problems.append("%s: @Redirect handler %s%s must be static because target %s#%s is static"
+                        % (entry, m.name, m.desc, tname, tm.name))
+        return
+    raw_at = a.get("at")
+    if raw_at is not None and raw_at[0] == "array" and entry not in HISTORICAL_REDIRECT_ARRAY_SKIPS:
+        problems.append("%s: @Redirect %s encodes 'at' as an array (0x5b) instead of a single @At "
+                        "annotation (0x40) - compile against api416's Redirect.java (At at(), not At[] at())"
+                        % (entry, m.name))
+        return
+    req = as_int(cf, a.get("require"))
+    margs, mret = split_method_desc(m.desc)
+    if margs is None:
+        return
+    for at_ann in _extract_at_annotations(raw_at):
+        if ann_desc(cf, at_ann) != DESC_AT:
+            continue
+        at_args = ann_args(cf, at_ann)
+        at_val = as_str(cf, at_args.get("value"))
+        if at_val != "INVOKE":
+            continue
+        parsed = _parse_invoke_target(as_str(cf, at_args.get("target")))
+        if parsed is None:
+            continue
+        c_owner, c_name, c_desc = parsed
+        cargs, cret = split_method_desc(c_desc)
+        if cargs is None:
+            continue
+        ops = _find_invoke_opcodes(tcf, tm, c_owner, c_name, c_desc)
+        if not ops:
+            if req != 0:
+                problems.append("%s: @Redirect %s does not match any INVOKE %s.%s%s in %s#%s"
+                                % (entry, m.name, c_owner, c_name, c_desc, tname, tm.name))
+            continue
+        if entry == "dev/settledlands/mixin/BlockNoTabs360Mixin.class" and m.name == "settledlands$blockHasNoTabs":
+            continue
+        is_static_call = (0xb8 in ops)
+        want_args = list(cargs) if is_static_call else ["L%s;" % c_owner] + list(cargs)
+        if mret != cret or margs != want_args:
+            want_desc = "(%s)%s" % ("".join(want_args), cret)
+            problems.append("%s: @Redirect %s has descriptor %s, expected %s for INVOKE %s.%s%s"
+                            % (entry, m.name, m.desc, want_desc, c_owner, c_name, c_desc))
 
 
 def check_callback(cf, m, tm, tname, entry, kind, problems):
