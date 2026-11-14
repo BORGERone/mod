@@ -1,0 +1,5 @@
+# Wisteria NeoForge 1.21.1
+
+Собран upstream IReallyWantToSleep/Wisteria commit `5997653a3bddbc15c10ec9a619791fde25151a00`, версия `0.1.0-alpha.1+1.21.1`, задача `:neoforge:build -Pmc=1.21.1`, CI `43647861105`. В jar включены семь Windows DLL из NVIDIA Streamline v2.12.0. Архив прошёл unzip -t, metadata указывает клиентскую обязательную зависимость Super Resolution `[0.9.2-alpha.1,)`; компиляция использовала опубликованный API `0.9.2-alpha.1-SNAPSHOT`, который может меняться, поэтому фактическая совместимость конкретного jar Super Resolution не установлена. В игре, с драйвером NVIDIA и конкретными шейдерами не тестировался. Это альфа.
+
+SHA256 `1fdfaf650ed277a1528e765e4272a5266b98c52566df109e56dd2152976a3e87`; Google Drive `https://drive.google.com/uc?id=13oEK3ApIc9eRSxI_GFLH5FiMO4Q2wCSA&export=download`. Воспроизводимый workflow `.github/workflows/build-wisteria.yml`; сборка зависит от внешнего SNAPSHOT API. Источник: https://github.com/IReallyWantToSleep/Wisteria/tree/5997653a3bddbc15c10ec9a619791fde25151a00 .

@@ -1,8 +1,6 @@
 name: Build Wisteria NeoForge 1.21.1
 on:
   workflow_dispatch:
-  push:
-    branches: [arena/e102897c-mod]
 permissions:
   contents: write
 jobs:
