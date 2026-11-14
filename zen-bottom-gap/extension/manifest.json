@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Bottom Gap — по сайтам",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Добавляет пустое место в конце страницы только на выбранных сайтах.",
   "browser_specific_settings": {
     "gecko": {

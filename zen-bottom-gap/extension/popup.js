@@ -17,6 +17,7 @@ const liftRowEl = document.getElementById('liftRow');
 const noticeEl = document.getElementById('notice');
 
 let host = null;
+let tabId = null;
 
 function hostOf(url) {
   try {
@@ -75,18 +76,23 @@ async function init() {
   liftEl.checked = on && Boolean(lift[host]);
   setDocState(on);
 
-  // Вкладка могла быть открыта до установки расширения — тогда
-  // content script в ней не запускался.
+  tabId = tab.id;
+  await refreshNotice();
+}
+
+/* Показывает, сколько панелей content script реально поднял.
+ * Заодно проверяет, что скрипт вообще есть на вкладке: если аддон
+ * поставили при уже открытой вкладке — его там нет. */
+async function refreshNotice() {
+  if (!tabId) return;
   try {
-    const state = await browser.tabs.sendMessage(tab.id, { type: 'ping' });
-    if (state && state.lift) {
-      setNotice(
-        state.lifted > 0
-          ? `Поднято панелей: ${state.lifted}.`
-          : 'Панели с position: fixed внизу не найдены — на этом сайте хватит отступа документа.'
-      );
-    } else {
+    const state = await browser.tabs.sendMessage(tabId, { type: 'ping' });
+    if (!state || !state.lift) {
       setNotice('');
+    } else if (state.lifted > 0) {
+      setNotice(`Поднято панелей: ${state.lifted}.`);
+    } else {
+      setNotice('Панели с position: fixed внизу не найдены — на этом сайте хватит отступа документа.');
     }
   } catch {
     setNotice('Перезагрузите вкладку, чтобы отступ появился (F5).');
@@ -130,6 +136,8 @@ pxEl.addEventListener('change', async () => {
   gaps[host] = clampPx(pxEl.value);
   pxEl.value = gaps[host];
   await save(KEY_GAPS, gaps);
+  await new Promise((r) => setTimeout(r, 400));
+  await refreshNotice();
 });
 
 liftEl.addEventListener('change', async () => {
@@ -138,6 +146,11 @@ liftEl.addEventListener('change', async () => {
   if (liftEl.checked) lift[host] = true;
   else delete lift[host];
   await save(KEY_LIFT, lift);
+
+  // content script сканирует страницу с задержкой (0/0.4/1.2/3 с) —
+  // ждём первый проход, чтобы показать реальное число поднятых панелей
+  await new Promise((r) => setTimeout(r, 500));
+  await refreshNotice();
 });
 
 init();
