@@ -64,6 +64,12 @@ function liftBars(px) {
   const vh = window.innerHeight;
   if (!vh || !document.body || px <= 0) return;
 
+  // Уже поднятым панелям просто обновляем величину: значение могло
+  // измениться в попапе, а заново их никто не поднимет (они в lifted).
+  for (const el of lifted.keys()) {
+    el.style.setProperty('bottom', `${px}px`, 'important');
+  }
+
   // Сначала только геометрия (без записи в DOM, чтобы не дёргать layout),
   // потом у кандидатов проверяем computed style.
   const candidates = [];

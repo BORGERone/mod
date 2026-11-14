@@ -111,11 +111,17 @@ toggleEl.addEventListener('change', async () => {
   await save(KEY_LIFT, lift);
 });
 
-pxEl.addEventListener('input', async () => {
+/* Пишем с небольшой задержкой: при наборе «24» не нужно дважды
+ * перестраивать стили на странице. */
+let inputTimer = null;
+pxEl.addEventListener('input', () => {
   if (!host || !toggleEl.checked) return;
-  const { gaps } = await loadAll();
-  gaps[host] = clampPx(pxEl.value);
-  await save(KEY_GAPS, gaps);
+  clearTimeout(inputTimer);
+  inputTimer = setTimeout(async () => {
+    const { gaps } = await loadAll();
+    gaps[host] = clampPx(pxEl.value);
+    await save(KEY_GAPS, gaps);
+  }, 150);
 });
 
 pxEl.addEventListener('change', async () => {
