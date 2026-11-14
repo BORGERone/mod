@@ -15,11 +15,17 @@ import net.minecraft.world.level.block.Block;
  */
 public final class BuiltInRegistries {
 
-    /** Every block of the game, by id. */
-    public static final DefaultedRegistry<Block> BLOCK = new DefaultedRegistry<Block>();
+    /**
+     * Every block of the game, by id.
+     *
+     * <p>{@code null} on purpose: this mirror exists for the compiler only, and {@code DefaultedRegistry}
+     * is an interface (see its own note - build 420 shipped it as a class and the game answered
+     * {@code IncompatibleClassChangeError}).</p>
+     */
+    public static final DefaultedRegistry<Block> BLOCK = null;
 
     /** Every entity type of the game, by id. */
-    public static final DefaultedRegistry<EntityType> ENTITY_TYPE = new DefaultedRegistry<EntityType>();
+    public static final DefaultedRegistry<EntityType> ENTITY_TYPE = null;
 
     private BuiltInRegistries() {
     }

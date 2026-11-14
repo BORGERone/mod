@@ -1,0 +1,2 @@
+a9e90656a1babcabf62802b8d41385d94d0ce9b7a8ee8435ad6f5cf73fe246f9  settledlands-0.8.0-build421-anchor-registry-fix.jar
+6ad7c05ae1d0e00f0e9d1107993a1a3529cdfeb457a15596a44e53414fe1c305  SettledLands-Build421-AnchorRegistryFix-Source.zip

@@ -200,3 +200,20 @@ NPC проходил в двери с блоком сверху и проход�
 обрезанная вставка ждёт молча. Новый гейт `tools/anchor_check.py` + JVM-проба (50 проверок). Найдена и
 исправлена ошибка заглушки brigadier (`register(ArgumentBuilder)` вместо `LiteralArgumentBuilder` —
 будущий `NoSuchMethodError`). 38/38 гейтов PASS, `verify_jar --base 419` PASS. В игре **не проверено**.
+
+## Build 421 — исправление якоря 420 (`IncompatibleClassChangeError`) (2026-11-10)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build421-anchor-registry-fix.jar | `1CjvHFEsIaOoGrlMS4Z0uk6JrSSE3o2nD` | `a9e90656a1babcabf62802b8d41385d94d0ce9b7a8ee8435ad6f5cf73fe246f9` |
+| SettledLands-Build421-AnchorRegistryFix-Source.zip | `1cgAsAU6I3X6CUynGazrTodLbDMzIuPNn` | `6ad7c05ae1d0e00f0e9d1107993a1a3529cdfeb457a15596a44e53414fe1c305` |
+
+База — 420. В логе автора: `IncompatibleClassChangeError: Found interface net.minecraft.core.DefaultedRegistry,
+but class was expected` — маркер не ставился ни разу, отсюда «ГРАФОВ НЕТ». Причина: в 420 заглушка
+`DefaultedRegistry` была объявлена **классом**, хотя в игре это **интерфейс**, поэтому вызов
+`Registry#getKey`/`get` компилировался в `invokevirtual` вместо `invokeinterface` (descriptor при этом
+верный, все гейты 420 были зелёные). В 421 `DefaultedRegistry` — интерфейс, поля `BuiltInRegistries.BLOCK`
+/`ENTITY_TYPE` — `null` (зеркало для компилятора); 10 из 12 классов якоря побайтово равны 420. Новый гейт
+`tools/invoke_kind_check.py` сверяет **вид** каждого вызова с базой (5638 целей; 420 на нём падает, 421 OK).
+Плюс две диагностические строки в лог: `a marker was placed at <pos>` и `pasted at <pos> ... turn <t>`.
+39/39 гейтов PASS, `verify_jar --base 420` PASS. В игре **не проверено**.

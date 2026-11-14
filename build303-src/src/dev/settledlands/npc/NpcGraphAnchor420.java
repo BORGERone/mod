@@ -331,7 +331,8 @@ public final class NpcGraphAnchor420 {
         NpcGraphAnchorCore420.Result result = NpcGraphAnchorFiles420.materialize(level, level.getServer(),
                 entries, turn, here);
         stamp(marker, here, turn);
-        LOG.info("anchor: pasted at " + here + " - " + result.line() + " (" + entries.size() + " entries carried)");
+        LOG.info("anchor: pasted at " + here + " - " + result.line() + " (" + entries.size()
+                + " entries carried, turn " + turn + ")");
         return result.total() > 0 || !entries.isEmpty();
     }
 
@@ -379,6 +380,7 @@ public final class NpcGraphAnchor420 {
             marker.moveTo(at.getX() + 0.5D, at.getY(), at.getZ() + 0.5D);
             marker.setYRot(0.0F);
             level.addFreshEntity(marker);
+            LOG.info("anchor: a marker was placed at " + at + " - this building's graphs can now travel");
             return marker;
         } catch (Throwable failure) {
             warn("anchor: the marker could not be placed: " + failure);

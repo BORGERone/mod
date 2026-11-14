@@ -38,12 +38,16 @@ import pathlib
 import sys
 import zipfile
 
-BASE_VERSION = "0.8.0-build419-esc-immediate-close"
-NEW_VERSION = "0.8.0-build420-graph-anchor"
-OUT_NAME = "settledlands-0.8.0-build420-graph-anchor.jar"
+BASE_VERSION = "0.8.0-build420-graph-anchor"
+NEW_VERSION = "0.8.0-build421-anchor-registry-fix"
+OUT_NAME = "settledlands-0.8.0-build421-anchor-registry-fix.jar"
 
 REMOVED = ()
-REPLACED = ()
+# Build 421 replaces the very classes build 420 added: same names, same layout, one compile mirror fixed.
+REPLACED = (
+    "dev/settledlands/npc/NpcGraphAnchorFiles420.class",
+    "dev/settledlands/npc/NpcGraphAnchor420.class",
+)
 ADDED = (
     "dev/settledlands/npc/NpcGraphAnchorCore420.class",
     "dev/settledlands/npc/NpcGraphAnchorCore420$Entry.class",
@@ -134,30 +138,39 @@ def main(argv):
         order = zf.namelist()
         blobs = {name: zf.read(name) for name in order}
 
+    ADDED_OK = set()
     for name in REMOVED:
         if name not in blobs:
             raise SystemExit("expected %s in base jar to remove" % name)
         del blobs[name]
         order.remove(name)
 
-    for name in ADDED + REPLACED:
+    # REPLACED first: a name can be in both lists only by mistake, and replacing has the stricter checks.
+    for name in REPLACED + ADDED:
         src = srcroot / name
         if not src.is_file():
             raise SystemExit("missing compiled class: %s" % src)
         data = src.read_bytes()
+        if name in ADDED and name not in REPLACED and name in blobs:
+            # Build 421 rewrites two of the classes build 420 adds and leaves the other ten alone; the ones
+            # it leaves alone have to be byte-identical to what 420 shipped, which is the check here.
+            if blobs[name] != data:
+                raise SystemExit("%s already in base jar and differs - put it in REPLACED" % name)
+            print("  same    : %s (unchanged from base)" % name)
+            ADDED_OK.add(name)
+            continue
         for marker in MARKERS.get(name, ()):
             if marker.encode("utf-8") not in data:
                 raise SystemExit("%s does not contain marker %r" % (name, marker))
         if name in ADDED:
-            if name in blobs:
-                raise SystemExit("%s already in base jar" % name)
-            order.append(name)
+            if name not in order:
+                order.append(name)
             print("  added   : %s (%d bytes)" % (name, len(data)))
         else:
             if name not in blobs:
                 raise SystemExit("base jar has no entry: %s" % name)
             if blobs[name] == data:
-                raise SystemExit("%s is byte-identical to base" % name)
+                raise SystemExit("%s is byte-identical to base - why is it in REPLACED?" % name)
             print("  replaced: %s (%d bytes)" % (name, len(data)))
         blobs[name] = data
 

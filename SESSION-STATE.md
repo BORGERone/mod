@@ -8,7 +8,7 @@
 > Записи ниже про 405/406 — **история, не текущее состояние**. Jar-ы 405/406 остались только на Google
 > Drive (`DRIVE-LINKS-RU.md`).
 >
-> Текущая база: `settledlands-0.8.0-build420-graph-anchor.jar` (база 419).
+> Текущая база: `settledlands-0.8.0-build421-anchor-registry-fix.jar` (база 420).
 
 Обновлено: 2026-11-10 (build 420). Ветка: `arena/a5f430cc-mod`.
 
@@ -16,6 +16,33 @@
 > ловушки. Этот файл — история и хронология.
 
 ## Текущая сборка
+
+`settledlands-0.8.0-build421-anchor-registry-fix.jar` (sha256 `a9e90656a1babcabf62802b8d41385d94d0ce9b7a8ee8435ad6f5cf73fe246f9`,
+база — **build 420**) — **исправление якоря 420: `IncompatibleClassChangeError`**:
+* автор проверил 420 в игре: **«ГРАФОВ НЕТ»**. `latest.log` дал точную строку:
+  `anchor: the marker could not be placed: java.lang.IncompatibleClassChangeError: Found interface
+  net.minecraft.core.DefaultedRegistry, but class was expected` — **маркер не ставился ни разу**, поэтому
+  якорь не мог ничего унести;
+* **причина (моя ошибка):** в 420 заглушка `net.minecraft.core.DefaultedRegistry` была объявлена
+  **классом**, хотя в игре это **интерфейс**. Дескрипторы совпали, а **вид вызова** — нет: база мода зовёт
+  `Registry#getKey`/`get` через `invokeinterface` (`NpcItems#idOf`, `WorldEvents#lambda$eligible$0`), а 420
+  компилировал `invokevirtual` → `IncompatibleClassChangeError` при первом же исполнении. Ни один гейт 420
+  этого не видел: все они сверяли owner/name/descriptor, но не опкод;
+* **фикс 421:** `DefaultedRegistry` — `interface DefaultedRegistry<T> extends Registry<T>`,
+  `BuiltInRegistries.BLOCK`/`ENTITY_TYPE` = `null` (зеркало только для компилятора). Пересобраны только
+  `NpcGraphAnchorFiles420` и `NpcGraphAnchor420`; остальные 10 классов якоря **побайтово равны 420**
+  (патч это проверяет, а правило якоря — повороты/отпечаток/раскладка — не менялось вообще);
+* **новый гейт `tools/invoke_kind_check.py`** — сверяет **вид** каждого вызова
+  (`invokevirtual`/`invokeinterface`/`invokestatic`/`invokespecial`) с базой: 5638 целей вызова;
+  **420 на нём падает** ровно на `DefaultedRegistry.getKey`/`get`, **421 проходит**. Три вызова, которых
+  база не делает (`Entity.moveTo(DDD)`, `Entity.setYRot(F)`, `BlockState.isAir()`), в белом списке с
+  обоснованием, что все три — классы, т.е. `invokevirtual` верен;
+* **диагностика:** в лог добавлены `anchor: a marker was placed at <pos> - this building's graphs can now
+  travel` и `anchor: pasted at <pos> - ... (<n> entries carried, turn <t>)` — следующий лог сам скажет, на
+  каком шаге остановилось;
+* **39/39** гейтов PASS, `verify_jar.py --base 420` PASS, `check_mixin_class.py --base 420` OK (0 новых
+  внешних ссылок), патч воспроизводим байт-в-байт.
+**В игре не проверено.**
 
 `settledlands-0.8.0-build420-graph-anchor.jar` (sha256 `19d5f064c9150dd401dc854e27d0c3e4d9d33a24654396a1fd11f9eca9847133`,
 база — **build 419**) — **якорь: графы постройки едут внутри схематика** (жалоба «в этих схематиках не
