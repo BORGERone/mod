@@ -1,0 +1,62 @@
+name: Build Wisteria NeoForge 1.21.1
+on:
+  workflow_dispatch:
+  push:
+    branches: [arena/e102897c-mod]
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - name: Checkout Wisteria
+        uses: actions/checkout@v4
+        with:
+          repository: IReallyWantToSleep/Wisteria
+          ref: 5997653a3bddbc15c10ec9a619791fde25151a00
+          path: wisteria
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - name: Fetch NVIDIA Streamline 2.12 runtime
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release download v2.12.0 -R NVIDIA-RTX/Streamline --pattern 'streamline-sdk-*.zip' --output /tmp/streamline.zip
+          unzip -q /tmp/streamline.zip 'bin/x64/*' -x 'bin/x64/development/*' -d "$GITHUB_WORKSPACE/streamline"
+          rm /tmp/streamline.zip
+      - name: Build target
+        id: gradle
+        working-directory: wisteria
+        env:
+          ORG_GRADLE_PROJECT_streamline_bin_dir: ${{ github.workspace }}/streamline/bin/x64
+        run: |
+          set -o pipefail
+          chmod +x ./gradlew
+          ./gradlew -Pmc=1.21.1 :neoforge:build --console=plain --stacktrace 2>&1 | tee /tmp/wisteria-build.log
+      - name: Save artifact or build failure log
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/wisteria-stage
+          if [ '${{ steps.gradle.outcome }}' = 'success' ]; then
+            mapfile -t jars < <(find wisteria/neoforge/build/libs -maxdepth 1 -name '*.jar' ! -name '*-sources.jar' ! -name '*-javadoc.jar')
+            test "${#jars[@]}" = 1
+            cp "${jars[0]}" /tmp/wisteria-stage/wisteria.jar
+            unzip -t /tmp/wisteria-stage/wisteria.jar | tail -1
+            unzip -l /tmp/wisteria-stage/wisteria.jar | grep -E 'META-INF/neoforge.mods.toml|streamline/.*dll'
+            sha256sum /tmp/wisteria-stage/wisteria.jar > /tmp/wisteria-stage/sha256.txt
+          else
+            tail -c 100000 /tmp/wisteria-build.log > /tmp/wisteria-stage/build.log 2>/dev/null || echo 'Gradle did not start' > /tmp/wisteria-stage/build.log
+          fi
+          cd /tmp/wisteria-stage
+          git init -q
+          git config user.name arena-ci
+          git config user.email arena@users.noreply.github.com
+          git add . && git commit -qm 'Wisteria build result'
+          git push -q "https://x-access-token:${GH_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" "HEAD:refs/tags/arena-wisteria-${GITHUB_RUN_ID}"
