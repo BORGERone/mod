@@ -50,4 +50,15 @@ public class PlayerInteractEvent {
     public static class RightClickBlock extends PlayerInteractEvent {
         public BlockPos getPos() { return null; }
     }
+
+    /**
+     * Build 420: right click on an entity. The shape is the base jar's own - {@code
+     * PossessionCultBridge} runs {@code onEntityInteract(EntityInteract)} in game and reads
+     * {@code getPlayer()}, {@code getTarget()}, {@code getItemStack()}, {@code setCanceled} and
+     * {@code setCancellationResult} from it.
+     */
+    public static class EntityInteract extends PlayerInteractEvent {
+        public net.minecraft.world.entity.player.Player getPlayer() { return getEntity(); }
+        public Entity getTarget() { return null; }
+    }
 }

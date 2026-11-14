@@ -14,6 +14,12 @@ public class Entity {
     public boolean isRemoved() { return false; }
     public boolean isPassenger() { return false; }
     public Level level() { return null; }
+    /**
+     * Build 420: the block an entity stands in. The base jar calls it on players and bodies already
+     * ({@code NpcPointsCommand}, {@code NpcEscortCommands}), so the name and the shape are the game's.
+     */
+    public net.minecraft.core.BlockPos blockPosition() { return null; }
+
     public double getX() { return 0; }
     public double getY() { return 0; }
     public double getZ() { return 0; }
@@ -33,5 +39,18 @@ public class Entity {
     public void setXRot(float xRot) {}
     public float yRotO;
     public float xRotO;
-}
 
+    /**
+     * Build 420: identity, because the anchor keeps entities in a {@link java.util.List} and asks
+     * {@code contains} - a whole-object comparison would go through the world each time.
+     */
+    @Override
+    public boolean equals(Object other) {
+        return this == other;
+    }
+
+    @Override
+    public int hashCode() {
+        return System.identityHashCode(this);
+    }
+}

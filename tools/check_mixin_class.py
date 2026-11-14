@@ -990,6 +990,27 @@ CONFIRMED_EXTERNAL = {
         "build 407's bogus PathNavigation#setCanPassDoors)",
     ("net/minecraft/world/level/pathfinder/NodeEvaluator", "canPassDoors", "()Z"):
         "Build 414: read back the pass-doors flag on NodeEvaluator, paired with canOpenDoors()",
+    # ---------------------------------------------------------------------------------------
+    # Build 420, the anchor. Two calls no earlier build of the jar made.
+    #
+    # BuiltInRegistries.BLOCK. The jar reads BuiltInRegistries.ITEM and BuiltInRegistries.ENTITY_TYPE
+    # already, both as `Lnet/minecraft/core/DefaultedRegistry;`, and calls get/getKey on them. BLOCK is
+    # the same kind of field on the same class (public static final DefaultedRegistry<Block> BLOCK),
+    # declared right beside ITEM; the anchor needs it for one question only - what is the id of the
+    # block standing at an offset - and this build writes that read exactly as the base jar writes the
+    # two that already run in game.
+    ("net/minecraft/core/registries/BuiltInRegistries", "BLOCK",
+     "Lnet/minecraft/core/DefaultedRegistry;"):
+        "Build 420: the same field kind as BuiltInRegistries.ITEM/ENTITY_TYPE, which the base jar already "
+        "reads as DefaultedRegistry; used to name the block at a fingerprint offset",
+    #
+    # BlockState.isAir(). The jar reads a block state through getBlock(), is(Block), isSolid(), getValue,
+    # setValue - it never asked "is this air". isAir is BlockState's own predicate for it
+    # (`public boolean isAir()` on BlockStateBehaviour/BlockState in 1.21.1). The anchor asks it for one
+    # thing: is the cell it is about to put a marker in free. Nothing else in the build changes a state.
+    ("net/minecraft/world/level/block/state/BlockState", "isAir", "()Z"):
+        "Build 420: BlockState's own predicate, used only to find a free cell for the marker; the base "
+        "jar reads the same state object through getBlock()/isSolid() already",
 }
 
 

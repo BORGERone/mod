@@ -31,6 +31,9 @@ public class BlockState {
 
     public boolean is(Block block) { return false; }
 
+    /** Build 420: the anchor needs a free cell for its marker - air is the one state it accepts. */
+    public boolean isAir() { return false; }
+
     public boolean hasProperty(Property<?> property) { return false; }
 
     /**

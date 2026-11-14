@@ -382,3 +382,44 @@ pass(es)`. Гейт `door_lock_check.py` падает, если вернулся
   миксинах на `NpcDialogueGraphScreen` используй различные типы захваченных аргументов у новых `lambda$N`
   (`short[]` vs `byte[]`), чтобы не столкнуться с `tools/mixin_clash_check.py`.
 
+## 9. Актуальное обновление (2026-11-10, сборка 420 — якорь для копирования графов)
+
+* **Запрос автора:** «в этих схематиках не копируются графы блоков» + «мод мост для Axiom, чтобы он
+  поддерживал ещё и копирование наших графов».
+* **Почему мостик в Axiom невозможен (проверено, не гипотеза):** публичный `AxiomClientAPI` — 15 классов
+  (`CustomTool`, `Effects`, `IAxiomWorldRenderContext`, `pathers/*`, `regions/*`, `service/*`); в нём **нет**
+  ни API буфера обмена, ни `.bp`, ни чтения выделения (`BlockRegion` — только запись). Серверный хук есть
+  только как **Paper-плагин** (`AxiomPaper.java`: `axiom:enable`, `axiom:marker_data`,
+  `axiom:marker_nbt_response`, `axiom:annotation_update`, `axiom:custom_blocks`, `axiom:tunnel`) и из
+  NeoForge недоступен; `AxiomAddon`/`AxiomEventBus` — непубличные и версионно-хрупкие. **Зато Axiom копирует
+  NBT блоков и сущностей** (`Copy Entities`), и `.schem` тоже несёт block entity с NBT.
+* **Причина потери графов:** они лежат в мировых файлах `settledlands_block_triggers`,
+  `settledlands_door_graphs`, `settledlands_chest_graphs`, `settledlands_doors` **по абсолютным координатам** —
+  копировальный инструмент о них не знает.
+* **Решение (вариант C, «якорь»), сборка 420** (`settledlands-0.8.0-build420-graph-anchor.jar`, база 419):
+  невидимый маркер = **существующий** `settledlands:guide_trigger` (находится по NBT, не по имени/UUID),
+  в `getPersistentData()` — `SettledLandsAnchor=420`, `Graphs`, `FP`, `SettledLandsAnchorAt`, всё относительно
+  маркера. `pass` каждые 40 тиков: освежение → автоустановка в свободную клетку → раскладка после вставки по
+  `позиция_маркера + повёрнутое смещение`, поворот/зеркало **по отпечатку блоков** (8 вариантов; ничья →
+  identity; <60 % → ничего не пишем), замки дверей через `DoorStore368`. Якорь — только транспорт: после
+  раскладки каждый граф редактируется жезлом отдельно.
+
+### Что делать следующему ИИ в первую очередь
+
+1. **Автор должен проверить 420 в игре** по сценарию из `README-Build420-RU.md`: постройка с графами на блоке,
+   двери и сундуке → пауза 2 с → в Axiom **включить `Copy Entities`** и скопировать/вставить (можно с
+   `Ctrl+R` / `Ctrl+F`) → пауза 2 с → `/settledlands anchor list`.
+2. Если графов на новом месте нет — **сначала спросить `latest.log`**. В нём ищется `anchor:` (строки
+   `pasted at ...`, `does not stand in the building its list was made for`, `not registered`,
+   `a cell could not be read`). По этим строкам видно, на каком шаге остановилось: маркер не переехал
+   (`Copy Entities` выключен), отпечаток не совпал (<60 %) или `guide_trigger` не зарегистрирован.
+3. **Ловушка, найденная в 420 и которая может повториться:** заглушка
+   `com.mojang.brigadier.CommandDispatcher#register` была объявлена как `register(ArgumentBuilder)`, хотя в
+   brigadier это `register(LiteralArgumentBuilder)` (`RootCommandNode.addChild` принимает только литералы, и
+   сам jar зовёт именно `LiteralArgumentBuilder`). Компилятор такое пропускает, гейт фазы D — нет; **не
+   понижать строгость гейта, не «принимать» сигнатуру по памяти**. Аналогично `BuiltInRegistries.BLOCK`
+   обязан быть `DefaultedRegistry`, как `ITEM`/`ENTITY_TYPE`, которые jar уже читает.
+4. **Два расширения гейтов 420, которые нельзя откатывать:** `tools/anchor_check.py` и
+   `tools/harness/Anchor420Probe.java` (`ANCHOR_CHECKS=50`, `ANCHOR_OK=true`). Проба запускается внутри гейта
+   и проверяет правило в живом JVM: восемь поворотов, round-trip упаковки, поворот вставки, отказ среди чужих
+   блоков, раскладку блока + дважды запертой двери + сундука, «незапечатанный маркер не пишет ничего».

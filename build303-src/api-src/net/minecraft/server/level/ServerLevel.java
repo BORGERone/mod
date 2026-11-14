@@ -21,6 +21,11 @@ public class ServerLevel extends Level {
     /** Build 376: every player in this level - the base mod loops over it to send payloads. */
     public java.util.List<ServerPlayer> players() { return null; }
 
+    /** Build 420: the anchor marker is placed with the call the base jar's revival helpers already use. */
+    public boolean addFreshEntity(net.minecraft.world.entity.Entity entity) {
+        return true;
+    }
+
     /** Build 351: the same call CutsceneStorage and NpcCommonGraphStorage already make. */
     public net.minecraft.world.level.storage.DimensionDataStorage getDataStorage() {
         return null;

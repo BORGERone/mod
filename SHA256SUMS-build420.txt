@@ -1,0 +1,2 @@
+19d5f064c9150dd401dc854e27d0c3e4d9d33a24654396a1fd11f9eca9847133  settledlands-0.8.0-build420-graph-anchor.jar
+fe19a2f6e9e666d46bc5e0a55f1a74d558140de22e25febcc900d58739898578  SettledLands-Build420-GraphAnchor-Source.zip

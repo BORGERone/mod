@@ -13,6 +13,9 @@ public class ServerPlayer extends Player {
 
     public MinecraftServer getServer() { return null; }
 
+    /** Build 420: the level this player is in - the call the base jar's own command classes make. */
+    public ServerLevel serverLevel() { return null; }
+
     /**
      * Build 397: open a menu for this player - a chest's window, after the panel that locks it was
      * cracked. Returns the menu id, which this mod does not use; the descriptor (including
