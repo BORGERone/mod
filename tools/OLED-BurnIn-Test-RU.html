@@ -1,0 +1,306 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Проверка выгорания OLED — Gigabyte MO32U24</title>
+<style>
+  :root{
+    --ui-bg: rgba(8,10,14,.82);
+    --ui-br: rgba(255,255,255,.14);
+    --txt: #e8ecf3;
+    --dim: #9aa4b2;
+    --accent: #58c6ff;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#000;color:var(--txt);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+    overflow:hidden;-webkit-font-smoothing:antialiased}
+  #stage{position:fixed;inset:0;transition:background-color .08s linear;cursor:none}
+  #stage.cursorOn{cursor:default}
+
+  /* ---------- стартовый экран ---------- */
+  #intro{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    background:radial-gradient(120% 90% at 50% 0%,#101722 0%,#05070a 60%,#000 100%);
+    padding:24px;z-index:30;cursor:default;overflow:auto}
+  .card{max-width:820px;width:100%;background:rgba(255,255,255,.035);
+    border:1px solid var(--ui-br);border-radius:18px;padding:30px 32px 26px;
+    backdrop-filter:blur(6px);box-shadow:0 30px 80px rgba(0,0,0,.6)}
+  .card h1{font-size:23px;margin:0 0 6px;letter-spacing:.2px}
+  .card .sub{color:var(--dim);font-size:13.5px;margin:0 0 20px}
+  .card h2{font-size:13px;text-transform:uppercase;letter-spacing:1.4px;color:var(--accent);
+    margin:22px 0 8px;font-weight:600}
+  .card ol,.card ul{margin:0;padding-left:20px;font-size:14px;line-height:1.65;color:#cfd7e3}
+  .card li{margin:4px 0}
+  .card b{color:#fff}
+  .warn{border-left:3px solid #f0b429;padding:2px 0 2px 12px;margin:16px 0;font-size:13.5px;
+    color:#e9d9a8;line-height:1.55}
+  .row{display:flex;gap:12px;flex-wrap:wrap;align-items:center;margin-top:24px}
+  button{font:inherit;font-size:14.5px;font-weight:600;border-radius:11px;padding:12px 22px;
+    border:1px solid transparent;cursor:pointer;transition:.15s}
+  .primary{background:var(--accent);color:#04121b}
+  .primary:hover{background:#7ad4ff}
+  .ghost{background:rgba(255,255,255,.06);color:var(--txt);border-color:var(--ui-br)}
+  .ghost:hover{background:rgba(255,255,255,.12)}
+  .keys{color:var(--dim);font-size:12.5px;margin-top:14px;line-height:1.7}
+  kbd{display:inline-block;background:rgba(255,255,255,.1);border:1px solid var(--ui-br);
+    border-bottom-width:2px;border-radius:6px;padding:1px 7px;font-size:11.5px;font-family:inherit}
+
+  /* ---------- HUD ---------- */
+  #hud{position:fixed;left:0;right:0;bottom:0;z-index:20;
+    display:flex;align-items:flex-end;justify-content:space-between;gap:18px;
+    padding:18px 22px;background:linear-gradient(to top,rgba(0,0,0,.85),rgba(0,0,0,0));
+    opacity:0;transition:opacity .25s;pointer-events:none}
+  #hud.show{opacity:1}
+  #hud .left{max-width:62%}
+  #hud .name{font-size:20px;font-weight:650;letter-spacing:.2px;
+    text-shadow:0 2px 12px rgba(0,0,0,.9)}
+  #hud .meta{font-size:12.5px;color:var(--dim);margin-top:2px;letter-spacing:.6px}
+  #hud .hint{font-size:13px;color:var(--dim);margin-top:8px;line-height:1.5;
+    text-shadow:0 1px 8px rgba(0,0,0,.9)}
+  #hud .right{display:flex;gap:7px;align-items:center;flex-wrap:wrap;justify-content:flex-end}
+  .dot{width:8px;height:8px;border-radius:50%;background:rgba(255,255,255,.22)}
+  .dot.on{background:var(--accent);box-shadow:0 0 10px rgba(88,198,255,.7)}
+  #counter{font-variant-numeric:tabular-nums;font-size:12.5px;color:var(--dim);margin-left:6px}
+  #badge{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:21;
+    font-size:12px;letter-spacing:1.6px;text-transform:uppercase;color:rgba(255,255,255,.5);
+    background:rgba(0,0,0,.55);padding:6px 14px;border-radius:99px;border:1px solid rgba(255,255,255,.12);
+    opacity:0;transition:opacity .25s;pointer-events:none}
+  #badge.show{opacity:1}
+  #wipe{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:25;
+    font-size:64px;font-variant-numeric:tabular-nums;color:#111;font-weight:700}
+</style>
+</head>
+<body>
+
+<div id="stage"></div>
+<div id="wipe"></div>
+<div id="badge">UI скрыт · H — вернуть</div>
+
+<div id="hud">
+  <div class="left">
+    <div class="name" id="sName">—</div>
+    <div class="meta" id="sMeta"></div>
+    <div class="hint" id="sHint"></div>
+  </div>
+  <div class="right" id="dots"></div>
+</div>
+
+<div id="intro">
+  <div class="card">
+    <h1>Тест на выгорание OLED — Gigabyte MO32U24</h1>
+    <p class="sub">31.5" 4K QD-OLED (Penta Tandem), 240 Гц · полноэкранные заливки и градиенты.
+      Открывайте этот файл локально в браузере на самом мониторе.</p>
+
+    <h2>Подготовка (5 минут, без неё тест врёт)</h2>
+    <ol>
+      <li><b>Протрите экран</b> сухой микрофиброй. Отпечатки и разводы на глянцевом ObsidianShield выглядят как «пятна выгорания».</li>
+      <li><b>Дождитесь цикла обслуживания панели.</b> В OSD: <b>OLED Care → Panel Refresh</b> (полный цикл, ~1 час, лучше после 4+ часов работы). Быстрый <b>Pixel Refresh</b> идёт при выключении. Временный «остаточный след» часто исчезает именно после него.</li>
+      <li><b>Настройки изображения:</b> пресвет ~50–60 %, режим <b>sRGB / Standard</b>, HDR <b>выключен</b>, яркость Windows ~50 %. Не тестируйте на «яркость 100 % + Vivid».</li>
+      <li><b>Свет:</b> сначала полностью тёмная комната (видны слабые следы), потом — обычное освещение (видно общее «облако» и равномерность).</li>
+    </ol>
+
+    <h2>Как смотреть</h2>
+    <ul>
+      <li>На каждой заливке постойте 10–20 секунд: сначала с 50–60 см, затем отойдите на 1,5–2 м.</li>
+      <li>Ищите <b>чёткие контуры</b>: панель задач, рамки окон, вкладки браузера, HUD из игр, прицел, часы.</li>
+      <li>Тёмные серые (2–10 %) показывают остаточный след лучше всего. Белый и 50 % серый — неравномерность и цветной оттенок по площади.</li>
+      <li>R / G / B по отдельности показывают, «села» ли конкретная группа субпикселей.</li>
+    </ul>
+
+    <div class="warn">
+      <b>Это НЕ выгорание:</b> лёгкое посветление чёрного при ярком свете в комнате (QD‑OLED не имеет поляризатора),
+      тонкая тёмная полоска/рамка по периметру, розовато‑зеленоватый оттенок белого под углом, «грязь» на 5 % сером в тёмной комнате,
+      а также быстро исчезающий след от статичной картинки (это image retention, а не burn‑in).
+    </div>
+
+    <div class="row">
+      <button class="primary" id="startBtn">Начать проверку (F)</button>
+      <button class="ghost" id="wipeBtn">Очистка экрана (белый, 3 мин)</button>
+    </div>
+    <p class="keys">
+      <kbd>→</kbd> / <kbd>Пробел</kbd> — следующая заливка &nbsp;·&nbsp; <kbd>←</kbd> — назад &nbsp;·&nbsp;
+      <kbd>1</kbd>…<kbd>9</kbd> — быстрый переход &nbsp;·&nbsp; <kbd>H</kbd> — скрыть/показать подписи &nbsp;·&nbsp;
+      <kbd>F</kbd> — полный экран &nbsp;·&nbsp; <kbd>Esc</kbd> — выход
+    </p>
+  </div>
+</div>
+
+<script>
+(function(){
+  const stage  = document.getElementById('stage');
+  const hud    = document.getElementById('hud');
+  const badge  = document.getElementById('badge');
+  const sName  = document.getElementById('sName');
+  const sMeta  = document.getElementById('sMeta');
+  const sHint  = document.getElementById('sHint');
+  const dotsEl = document.getElementById('dots');
+  const intro  = document.getElementById('intro');
+  const wipe   = document.getElementById('wipe');
+
+  const slides = [
+    { name:'Чёрный',                 bg:'#000000', meta:'#000000 · 0 %',
+      hint:'Экран должен быть равномерно чёрным. Любые серые «призраки» окон или логотипов — тревожный признак.' },
+    { name:'Серый 2 %',              bg:'#050505', meta:'#050505 · 2 %',
+      hint:'Самый чувствительный тест на остаточный след. Смотрите в темноте, глаза дайте привыкнуть 20–30 с.' },
+    { name:'Серый 5 %',              bg:'#0d0d0d', meta:'#0d0d0d · 5 %',
+      hint:'Здесь обычно проявляются контуры панели задач, таскбара, вкладок браузера и HUD.' },
+    { name:'Серый 10 %',             bg:'#1a1a1a', meta:'#1a1a1a · 10 %',
+      hint:'Проверьте нижнюю полосу (панель задач) и верхнюю (заголовки окон) — они страдают первыми.' },
+    { name:'Серый 25 %',             bg:'#404040', meta:'#404040 · 25 %',
+      hint:'Неравномерность яркости по площади, полосы, «облака».' },
+    { name:'Серый 50 %',             bg:'#808080', meta:'#808080 · 50 %',
+      hint:'Главный тест на цветовой оттенок: пятна зелёного/розового по площади = неравномерный износ субпикселей.' },
+    { name:'Серый 75 %',             bg:'#bfbfbf', meta:'#bfbfbf · 75 %',
+      hint:'Мягкие отпечатки и «dirty screen effect».' },
+    { name:'Белый',                  bg:'#ffffff', meta:'#ffffff · 100 %',
+      hint:'Смотреть 5–10 с, недолго. Проверяем ровность белого и отсутствие желтоватых/синеватых зон.' },
+    { name:'Красный',                bg:'#ff0000', meta:'#ff0000',
+      hint:'Погасшие участки красного = износ красных субпикселей.' },
+    { name:'Зелёный',                bg:'#00ff00', meta:'#00ff00',
+      hint:'Погасшие участки зелёного. Часто первым «садится» именно зелёный.' },
+    { name:'Синий',                  bg:'#0000ff', meta:'#0000ff',
+      hint:'Погасшие участки синего. На QD‑OLED синий деградирует медленнее, но проверять нужно.' },
+    { name:'Голубой',                bg:'#00ffff', meta:'#00ffff',
+      hint:'Смесь G+B — хорошо видны следы от белых элементов интерфейса.' },
+    { name:'Пурпурный',              bg:'#ff00ff', meta:'#ff00ff',
+      hint:'Смесь R+B.' },
+    { name:'Жёлтый',                 bg:'#ffff00', meta:'#ffff00',
+      hint:'Смесь R+G. Часто самый «чистый» — по нему удобно сравнивать.' },
+    { name:'Градиент → вправо',      bg:'linear-gradient(to right,#000,#fff)', meta:'0 → 100 %',
+      hint:'Ступеньки допустимы (8 бит). Ищите вертикальные полосы и цветные оттенки внутри серого.' },
+    { name:'Градиент ↓ вниз',        bg:'linear-gradient(to bottom,#000,#fff)', meta:'0 → 100 %',
+      hint:'Вертикальный градиент. Неровности по вертикали часто выдают износ строк.' },
+    { name:'Градиент по диагонали',  bg:'linear-gradient(135deg,#000,#fff)', meta:'0 → 100 %',
+      hint:'Финальный взгляд на равномерность панели целиком.' }
+  ];
+
+  let idx = 0, running = false, uiPinned = false, hideTimer = null, wipeTimer = null;
+
+  slides.forEach((_,i)=>{
+    const d = document.createElement('div');
+    d.className = 'dot';
+    d.title = 'Слайд ' + (i+1);
+    dotsEl.appendChild(d);
+  });
+  const counter = document.createElement('span');
+  counter.id = 'counter';
+  dotsEl.appendChild(counter);
+  const dots = Array.from(dotsEl.querySelectorAll('.dot'));
+
+  function paint(){
+    const s = slides[idx];
+    stage.style.background = s.bg.includes('gradient') ? s.bg : s.bg;
+    sName.textContent = s.name;
+    sMeta.textContent = s.meta;
+    sHint.textContent  = s.hint;
+    dots.forEach((d,i)=> d.classList.toggle('on', i===idx));
+    counter.textContent = (idx+1) + ' / ' + slides.length;
+  }
+
+  function showHud(){
+    if (uiPinned) return;
+    hud.classList.add('show');
+    clearTimeout(hideTimer);
+    hideTimer = setTimeout(()=>{ if(running) hud.classList.remove('show'); }, 2600);
+  }
+
+  function go(n){
+    idx = (n + slides.length) % slides.length;
+    paint();
+    showHud();
+  }
+
+  function start(){
+    if (running) return;
+    running = true;
+    intro.style.display = 'none';
+    document.documentElement.requestFullscreen?.().catch(()=>{});
+    paint();
+    showHud();
+  }
+
+  function exitTest(){
+    running = false;
+    hud.classList.remove('show');
+    badge.classList.remove('show');
+    intro.style.display = 'flex';
+    if (document.fullscreenElement) document.exitFullscreen?.().catch(()=>{});
+  }
+
+  function toggleUi(){
+    uiPinned = !uiPinned;
+    hud.classList.toggle('show', uiPinned);
+    badge.classList.toggle('show', !uiPinned);
+    if (!uiPinned) showHud();
+  }
+
+  /* ---------- очистка экрана ---------- */
+  function startWipe(){
+    intro.style.display = 'none';
+    running = true;
+    stage.style.background = '#ffffff';
+    wipe.style.display = 'flex';
+    let left = 180;
+    wipe.textContent = left;
+    document.documentElement.requestFullscreen?.().catch(()=>{});
+    clearInterval(wipeTimer);
+    wipeTimer = setInterval(()=>{
+      left--;
+      if (left <= 0){
+        clearInterval(wipeTimer);
+        wipe.style.display = 'none';
+        stage.style.background = '#000';
+        exitTest();
+        return;
+      }
+      wipe.textContent = left;
+    }, 1000);
+  }
+  function stopWipe(){
+    clearInterval(wipeTimer);
+    wipe.style.display = 'none';
+  }
+
+  /* ---------- события ---------- */
+  document.getElementById('startBtn').onclick = start;
+  document.getElementById('wipeBtn').onclick  = startWipe;
+
+  stage.addEventListener('click', (e)=>{
+    if (!running || wipe.style.display === 'flex') return;
+    (e.clientX > window.innerWidth/2) ? go(idx+1) : go(idx-1);
+  });
+
+  window.addEventListener('mousemove', ()=>{
+    stage.classList.add('cursorOn');
+    showHud();
+    clearTimeout(stage._c);
+    stage._c = setTimeout(()=> stage.classList.remove('cursorOn'), 1500);
+  });
+
+  window.addEventListener('keydown', (e)=>{
+    const k = e.key;
+    if (k === 'Escape'){ stopWipe(); exitTest(); return; }
+    if (k === 'f' || k === 'F' || k === 'а' || k === 'А'){
+      document.fullscreenElement ? document.exitFullscreen?.() : document.documentElement.requestFullscreen?.();
+      return;
+    }
+    if (!running) return;
+    if (k === 'ArrowRight' || k === ' ' || k === 'Enter'){ e.preventDefault(); go(idx+1); }
+    else if (k === 'ArrowLeft'){ e.preventDefault(); go(idx-1); }
+    else if (k === 'h' || k === 'H' || k === 'р' || k === 'Р'){ toggleUi(); }
+    else if (/^[1-9]$/.test(k)){ go(parseInt(k,10)-1); }
+  });
+
+  document.addEventListener('fullscreenchange', ()=>{
+    if (!document.fullscreenElement && running && wipe.style.display !== 'flex'){
+      // пользователь вышел из полноэкранного режима — продолжаем, но подсказываем
+      showHud();
+    }
+  });
+
+  paint();
+})();
+</script>
+</body>
+</html>
