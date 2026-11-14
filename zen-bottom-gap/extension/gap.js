@@ -1,25 +1,36 @@
 /* Bottom Gap — content script.
  *
- * Запускается на каждой странице (document_start), но стиль ставит
- * только если текущий хост есть в списке включённых.
+ * Два независимых режима, оба включаются по сайту из попапа:
  *
- * Хранилище: { gaps: { "example.com": 20, "news.site": 32 } }
- *   ключ  — hostname (без порта и пути),
- *   значение — отступ в px. Нет ключа = выключено.
+ * 1) «документ» (storage: gaps) — padding-bottom на <html>.
+ *    Добавляет место В КОНЦЕ документа. Помогает страницам с обычным
+ *    потоком, но НЕ двигает position: fixed — фиксированные элементы
+ *    считаются от вьюпорта, и отступ документа им безразличен.
  *
- * Важно про способ инъекции: ставим инлайновый стиль на <html> через
- * CSSOM, а не вставляем <style>. Так CSP страницы не мешает, и это
- * самый сильный author-уровень (перебивает чужие правила без !important).
- * Задержка применения не страшна: padding на корне добавляет место
- * только в конце документа, поэтому «прыжка» вёрстки не видно.
+ * 2) «панели» (storage: lift) — ищет элементы с position: fixed,
+ *    приклеенные к нижней кромке окна (плееры, док-бары, cookie-баннеры)
+ *    и поднимает их: bottom += px. Это то, что нужно на сайтах вроде
+ *    Newgrounds, где внизу висит фиксированный плеер.
+ *
+ * Хранилище:
+ *   { gaps: { "site.com": 20 }, lift: { "site.com": true } }
+ *
+ * Инъекция — инлайновый стиль через CSSOM, а не <style>: CSP страницы
+ * не мешает, и это самый сильный author-уровень.
  */
 
-const KEY = 'gaps';
+const KEY_GAPS = 'gaps';
+const KEY_LIFT = 'lift';
 
 let appliedPx = 0;
+let liftEnabled = false;
 
-/* На document_start documentElement может быть ещё не создан —
- * дожидаемся его появления и дальше работаем с ним. */
+/* el -> прежнее инлайновое значение bottom (чтобы вернуть как было) */
+const lifted = new Map();
+
+let scanTimers = [];
+let observer = null;
+
 function withRoot(fn) {
   if (document.documentElement) {
     fn(document.documentElement);
@@ -33,12 +44,12 @@ function withRoot(fn) {
   mo.observe(document, { childList: true, subtree: true });
 }
 
-function apply(el, px) {
-  appliedPx = px;
+/* ---------- режим 1: отступ в конце документа ---------- */
+
+function applyDocumentGap(el, px) {
   if (px > 0) {
-    // content-box: отступ прибавляется к высоте документа. Если сайт
-    // ставит html { box-sizing: border-box; height: 100% }, при border-box
-    // padding «съедается» высотой и его не будет видно.
+    // content-box: отступ прибавляется к высоте документа. При border-box
+    // и html { height: 100% } padding «съедается» высотой и его не видно.
     el.style.setProperty('box-sizing', 'content-box', 'important');
     el.style.setProperty('padding-bottom', `${px}px`, 'important');
   } else {
@@ -47,27 +58,111 @@ function apply(el, px) {
   }
 }
 
-async function sync() {
-  const data = await browser.storage.local.get(KEY);
-  const gaps = data[KEY] || {};
-  const px = Number(gaps[location.hostname]) || 0;
-  withRoot((el) => apply(el, px));
+/* ---------- режим 2: подъём фиксированных панелей ---------- */
+
+function liftBars(px) {
+  const vh = window.innerHeight;
+  if (!vh || !document.body || px <= 0) return;
+
+  // Сначала только геометрия (без записи в DOM, чтобы не дёргать layout),
+  // потом у кандидатов проверяем computed style.
+  const candidates = [];
+  for (const el of document.body.querySelectorAll('*')) {
+    if (lifted.has(el)) continue;
+    const r = el.getBoundingClientRect();
+    if (r.width === 0 || r.height === 0) continue;
+    if (r.height > vh * 0.5) continue;          // полноэкранные оверлеи не трогаем
+    if (Math.abs(r.bottom - vh) > 4) continue;  // не приклеен к нижней кромке
+    candidates.push(el);
+  }
+
+  for (const el of candidates) {
+    const cs = getComputedStyle(el);
+    if (cs.position !== 'fixed') continue;  // sticky/absolute сюда не входят
+    if (cs.bottom === 'auto') continue;     // приклеен не через bottom — не трогаем
+    lifted.set(el, el.style.getPropertyValue('bottom'));
+    el.style.setProperty('bottom', `${px}px`, 'important');
+  }
 }
 
-sync();
+function unliftAll() {
+  for (const [el, prev] of lifted) {
+    if (prev) el.style.setProperty('bottom', prev);
+    else el.style.removeProperty('bottom');
+  }
+  lifted.clear();
+}
 
-/* Переключение в попапе меняет storage — страница подхватывает это
- * сама, без перезагрузки и без обмена сообщениями. */
+function clearScans() {
+  for (const t of scanTimers) clearTimeout(t);
+  scanTimers = [];
+  if (observer) {
+    observer.disconnect();
+    observer = null;
+  }
+}
+
+/* Панель часто дорисовывается скриптами сайта уже после загрузки,
+ * поэтому сканируем несколько раз + следим за DOM. */
+function scheduleScans(px) {
+  clearScans();
+  for (const delay of [0, 400, 1200, 3000]) {
+    scanTimers.push(setTimeout(() => liftBars(px), delay));
+  }
+
+  if (!document.body) return;
+  let pending = false;
+  observer = new MutationObserver(() => {
+    if (pending) return;
+    pending = true;
+    setTimeout(() => {
+      pending = false;
+      liftBars(px);
+    }, 300);
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+}
+
+/* ---------- состояние ---------- */
+
+function syncFromStorage() {
+  return browser.storage.local.get([KEY_GAPS, KEY_LIFT]).then((data) => {
+    const gaps = data[KEY_GAPS] || {};
+    const lift = data[KEY_LIFT] || {};
+    const host = location.hostname;
+
+    appliedPx = Number(gaps[host]) || 0;
+    liftEnabled = Boolean(lift[host]) && appliedPx > 0;
+
+    withRoot((el) => applyDocumentGap(el, appliedPx));
+
+    if (liftEnabled) {
+      scheduleScans(appliedPx);
+    } else {
+      clearScans();
+      unliftAll();
+    }
+  });
+}
+
+syncFromStorage();
+
+/* Тумблеры в попапе меняют storage — страница подхватывает это сама. */
 browser.storage.onChanged.addListener((changes, area) => {
-  if (area !== 'local' || !changes[KEY]) return;
-  const gaps = changes[KEY].newValue || {};
-  const px = Number(gaps[location.hostname]) || 0;
-  withRoot((el) => apply(el, px));
+  if (area !== 'local') return;
+  if (!changes[KEY_GAPS] && !changes[KEY_LIFT]) return;
+  syncFromStorage();
 });
 
-/* Попап проверяет этим, что скрипт вообще есть на вкладке
- * (если аддон поставили при уже открытой вкладке — его там нет). */
+window.addEventListener('resize', () => {
+  if (liftEnabled) liftBars(appliedPx);
+});
+
+/* Попап спрашивает состояние: есть ли скрипт на вкладке и сколько
+ * панелей реально поднято (полезно понять, что нашлось, а что нет). */
 browser.runtime.onMessage.addListener((msg) => {
-  if (msg && msg.type === 'ping') return Promise.resolve({ px: appliedPx });
+  if (msg && msg.type === 'ping') {
+    return Promise.resolve({ px: appliedPx, lift: liftEnabled, lifted: lifted.size });
+  }
   return undefined;
 });

@@ -1,16 +1,19 @@
 /* Bottom Gap — попап.
  *
- * Только читает/пишет storage. Content script сам слушает storage.onChanged
- * и перерисовывается мгновенно, так что перезагрузка вкладки не нужна.
+ * Только читает/пишет storage. Content script сам слушает
+ * storage.onChanged и перерисовывается мгновенно — без перезагрузки.
  */
 
-const KEY = 'gaps';
+const KEY_GAPS = 'gaps';
+const KEY_LIFT = 'lift';
 const DEFAULT_PX = 20;
 
 const hostEl = document.getElementById('host');
 const toggleEl = document.getElementById('toggle');
 const pxEl = document.getElementById('px');
 const rowEl = document.getElementById('row');
+const liftEl = document.getElementById('lift');
+const liftRowEl = document.getElementById('liftRow');
 const noticeEl = document.getElementById('notice');
 
 let host = null;
@@ -30,18 +33,23 @@ function clampPx(value) {
   return Math.min(300, Math.max(1, n));
 }
 
-async function loadGaps() {
-  const data = await browser.storage.local.get(KEY);
-  return data[KEY] || {};
+async function loadAll() {
+  const data = await browser.storage.local.get([KEY_GAPS, KEY_LIFT]);
+  return { gaps: data[KEY_GAPS] || {}, lift: data[KEY_LIFT] || {} };
 }
 
-async function saveGaps(gaps) {
-  await browser.storage.local.set({ [KEY]: gaps });
+async function save(key, map) {
+  await browser.storage.local.set({ [key]: map });
 }
 
-function setRowState(on) {
+function setDocState(on) {
   rowEl.dataset.off = on ? '0' : '1';
   pxEl.disabled = !on;
+  liftRowEl.dataset.off = on ? '0' : '1';
+}
+
+function setNotice(text) {
+  noticeEl.textContent = text || '';
 }
 
 async function init() {
@@ -50,58 +58,80 @@ async function init() {
 
   if (!host) {
     hostEl.textContent = 'эта страница';
-    noticeEl.textContent = 'Работает только на http/https.';
+    setNotice('Работает только на http/https.');
     toggleEl.disabled = true;
-    setRowState(false);
+    setDocState(false);
     return;
   }
 
   hostEl.textContent = host;
 
-  const gaps = await loadGaps();
+  const { gaps, lift } = await loadAll();
   const current = gaps[host];
   const on = typeof current === 'number';
 
   toggleEl.checked = on;
   pxEl.value = on ? current : DEFAULT_PX;
-  setRowState(on);
+  liftEl.checked = on && Boolean(lift[host]);
+  setDocState(on);
 
   // Вкладка могла быть открыта до установки расширения — тогда
   // content script в ней не запускался.
   try {
-    await browser.tabs.sendMessage(tab.id, { type: 'ping' });
-    noticeEl.textContent = '';
+    const state = await browser.tabs.sendMessage(tab.id, { type: 'ping' });
+    if (state && state.lift) {
+      setNotice(
+        state.lifted > 0
+          ? `Поднято панелей: ${state.lifted}.`
+          : 'Панели с position: fixed внизу не найдены — на этом сайте хватит отступа документа.'
+      );
+    } else {
+      setNotice('');
+    }
   } catch {
-    noticeEl.textContent = 'Перезагрузите вкладку, чтобы отступ появился (F5).';
+    setNotice('Перезагрузите вкладку, чтобы отступ появился (F5).');
   }
 }
 
 toggleEl.addEventListener('change', async () => {
   if (!host) return;
-  setRowState(toggleEl.checked);
-  const gaps = await loadGaps();
+  setDocState(toggleEl.checked);
+  const { gaps, lift } = await loadAll();
+
   if (toggleEl.checked) {
     gaps[host] = clampPx(pxEl.value);
     pxEl.value = gaps[host];
   } else {
     delete gaps[host];
+    delete lift[host];       // выключили сайт — «подъём панелей» тоже не нужен
+    liftEl.checked = false;
   }
-  await saveGaps(gaps);
+
+  await save(KEY_GAPS, gaps);
+  await save(KEY_LIFT, lift);
 });
 
 pxEl.addEventListener('input', async () => {
   if (!host || !toggleEl.checked) return;
-  const gaps = await loadGaps();
+  const { gaps } = await loadAll();
   gaps[host] = clampPx(pxEl.value);
-  await saveGaps(gaps);
+  await save(KEY_GAPS, gaps);
 });
 
 pxEl.addEventListener('change', async () => {
   if (!host || !toggleEl.checked) return;
-  const gaps = await loadGaps();
+  const { gaps } = await loadAll();
   gaps[host] = clampPx(pxEl.value);
   pxEl.value = gaps[host];
-  await saveGaps(gaps);
+  await save(KEY_GAPS, gaps);
+});
+
+liftEl.addEventListener('change', async () => {
+  if (!host || !toggleEl.checked) return;
+  const { lift } = await loadAll();
+  if (liftEl.checked) lift[host] = true;
+  else delete lift[host];
+  await save(KEY_LIFT, lift);
 });
 
 init();
