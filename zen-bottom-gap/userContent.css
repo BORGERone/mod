@@ -1,0 +1,59 @@
+/* =====================================================================
+ * Bottom Gap — вариант «без расширений», только нужные сайты.
+ *
+ * Куда положить: <папка профиля>/chrome/userContent.css
+ *   папка профиля: about:support → «Профиль» → «Открыть папку»
+ *   (Zen: ~/.zen/<id>.Default Profile/chrome/userContent.css,
+ *    Windows: %APPDATA%\zen\Profiles\<id>\chrome\userContent.css)
+ *
+ * Включить: about:config →
+ *   toolkit.legacyUserProfileCustomizations.stylesheets = true
+ *
+ * Минус именно этого варианта: файл читается только при старте браузера.
+ * Добавили сайт → нужен перезапуск Zen (F5 не поможет).
+ * Если сайтов много и они меняются — проще расширением (../extension/).
+ *
+ * Как добавить сайт: скопировать блок @-moz-document и заменить домен.
+ * domain("site.com") захватывает и поддомены (www.site.com и т.п.).
+ * ===================================================================== */
+
+/* --- сайт 1 --------------------------------------------------------- */
+@-moz-document domain("example.com") {
+  html {
+    box-sizing: content-box !important;
+    padding-bottom: 20px !important;
+  }
+}
+
+/* --- сайт 2: другой размер ------------------------------------------ */
+@-moz-document domain("news.example.org") {
+  html {
+    box-sizing: content-box !important;
+    padding-bottom: 32px !important;
+  }
+}
+
+/* --- сайт 3 --------------------------------------------------------- */
+/*
+@-moz-document domain("another.site") {
+  html {
+    box-sizing: content-box !important;
+    padding-bottom: 20px !important;
+  }
+}
+*/
+
+/* ---------------------------------------------------------------------
+ * Почему так, а не body { margin-bottom }:
+ *   padding на <html> прибавляется к высоте документа → 20px появляются
+ *   в конце страницы, существующая вёрстка не сдвигается.
+ *   margin-bottom на body часто схлопывается, padding-bottom на body
+ *   ломает раскладки с height: 100%.
+ *
+ * Зачем box-sizing: content-box:
+ *   почти все CSS-ресеты ставят * { box-sizing: border-box } и на <html>;
+ *   при border-box + html { height: 100% } padding «съедается» высотой.
+ *
+ * Если внизу получилась «дыра» цвета канвы (фон нарисован у body),
+ * добавьте в блок сайта:  html { background-color: Canvas !important; }
+ * ------------------------------------------------------------------- */

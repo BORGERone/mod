@@ -1,0 +1,25 @@
+{
+  "manifest_version": 3,
+  "name": "Bottom Gap — по сайтам",
+  "version": "2.0.0",
+  "description": "Добавляет пустое место в конце страницы только на выбранных сайтах.",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "bottom-gap-20@local",
+      "strict_min_version": "115.0"
+    }
+  },
+  "permissions": ["storage", "activeTab"],
+  "action": {
+    "default_title": "Bottom Gap",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["gap.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ]
+}
