@@ -84,6 +84,15 @@ public final class NpcGraphAnchorCore420 {
     /** The arrangement a build with no rotation gets - and the one every tie falls back to. */
     public static final int IDENTITY = 0;
 
+    /**
+     * How many fingerprint blocks the search looks at before the winner is re-scored against all of them.
+     *
+     * <p>The cell and the turn are searched together ({@link #place}), which is 8 x 11 x 11 x 7 looks per
+     * fingerprint block. On a full fingerprint that is millions of world reads on the server thread, so
+     * the search uses every n-th block and the winner is then re-scored against the whole list.</p>
+     */
+    public static final int SEARCH_SAMPLE = 128;
+
     private NpcGraphAnchorCore420() {
     }
 
@@ -279,6 +288,130 @@ public final class NpcGraphAnchorCore420 {
     }
 
     /**
+     * The place and the arrangement a pasted build really has, found together.
+     *
+     * <p>Build 423. Build 422 searched the cell with the offsets <b>unrotated</b> and only then asked
+     * which arrangement fitted best. That works while the build is not turned, and breaks the moment it
+     * is: the blocks around a turned marker are the turned building, so the unrotated search finds a cell
+     * that fits the wrong arrangement - and then the turn that fits <i>that</i> cell is found and applied.
+     * The author's report is exactly this: «все копируется, но с поворотами графы съезжают».</p>
+     *
+     * <p>Cell and arrangement cannot be decided one after the other: both are unknown, and each answer
+     * changes what the other has to be. So they are searched as one pair - every arrangement, every
+     * neighbouring cell - and the pair that matches the fingerprint best wins. That is at most 8 x 11 x
+     * 11 x 7 = 6776 looks at blocks the server already has in memory, once per paste, and it removes the
+     * whole class of «right cell, wrong turn» and «right turn, wrong cell».</p>
+     *
+     * <p>Ties go to identity, then to the smaller shift, so a marker that was not moved is never moved by
+     * a coincidence. A search that matches nothing anywhere is not a place at all: the cell and the turn
+     * are then reported as unknown ({@code found == false}) and the caller keeps what it had.</p>
+     */
+    public static final class Placement {
+        /** The shift from the marker's own cell to the cell of the build. */
+        public final int dx;
+        public final int dy;
+        public final int dz;
+        /** The arrangement, 0..7 - see {@link #turn}. */
+        public final int turn;
+        /** How many fingerprint blocks agreed, and how many were looked for. */
+        public final int found;
+        public final int asked;
+
+        Placement(int dx, int dy, int dz, int turn, int found, int asked) {
+            this.dx = dx;
+            this.dy = dy;
+            this.dz = dz;
+            this.turn = turn;
+            this.found = found;
+            this.asked = asked;
+        }
+
+        /** True when the fingerprint agreed with at least {@link #MIN_FINGERPRINT_MATCH} of the build. */
+        public boolean found() {
+            return asked > 0 && (double) found / (double) asked >= MIN_FINGERPRINT_MATCH;
+        }
+
+        public int[] shift() {
+            return new int[] {dx, dy, dz};
+        }
+    }
+
+    /**
+     * The best {@link Placement} of a fingerprint around a marker's own cell.
+     *
+     * @param spanXZ how far sideways to look, in blocks
+     * @param spanY  how far up and down to look, in blocks
+     */
+    public static Placement place(List<int[]> offsets, List<String> blocks, BlockLookup lookup,
+            int spanXZ, int spanY) {
+        if (offsets == null || blocks == null || lookup == null || spanXZ < 0 || spanY < 0) {
+            return new Placement(0, 0, 0, IDENTITY, 0, 0);
+        }
+        Placement best = new Placement(0, 0, 0, IDENTITY, 0, 0);
+        double bestShare = -1.0D;
+        int bestDistance = Integer.MAX_VALUE;
+        // The search is 8 turns x 11 x 11 x 7 cells. Against a full fingerprint of thousands of blocks
+        // that is millions of world reads on the server thread, for one paste. A strided sample keeps the
+        // search just as decisive (a build is not symmetric enough for a sample to lie twice) and the
+        // winning cell is then re-scored against the whole fingerprint below, so what is reported and
+        // what is compared is still the whole build.
+        int stride = 1;
+        int size = Math.min(offsets.size(), blocks.size());
+        if (size > SEARCH_SAMPLE && SEARCH_SAMPLE > 0) stride = (size + SEARCH_SAMPLE - 1) / SEARCH_SAMPLE;
+        for (int turn = 0; turn < 8; turn++) {
+            for (int cy = -spanY; cy <= spanY; cy++) {
+                for (int cx = -spanXZ; cx <= spanXZ; cx++) {
+                    for (int cz = -spanXZ; cz <= spanXZ; cz++) {
+                        int found = 0;
+                        int asked = 0;
+                        for (int i = 0; i < size; i += stride) {
+                            int[] offset = offsets.get(i);
+                            String block = blocks.get(i);
+                            if (offset == null || block == null || block.isEmpty()) continue;
+                            asked++;
+                            int[] turned = turn(offset, turn);
+                            String there = lookup.blockAt(turned[0] + cx, turned[1] + cy, turned[2] + cz);
+                            if (block.equals(there)) found++;
+                        }
+                        if (asked == 0) continue;
+                        double share = (double) found / (double) asked;
+                        int distance = Math.abs(cx) + Math.abs(cy) + Math.abs(cz);
+                        // A better share wins. At the same share the arrangement is the tie-break that
+                        // matters least, so identity and then the smaller shift are preferred - a marker
+                        // standing where it was sealed is never moved by a repeated block.
+                        boolean better = share > bestShare + 1.0E-9D
+                                || (Math.abs(share - bestShare) <= 1.0E-9D && distance < bestDistance)
+                                || (Math.abs(share - bestShare) <= 1.0E-9D && distance == bestDistance
+                                        && turn < best.turn);
+                        if (better) {
+                            bestShare = share;
+                            bestDistance = distance;
+                            best = new Placement(cx, cy, cz, turn, found, asked);
+                        }
+                    }
+                }
+            }
+        }
+        // The winner was chosen on a sample; re-score it against the whole fingerprint, so the number in
+        // the log and the number the caller trusts describe the entire build, not the sample.
+        if (stride > 1) {
+            int found = 0;
+            int asked = 0;
+            for (int i = 0; i < size; i++) {
+                int[] offset = offsets.get(i);
+                String block = blocks.get(i);
+                if (offset == null || block == null || block.isEmpty()) continue;
+                asked++;
+                int[] turned = turn(offset, best.turn);
+                String there = lookup.blockAt(turned[0] + best.dx, turned[1] + best.dy, turned[2] + best.dz);
+                if (block.equals(there)) found++;
+            }
+            best = new Placement(best.dx, best.dy, best.dz, best.turn, found, asked);
+        }
+        return best;
+    }
+
+    /**
      * The cell the pasted build really stands on, as an offset from the cell the marker's own feet are in.
      *
      * <p>Build 422. The place of a paste cannot be read off an entity's position: a marker is a mob, its
@@ -287,10 +420,8 @@ public final class NpcGraphAnchorCore420 {
      * number, so the graphs of a sealed building were written one block under the blocks they belong to,
      * where nothing reads them: exactly the «по прежнему не копируется» the author kept reporting.</p>
      *
-     * <p>The answer is the fingerprint the marker already carries. Every neighbouring cell is tried and the
-     * one whose surrounding blocks match the fingerprint best wins; a cell that matches nothing is not a
-     * place at all, and {@code {0,0,0}} - the marker's own cell - is returned instead. Identity wins a tie,
-     * then the smaller shift, so a marker that was not moved is never moved by a coincidence.</p>
+     * <p>Kept for the callers that only want the cell. It searches every arrangement too - see
+     * {@link #place} for why the two cannot be separated - and answers the cell of the best pair.</p>
      *
      * @param spanXZ how far sideways to look, in blocks
      * @param spanY  how far up and down to look, in blocks
@@ -298,39 +429,8 @@ public final class NpcGraphAnchorCore420 {
      */
     public static int[] bestPlace(List<int[]> offsets, List<String> blocks, BlockLookup lookup,
             int spanXZ, int spanY) {
-        int[] best = new int[] {0, 0, 0};
-        if (offsets == null || blocks == null || lookup == null) return best;
-        if (spanXZ < 0 || spanY < 0) return best;
-        double bestShare = -1.0D;
-        int bestDistance = Integer.MAX_VALUE;
-        for (int cy = -spanY; cy <= spanY; cy++) {
-            for (int cx = -spanXZ; cx <= spanXZ; cx++) {
-                for (int cz = -spanXZ; cz <= spanXZ; cz++) {
-                    int found = 0;
-                    int asked = 0;
-                    for (int i = 0; i < offsets.size() && i < blocks.size(); i++) {
-                        int[] offset = offsets.get(i);
-                        String block = blocks.get(i);
-                        if (offset == null || block == null || block.isEmpty()) continue;
-                        asked++;
-                        String there = lookup.blockAt(offset[0] + cx, offset[1] + cy, offset[2] + cz);
-                        if (block.equals(there)) found++;
-                    }
-                    if (asked == 0) continue;
-                    double share = (double) found / (double) asked;
-                    int distance = Math.abs(cx) + Math.abs(cy) + Math.abs(cz);
-                    // A better share wins; at the same share the cell nearer the marker wins, so a marker
-                    // standing on the right cell is never shifted by the repeat of one common block.
-                    if (share > bestShare + 1.0E-9D
-                            || (Math.abs(share - bestShare) <= 1.0E-9D && distance < bestDistance)) {
-                        bestShare = share;
-                        bestDistance = distance;
-                        best = new int[] {cx, cy, cz};
-                    }
-                }
-            }
-        }
-        return bestShare < MIN_FINGERPRINT_MATCH ? new int[] {0, 0, 0} : best;
+        Placement found = place(offsets, blocks, lookup, spanXZ, spanY);
+        return found.found() ? found.shift() : new int[] {0, 0, 0};
     }
 
     /**

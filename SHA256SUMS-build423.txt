@@ -1,0 +1,2 @@
+2f38408b2a4c4a9b1f29b53e198dca88f8657df5e51055012dad82d69c88c2d2  settledlands-0.8.0-build423-turn-and-cell.jar
+dfbaa97702d9c977a102c5c23a1481db6dd16556fcbee5d9b5dc5ff2fe397fff  SettledLands-Build423-TurnAndCell-Source.zip

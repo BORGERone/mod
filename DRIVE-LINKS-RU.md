@@ -5,6 +5,13 @@
 Снимок от 2026-11-02, после отката 405/406.
 
 
+## Сборка 423 (2026-11-10)
+
+| файл | id | ссылка |
+|---|---|---|
+| settledlands-0.8.0-build423-turn-and-cell.jar | `1GZwy85cS4c45rlajbq_V5AHsqxguGorh` | https://drive.google.com/uc?export=download&id=1GZwy85cS4c45rlajbq_V5AHsqxguGorh |
+| SettledLands-Build423-TurnAndCell-Source.zip | `1J91e00gFcWd95YYDYwmEy5qalTl_9oLe` | https://drive.google.com/uc?export=download&id=1J91e00gFcWd95YYDYwmEy5qalTl_9oLe |
+
 ## Сборка 422 (2026-11-10)
 
 | файл | id | ссылка |

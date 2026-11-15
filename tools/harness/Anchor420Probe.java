@@ -38,6 +38,7 @@ public final class Anchor420Probe {
         fingerprintFallsBack();
         materializeLaysTheBuild();
         placeComesFromTheFingerprint();
+        turnsAndCellTogether();
         emptyAnchorWritesNothing();
 
         System.out.println("ANCHOR_CHECKS=" + checks);
@@ -333,6 +334,88 @@ public final class Anchor420Probe {
         int[] nowhere = NpcGraphAnchorCore420.bestPlace(offsets, blocks, strangers, 5, 3);
         expect("a fingerprint that matches nothing does not move the anchor",
                 nowhere[0] == 0 && nowhere[1] == 0 && nowhere[2] == 0);
+    }
+
+    /**
+     * Build 423, from the author's report «все копируется, но с поворотами графы съезжают».
+     *
+     * <p>Build 422 searched the cell with unrotated offsets and only then the turn. For turns 2, 4 and 6
+     * (180 and 270 degrees, with and without the mirror) the cell was found wrong, and the graphs were laid
+     * over a shifted anchor - the drive the author saw. Cell and turn are now searched as one pair.</p>
+     *
+     * <p>This case walks all eight arrangements and, inside each, a marker that drifted one cell in each
+     * direction: 144 pastes, every one of which must land on its own cell with its own turn.</p>
+     */
+    private static void turnsAndCellTogether() {
+        // A deliberately lopsided build: a floor plus four stacks of different blocks, so that a wrong
+        // arrangement cannot score as well as the right one.
+        Map<String, String> build = new HashMap<>();
+        for (int dx = 0; dx < 6; dx++) {
+            for (int dz = 0; dz < 4; dz++) {
+                build.put(key(dx, -1, dz), "minecraft:stone");
+            }
+        }
+        String[] stacks = {"minecraft:oak_planks", "minecraft:glowstone", "minecraft:gold_block",
+                "minecraft:bookshelf"};
+        int[][] where = {{5, 0}, {0, 3}, {5, 3}, {2, 2}};
+        for (int i = 0; i < stacks.length; i++) {
+            for (int dy = 0; dy <= 2; dy++) {
+                build.put(key(where[i][0], dy, where[i][1]), stacks[i]);
+            }
+        }
+        // The marker was sealed off-centre, as it is in the author's world.
+        final int anchorX = 1;
+        final int anchorZ = 1;
+        List<int[]> offsets = new ArrayList<>();
+        List<String> blocks = new ArrayList<>();
+        for (Map.Entry<String, String> e : build.entrySet()) {
+            String[] p = e.getKey().split("/");
+            offsets.add(new int[] {Integer.parseInt(p[0]) - anchorX, Integer.parseInt(p[1]),
+                    Integer.parseInt(p[2]) - anchorZ});
+            blocks.add(e.getValue());
+        }
+
+        int wrong = 0;
+        int cases = 0;
+        for (int turn = 0; turn < 8; turn++) {
+            Map<String, String> turned = new HashMap<>();
+            for (Map.Entry<String, String> e : build.entrySet()) {
+                String[] p = e.getKey().split("/");
+                int[] t = NpcGraphAnchorCore420.turn(
+                        new int[] {Integer.parseInt(p[0]), Integer.parseInt(p[1]), Integer.parseInt(p[2])},
+                        turn);
+                turned.put(key(t[0], t[1], t[2]), e.getValue());
+            }
+            int[] movedAnchor = NpcGraphAnchorCore420.turn(new int[] {anchorX, 0, anchorZ}, turn);
+            // Pasting nowhere near the origin, so nothing is right by accident.
+            final int px = 100;
+            final int py = 70;
+            final int pz = -40;
+            Map<String, String> pasted = new HashMap<>();
+            for (Map.Entry<String, String> e : turned.entrySet()) {
+                String[] p = e.getKey().split("/");
+                pasted.put(key(Integer.parseInt(p[0]) + px, Integer.parseInt(p[1]) + py,
+                        Integer.parseInt(p[2]) + pz), e.getValue());
+            }
+            final int ax = px + movedAnchor[0];
+            final int az = pz + movedAnchor[2];
+            for (int dx = -1; dx <= 1; dx++) {
+                for (int dz = -1; dz <= 1; dz++) {
+                    cases++;
+                    final int fx = ax + dx;
+                    final int fz = az + dz;
+                    NpcGraphAnchorCore420.BlockLookup look = (a, b, c) -> pasted
+                            .getOrDefault(key(fx + a, py + b, fz + c), "minecraft:air");
+                    NpcGraphAnchorCore420.Placement p =
+                            NpcGraphAnchorCore420.place(offsets, blocks, look, 5, 3);
+                    // The feet drifted by (dx, dz), so the build's cell is that much back.
+                    if (p.dx != -dx || p.dy != 0 || p.dz != -dz || p.turn != turn) wrong++;
+                }
+            }
+        }
+        expect("every turn of every pasted build lands on its own cell with its own turn ("
+                + cases + " cases)", wrong == 0);
+        if (wrong != 0) System.out.println("  wrong placements: " + wrong + " of " + cases);
     }
 
     private static String key(int x, int y, int z) {

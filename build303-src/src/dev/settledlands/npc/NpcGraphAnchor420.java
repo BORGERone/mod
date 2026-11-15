@@ -332,38 +332,35 @@ public final class NpcGraphAnchor420 {
         if (!NpcGraphAnchorCore420.hasGraphs(data)) return false;
         BlockPos feet = cell(marker);
         NpcGraphAnchorCore420.Fingerprint print = NpcGraphAnchorCore420.fingerprint(data);
-        // Build 422. The cell the graphs belong to is the one the building's blocks stand on, and the
-        // fingerprint is the only witness of it: an entity's y is a double, and a pasted marker that
-        // lands a fraction of a block low sits in the cell *under* its own build. Reading floor(y) as the
-        // place - what build 421 did - wrote every graph one block below the blocks it belongs to, which
-        // is why the author still found no graphs on the pasted building.
-        int[] shift = NpcGraphAnchorCore420.bestPlace(print.offsets, print.blocks,
+        // Build 422: the cell comes from the blocks, not from the marker's own position - an entity's y
+        // is a double and a paste that lands a fraction low sits in the cell *under* its build.
+        // Build 423: the cell and the arrangement are one question. Searching the cell first and the
+        // turn second gives the turn of the wrong cell as soon as the build was pasted turned - which is
+        // exactly what the author saw («с поворотами графы съезжают»).
+        NpcGraphAnchorCore420.Placement place = NpcGraphAnchorCore420.place(print.offsets, print.blocks,
                 (dx, dy, dz) -> NpcGraphAnchorFiles420.blockAt(level, feet, dx, dy, dz),
                 PLACE_SEARCH_BLOCKS, PLACE_SEARCH_UP);
-        BlockPos here = feet.offset(shift[0], shift[1], shift[2]);
+        if (!place.found()) {
+            // Nothing in reach looks like this marker's building. Writing here would put graphs on a
+            // stranger's blocks, so nothing is written and the marker keeps its stamp for a later pass.
+            warn("anchor: the marker at " + feet + " does not stand in the building its list was made for"
+                    + " (" + place.found + "/" + place.asked + " blocks agree) - nothing was written");
+            return false;
+        }
+        BlockPos here = feet.offset(place.dx, place.dy, place.dz);
         int[] were = data.getIntArray(STAMP);
         boolean moved = were == null || were.length < 3
                 || were[0] != here.getX() || were[1] != here.getY() || were[2] != here.getZ();
         if (!moved) return false;
-        // The fingerprint has just placed the build around this cell; a cell whose blocks agree with
-        // nothing is not this marker's building, and writing there would put graphs on a stranger.
-        int[] identity = NpcGraphAnchorCore420.score(print.offsets, print.blocks,
-                NpcGraphAnchorCore420.IDENTITY,
-                (dx, dy, dz) -> NpcGraphAnchorFiles420.blockAt(level, here, dx, dy, dz));
-        if (identity[1] > 0 && (double) identity[0] / identity[1] < 0.6D) {
-            warn("anchor: the marker at " + feet + " does not stand in the building its list was made for"
-                    + " (" + identity[0] + "/" + identity[1] + " blocks agree) - nothing was written");
-            return false;
-        }
-        int turn = NpcGraphAnchorCore420.bestTurn(print.offsets, print.blocks,
-                (dx, dy, dz) -> NpcGraphAnchorFiles420.blockAt(level, here, dx, dy, dz));
+        int turn = place.turn;
         List<NpcGraphAnchorCore420.Entry> entries = NpcGraphAnchorCore420.entries(data);
         NpcGraphAnchorCore420.Result result = NpcGraphAnchorFiles420.materialize(level, level.getServer(),
                 entries, turn, here);
         stamp(marker, here, turn);
         LOG.info("anchor: pasted at " + here + " (the marker's feet are in " + feet + ", the building was"
-                + " found " + shift[0] + " " + shift[1] + " " + shift[2] + " from them) - " + result.line()
-                + " (" + entries.size() + " entries carried, turn " + turn + ")");
+                + " found " + place.dx + " " + place.dy + " " + place.dz + " from them, " + place.found
+                + "/" + place.asked + " blocks agree, turn " + turn + ") - " + result.line()
+                + " (" + entries.size() + " entries carried)");
         return result.total() > 0 || !entries.isEmpty();
     }
 
@@ -457,10 +454,12 @@ public final class NpcGraphAnchor420 {
                 return stamped;
             }
         }
-        int[] shift = NpcGraphAnchorCore420.bestPlace(print.offsets, print.blocks,
+        // Build 423: the same search the paste uses - cell and arrangement together. A marker that was
+        // pasted turned must keep gathering around the cell of its build, which only that search knows.
+        NpcGraphAnchorCore420.Placement place = NpcGraphAnchorCore420.place(print.offsets, print.blocks,
                 (dx, dy, dz) -> NpcGraphAnchorFiles420.blockAt(level, feet, dx, dy, dz),
                 PLACE_SEARCH_BLOCKS, PLACE_SEARCH_UP);
-        return feet.offset(shift[0], shift[1], shift[2]);
+        return place.found() ? feet.offset(place.dx, place.dy, place.dz) : feet;
     }
 
     private static void warn(String line) {

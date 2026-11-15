@@ -59,6 +59,7 @@ CORE_INNER = (
     "dev/settledlands/npc/NpcGraphAnchorCore420$Result.class",
     "dev/settledlands/npc/NpcGraphAnchorCore420$StoreSink.class",
     "dev/settledlands/npc/NpcGraphAnchorCore420$BlockLookup.class",
+    "dev/settledlands/npc/NpcGraphAnchorCore420$Placement.class",
 )
 FILES = "dev/settledlands/npc/NpcGraphAnchorFiles420.class"
 WORLD = "dev/settledlands/npc/NpcGraphAnchor420.class"
@@ -291,21 +292,29 @@ def check_pass(blobs, problems):
     world = blobs.get(WORLD, b"")
     if world:
         listing = method_listing(world, "materialiseIfMoved")
-        if "bestTurn" not in listing:
-            problems.append("%s#materialiseIfMoved does not ask the fingerprint for the turn" % WORLD)
+        # The turn must come from the fingerprint - never from the marker's own yaw. Both the joint
+        # search ("Placement", build 423) and the older separate one ("bestTurn") satisfy that, as long
+        # as the answer is derived from blocks read around the marker.
+        if "bestTurn" not in listing and "Placement" not in listing:
+            problems.append("%s#materialiseIfMoved does not take the turn from the fingerprint" % WORLD)
         if "getYRot" in listing:
             problems.append("%s#materialiseIfMoved reads the marker's yaw - a blueprint's turn does not "
                             "reach an entity's yaw" % WORLD)
         # Build 422: the cell of a paste comes from the fingerprint, not from the marker's feet. A marker
         # is a mob with a double y, so reading its cell put every restored graph one block under the
         # blocks it belongs to - the author's «по прежнему не копируется».
-        if "bestPlace" not in listing:
+        if "bestPlace" not in listing and "Placement" not in listing:
             problems.append("%s#materialiseIfMoved does not let the fingerprint place the build - a "
                             "marker's own cell is a double and can sit half a block off" % WORLD)
-        core = blobs.get(CORE, b"")
-        if core and "bestPlace" not in " ".join(strings_of(core)):
-            problems.append("%s does not name bestPlace - the rule must own the search for the cell"
-                            % CORE)
+        # Build 423: the cell and the arrangement must be one search. Asking for the cell first and the
+        # turn second puts every turned paste on a shifted anchor - «с поворотами графы съезжают».
+        if "bestTurn" in listing:
+            problems.append("%s#materialiseIfMoved still asks for the turn separately from the cell - the "
+                            "two are one question once a build can be pasted turned" % WORLD)
+        # Build 423: when the rule owns a joint search, its answer type has to be packaged with it - a
+        # caller that got a half-answer is exactly the bug this build fixes.
+        if "NpcGraphAnchorCore420$Placement" in blobs and "Placement" not in listing:
+            problems.append("%s has a Placement but #materialiseIfMoved does not use it" % WORLD)
 
 
 def check_interact(blobs, problems):
