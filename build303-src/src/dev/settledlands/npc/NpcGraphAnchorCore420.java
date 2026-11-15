@@ -279,6 +279,61 @@ public final class NpcGraphAnchorCore420 {
     }
 
     /**
+     * The cell the pasted build really stands on, as an offset from the cell the marker's own feet are in.
+     *
+     * <p>Build 422. The place of a paste cannot be read off an entity's position: a marker is a mob, its
+     * y is a {@code double}, and a half-block of drift - one tick of a nudge, a paste that lands a
+     * thousandth low - turns {@code floor(y)} into the cell <b>below</b> the build. Build 421 trusted that
+     * number, so the graphs of a sealed building were written one block under the blocks they belong to,
+     * where nothing reads them: exactly the «по прежнему не копируется» the author kept reporting.</p>
+     *
+     * <p>The answer is the fingerprint the marker already carries. Every neighbouring cell is tried and the
+     * one whose surrounding blocks match the fingerprint best wins; a cell that matches nothing is not a
+     * place at all, and {@code {0,0,0}} - the marker's own cell - is returned instead. Identity wins a tie,
+     * then the smaller shift, so a marker that was not moved is never moved by a coincidence.</p>
+     *
+     * @param spanXZ how far sideways to look, in blocks
+     * @param spanY  how far up and down to look, in blocks
+     * @return the winning shift, or {@code {0,0,0}} when no cell matched
+     */
+    public static int[] bestPlace(List<int[]> offsets, List<String> blocks, BlockLookup lookup,
+            int spanXZ, int spanY) {
+        int[] best = new int[] {0, 0, 0};
+        if (offsets == null || blocks == null || lookup == null) return best;
+        if (spanXZ < 0 || spanY < 0) return best;
+        double bestShare = -1.0D;
+        int bestDistance = Integer.MAX_VALUE;
+        for (int cy = -spanY; cy <= spanY; cy++) {
+            for (int cx = -spanXZ; cx <= spanXZ; cx++) {
+                for (int cz = -spanXZ; cz <= spanXZ; cz++) {
+                    int found = 0;
+                    int asked = 0;
+                    for (int i = 0; i < offsets.size() && i < blocks.size(); i++) {
+                        int[] offset = offsets.get(i);
+                        String block = blocks.get(i);
+                        if (offset == null || block == null || block.isEmpty()) continue;
+                        asked++;
+                        String there = lookup.blockAt(offset[0] + cx, offset[1] + cy, offset[2] + cz);
+                        if (block.equals(there)) found++;
+                    }
+                    if (asked == 0) continue;
+                    double share = (double) found / (double) asked;
+                    int distance = Math.abs(cx) + Math.abs(cy) + Math.abs(cz);
+                    // A better share wins; at the same share the cell nearer the marker wins, so a marker
+                    // standing on the right cell is never shifted by the repeat of one common block.
+                    if (share > bestShare + 1.0E-9D
+                            || (Math.abs(share - bestShare) <= 1.0E-9D && distance < bestDistance)) {
+                        bestShare = share;
+                        bestDistance = distance;
+                        best = new int[] {cx, cy, cz};
+                    }
+                }
+            }
+        }
+        return bestShare < MIN_FINGERPRINT_MATCH ? new int[] {0, 0, 0} : best;
+    }
+
+    /**
      * The arrangement to use.
      *
      * <p>Winner by the share of matching blocks; a share below {@link #MIN_FINGERPRINT_MATCH} is not a

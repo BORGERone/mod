@@ -4,6 +4,14 @@
 `https://drive.google.com/uc?export=download&id=<ID>`
 Снимок от 2026-11-02, после отката 405/406.
 
+
+## Сборка 422 (2026-11-10)
+
+| файл | id | ссылка |
+|---|---|---|
+| settledlands-0.8.0-build422-paste-cell.jar | `1wgrx4QpeQGPcNbhlP_QETTt5sAIQ-m3a` | https://drive.google.com/uc?export=download&id=1wgrx4QpeQGPcNbhlP_QETTt5sAIQ-m3a |
+| SettledLands-Build422-PasteCell-Source.zip | `1kqiWQdvfxc32Ymuxt_ohbDd4qsPMeWfI` | https://drive.google.com/uc?export=download&id=1kqiWQdvfxc32Ymuxt_ohbDd4qsPMeWfI |
+
 ## Документы сессии
 
 | файл | id | ссылка |

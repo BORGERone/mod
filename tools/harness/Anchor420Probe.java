@@ -37,6 +37,7 @@ public final class Anchor420Probe {
         fingerprintPicksTheTurn();
         fingerprintFallsBack();
         materializeLaysTheBuild();
+        placeComesFromTheFingerprint();
         emptyAnchorWritesNothing();
 
         System.out.println("ANCHOR_CHECKS=" + checks);
@@ -270,6 +271,72 @@ public final class Anchor420Probe {
         boolean has(String kind, int x, int y, int z) {
             return writes.contains(kind + "@" + x + "," + y + "," + z);
         }
+    }
+
+    // ---- 4b. the cell of a paste is the build's cell, not the marker's feet -
+
+    /**
+     * Build 422, from the author's own log: a marker sealed at {@code y = 199} reported «pasted» at
+     * {@code y = 198} two seconds later, with no paste in between, and the graph was written one block
+     * under the block it belongs to. The cause is that a marker's y is a {@code double} and the cell was
+     * read with {@code floor(y)} of the marker's feet - so half a block of drift moves the graphs.
+     *
+     * <p>These cases pin the fix: the fingerprint decides the cell, and it decides the same cell whether
+     * the marker stands on it exactly or a fraction of a block below it.</p>
+     */
+    private static void placeComesFromTheFingerprint() {
+        // The author's own geometry. The build's anchor cell is A = y 199 and its floor is the cell
+        // below A (y 198); the fingerprint was recorded relative to A, so every offset has dy = -1.
+        // The marker drifted one cell down: its feet are now at y 198 instead of 199.
+        final int feetY = 198;
+        Map<String, String> world = new HashMap<>();
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                world.put(key(dx, 198, dz), "minecraft:stone");
+            }
+        }
+        NpcGraphAnchorCore420.BlockLookup stays =
+                (dx, dy, dz) -> world.getOrDefault(key(dx, feetY + dy, dz), "minecraft:air");
+        List<int[]> offsets = new ArrayList<>();
+        List<String> blocks = new ArrayList<>();
+        for (int dx = -2; dx <= 2; dx++) {
+            for (int dz = -2; dz <= 2; dz++) {
+                offsets.add(new int[] {dx, -1, dz});
+                blocks.add("minecraft:stone");
+            }
+        }
+
+        int[] dropped = NpcGraphAnchorCore420.bestPlace(offsets, blocks, stays, 5, 3);
+        expect("a marker one cell below its build is put back on the build",
+                dropped[0] == 0 && dropped[1] == 1 && dropped[2] == 0);
+
+        // The graphs must be written at the cell the fingerprint found - A - and nowhere near the feet.
+        CompoundTag graph = new CompoundTag();
+        graph.putInt("nodes", 1);
+        List<NpcGraphAnchorCore420.Entry> entries = new ArrayList<>();
+        entries.add(new NpcGraphAnchorCore420.Entry("block", 0, 0, 0, graph, null));
+        BlockPos here = new BlockPos(0, feetY, 0).offset(dropped[0], dropped[1], dropped[2]);
+        Recorder recorder = new Recorder();
+        NpcGraphAnchorCore420.materialize(entries, 0, here, recorder);
+        expect("the graph lands on the build's cell", recorder.has("block", 0, 199, 0));
+        expect("the graph is not written one cell low", !recorder.has("block", 0, 198, 0));
+
+        // A marker that has not moved must not be moved by the search: same cell in, same cell out.
+        NpcGraphAnchorCore420.BlockLookup exact =
+                (dx, dy, dz) -> world.getOrDefault(key(dx, 199 + dy, dz), "minecraft:air");
+        int[] still = NpcGraphAnchorCore420.bestPlace(offsets, blocks, exact, 5, 3);
+        expect("a marker standing on its build keeps its own cell",
+                still[0] == 0 && still[1] == 0 && still[2] == 0);
+
+        // Strangers: nothing matches, so the marker's own cell is kept rather than a random shift.
+        NpcGraphAnchorCore420.BlockLookup strangers = (dx, dy, dz) -> "minecraft:air";
+        int[] nowhere = NpcGraphAnchorCore420.bestPlace(offsets, blocks, strangers, 5, 3);
+        expect("a fingerprint that matches nothing does not move the anchor",
+                nowhere[0] == 0 && nowhere[1] == 0 && nowhere[2] == 0);
+    }
+
+    private static String key(int x, int y, int z) {
+        return x + "/" + y + "/" + z;
     }
 
     // ---- 5. an unsealed marker is an ordinary marker -----------------------

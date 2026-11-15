@@ -1,0 +1,2 @@
+9dd5f0516d907bbeb64c1f6089a4737ebf42c3a70bb99eb79f4c7f60ac1d6227  settledlands-0.8.0-build422-paste-cell.jar
+83e6619c2515684406983cfbe8fef1b5a5b6378b86023b0cb8e57f9275a79131  SettledLands-Build422-PasteCell-Source.zip

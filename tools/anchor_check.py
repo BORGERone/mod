@@ -296,6 +296,16 @@ def check_pass(blobs, problems):
         if "getYRot" in listing:
             problems.append("%s#materialiseIfMoved reads the marker's yaw - a blueprint's turn does not "
                             "reach an entity's yaw" % WORLD)
+        # Build 422: the cell of a paste comes from the fingerprint, not from the marker's feet. A marker
+        # is a mob with a double y, so reading its cell put every restored graph one block under the
+        # blocks it belongs to - the author's «по прежнему не копируется».
+        if "bestPlace" not in listing:
+            problems.append("%s#materialiseIfMoved does not let the fingerprint place the build - a "
+                            "marker's own cell is a double and can sit half a block off" % WORLD)
+        core = blobs.get(CORE, b"")
+        if core and "bestPlace" not in " ".join(strings_of(core)):
+            problems.append("%s does not name bestPlace - the rule must own the search for the cell"
+                            % CORE)
 
 
 def check_interact(blobs, problems):

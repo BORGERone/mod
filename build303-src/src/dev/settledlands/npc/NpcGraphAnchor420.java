@@ -66,6 +66,17 @@ public final class NpcGraphAnchor420 {
     /** How many blocks around the marker a fingerprint remembers - a 9³ cube, air left out. */
     public static final int FINGERPRINT_BLOCKS = 4;
 
+    /**
+     * Build 422: how far from a pasted marker's own cell its build may really stand, sideways and up.
+     *
+     * <p>A pasted marker can land a fraction of a block low, and a marker is a mob that can be nudged a
+     * cell sideways; three cells each way covers both without letting the search wander off the build.</p>
+     */
+    public static final int PLACE_SEARCH_BLOCKS = 5;
+
+    /** Build 422: how far up and down the pasted build may really stand from the marker's own cell. */
+    public static final int PLACE_SEARCH_UP = 3;
+
     /** Where the marker already put its graphs: {@code [x, y, z, turn]} - written to the entity's NBT. */
     private static final String STAMP = "SettledLandsAnchorAt";
 
@@ -270,8 +281,20 @@ public final class NpcGraphAnchor420 {
     public static boolean sealHere(ServerLevel level, BlockPos place) {
         if (level == null || place == null) return false;
         Entity marker = spawn(level, freeSpot(level, place) == null ? place : freeSpot(level, place));
-        return marker != null && seal(level, marker, new BlockPos((int) marker.getX(),
-                (int) Math.floor(marker.getY()), (int) marker.getZ()));
+        return marker != null && seal(level, marker, cell(marker));
+    }
+
+    /**
+     * The cell an entity's feet are in.
+     *
+     * <p>Build 422: {@code (int)} truncates towards zero, so a marker at {@code x = -1674.5} - which is
+     * where {@link #spawn} puts every marker, half a block past a cell edge - was read as cell
+     * {@code -1674} west of the truth, and {@code y = 198.999} as {@code 198}. Both are the neighbouring
+     * cell, and a graph written there is a graph nothing reads. Every cell in this class comes from here.</p>
+     */
+    public static BlockPos cell(Entity entity) {
+        if (entity == null) return new BlockPos(0, 0, 0);
+        return BlockPos.containing(entity.getX(), entity.getY(), entity.getZ());
     }
 
     /** The fingerprint: the block standing at every cell of a cube around the marker, air left out. */
@@ -307,21 +330,28 @@ public final class NpcGraphAnchor420 {
         if (level == null || marker == null) return false;
         CompoundTag data = data(marker);
         if (!NpcGraphAnchorCore420.hasGraphs(data)) return false;
-        BlockPos here = new BlockPos((int) Math.floor(marker.getX()), (int) Math.floor(marker.getY()),
-                (int) Math.floor(marker.getZ()));
+        BlockPos feet = cell(marker);
+        NpcGraphAnchorCore420.Fingerprint print = NpcGraphAnchorCore420.fingerprint(data);
+        // Build 422. The cell the graphs belong to is the one the building's blocks stand on, and the
+        // fingerprint is the only witness of it: an entity's y is a double, and a pasted marker that
+        // lands a fraction of a block low sits in the cell *under* its own build. Reading floor(y) as the
+        // place - what build 421 did - wrote every graph one block below the blocks it belongs to, which
+        // is why the author still found no graphs on the pasted building.
+        int[] shift = NpcGraphAnchorCore420.bestPlace(print.offsets, print.blocks,
+                (dx, dy, dz) -> NpcGraphAnchorFiles420.blockAt(level, feet, dx, dy, dz),
+                PLACE_SEARCH_BLOCKS, PLACE_SEARCH_UP);
+        BlockPos here = feet.offset(shift[0], shift[1], shift[2]);
         int[] were = data.getIntArray(STAMP);
         boolean moved = were == null || were.length < 3
                 || were[0] != here.getX() || were[1] != here.getY() || were[2] != here.getZ();
         if (!moved) return false;
-        NpcGraphAnchorCore420.Fingerprint print = NpcGraphAnchorCore420.fingerprint(data);
+        // The fingerprint has just placed the build around this cell; a cell whose blocks agree with
+        // nothing is not this marker's building, and writing there would put graphs on a stranger.
         int[] identity = NpcGraphAnchorCore420.score(print.offsets, print.blocks,
                 NpcGraphAnchorCore420.IDENTITY,
                 (dx, dy, dz) -> NpcGraphAnchorFiles420.blockAt(level, here, dx, dy, dz));
-        // The stamp says where the graphs were written; this says whether the blocks around the marker
-        // are the building that those graphs belong to. Two thirds of the fingerprint is the bar: below
-        // it the marker is somewhere else entirely and writing would put graphs on a stranger's blocks.
         if (identity[1] > 0 && (double) identity[0] / identity[1] < 0.6D) {
-            warn("anchor: the marker at " + here + " does not stand in the building its list was made for"
+            warn("anchor: the marker at " + feet + " does not stand in the building its list was made for"
                     + " (" + identity[0] + "/" + identity[1] + " blocks agree) - nothing was written");
             return false;
         }
@@ -331,8 +361,9 @@ public final class NpcGraphAnchor420 {
         NpcGraphAnchorCore420.Result result = NpcGraphAnchorFiles420.materialize(level, level.getServer(),
                 entries, turn, here);
         stamp(marker, here, turn);
-        LOG.info("anchor: pasted at " + here + " - " + result.line() + " (" + entries.size()
-                + " entries carried, turn " + turn + ")");
+        LOG.info("anchor: pasted at " + here + " (the marker's feet are in " + feet + ", the building was"
+                + " found " + shift[0] + " " + shift[1] + " " + shift[2] + " from them) - " + result.line()
+                + " (" + entries.size() + " entries carried, turn " + turn + ")");
         return result.total() > 0 || !entries.isEmpty();
     }
 
@@ -395,12 +426,41 @@ public final class NpcGraphAnchor420 {
         return net.minecraft.core.registries.BuiltInRegistries.ENTITY_TYPE.get(id);
     }
 
-    /** Rebuilds one marker's NBT from the world, so a blueprint carries what the author built. */
+    /**
+     * Rebuilds one marker's NBT from the world, so a blueprint carries what the author built.
+     *
+     * <p>Build 422. The graphs are gathered around the cell the marker <b>stamped</b>, not around the cell
+     * its feet happen to be in: the two differ whenever a marker drifted a fraction of a block, and
+     * gathering around the drifted cell would rewrite the list with every offset moved - undoing the very
+     * paste {@link #materialiseIfMoved} had just made. The stamp is checked against the fingerprint before
+     * it is trusted, so a marker that was carried somewhere else is still gathered at its new place.</p>
+     */
     public static boolean refresh(ServerLevel level, Entity marker) {
         if (level == null || marker == null) return false;
-        BlockPos here = new BlockPos((int) Math.floor(marker.getX()), (int) Math.floor(marker.getY()),
-                (int) Math.floor(marker.getZ()));
-        return seal(level, marker, here);
+        return seal(level, marker, home(level, marker));
+    }
+
+    /**
+     * Where this marker's build really stands: the stamped cell while the blocks around it still agree with
+     * the marker's own fingerprint, otherwise the cell the fingerprint finds nearest the marker's feet.
+     */
+    public static BlockPos home(ServerLevel level, Entity marker) {
+        BlockPos feet = cell(marker);
+        NpcGraphAnchorCore420.Fingerprint print = NpcGraphAnchorCore420.fingerprint(data(marker));
+        int[] were = data(marker).getIntArray(STAMP);
+        if (were != null && were.length >= 3) {
+            BlockPos stamped = new BlockPos(were[0], were[1], were[2]);
+            int[] score = NpcGraphAnchorCore420.score(print.offsets, print.blocks,
+                    NpcGraphAnchorCore420.IDENTITY,
+                    (dx, dy, dz) -> NpcGraphAnchorFiles420.blockAt(level, stamped, dx, dy, dz));
+            if (score[1] == 0 || (double) score[0] / score[1] >= NpcGraphAnchorCore420.MIN_FINGERPRINT_MATCH) {
+                return stamped;
+            }
+        }
+        int[] shift = NpcGraphAnchorCore420.bestPlace(print.offsets, print.blocks,
+                (dx, dy, dz) -> NpcGraphAnchorFiles420.blockAt(level, feet, dx, dy, dz),
+                PLACE_SEARCH_BLOCKS, PLACE_SEARCH_UP);
+        return feet.offset(shift[0], shift[1], shift[2]);
     }
 
     private static void warn(String line) {
@@ -528,8 +588,7 @@ public final class NpcGraphAnchor420 {
             tell(player, "якорь: маркер не поставился - смотри лог");
             return false;
         }
-        BlockPos at = new BlockPos((int) Math.floor(marker.getX()),
-                (int) Math.floor(marker.getY()), (int) Math.floor(marker.getZ()));
+        BlockPos at = cell(marker);
         boolean sealed = seal(level, marker, at);
         tell(player, sealed ? "якорь: постройка получила маркер на " + at.getX() + " " + at.getY() + " "
                 + at.getZ() : "якорь: маркер есть, но графов рядом нет");
