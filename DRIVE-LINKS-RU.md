@@ -232,3 +232,19 @@ but class was expected` — маркер не ставился ни разу, о
 `tools/invoke_kind_check.py` сверяет **вид** каждого вызова с базой (5638 целей; 420 на нём падает, 421 OK).
 Плюс две диагностические строки в лог: `a marker was placed at <pos>` и `pasted at <pos> ... turn <t>`.
 39/39 гейтов PASS, `verify_jar --base 420` PASS. В игре **не проверено**.
+
+## Build 424 — узел графа «Телепорт» (2026-11-16)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build424-teleport.jar | `1_hBEduu4ODk8jC1uyF5KcRpT2mYVaJP6` | `fbecb7d3c8f0927f55d75943775583849b8a5de90417508f350a6880bc9d9946` |
+| SettledLands-Build424-Teleport-Source.zip | `1tS6bT7solFTRzyEdJu-GyVAM7_Awl9QY` | `3a41a81e6c11b2cb6a4780e8ddd2f7f9d33415eacc29229d5ee5b328e567d06b` |
+
+База — 423. Узел «Телепорт» (`type = 2 / TRIGGER`, `action = "trigger:teleport:<dimension>|<x>|<y>|<z>"`)
+добавлен во все 4 редактора графов (НПС, блок, дверь, сундук), пустые координаты = `0.0`,
+поддерживаются Обычный мир / Незер / Край / Чистилище (+ произвольный `modid:name`),
+межизмерный перенос `ServerPlayer` со сбросом `fallDistance`, огня и скорости (НПС не телепортируются).
+40/40 гейтов PASS (`teleport_check.py`: 84 JVM-проверки), `verify_jar --base 423` PASS, `invoke_kind_check --base 423` OK,
+`mixin_clash_check` OK. В игре **не проверено**.
+Зеркало в репозитории: `https://github.com/BORGERone/mod/raw/0405d7b60b622052a05006bda81150745f17393d/settledlands-0.8.0-build424-teleport.jar`
+
