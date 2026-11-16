@@ -2,6 +2,7 @@ package dev.settledlands.mixin;
 
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.NpcDialogueGraph;
+import dev.settledlands.npc.TeleportNode424;
 import dev.settledlands.npc.client.BlockMenu363;
 import dev.settledlands.npc.client.BlockTriggerClient351;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
@@ -63,6 +64,11 @@ public abstract class NpcBlockGraph351Mixin {
         throw new AssertionError();
     }
 
+    @Shadow
+    private void widgets() {
+        throw new AssertionError();
+    }
+
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$blockPalette(double x, double y, int button,
             CallbackInfoReturnable<Boolean> cir) {
@@ -90,6 +96,22 @@ public abstract class NpcBlockGraph351Mixin {
         this.contextMenu.close();
         cir.setReturnValue(Boolean.TRUE);
         if (button != 0 || row < 0) return;
+
+        if (BlockMenu363.isTeleportRow(row)) {
+            NpcDialogueGraph.Node created = this.addAt(NpcDialogueGraph.TRIGGER, worldX, worldY);
+            if (created != null) {
+                TeleportNode424.applyDefaults(created);
+                if (wireFrom >= 0 && this.graph != null
+                        && this.graph.connect(wireFrom, created.id, wirePort)) {
+                    this.status = Component.translatable("gui.settledlands.graph.connected").getString();
+                } else {
+                    this.status = Component.translatable("gui.settledlands.teleport.added").getString();
+                }
+                this.widgets();
+                this.changed();
+            }
+            return;
+        }
 
         // Build 363: the menu of a block carries the rows a block can run and nothing else, so the
         // row of the click is the row of that shorter panel. The stock row behind it is what the

@@ -1,6 +1,7 @@
 package dev.settledlands.npc.client;
 
 import dev.settledlands.npc.BlockTrigger351;
+import dev.settledlands.npc.TeleportNode424;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -145,11 +146,16 @@ public final class BlockMenu363 {
     }
 
     /**
-     * How many rows this menu has. Build 392: a door's menu is exactly the stock list - the two outputs of
-     * a door are sockets of its card now, not nodes, so there is nothing left to add after the stock rows.
+     * How many rows this menu has. Build 424 appends the Teleport row directly after the stock rows
+     * ({@code compact == rows().length}) so {@link #rows()} and {@link #stockRow(int)} stay untouched.
      */
     public static int count() {
-        return rows().length;
+        return rows().length + 1;
+    }
+
+    /** True when {@code compact} is the Teleport row appended after the stock block rows. */
+    public static boolean isTeleportRow(int compact) {
+        return compact == rows().length;
     }
 
     /**
@@ -170,12 +176,18 @@ public final class BlockMenu363 {
 
     /** The stock label of a row of this panel - the stock one, for a block and for a door alike. */
     public static String label(int compact) {
+        if (isTeleportRow(compact)) {
+            return Component.translatable(TeleportNode424.MENU_LABEL_KEY).getString();
+        }
         int stock = stockRow(compact);
         return stock < 0 ? "" : Component.translatable(LABEL_KEYS[stock]).getString();
     }
 
     /** The stock colour of a row of this panel - the colour the same node has in an NPC graph. */
     public static int colour(int compact) {
+        if (isTeleportRow(compact)) {
+            return TeleportNode424.ACCENT_COLOR;
+        }
         int stock = stockRow(compact);
         if (stock < 0) return LABEL;
         return stock < ROW_COLOUR.length ? ROW_COLOUR[stock] : LABEL;

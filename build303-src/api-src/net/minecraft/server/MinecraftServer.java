@@ -1,6 +1,8 @@
 package net.minecraft.server;
 
+import net.minecraft.resources.ResourceKey;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.Level;
 
 /**
  * Compile-time mirror. Build 334 adds {@code overworld()}: CutsceneStorage and NpcMobilityGroups
@@ -10,6 +12,9 @@ public class MinecraftServer {
     public Iterable<ServerLevel> getAllLevels() { return null; }
 
     public ServerLevel overworld() { return null; }
+
+    /** Build 424: base jar already calls getLevel(ResourceKey) on PurgatoryManager. */
+    public ServerLevel getLevel(ResourceKey<Level> key) { return null; }
 
     /** Build 352: the base jar already walks the player list from here. */
     public net.minecraft.server.players.PlayerList getPlayerList() { return null; }

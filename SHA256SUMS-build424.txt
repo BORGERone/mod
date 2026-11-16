@@ -1,0 +1,2 @@
+fbecb7d3c8f0927f55d75943775583849b8a5de90417508f350a6880bc9d9946  settledlands-0.8.0-build424-teleport.jar
+3a41a81e6c11b2cb6a4780e8ddd2f7f9d33415eacc29229d5ee5b328e567d06b  SettledLands-Build424-Teleport-Source.zip

@@ -2,6 +2,7 @@ package dev.settledlands.mixin;
 
 import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.npc.NpcDialogueGraph;
+import dev.settledlands.npc.TeleportNode424;
 import dev.settledlands.npc.client.BlockMenu363;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphContextMenu;
@@ -50,6 +51,11 @@ public abstract class NpcChestPalette396Mixin {
         throw new AssertionError();
     }
 
+    @Shadow
+    private void widgets() {
+        throw new AssertionError();
+    }
+
     @Inject(method = "mouseClicked", at = @At("HEAD"), cancellable = true, remap = false)
     private void settledlands$chestPalette(double x, double y, int button,
             CallbackInfoReturnable<Boolean> cir) {
@@ -73,6 +79,22 @@ public abstract class NpcChestPalette396Mixin {
         this.contextMenu.close();
         cir.setReturnValue(Boolean.TRUE);
         if (button != 0 || row < 0) return;
+
+        if (BlockMenu363.isTeleportRow(row)) {
+            NpcDialogueGraph.Node created = this.addAt(NpcDialogueGraph.TRIGGER, worldX, worldY);
+            if (created != null) {
+                TeleportNode424.applyDefaults(created);
+                if (wireFrom >= 0 && this.graph != null
+                        && this.graph.connect(wireFrom, created.id, wirePort)) {
+                    this.status = Component.translatable("gui.settledlands.graph.connected").getString();
+                } else {
+                    this.status = Component.translatable("gui.settledlands.teleport.added").getString();
+                }
+                this.widgets();
+                this.changed();
+            }
+            return;
+        }
 
         // The row of the click is a row of the block's (shorter) panel; the stock row behind it is what the
         // palette map speaks, and the type is the block's own mapping - not a second one for chests.
