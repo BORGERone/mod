@@ -6,6 +6,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import net.minecraft.core.BlockPos;
@@ -28,13 +29,14 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Build 425: loader and deterministic placer for the packed {@code start.slbp} blueprint
- * (converted from Axiom {@code старт.bp}).
+ * Build 425 / 427: loader and deterministic rotated/chunked placer for both the bundled
+ * {@code start.slbp} fallback and externally loaded Axiom {@code .bp} templates.
  *
  * <p>Hides schematic seam markers ({@code minecraft:lapis_block} and {@code minecraft:redstone_block})
- * by swapping them to {@code minecraft:nether_bricks}, gracefully skips optional external mod blocks
- * or entities that are not installed in the running pack, and offsets block entities and entities
- * relative to the dungeon instance grid origin.</p>
+ * by swapping them to {@code doorwayBlock} (default {@code minecraft:nether_bricks}), rotates block
+ * coordinates, blockstate properties ({@code facing}, {@code axis}, {@code rotation},
+ * {@code north/east/south/west}, rail {@code shape}), block entities, and entities cleanly across
+ * 0/90/180/270-degree turns, and supports sliced tick-budgeted placement.</p>
  */
 public final class DungeonTemplate425 {
 
@@ -197,15 +199,126 @@ public final class DungeonTemplate425 {
     }
 
     public static String remapBlockId(String rawId) {
+        return remapBlockId(rawId, DOORWAY_REPLACEMENT);
+    }
+
+    public static String remapBlockId(String rawId, String doorwayReplacement) {
         if ("minecraft:lapis_block".equals(rawId) || "minecraft:redstone_block".equals(rawId)) {
-            return DOORWAY_REPLACEMENT;
+            return (doorwayReplacement == null || doorwayReplacement.isEmpty())
+                    ? DOORWAY_REPLACEMENT : doorwayReplacement;
         }
         return rawId;
     }
 
+    public static Map<String, String> rotateProps(Map<String, String> props, int turns) {
+        int t = turns & 3;
+        if (props == null || props.isEmpty() || t == 0) {
+            return props == null ? Collections.emptyMap() : props;
+        }
+        Map<String, String> out = new LinkedHashMap<>();
+        String cN = props.get("north");
+        String cE = props.get("east");
+        String cS = props.get("south");
+        String cW = props.get("west");
+
+        for (Map.Entry<String, String> e : props.entrySet()) {
+            String k = e.getKey();
+            String v = e.getValue();
+            if ("facing".equals(k)) {
+                out.put(k, rotateFacing(v, t));
+            } else if ("axis".equals(k)) {
+                out.put(k, rotateAxis(v, t));
+            } else if ("rotation".equals(k)) {
+                out.put(k, rotateInt16(v, t));
+            } else if ("shape".equals(k)) {
+                out.put(k, rotateShape(v, t));
+            } else if ("north".equals(k) || "east".equals(k) || "south".equals(k) || "west".equals(k)) {
+                // Reassigned below so cardinal connections map cleanly without losing order
+                out.put(k, v);
+            } else {
+                out.put(k, v);
+            }
+        }
+        if (cN != null || cE != null || cS != null || cW != null) {
+            String[] ring = new String[] { cN, cE, cS, cW };
+            String[] names = new String[] { "north", "east", "south", "west" };
+            for (int i = 0; i < 4; i++) {
+                String val = ring[i];
+                if (val != null) {
+                    out.put(names[(i + t) & 3], val);
+                }
+            }
+        }
+        return out;
+    }
+
+    private static String rotateFacing(String v, int turns) {
+        if (v == null) return null;
+        int dir = switch (v.toLowerCase(Locale.ROOT)) {
+            case "north" -> 0;
+            case "east" -> 1;
+            case "south" -> 2;
+            case "west" -> 3;
+            default -> -1;
+        };
+        if (dir < 0) return v;
+        return switch ((dir + turns) & 3) {
+            case 0 -> "north";
+            case 1 -> "east";
+            case 2 -> "south";
+            default -> "west";
+        };
+    }
+
+    private static String rotateAxis(String v, int turns) {
+        if (v == null || (turns & 1) == 0) return v;
+        if ("x".equals(v)) return "z";
+        if ("z".equals(v)) return "x";
+        return v;
+    }
+
+    private static String rotateInt16(String v, int turns) {
+        try {
+            int r = Integer.parseInt(v);
+            return Integer.toString((r + 4 * turns) & 15);
+        } catch (NumberFormatException ignored) {
+            return v;
+        }
+    }
+
+    private static String rotateShape(String v, int turns) {
+        if (v == null) return null;
+        if ("north_south".equals(v)) return (turns & 1) == 1 ? "east_west" : "north_south";
+        if ("east_west".equals(v)) return (turns & 1) == 1 ? "north_south" : "east_west";
+        if (v.startsWith("ascending_")) {
+            String dir = rotateFacing(v.substring("ascending_".length()), turns);
+            return "ascending_" + dir;
+        }
+        int corner = switch (v) {
+            case "north_east" -> 0;
+            case "south_east" -> 1;
+            case "south_west" -> 2;
+            case "north_west" -> 3;
+            default -> -1;
+        };
+        if (corner >= 0) {
+            return switch ((corner + turns) & 3) {
+                case 0 -> "north_east";
+                case 1 -> "south_east";
+                case 2 -> "south_west";
+                default -> "north_west";
+            };
+        }
+        return v;
+    }
+
     public static BlockState resolveBlockState(PaletteEntry entry) {
+        return resolveBlockState(entry, 0, DOORWAY_REPLACEMENT);
+    }
+
+    public static BlockState resolveBlockState(PaletteEntry entry, int turns, String doorwayReplacement) {
         if (entry == null || entry.id == null || entry.id.isEmpty()) return null;
-        String mappedId = remapBlockId(entry.id);
+        String mappedId = remapBlockId(entry.id, doorwayReplacement);
         ResourceLocation rl = ResourceLocation.tryParse(mappedId);
         if (rl == null || BuiltInRegistries.BLOCK == null) return null;
 
@@ -224,7 +337,8 @@ public final class DungeonTemplate425 {
         StateDefinition<Block, BlockState> def = block.getStateDefinition();
         if (def == null) return state;
 
-        for (Map.Entry<String, String> propEntry : entry.properties.entrySet()) {
+        Map<String, String> rotatedProps = rotateProps(entry.properties, turns);
+        for (Map.Entry<String, String> propEntry : rotatedProps.entrySet()) {
             Property<?> prop = def.getProperty(propEntry.getKey());
             if (prop != null) {
                 state = applyProperty(state, prop, propEntry.getValue());
@@ -251,30 +365,71 @@ public final class DungeonTemplate425 {
     public static PlacementStats place(ServerLevel level, StartTemplate tpl, int originX, int originY, int originZ) {
         PlacementStats stats = new PlacementStats();
         if (level == null || tpl == null) return stats;
+        placeSlice(level, tpl, originX, originY, originZ, 0, DOORWAY_REPLACEMENT, 0, tpl.blockCount(), stats);
+        return stats;
+    }
+
+    public static int placeSlice(
+            ServerLevel level,
+            StartTemplate tpl,
+            int originX,
+            int originY,
+            int originZ,
+            int turns,
+            String doorwayReplacement,
+            int fromBlock,
+            int maxBlocks,
+            PlacementStats stats) {
+        if (level == null || tpl == null) return fromBlock;
+        int total = tpl.blockCount();
+        int start = Math.max(0, fromBlock);
+        int end = Math.min(total, start + Math.max(0, maxBlocks));
+        int t = turns & 3;
 
         BlockState[] resolved = new BlockState[tpl.palette.size()];
         for (int i = 0; i < tpl.palette.size(); i++) {
-            resolved[i] = resolveBlockState(tpl.palette.get(i));
+            resolved[i] = resolveBlockState(tpl.palette.get(i), t, doorwayReplacement);
         }
 
         int[] raw = tpl.blocks;
-        for (int i = 0; i + 3 < raw.length; i += 4) {
+        for (int bi = start; bi < end; bi++) {
+            int i = bi * 4;
             int palIdx = raw[i + 3];
             BlockState state = (palIdx >= 0 && palIdx < resolved.length) ? resolved[palIdx] : null;
             if (state == null) {
-                stats.blocksSkipped++;
+                if (stats != null) stats.blocksSkipped++;
                 continue;
             }
-            BlockPos pos = new BlockPos(originX + raw[i], originY + raw[i + 1], originZ + raw[i + 2]);
+            int rx = DungeonGenerator427.rotX(raw[i], raw[i + 2], t);
+            int rz = DungeonGenerator427.rotZ(raw[i], raw[i + 2], t);
+            BlockPos pos = new BlockPos(originX + rx, originY + raw[i + 1], originZ + rz);
             ((Level) level).setBlock(pos, state, 2);
-            stats.blocksPlaced++;
+            if (stats != null) stats.blocksPlaced++;
         }
 
+        if (end >= total && start < total) {
+            placeBlockEntitiesAndEntities(level, tpl, originX, originY, originZ, t, stats);
+        } else if (total == 0 && start == 0) {
+            placeBlockEntitiesAndEntities(level, tpl, originX, originY, originZ, t, stats);
+        }
+        return end;
+    }
+
+    private static void placeBlockEntitiesAndEntities(
+            ServerLevel level,
+            StartTemplate tpl,
+            int originX,
+            int originY,
+            int originZ,
+            int turns,
+            PlacementStats stats) {
         for (BlockEntitySpec beSpec : tpl.blockEntities) {
-            BlockPos pos = new BlockPos(originX + beSpec.x, originY + beSpec.y, originZ + beSpec.z);
+            int rx = DungeonGenerator427.rotX(beSpec.x, beSpec.z, turns);
+            int rz = DungeonGenerator427.rotZ(beSpec.x, beSpec.z, turns);
+            BlockPos pos = new BlockPos(originX + rx, originY + beSpec.y, originZ + rz);
             BlockEntity be = level.getBlockEntity(pos);
             if (be == null) {
-                stats.blockEntitiesSkipped++;
+                if (stats != null) stats.blockEntitiesSkipped++;
                 continue;
             }
             try {
@@ -287,9 +442,9 @@ public final class DungeonTemplate425 {
                 nbt.putInt("z", pos.getZ());
                 be.loadWithComponents(nbt, ((Level) level).registryAccess());
                 be.setChanged();
-                stats.blockEntitiesLoaded++;
+                if (stats != null) stats.blockEntitiesLoaded++;
             } catch (Throwable ex) {
-                stats.blockEntitiesSkipped++;
+                if (stats != null) stats.blockEntitiesSkipped++;
                 LOG.warn("settledlands: skipped block entity " + beSpec.id + " at " + pos + ": " + ex.getMessage());
             }
         }
@@ -300,13 +455,13 @@ public final class DungeonTemplate425 {
                     ? null : BuiltInRegistries.ENTITY_TYPE.get(rl);
             ResourceLocation actualKey = type == null ? null : BuiltInRegistries.ENTITY_TYPE.getKey(type);
             if (type == null || actualKey == null || !rl.equals(actualKey)) {
-                stats.entitiesSkipped++;
+                if (stats != null) stats.entitiesSkipped++;
                 continue;
             }
             try {
                 Entity entity = type.create((Level) level);
                 if (entity == null) {
-                    stats.entitiesSkipped++;
+                    if (stats != null) stats.entitiesSkipped++;
                     continue;
                 }
                 CompoundTag nbt = eSpec.nbt == null ? new CompoundTag() : eSpec.nbt.copy();
@@ -316,17 +471,39 @@ public final class DungeonTemplate425 {
                 if (!nbt.isEmpty()) {
                     entity.load(nbt);
                 }
-                entity.moveTo(originX + eSpec.dx, originY + eSpec.dy, originZ + eSpec.dz);
-                entity.setYRot(eSpec.yaw);
+                double edx = DungeonGenerator427.rotEntityX(eSpec.dx, eSpec.dz, turns);
+                double edz = DungeonGenerator427.rotEntityZ(eSpec.dx, eSpec.dz, turns);
+                entity.moveTo(originX + edx, originY + eSpec.dy, originZ + edz);
+                entity.setYRot(eSpec.yaw + 90.0F * turns);
                 entity.setXRot(eSpec.pitch);
                 level.addFreshEntity(entity);
-                stats.entitiesSpawned++;
+                if (stats != null) stats.entitiesSpawned++;
             } catch (Throwable ex) {
-                stats.entitiesSkipped++;
+                if (stats != null) stats.entitiesSkipped++;
                 LOG.warn("settledlands: skipped entity " + eSpec.id + ": " + ex.getMessage());
             }
         }
+    }
 
-        return stats;
+    public static int placeSeal(ServerLevel level, int wx, int wy, int wz, int outDir, String doorwayBlock) {
+        if (level == null) return 0;
+        String blockId = (doorwayBlock == null || doorwayBlock.isEmpty()) ? DOORWAY_REPLACEMENT : doorwayBlock;
+        BlockState state = resolveBlockState(new PaletteEntry(blockId, Collections.emptyMap()), 0, blockId);
+        if (state == null) return 0;
+        int d = outDir & 3;
+        int tx = -AxiomBlueprint427.DZ[d];
+        int tz = AxiomBlueprint427.DX[d];
+        int placed = 0;
+        for (int s = -1; s <= 1; s++) {
+            for (int dy = 2; dy <= 6; dy++) {
+                BlockPos pos = new BlockPos(wx + tx * s, wy + dy, wz + tz * s);
+                BlockState existing = ((Level) level).getBlockState(pos);
+                if (existing == null || existing.isAir()) {
+                    ((Level) level).setBlock(pos, state, 2);
+                    placed++;
+                }
+            }
+        }
+        return placed;
     }
 }

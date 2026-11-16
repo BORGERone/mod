@@ -37,6 +37,21 @@ import pack_start
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 REQUIRED_CLASSES = (
+    "dev/settledlands/dungeon/AxiomBlueprint427.class",
+    "dev/settledlands/dungeon/AxiomBlueprint427$CountingInputStream.class",
+    "dev/settledlands/dungeon/AxiomBlueprint427$Marker.class",
+    "dev/settledlands/dungeon/AxiomBlueprint427$NbtCompound.class",
+    "dev/settledlands/dungeon/AxiomBlueprint427$NbtReader.class",
+    "dev/settledlands/dungeon/AxiomBlueprint427$NbtValue.class",
+    "dev/settledlands/dungeon/AxiomBlueprint427$PieceTemplate.class",
+    "dev/settledlands/dungeon/DungeonConfig427.class",
+    "dev/settledlands/dungeon/DungeonBlueprints427.class",
+    "dev/settledlands/dungeon/DungeonBlueprints427$Library.class",
+    "dev/settledlands/dungeon/DungeonGenerator427.class",
+    "dev/settledlands/dungeon/DungeonGenerator427$OpenExit.class",
+    "dev/settledlands/dungeon/DungeonGenerator427$Plan.class",
+    "dev/settledlands/dungeon/DungeonGenerator427$PlannedPiece.class",
+    "dev/settledlands/dungeon/DungeonGenerator427$Seal.class",
     "dev/settledlands/dungeon/DungeonTemplate425.class",
     "dev/settledlands/dungeon/DungeonTemplate425$PaletteEntry.class",
     "dev/settledlands/dungeon/DungeonTemplate425$BlockEntitySpec.class",
@@ -45,6 +60,8 @@ REQUIRED_CLASSES = (
     "dev/settledlands/dungeon/DungeonTemplate425$PlacementStats.class",
     "dev/settledlands/dungeon/DungeonData425.class",
     "dev/settledlands/dungeon/DungeonData425$Instance.class",
+    "dev/settledlands/dungeon/DungeonData425$PieceProgress.class",
+    "dev/settledlands/dungeon/DungeonData425$SealProgress.class",
     "dev/settledlands/dungeon/DungeonData425$ReturnPoint.class",
     "dev/settledlands/dungeon/DungeonManager425.class",
     "dev/settledlands/dungeon/DungeonEvents425.class",
@@ -54,6 +71,7 @@ REQUIRED_CLASSES = (
 LANG_KEYS = (
     "gui.settledlands.teleport.world.hell_dungeon",
     "message.settledlands.dungeon.not_loaded",
+    "message.settledlands.dungeon.no_blueprints",
 )
 
 
@@ -151,13 +169,16 @@ def main(argv):
         # Bytecode checks
         ev_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonEvents425.class"))
         ev_refs = cp_refs(ev_info)
-        for wanted in ("getLevel", "getSpawnType", "setResult"):
+        for wanted in ("getLevel", "getSpawnType", "setResult", "getServer"):
             if not any(f".{wanted}(" in r for r in ev_refs):
                 return fail("DungeonEvents425 missing %s" % wanted)
+        ev_utf8 = {e[1] for e in ev_info["cp"] if e and e[0] == 1}
+        if "net/neoforged/neoforge/event/tick/ServerTickEvent$Post" not in ev_utf8:
+            return fail("DungeonEvents425 missing ServerTickEvent$Post")
 
         mgr_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonManager425.class"))
         mgr_refs = cp_refs(mgr_info)
-        for wanted in ("teleportTo", "displayClientMessage", "clearFire", "setDeltaMovement"):
+        for wanted in ("teleportTo", "displayClientMessage", "clearFire", "setDeltaMovement", "players"):
             if not any(f".{wanted}(" in r for r in mgr_refs):
                 return fail("DungeonManager425 missing %s" % wanted)
 
@@ -174,10 +195,15 @@ def main(argv):
         cmd_utf8 = {e[1] for e in cmd_cf["cp"] if e and e[0] == 1}
         if "com/mojang/brigadier/exceptions/CommandSyntaxException" not in cmd_utf8:
             return fail("DungeonCommand425 missing real com/mojang/brigadier/exceptions/CommandSyntaxException")
+        if "reload" not in cmd_utf8:
+            return fail("DungeonCommand425 missing /settledlands dungeon reload command")
 
-    probe = ROOT / "tools" / "harness" / "HellDungeon425Probe.java"
-    if not probe.is_file():
-        return fail("missing probe: %s" % probe)
+    probe425 = ROOT / "tools" / "harness" / "HellDungeon425Probe.java"
+    probe427 = ROOT / "tools" / "harness" / "HellDungeon427Probe.java"
+    if not probe425.is_file():
+        return fail("missing probe: %s" % probe425)
+    if not probe427.is_file():
+        return fail("missing probe: %s" % probe427)
 
     java = find_java()
     ecj = ROOT / "tools" / "vendor" / "ecj-3.46.100.jar"
@@ -296,19 +322,24 @@ public final class BuiltInRegistries {
         probe_inputs = [
             str(reg_dir / "ProbeRegistries.java"),
             str(reg_dir / "BuiltInRegistries.java"),
-            str(probe),
+            str(probe425),
+            str(probe427),
         ]
         r2 = subprocess.run([java, "-jar", str(ecj), "-21", "-proc:none", "-nowarn",
-                             "-cp", f"{jar}:{stubs_out}", "-d", str(probe_out)] + probe_inputs,
+                             "-cp", f"{jar.resolve()}:{stubs_out}", "-d", str(probe_out)] + probe_inputs,
                             capture_output=True, text=True)
         if r2.returncode != 0:
-            return fail("HellDungeon425Probe compile failed:\n" + r2.stdout + r2.stderr)
+            return fail("HellDungeon probes compile failed:\n" + r2.stdout + r2.stderr)
 
-        r3 = subprocess.run([java, "-cp", f"{probe_out}:{jar}:{stubs_out}", "HellDungeon425Probe"],
-                            capture_output=True, text=True)
-        if r3.returncode != 0:
-            return fail("HellDungeon425Probe failed (rc=%d):\n%s\n%s" % (r3.returncode, r3.stdout, r3.stderr))
-        sys.stdout.write(r3.stdout)
+        run_dir = tmp / "run_cwd"
+        run_dir.mkdir()
+        cp = f"{probe_out}:{jar.resolve()}:{stubs_out}"
+        for probe_cls in ("HellDungeon425Probe", "HellDungeon427Probe"):
+            r3 = subprocess.run([java, "-cp", cp, probe_cls],
+                                cwd=str(run_dir), capture_output=True, text=True)
+            if r3.returncode != 0:
+                return fail("%s failed (rc=%d):\n%s\n%s" % (probe_cls, r3.returncode, r3.stdout, r3.stderr))
+            sys.stdout.write(r3.stdout)
 
     print("hell_dungeon_check: PASS")
     return 0

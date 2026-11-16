@@ -16,8 +16,8 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 /**
- * Build 425: {@code /settledlands dungeon} commands for testing, entering, creating grid instances,
- * listing and leaving the «Адский данж» dimension.
+ * Build 425 / 427: {@code /settledlands dungeon} commands for entering, creating grid instances,
+ * listing progress, reloading external {@code .bp} folders, and leaving «Адский данж».
  */
 @EventBusSubscriber(modid = "settledlands")
 public final class DungeonCommand425 {
@@ -46,7 +46,10 @@ public final class DungeonCommand425 {
                                     .executes(DungeonCommand425::info))
                             .then(Commands.literal("list")
                                     .requires(src -> src.hasPermission(2))
-                                    .executes(DungeonCommand425::list)));
+                                    .executes(DungeonCommand425::list))
+                            .then(Commands.literal("reload")
+                                    .requires(src -> src.hasPermission(2))
+                                    .executes(DungeonCommand425::reload)));
             event.getDispatcher().register(root);
         } catch (Throwable failure) {
             BlockTrigger351.fail(failure);
@@ -61,7 +64,10 @@ public final class DungeonCommand425 {
             DungeonData425.Instance inst = DungeonData425.get(player.getServer()).getInstance(id);
             String coords = inst == null ? "0, 0, 0"
                     : inst.originX + ", " + inst.originY + ", " + inst.originZ;
-            tell(player, "данж: вход в '" + DungeonData425.normalizeInstanceId(id) + "' (" + coords + ")");
+            String rooms = inst == null || inst.pieces.isEmpty() ? ""
+                    : (", комнат в плане: " + inst.pieces.size());
+            tell(player, "данж: вход в '" + DungeonData425.normalizeInstanceId(id)
+                    + "' (" + coords + ")" + rooms);
         }
         return ok ? 1 : 0;
     }
@@ -84,16 +90,28 @@ public final class DungeonCommand425 {
         return ok ? 1 : 0;
     }
 
+    private static int reload(CommandContext<CommandSourceStack> ctx) {
+        if (ctx == null || ctx.getSource() == null) return 0;
+        DungeonBlueprints427.Library lib = DungeonBlueprints427.reload();
+        String msg = "данж: блупринты перечитаны — " + lib.summaryLine()
+                + (lib.skippedNoMarkers > 0 ? (", без lapis_block: " + lib.skippedNoMarkers) : "")
+                + (lib.failedParse > 0 ? (", ошибок: " + lib.failedParse) : "");
+        ctx.getSource().sendSuccess(() -> Component.literal(msg), false);
+        return 1;
+    }
+
     private static int info(CommandContext<CommandSourceStack> ctx) {
         if (ctx == null || ctx.getSource() == null) return 0;
         MinecraftServer server = ctx.getSource().getServer();
         if (server == null) return 0;
         ServerLevel dungeon = DungeonManager425.dungeonLevel(server);
         DungeonData425 data = DungeonData425.get(server);
+        DungeonBlueprints427.Library lib = DungeonBlueprints427.get();
         String msg = "данж: измерение "
                 + (dungeon == null ? "НЕ загружено (нужен новый мир)" : "готово")
-                + ", инстансов в сетке: " + data.instanceCount()
-                + ", шаг сетки: " + DungeonData425.GRID_SPACING;
+                + ", инстансов: " + data.instanceCount()
+                + ", шаг сетки: " + DungeonData425.GRID_SPACING
+                + " | " + lib.summaryLine();
         ctx.getSource().sendSuccess(() -> Component.literal(msg), false);
         return 1;
     }
@@ -108,9 +126,13 @@ public final class DungeonCommand425 {
             return 1;
         }
         for (DungeonData425.Instance inst : data.allInstances()) {
+            String state = inst.pieces.isEmpty()
+                    ? (inst.placed ? "[placed]" : "[pending]")
+                    : (inst.placed
+                            ? "[done " + inst.pieces.size() + "/" + inst.pieces.size() + "]"
+                            : "[building " + inst.donePieceCount() + "/" + inst.pieces.size() + "]");
             String line = "  #" + inst.index + " " + inst.id + " @ ("
-                    + inst.originX + ", " + inst.originY + ", " + inst.originZ + ")"
-                    + (inst.placed ? " [placed]" : " [pending]");
+                    + inst.originX + ", " + inst.originY + ", " + inst.originZ + ") " + state;
             ctx.getSource().sendSuccess(() -> Component.literal(line), false);
         }
         return 1;

@@ -1,9 +1,11 @@
 package dev.settledlands.dungeon;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.UUID;
@@ -15,11 +17,12 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 
 /**
- * Build 425: world-persisted registry of Hell Dungeon grid instances and player return points.
+ * Build 425 / 427: world-persisted registry of Hell Dungeon grid instances, procedural piece
+ * placement plans/progress, and player return points.
  *
  * <p>Each instance owns a non-overlapping {@code 512 x 512} grid cell on the XZ plane
- * ({@link #gridOriginForIndex(int)}), and tracks {@code placed} so {@code start.slbp} is placed once
- * per instance and never overwrites subsequent edits or generation.</p>
+ * ({@link #gridOriginForIndex(int)}), generates its layout once per instance, and persists
+ * piece-by-piece progress so interrupted builds resume cleanly after restart.</p>
  */
 public final class DungeonData425 extends SavedData {
 
@@ -29,6 +32,69 @@ public final class DungeonData425 extends SavedData {
 
     public static final SavedData.Factory<DungeonData425> FACTORY =
             new SavedData.Factory<>(DungeonData425::new, DungeonData425::load, null);
+
+    public static final class PieceProgress {
+        public final String pieceKey;
+        public final int ox;
+        public final int oy;
+        public final int oz;
+        public final int turns;
+        public final int minX;
+        public final int minY;
+        public final int minZ;
+        public final int maxX;
+        public final int maxY;
+        public final int maxZ;
+        public int blockCursor;
+        public boolean done;
+
+        public PieceProgress(String pieceKey, int ox, int oy, int oz, int turns,
+                int minX, int minY, int minZ, int maxX, int maxY, int maxZ,
+                int blockCursor, boolean done) {
+            this.pieceKey = pieceKey;
+            this.ox = ox;
+            this.oy = oy;
+            this.oz = oz;
+            this.turns = turns & 3;
+            this.minX = minX;
+            this.minY = minY;
+            this.minZ = minZ;
+            this.maxX = maxX;
+            this.maxY = maxY;
+            this.maxZ = maxZ;
+            this.blockCursor = Math.max(0, blockCursor);
+            this.done = done;
+        }
+
+        public double distSqTo(double px, double py, double pz) {
+            double cx = clamp(px, minX, maxX) - px;
+            double cy = clamp(py, minY, maxY) - py;
+            double cz = clamp(pz, minZ, maxZ) - pz;
+            return cx * cx + cy * cy + cz * cz;
+        }
+
+        private static double clamp(double v, int lo, int hi) {
+            if (v < lo) return lo;
+            if (v > hi) return hi;
+            return v;
+        }
+    }
+
+    public static final class SealProgress {
+        public final int x;
+        public final int y;
+        public final int z;
+        public final int outDir;
+        public boolean done;
+
+        public SealProgress(int x, int y, int z, int outDir, boolean done) {
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.outDir = outDir & 3;
+            this.done = done;
+        }
+    }
 
     public static final class Instance {
         public final String id;
@@ -40,6 +106,18 @@ public final class DungeonData425 extends SavedData {
         public long seed;
         public long createdTick;
 
+        // Build 427 procedural layout state
+        public boolean planGenerated;
+        public double spawnX;
+        public double spawnY;
+        public double spawnZ;
+        public float spawnYaw;
+        public float spawnPitch;
+        public String doorwayBlock;
+        public String blueprintSource;
+        public final List<PieceProgress> pieces = new ArrayList<>();
+        public final List<SealProgress> seals = new ArrayList<>();
+
         public Instance(String id, int index, int originX, int originY, int originZ,
                 boolean placed, long seed, long createdTick) {
             this.id = id;
@@ -50,6 +128,33 @@ public final class DungeonData425 extends SavedData {
             this.placed = placed;
             this.seed = seed;
             this.createdTick = createdTick;
+            this.planGenerated = placed;
+            this.spawnX = originX + DungeonTemplate425.SPAWN_OFFSET_X;
+            this.spawnY = originY + DungeonTemplate425.SPAWN_OFFSET_Y;
+            this.spawnZ = originZ + DungeonTemplate425.SPAWN_OFFSET_Z;
+            this.spawnYaw = DungeonTemplate425.SPAWN_YAW;
+            this.spawnPitch = DungeonTemplate425.SPAWN_PITCH;
+            this.doorwayBlock = DungeonTemplate425.DOORWAY_REPLACEMENT;
+            this.blueprintSource = "";
+        }
+
+        public int donePieceCount() {
+            int c = 0;
+            for (PieceProgress p : pieces) {
+                if (p.done) c++;
+            }
+            return c;
+        }
+
+        public boolean hasPendingWork() {
+            if (!planGenerated || placed) return false;
+            for (PieceProgress p : pieces) {
+                if (!p.done) return true;
+            }
+            for (SealProgress s : seals) {
+                if (!s.done) return true;
+            }
+            return false;
         }
     }
 
@@ -142,7 +247,8 @@ public final class DungeonData425 extends SavedData {
         if (existing != null) return existing;
         int idx = allocateNextIndex();
         int[] origin = gridOriginForIndex(idx);
-        Instance created = new Instance(id, idx, origin[0], origin[1], origin[2], false, seed, tick);
+        long instSeed = mixSeed(seed, idx, id);
+        Instance created = new Instance(id, idx, origin[0], origin[1], origin[2], false, instSeed, tick);
         instances.put(id, created);
         setDirty();
         return created;
@@ -159,10 +265,21 @@ public final class DungeonData425 extends SavedData {
         }
         int idx = allocateNextIndex();
         int[] origin = gridOriginForIndex(idx);
-        Instance created = new Instance(id, idx, origin[0], origin[1], origin[2], false, seed, tick);
+        long instSeed = mixSeed(seed, idx, id);
+        Instance created = new Instance(id, idx, origin[0], origin[1], origin[2], false, instSeed, tick);
         instances.put(id, created);
         setDirty();
         return created;
+    }
+
+    private static long mixSeed(long worldSeed, int idx, String id) {
+        long h = worldSeed ^ ((long) idx * 0x9E3779B97F4A7C15L);
+        if (id != null) {
+            for (int i = 0; i < id.length(); i++) {
+                h = h * 31L + id.charAt(i);
+            }
+        }
+        return h;
     }
 
     private int allocateNextIndex() {
@@ -181,10 +298,39 @@ public final class DungeonData425 extends SavedData {
         return false;
     }
 
+    public void setPlan(Instance inst, DungeonGenerator427.Plan plan,
+            String doorwayBlock, String blueprintSource) {
+        if (inst == null || plan == null) return;
+        inst.pieces.clear();
+        for (DungeonGenerator427.PlannedPiece pp : plan.pieces) {
+            inst.pieces.add(new PieceProgress(
+                    pp.pieceKey, pp.ox, pp.oy, pp.oz, pp.turns,
+                    pp.minX, pp.minY, pp.minZ, pp.maxX, pp.maxY, pp.maxZ,
+                    0, false));
+        }
+        inst.seals.clear();
+        for (DungeonGenerator427.Seal s : plan.seals) {
+            inst.seals.add(new SealProgress(s.x, s.y, s.z, s.outDir, false));
+        }
+        inst.spawnX = plan.spawnX;
+        inst.spawnY = plan.spawnY;
+        inst.spawnZ = plan.spawnZ;
+        inst.spawnYaw = plan.spawnYaw;
+        inst.spawnPitch = plan.spawnPitch;
+        inst.doorwayBlock = (doorwayBlock == null || doorwayBlock.isEmpty())
+                ? DungeonTemplate425.DOORWAY_REPLACEMENT : doorwayBlock;
+        inst.blueprintSource = blueprintSource == null ? "" : blueprintSource;
+        inst.planGenerated = true;
+        setDirty();
+    }
+
     public void markPlaced(String rawId) {
         Instance inst = instances.get(normalizeInstanceId(rawId));
-        if (inst != null && !inst.placed) {
-            inst.placed = true;
+        if (inst != null) {
+            inst.planGenerated = true;
+            if (!inst.placed) {
+                inst.placed = true;
+            }
             setDirty();
         }
     }
@@ -221,6 +367,55 @@ public final class DungeonData425 extends SavedData {
             item.putBoolean("Placed", inst.placed);
             item.putLong("Seed", inst.seed);
             item.putLong("CreatedTick", inst.createdTick);
+
+            item.putBoolean("PlanGenerated", inst.planGenerated);
+            item.putDouble("SpawnX", inst.spawnX);
+            item.putDouble("SpawnY", inst.spawnY);
+            item.putDouble("SpawnZ", inst.spawnZ);
+            item.putFloat("SpawnYaw", inst.spawnYaw);
+            item.putFloat("SpawnPitch", inst.spawnPitch);
+            if (inst.doorwayBlock != null && !inst.doorwayBlock.isEmpty()) {
+                item.putString("DoorwayBlock", inst.doorwayBlock);
+            }
+            if (inst.blueprintSource != null && !inst.blueprintSource.isEmpty()) {
+                item.putString("BlueprintSource", inst.blueprintSource);
+            }
+
+            if (!inst.pieces.isEmpty()) {
+                ListTag pList = new ListTag();
+                for (PieceProgress p : inst.pieces) {
+                    CompoundTag pt = new CompoundTag();
+                    pt.putString("Piece", p.pieceKey);
+                    pt.putInt("Ox", p.ox);
+                    pt.putInt("Oy", p.oy);
+                    pt.putInt("Oz", p.oz);
+                    pt.putInt("Turns", p.turns);
+                    pt.putInt("MinX", p.minX);
+                    pt.putInt("MinY", p.minY);
+                    pt.putInt("MinZ", p.minZ);
+                    pt.putInt("MaxX", p.maxX);
+                    pt.putInt("MaxY", p.maxY);
+                    pt.putInt("MaxZ", p.maxZ);
+                    pt.putInt("Cursor", p.blockCursor);
+                    pt.putBoolean("Done", p.done);
+                    pList.add(pt);
+                }
+                item.put("Pieces", pList);
+            }
+            if (!inst.seals.isEmpty()) {
+                ListTag sList = new ListTag();
+                for (SealProgress s : inst.seals) {
+                    CompoundTag st = new CompoundTag();
+                    st.putInt("X", s.x);
+                    st.putInt("Y", s.y);
+                    st.putInt("Z", s.z);
+                    st.putInt("Dir", s.outDir);
+                    st.putBoolean("Done", s.done);
+                    sList.add(st);
+                }
+                item.put("Seals", sList);
+            }
+
             instList.add(item);
         }
         tag.put("Instances", instList);
@@ -258,7 +453,53 @@ public final class DungeonData425 extends SavedData {
             boolean placed = item.getBoolean("Placed");
             long seed = item.getLong("Seed");
             long created = item.getLong("CreatedTick");
-            data.instances.put(id, new Instance(id, idx, ox, oy, oz, placed, seed, created));
+            Instance inst = new Instance(id, idx, ox, oy, oz, placed, seed, created);
+
+            if (item.contains("PlanGenerated")) {
+                inst.planGenerated = item.getBoolean("PlanGenerated");
+            }
+            if (item.contains("SpawnX")) {
+                inst.spawnX = item.getDouble("SpawnX");
+                inst.spawnY = item.getDouble("SpawnY");
+                inst.spawnZ = item.getDouble("SpawnZ");
+                inst.spawnYaw = item.getFloat("SpawnYaw");
+                inst.spawnPitch = item.getFloat("SpawnPitch");
+            }
+            String db = item.getString("DoorwayBlock");
+            if (!db.isEmpty()) inst.doorwayBlock = db;
+            inst.blueprintSource = item.getString("BlueprintSource");
+
+            ListTag pList = item.getList("Pieces", 10);
+            for (int j = 0; j < pList.size(); j++) {
+                CompoundTag pt = pList.getCompound(j);
+                inst.pieces.add(new PieceProgress(
+                        pt.getString("Piece"),
+                        pt.getInt("Ox"),
+                        pt.getInt("Oy"),
+                        pt.getInt("Oz"),
+                        pt.getInt("Turns"),
+                        pt.getInt("MinX"),
+                        pt.getInt("MinY"),
+                        pt.getInt("MinZ"),
+                        pt.getInt("MaxX"),
+                        pt.getInt("MaxY"),
+                        pt.getInt("MaxZ"),
+                        pt.getInt("Cursor"),
+                        pt.getBoolean("Done")));
+            }
+
+            ListTag sList = item.getList("Seals", 10);
+            for (int j = 0; j < sList.size(); j++) {
+                CompoundTag st = sList.getCompound(j);
+                inst.seals.add(new SealProgress(
+                        st.getInt("X"),
+                        st.getInt("Y"),
+                        st.getInt("Z"),
+                        st.getInt("Dir"),
+                        st.getBoolean("Done")));
+            }
+
+            data.instances.put(id, inst);
             if (idx >= data.nextIndex) {
                 data.nextIndex = idx + 1;
             }

@@ -271,8 +271,8 @@ but class was expected` — маркер не ставился ни разу, о
 
 | файл | id | sha256 |
 |---|---|---|
-| settledlands-0.8.0-build426-dungeon-command-fix.jar | *(ожидает включения `google_drive`)* | `5b60063fb0000d22c3589fe6f1e1e3e70eb22371182bdcc8d8d68441e5fa964b` |
-| SettledLands-Build426-DungeonCommandFix-Source.zip | *(ожидает включения `google_drive`)* | `a7fa65a4431f2657dff9a74a8f256fdad8af92bc8d77d4d393d3085f65ea3208` |
+| settledlands-0.8.0-build426-dungeon-command-fix.jar | `19Frdmn-Atm0xCupZjvEa1CFa2KGdq1kx` | `5b60063fb0000d22c3589fe6f1e1e3e70eb22371182bdcc8d8d68441e5fa964b` |
+| SettledLands-Build426-DungeonCommandFix-Source.zip | `1KE4xGgvXdln5-WQdyW1tIZChMOeVPDs-` | `a7fa65a4431f2657dff9a74a8f256fdad8af92bc8d77d4d393d3085f65ea3208` |
 
 База — 425. Исправлена причина краша Build 425 в NeoForge 21.1.265 (`NoClassDefFoundError: com/mojang/brigadier/CommandSyntaxException`
 при `FMLModContainer.constructMod -> AutomaticEventSubscriber.inject -> Class.getDeclaredMethods`): заглушка `CommandSyntaxException`
@@ -283,7 +283,27 @@ but class was expected` — маркер не ставился ни разу, о
 `getDeclaredMethods()` и `onRegisterCommands`).
 41/41 гейтов PASS (`hell_dungeon_check.py`: 6 293 JVM-проверки; `teleport_check.py`: 88 JVM-проверок),
 `verify_jar --base 425` и `--base 424` PASS, `invoke_kind_check --base 425`/`424` OK, `mixin_clash_check` OK, `cmp -s` PASS.
-В игре **ожидает повторной проверки автором**.
+**В игре подтверждено автором.**
 Зеркало в репозитории: `https://github.com/BORGERone/mod/raw/d75801f2ff96b50d4b437d7ff512e00da59cadef/settledlands-0.8.0-build426-dungeon-command-fix.jar`
 Исходники в репозитории: `https://github.com/BORGERone/mod/raw/d75801f2ff96b50d4b437d7ff512e00da59cadef/SettledLands-Build426-DungeonCommandFix-Source.zip`
+
+## Build 427 — процедурный «Адский данж» напрямую из папки `.bp` Axiom (2026-11-16)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build427-procedural-dungeon.jar | `15H-AX4Ovy4-cgwVCp_jPqx5RBgWZKLvy` | `1f6e96885ebdc7ce38eba7ee167bef9678f60b1c05752a578a7c72a5cdbecd67` |
+| SettledLands-Build427-ProceduralDungeon-Source.zip | `1iQY3D4AZ72vDDQFNpBE3C7EnrdNSHPyA` | `1d286fbe4f0a58416ecd082da2e09fb8837319ce7d969bf9e0002942037c45d0` |
+
+База — 426. Нативный ридер Axiom `.bp` (`AxiomBlueprint427`), автопоиск внешних папок (`config/settledlands/blueprints`,
+`config/axiom/blueprints`, `blueprints`), настройка в `config/settledlands/dungeon.properties` и фильтр тем
+(`auto` отбирает `infernal` при смешении тем или берёт все валидные `.bp`), детерминированная стыковка комнат по
+`lapis_block`/`redstone_block` в ячейке `512 × 512` с поворотами блоков/свойств/`BlockEntities`/`Entities`, заделкой тупиков
+и тылового проёма старта (`nether_bricks`), поточная достройка по тикам (`ServerTickEvent.Post`) с приоритетом рядом с
+игроками и командой `/settledlands dungeon reload`. При пустой папке `.bp` сохраняется безопасный fallback на встроенный
+`start.slbp`.
+45/45 гейтов PASS (`hell_dungeon_check.py`: 6 293 + 371 194 JVM-проверки на всех 232 реальных `.bp` из `Данж.rar`),
+`verify_jar --base 426` PASS (`0` новых внешних API), `invoke_kind_check --base 426` OK (`5 890` целей), `mixin_clash_check` OK,
+`cmp -s` PASS. В игре **ожидает проверки автором**.
+Прямая ссылка на мод: `https://drive.google.com/uc?export=download&id=15H-AX4Ovy4-cgwVCp_jPqx5RBgWZKLvy`
+Прямая ссылка на исходники: `https://drive.google.com/uc?export=download&id=1iQY3D4AZ72vDDQFNpBE3C7EnrdNSHPyA`
 

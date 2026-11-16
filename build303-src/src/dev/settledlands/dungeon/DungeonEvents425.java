@@ -6,10 +6,11 @@ import net.minecraft.world.level.ServerLevelAccessor;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.entity.living.MobSpawnEvent;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
 /**
- * Build 425: blocks passive/natural/chunk/patrol/structure/reinforcement mob spawns inside
- * {@code settledlands:hell_dungeon}, while preserving spawners, trial spawners, commands and scripted triggers.
+ * Build 425 / 427: blocks passive/natural/chunk/patrol/structure/reinforcement mob spawns inside
+ * {@code settledlands:hell_dungeon} and advances tick-paced dungeon generation.
  */
 @EventBusSubscriber(modid = "settledlands")
 public final class DungeonEvents425 {
@@ -31,5 +32,11 @@ public final class DungeonEvents425 {
                 || type == MobSpawnType.REINFORCEMENT) {
             event.setResult(MobSpawnEvent.PositionCheck.Result.FAIL);
         }
+    }
+
+    @SubscribeEvent
+    public static void onServerTick(ServerTickEvent.Post event) {
+        if (event == null) return;
+        DungeonManager425.tickPendingGeneration(event.getServer());
     }
 }
