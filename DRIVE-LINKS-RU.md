@@ -248,3 +248,21 @@ but class was expected` — маркер не ставился ни разу, о
 `mixin_clash_check` OK. В игре **не проверено**.
 Зеркало в репозитории: `https://github.com/BORGERone/mod/raw/0405d7b60b622052a05006bda81150745f17393d/settledlands-0.8.0-build424-teleport.jar`
 
+## Build 425 — измерение «Адский данж» и стартовая комната (`start.slbp`) (2026-11-16)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build425-hell-dungeon.jar | `109rz9dR_mSvXrYKBIFX7-et4WPfgeGB_` | `9e4ab859305f87cfa32fc7d06661f35a4ea9afa44875f9063dd32e2466691c3e` |
+| SettledLands-Build425-HellDungeon-Source.zip | `1Td3nK9Vmqw2EurGQIo_7GSdppyQMTmL_` | `3d2d4ac93176a394437ccca67476e85c452a98a8cfe21163ce5d2f5cb2b14f06` |
+
+База — 424. Пустотное измерение `settledlands:hell_dungeon` (незерский свет `0.15`, `fixed_time: 18000`, `min_y: -64`,
+`height: 384`, `minecraft:flat` с `minecraft:the_void`), фильтр спавна (`MobSpawnEvent.PositionCheck` блокирует
+`NATURAL`/`CHUNK_GENERATION`/`PATROL`/`STRUCTURE`/`REINFORCEMENT`, сохраняя `SPAWNER`, `TRIAL_SPAWNER`, `COMMAND`,
+`SPAWN_EGG`, `MOB_SUMMONED`), одноразовая установка `start.slbp` (из `старт.bp`, `6 019` блоков, замена `lapis_block`/
+`redstone_block` -> `minecraft:nether_bricks`, безопасный пропуск отсутствующего `trialtuner:trial_spawner`, перенос
+`settledlands:guide_trigger` без `UUID`/`Pos`/`neoforge:attachments`) на спиральной сетке `512 × 512` (`SavedData`
+`settledlands_hell_dungeon`), 5-й мир в узле «Телепорт» и команды `/settledlands dungeon {enter,new,leave,info,list}`.
+41/41 гейтов PASS (`hell_dungeon_check.py`: 6 279 JVM-проверок; `teleport_check.py`: 88 JVM-проверок),
+`verify_jar --base 424` PASS, `invoke_kind_check --base 424` OK, `mixin_clash_check` OK, `cmp -s` PASS. В игре **не проверено**.
+Зеркало в репозитории: `https://github.com/BORGERone/mod/raw/fb61162e523a52d0ae242e13efd5f120a5a65241/settledlands-0.8.0-build425-hell-dungeon.jar`
+
