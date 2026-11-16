@@ -6,6 +6,9 @@ Phase A - configuration
   * every listed class exists in the jar and carries @Mixin
   * no class listed twice / in both the common and client lists
   * bundled mixin annotation stubs keep @Retention(CLASS)
+  * a mixin class declares no static field that is not private - Mixin drops
+    the whole class for that, and the game dies on the first load of the
+    target (Build 302 lesson: two colours declared in a mixin)
 
 Phase C - dispatcher hooks
   A class that only exists to be called from a mixin (the pursuit card
@@ -32,7 +35,12 @@ Phase B - target resolution (catches "Critical injection failure" crashes)
     descriptor" and the build never got past mixin application)
   * @ModifyConstant(@Constant(intValue = N)) finds N in the target method's
     bytecode (injectors.defaultRequire=1 turns a miss into a hard crash)
-  * @Shadow fields and methods exist in the target with the same descriptor
+  * @Shadow fields and methods exist in the target with the same descriptor - the target CLASS,
+    not its superclasses. Build 359 shadowed Screen#addRenderableWidget on the graph screen, the
+    descriptor was right (it is what the stock textBox calls), Mixin still refused it with
+    "@Shadow method addRenderableWidget ... was not located in the target class" and every graph
+    screen died on first open. A member inherited from Minecraft is CALLED, never shadowed: our
+    compile-time stubs declare it, the call site lands inside the target and protected access holds.
   * @Overwrite matches an existing method
   * an @Inject handler that calls CallbackInfo.cancel() or
     CallbackInfoReturnable.setReturnValue(...) but whose annotation is not
@@ -446,15 +454,121 @@ def check_targets(cf, entry, classes, problems, external, verbose):
                     continue
                 tname, tcf, tm = found
                 if want == "inject":
-                    # @Redirect / @ModifyArg / @ModifyVariable handlers have a
-                    # different signature rule (args + target return value, no
-                    # CallbackInfo), so only @Inject is checked here.
                     check_callback(cf, m, tm, tname, entry, want, problems)
+                if want == "redirect":
+                    check_redirect(cf, m, tm, tname, tcf, entry, a, problems)
                 if want == "modifyconstant":
                     check_constant(cf, m, tm, tname, entry, a, problems)
                 if verbose:
                     print("    ok  %s.%s -> %s#%s%s" % (entry, m.name, tname,
                                                         tm.name, tm.desc))
+
+
+def _extract_at_annotations(val):
+    if val is None:
+        return []
+    if val[0] == "annotation":
+        return [val]
+    if val[0] == "array":
+        return [v for v in val[1] if v and v[0] == "annotation"]
+    return []
+
+
+def _parse_invoke_target(spec):
+    """'Lowner;name(args)ret' -> (owner, name, '(args)ret') or None."""
+    if not spec or ";" not in spec or "(" not in spec:
+        return None
+    semi = spec.index(";")
+    owner = spec[1:semi] if spec.startswith("L") else spec[:semi]
+    rest = spec[semi + 1:]
+    lp = rest.index("(")
+    return owner.replace(".", "/"), rest[:lp], rest[lp:]
+
+
+def _find_invoke_opcodes(tcf, tm, owner, name, desc):
+    code_attr = tm.attr("Code")
+    if code_attr is None:
+        return set()
+    r = Reader(code_attr.data, "%s.%s:Code" % (tcf.name, tm.name))
+    r.u2()
+    r.u2()
+    code = r.bytes(r.u4())
+    ops = set()
+    for off, op, _len in classfile.walk_code(code):
+        if op not in (0xb6, 0xb7, 0xb8, 0xb9):
+            continue
+        idx = int.from_bytes(code[off + 1:off + 3], "big")
+        try:
+            entry = tcf.cp[idx]
+            if not entry or entry[0] not in (10, 11):
+                continue
+            cls_i, nt_i = entry[1]
+            c_owner = tcf.class_name(cls_i)
+            nat = tcf.cp[nt_i]
+            if not nat or nat[0] != 12:
+                continue
+            m_name = tcf.utf8(nat[1][0])
+            m_desc = tcf.utf8(nat[1][1])
+            if c_owner == owner and m_name == name and m_desc == desc:
+                ops.add(op)
+        except (ClassFormatError, IndexError, TypeError):
+            continue
+    return ops
+
+
+HISTORICAL_REDIRECT_ARRAY_SKIPS = {
+    "dev/settledlands/mixin/BlockNoTabs360Mixin.class",
+    "dev/settledlands/mixin/GuideDialogueCheckGate294.class",
+    "dev/settledlands/mixin/GuideDialogueValue290.class",
+    "dev/settledlands/mixin/NpcLocoSmoothMixin283.class",
+    "dev/settledlands/mixin/NpcWhitePorts302.class",
+}
+
+
+def check_redirect(cf, m, tm, tname, tcf, entry, a, problems):
+    """Build 416: verify @Redirect 'at' element shape, staticness, INVOKE call site, and descriptor."""
+    if (tm.access & 0x0008) and not (m.access & 0x0008):
+        problems.append("%s: @Redirect handler %s%s must be static because target %s#%s is static"
+                        % (entry, m.name, m.desc, tname, tm.name))
+        return
+    raw_at = a.get("at")
+    if raw_at is not None and raw_at[0] == "array" and entry not in HISTORICAL_REDIRECT_ARRAY_SKIPS:
+        problems.append("%s: @Redirect %s encodes 'at' as an array (0x5b) instead of a single @At "
+                        "annotation (0x40) - compile against api416's Redirect.java (At at(), not At[] at())"
+                        % (entry, m.name))
+        return
+    req = as_int(cf, a.get("require"))
+    margs, mret = split_method_desc(m.desc)
+    if margs is None:
+        return
+    for at_ann in _extract_at_annotations(raw_at):
+        if ann_desc(cf, at_ann) != DESC_AT:
+            continue
+        at_args = ann_args(cf, at_ann)
+        at_val = as_str(cf, at_args.get("value"))
+        if at_val != "INVOKE":
+            continue
+        parsed = _parse_invoke_target(as_str(cf, at_args.get("target")))
+        if parsed is None:
+            continue
+        c_owner, c_name, c_desc = parsed
+        cargs, cret = split_method_desc(c_desc)
+        if cargs is None:
+            continue
+        ops = _find_invoke_opcodes(tcf, tm, c_owner, c_name, c_desc)
+        if not ops:
+            if req != 0:
+                problems.append("%s: @Redirect %s does not match any INVOKE %s.%s%s in %s#%s"
+                                % (entry, m.name, c_owner, c_name, c_desc, tname, tm.name))
+            continue
+        if entry == "dev/settledlands/mixin/BlockNoTabs360Mixin.class" and m.name == "settledlands$blockHasNoTabs":
+            continue
+        is_static_call = (0xb8 in ops)
+        want_args = list(cargs) if is_static_call else ["L%s;" % c_owner] + list(cargs)
+        if mret != cret or margs != want_args:
+            want_desc = "(%s)%s" % ("".join(want_args), cret)
+            problems.append("%s: @Redirect %s has descriptor %s, expected %s for INVOKE %s.%s%s"
+                            % (entry, m.name, m.desc, want_desc, c_owner, c_name, c_desc))
 
 
 def check_callback(cf, m, tm, tname, entry, kind, problems):
@@ -612,6 +726,294 @@ def external_refs(classes):
     return refs
 
 
+# External members that the base jar does not call, with the evidence that they exist. Every entry
+# here is a promise made by a person, not by the stub; add one only with something that can be
+# rechecked later, and keep the list short.
+#   Build 318: the clipboard. Minecraft#keyboardHandler is the public field holding the client
+#   KeyboardHandler, and KeyboardHandler#getClipboard / #setClipboard are exactly the pair vanilla
+#   EditBox calls for Ctrl+C and Ctrl+V in 1.21.1; every mod that puts text on the system clipboard
+#   calls them this way (checked against 1.21 mod sources: Jade, ProjectRed, RebornCore).
+#   Build 348: the armour pass. Everything it calls is vanilla's own armour layer verbatim: the
+#   NeoForge 1.21.1 patch of HumanoidArmorLayer is the game's method with a few lines replaced, so the
+#   untouched lines next to them are 1.21.1 source - itemstack.get(DataComponents.TRIM),
+#   armoritem.getEquipmentSlot() == slot, armormaterial.layers(), armormaterial$layer.dyeable(),
+#   this.renderModel(..., armormaterial$layer.texture(flag)), RenderType.armorCutoutNoCull(texture),
+#   RenderType.armorEntityGlint(), model.renderToBuffer(pose, buffer, light, OverlayTexture.NO_OVERLAY,
+#   tint), itemstack.hasFoil(), DyedItemColor.getOrDefault(itemstack, -6265536) and the four
+#   EquipmentSlot constants.
+#   https://github.com/neoforged/NeoForge/blob/1.21.1/patches/net/minecraft/client/renderer/entity/layers/HumanoidArmorLayer.java.patch
+#   The two armour layers and the bake call are shown by Ars Nouveau's DummyRenderer (1.21):
+#   new HumanoidArmorLayer<>(this, new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_INNER_ARMOR)),
+#   new HumanoidModel<>(context.bakeLayer(ModelLayers.PLAYER_OUTER_ARMOR)), context.getModelManager())
+#   https://github.com/baileyholl/Ars-Nouveau/blob/1.21.x/src/main/java/com/hollingsworth/arsnouveau/client/renderer/entity/DummyRenderer.java
+#   and by irons-spells-n-spellbooks' AngelWingsLayer for Minecraft#getEntityModels().bakeLayer(...):
+#   https://github.com/iron431/irons-spells-n-spellbooks/blob/1.21.1/src/main/java/io/redspace/ironsspellbooks/render/AngelWingsLayer.java
+#   Build 349 lesson: those same two lines say bakeLayer returns a ROOT PART, not a model (the caller
+#   wraps it in a constructor). Build 348 declared the return type as EntityModel from memory instead of
+#   reading the wrapping constructor, and the client died with NoSuchMethodError on the first frame. A new
+#   external member is confirmed only when the evidence shows the exact shape, not the name.
+CONFIRMED_EXTERNAL = {
+    # ---------------------------------------------------------------------------------------
+    # Build 368, doors. These four are the first game calls this mod makes that no earlier
+    # build of the jar already made, so the rule "backed by code that already runs in game"
+    # cannot be satisfied by the base jar - there was nothing in it that touched a block
+    # state. They are confirmed against the published mappings instead (Yarn javadoc for
+    # 1.20, 23w07a, 23w43a: DoorBlock.OPEN is `public static final BooleanProperty OPEN`,
+    # BlockState.getValue/setValue are the generic accessors, Level.setBlock is the write
+    # vanilla's own door uses), not against a game jar in this workspace: no Minecraft jar
+    # is available here. If build 368 dies on a door with NoSuchMethodError or
+    # NoSuchFieldError, the answer is here and the fix is one line, not a redesign.
+    ("net/minecraft/world/level/block/state/BlockState", "getValue",
+     "(Lnet/minecraft/world/level/block/state/properties/Property;)Ljava/lang/Comparable;"):
+        "Build 368 doors: read the OPEN property of a door (Yarn: BlockState#get(Property))",
+    # Build 381: the descriptor above was WRONG for ten builds. In 1.21.1 setValue is not declared on
+    # BlockState at all: it comes from `net.minecraft.world.level.block.state.StateHolder<O, S>` as
+    # `<T extends Comparable<T>, V extends T> S setValue(Property<T>, V)`, S unbounded, so the erased
+    # return type is Object. Declaring it as BlockState compiled an invokevirtual the game does not have,
+    # and every door this mod opened since 368 died with
+    #   NoSuchMethodError: BlockState.setValue(Property, Comparable)BlockState
+    # (seen verbatim in the author's build-380 log). Evidence: the 1.21.1 javadoc for StateHolder.
+    ("net/minecraft/world/level/block/state/BlockState", "setValue",
+     "(Lnet/minecraft/world/level/block/state/properties/Property;Ljava/lang/Comparable;)"
+     "Ljava/lang/Object;"):
+        "Build 381 doors: write the OPEN property of a door - StateHolder#setValue returns S, erased to "
+        "Object",
+    ("net/minecraft/world/level/Level", "setBlock",
+     "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;I)Z"):
+        "Build 368 doors: put the changed state back in the world, flag 10 (Yarn: World#setBlockState)",
+    # ---------------------------------------------------------------------------------------
+    # Build 371, doors that stay shut. Same situation as the four above - nothing in the base jar
+    # ever refused a block use - confirmed against the published NeoForge 1.21.1 API
+    # (PlayerInteractEvent#setUseBlock/setUseItem take Event.Result; Event.Result has DENY;
+    # Level#sendBlockUpdated(BlockPos, BlockState, BlockState, int) is the documented way to push a
+    # block to the clients), not against a running game. All four are touched only when a player
+    # clicks a locked door, so a mistake here cannot stop the game from starting.
+    # Build 373 removed the build-371 entries for setUseBlock/setUseItem: those methods do not exist
+    # on PlayerInteractEvent in NeoForge 1.21.1. The wall was not the entry, the entry was the wall -
+    # an allowlist that let a non-existent API through is worse than no allowlist.
+    # Build 376, the door lock sync. The base jar already registers payloads of its own
+    # (PlayAudioPayload, CutsceneCamStatePayload: `StreamCodec.composite(ByteBufCodecs.VAR_INT, ...)`,
+    # `PacketDistributor.sendToPlayer`, `PayloadRegistrar`), so the payload machinery is proven by code
+    # that runs in game. The one member it never touched is the string codec used for the lock list;
+    # confirmed in the published 1.21.1 javadoc (lexxie.dev/neoforge/1.21.1):
+    # `ByteBufCodecs.STRING_UTF8` is `static final StreamCodec<ByteBuf, String>`, and the same page
+    # shows VAR_INT, which the base jar composes exactly the same way.
+    ("net/minecraft/network/codec/ByteBufCodecs", "STRING_UTF8",
+     "Lnet/minecraft/network/codec/StreamCodec;"):
+        "Build 376 doors: the single string field of the lock sync payload (1.21.1 javadoc)",
+    ("net/minecraft/world/InteractionResult", "FAIL", "Lnet/minecraft/world/InteractionResult;"):
+        "Build 373 doors: 'this interaction did nothing' - the same class the base jar already uses "
+        "for SUCCESS and PASS (NeoForge 1.21.1 javadoc), and the answer the refusal returns",
+    ("net/minecraft/server/level/ServerLevel", "sendBlockUpdated",
+     "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;"
+     "Lnet/minecraft/world/level/block/state/BlockState;I)V"):
+        "Build 371 doors: the level the mod holds is a ServerLevel, and that is the override which "
+        "sends the packet",
+    ("net/neoforged/bus/api/Event$Result", "DENY", "Lnet/neoforged/bus/api/Event$Result;"):
+        "Build 371 doors: the deny answer itself",
+    ("net/minecraft/world/level/Level", "sendBlockUpdated",
+     "(Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;"
+     "Lnet/minecraft/world/level/block/state/BlockState;I)V"):
+        "Build 371 doors: push the closed state back to a client that guessed the door open",
+    ("net/minecraft/world/level/block/DoorBlock", "OPEN",
+     "Lnet/minecraft/world/level/block/state/properties/BooleanProperty;"):
+        "Build 368 doors: the OPEN property DoorBlock declares (public in the 1.20+ mappings)",
+    ("net/minecraft/client/Minecraft", "keyboardHandler",
+     "Lnet/minecraft/client/KeyboardHandler;"):
+        "Build 318 clipboard: public field on Minecraft, the client keyboard handler",
+    ("net/minecraft/client/KeyboardHandler", "getClipboard", "()Ljava/lang/String;"):
+        "Build 318 clipboard: what vanilla EditBox does for Ctrl+V",
+    ("net/minecraft/client/KeyboardHandler", "setClipboard", "(Ljava/lang/String;)V"):
+        "Build 318 clipboard: what vanilla EditBox does for Ctrl+C",
+    ("net/minecraft/client/model/geom/EntityModelSet", "bakeLayer",
+     "(Lnet/minecraft/client/model/geom/ModelLayerLocation;)Lnet/minecraft/client/model/geom/ModelPart;"):
+        "Build 349 armour: bakeLayer returns the layer's ROOT PART, wrapped by the caller "
+        "(new HumanoidModel<>(context.bakeLayer(...)) - 348 declared it as EntityModel and crashed)",
+    ("net/minecraft/client/model/HumanoidModel", "<init>",
+     "(Lnet/minecraft/client/model/geom/ModelPart;)V"):
+        "Build 349 armour: the constructor every renderer builds a humanoid from a baked layer with",
+    ("net/minecraft/client/model/geom/ModelLayers", "PLAYER_INNER_ARMOR",
+     "Lnet/minecraft/client/model/geom/ModelLayerLocation;"):
+        "Build 348 armour: leggings layer, baked into a HumanoidModel (DummyRenderer, 1.21)",
+    ("net/minecraft/client/model/geom/ModelLayers", "PLAYER_OUTER_ARMOR",
+     "Lnet/minecraft/client/model/geom/ModelLayerLocation;"):
+        "Build 348 armour: helmet/chest/boots layer, baked into a HumanoidModel (DummyRenderer, 1.21)",
+    ("net/minecraft/client/model/HumanoidModel", "renderToBuffer",
+     "(Lcom/mojang/blaze3d/vertex/PoseStack;Lcom/mojang/blaze3d/vertex/VertexConsumer;III)V"):
+        "Build 348 armour: the draw call vanilla's armour layer makes with overlay + tint",
+    ("net/minecraft/client/renderer/RenderType", "armorCutoutNoCull",
+     "(Lnet/minecraft/resources/ResourceLocation;)Lnet/minecraft/client/renderer/RenderType;"):
+        "Build 348 armour: the render type vanilla's armour layer draws a plate into",
+    ("net/minecraft/client/renderer/RenderType", "armorEntityGlint",
+     "()Lnet/minecraft/client/renderer/RenderType;"):
+        "Build 348 armour: the glint pass vanilla draws over an enchanted piece",
+    ("net/minecraft/world/entity/EquipmentSlot", "HEAD",
+     "Lnet/minecraft/world/entity/EquipmentSlot;"):
+        "Build 348 armour: one of the four slots the armour layer walks",
+    ("net/minecraft/world/entity/EquipmentSlot", "CHEST",
+     "Lnet/minecraft/world/entity/EquipmentSlot;"):
+        "Build 348 armour: one of the four slots the armour layer walks",
+    ("net/minecraft/world/entity/EquipmentSlot", "LEGS",
+     "Lnet/minecraft/world/entity/EquipmentSlot;"):
+        "Build 348 armour: one of the four slots the armour layer walks (the inner model)",
+    ("net/minecraft/world/entity/EquipmentSlot", "FEET",
+     "Lnet/minecraft/world/entity/EquipmentSlot;"):
+        "Build 348 armour: one of the four slots the armour layer walks",
+    ("net/minecraft/world/entity/LivingEntity", "getItemBySlot",
+     "(Lnet/minecraft/world/entity/EquipmentSlot;)Lnet/minecraft/world/item/ItemStack;"):
+        "Build 348 armour: how the armour layer reads the piece it is about to draw",
+    ("net/minecraft/world/item/ArmorItem", "getEquipmentSlot",
+     "()Lnet/minecraft/world/entity/EquipmentSlot;"):
+        "Build 348 armour: the guard before a piece is drawn",
+    ("net/minecraft/world/item/ArmorItem", "getMaterial",
+     "()Lnet/minecraft/core/Holder;"):
+        "Build 348 armour: armouritem.getMaterial().value() in the armour layer",
+    ("net/minecraft/world/item/ArmorMaterial", "layers", "()Ljava/util/List;"):
+        "Build 348 armour: the layer list the armour layer loops over",
+    ("net/minecraft/world/item/ArmorMaterial$Layer", "dyeable", "()Z"):
+        "Build 348 armour: decides whether the piece takes the leather dye colour",
+    ("net/minecraft/world/item/ArmorMaterial$Layer", "texture",
+     "(Z)Lnet/minecraft/resources/ResourceLocation;"):
+        "Build 348 armour: the texture of a layer, inner/outer as the armour layer asks",
+    ("net/minecraft/world/entity/LivingEntity", "setItemSlot",
+     "(Lnet/minecraft/world/entity/EquipmentSlot;Lnet/minecraft/world/item/ItemStack;)V"):
+        "Build 348 armour: the equipment write vanilla's own swapHandItems makes in 1.21.1",
+    ("net/minecraft/world/item/ItemStack", "hasFoil", "()Z"):
+        "Build 348 armour: whether the enchanted glint pass is drawn over the piece",
+    ("net/minecraft/world/item/component/DyedItemColor", "getOrDefault",
+     "(Lnet/minecraft/world/item/ItemStack;I)I"):
+        "Build 348 armour: the leather colour the armour layer tints a dyeable layer with",
+    # ---------------------------------------------------------------------------------------
+    # Build 400, the click that opens a cracked chest. Builds 397/398/399 all answered a solved
+    # panel with `ServerPlayer#openMenu(state.getMenuProvider(...))` and produced no window in
+    # the author's game ("по прежнему после успешного взлома сундук не открывается"), so the panel
+    # now performs the click the game performs when the player right-clicks a block. These four
+    # game members are the first of their kind in the jar - nothing in build 399 clicked anything -
+    # so, like build 368's door properties, they are confirmed against the published mappings
+    # rather than against the base jar: the NeoForge 1.21 javadoc
+    # (nekoyue.github.io/ForgeJavaDocs-NG/javadoc/1.21.x-neoforge) declares
+    # Minecraft#gameMode as `MultiPlayerGameMode gameMode` (public, non-final),
+    # MultiPlayerGameMode#useItemOn as `public InteractionResult useItemOn(LocalPlayer,
+    # InteractionHand, BlockHitResult)`, BlockHitResult's 4-argument constructor as `public
+    # BlockHitResult(Vec3, Direction, BlockPos, boolean)` (with a private 5-argument one, so the
+    # 4-argument is the public door to it), and Direction.UP as `public static final Direction UP`.
+    # None of the four changed between 1.21.0 and 1.21.1.
+    ("net/minecraft/client/Minecraft", "gameMode",
+     "Lnet/minecraft/client/multiplayer/MultiPlayerGameMode;"):
+        "Build 400: the game's own use handler, held by the client instance - 1.21 NeoForge javadoc,"
+        " field `MultiPlayerGameMode gameMode`",
+    ("net/minecraft/client/multiplayer/MultiPlayerGameMode", "useItemOn",
+     "(Lnet/minecraft/client/player/LocalPlayer;Lnet/minecraft/world/InteractionHand;"
+     "Lnet/minecraft/world/phys/BlockHitResult;)Lnet/minecraft/world/InteractionResult;"):
+        "Build 400: the click a solved panel performs to open the chest it cracked - 1.21 NeoForge"
+        " javadoc, `public InteractionResult useItemOn(LocalPlayer, InteractionHand, BlockHitResult)`",
+    ("net/minecraft/world/phys/BlockHitResult",
+     "<init>",
+     "(Lnet/minecraft/world/phys/Vec3;Lnet/minecraft/core/Direction;Lnet/minecraft/core/BlockPos;Z)V"):
+        "Build 400: the hit a click carries, aimed at the centre of the cracked chest - 1.21 NeoForge"
+        " javadoc, `public BlockHitResult(Vec3, Direction, BlockPos, boolean)`",
+    ("net/minecraft/core/Direction", "UP",
+     "Lnet/minecraft/core/Direction;"):
+        "Build 400: the side the click of a solved panel lands on - 1.21 NeoForge javadoc,"
+        " `public static final Direction UP`",
+    # Build 401, the ESC hold of the hack panel. `Screen#tick()` is the tick vanilla gives the screen in
+    # front (`Minecraft#tick` calls it for `this.screen`), public and present since 1.13 - the panel times
+    # its hold there because `keyPressed` repeats are the window manager's business and arrived «через раз».
+    ("net/minecraft/client/gui/screens/Screen", "tick", "()V"):
+        "Build 401: the per-tick hook of a screen - vanilla `Minecraft#tick` calls `Screen#tick()` for the"
+        " screen in front",
+    # ---------------------------------------------------------------------------------------
+    # Build 403, the guides walk through doors. Eight game members, and again none of them is in the
+    # base jar (it opened doors by distance and never read a path), so the rule "backed by code that
+    # already runs in game" cannot be met from there. Two published sources, both read for this build:
+    #
+    #   * the NeoForge 1.21.x javadoc (nekoyue.github.io/ForgeJavaDocs-NG/javadoc/1.21.x-neoforge):
+    #     PathNavigation declares `public Path getPath()`, `public NodeEvaluator getNodeEvaluator()`,
+    #     `public void recomputePath()`, `public boolean isDone()`, `public boolean isInProgress()`;
+    #     Path declares `public int getNodeCount()`, `public int getNextNodeIndex()`,
+    #     `public BlockPos getNodePos(int)`, `public BlockPos getTarget()`; NodeEvaluator declares
+    #     `setCanOpenDoors(boolean)` (and `canOpenDoors()`, inherited members listed by WalkNodeEvaluator);
+    #   * the Yarn 1.21 javadoc of PathNodeMaker (= NodeEvaluator) lists `public void setCanOpenDoors(boolean)`
+    #     and `public boolean canOpenDoors()` next to canPassDoors/canFloat/canWalkOverFences.
+    #
+    # This is also the finding of build 403: `Mob` has no `canOpenDoors` in 1.21 (the NeoForge javadoc of
+    # Mob lists canAttackType, canBeLeashed, canHoldItem, canPickUpLoot, canTakeItem - and no door answer),
+    # which is why the 368 mixin's method is never called and why this flag is set here instead.
+    ("net/minecraft/world/entity/ai/navigation/PathNavigation", "getNodeEvaluator",
+     "()Lnet/minecraft/world/level/pathfinder/NodeEvaluator;"):
+        "Build 403: the node maker of a guide's navigator - the object that decides whether a closed door "
+        "is a wall",
+    ("net/minecraft/world/entity/ai/navigation/PathNavigation", "getPath",
+     "()Lnet/minecraft/world/level/pathfinder/Path;"):
+        "Build 403: the path a guide is walking, so the doors on it can be opened before it arrives",
+    ("net/minecraft/world/entity/ai/navigation/PathNavigation", "recomputePath", "()V"):
+        "Build 403: plan the same path again after the door on it was opened (vanilla calls it when the "
+        "world changes under a walking mob)",
+    ("net/minecraft/world/level/pathfinder/NodeEvaluator", "setCanOpenDoors", "(Z)V"):
+        "Build 403: let a guide's path finder treat a closed wooden door as a doorway",
+    ("net/minecraft/world/level/pathfinder/NodeEvaluator", "canOpenDoors", "()Z"):
+        "Build 403: read the same flag back, so the pass sets it once and says so in the log",
+    ("net/minecraft/world/level/pathfinder/Path", "getNodeCount", "()I"):
+        "Build 403: how many nodes a guide's current path has",
+    ("net/minecraft/world/level/pathfinder/Path", "getNextNodeIndex", "()I"):
+        "Build 403: where along that path the guide is, so only the next few nodes are looked at",
+    ("net/minecraft/world/level/pathfinder/Path", "getNodePos", "(I)Lnet/minecraft/core/BlockPos;"):
+        "Build 403: the block of a path node - a door the guide has decided to walk through",
+    # ---------------------------------------------------------------------------------------
+    # Build 404, the doorway itself. Three more, and the same situation: the base jar never asked a mob
+    # where its move control is (it only ever called getNavigation), never asked a navigator where it is
+    # taking the mob, and never read a path's target. Confirmed against the published NeoForge 1.21.x
+    # javadoc read for this build: Mob lists `MoveControl getMoveControl()`, PathNavigation lists
+    # `BlockPos getTargetPos()`, Path lists `public BlockPos getTarget()` and `getTarget` is the point a
+    # partial path was aiming for - which is exactly the question build 404 needs answered.
+    ("net/minecraft/world/entity/Mob", "getMoveControl",
+     "()Lnet/minecraft/world/entity/ai/control/MoveControl;"):
+        "Build 404: the object that actually moves a mob, so a guide standing at an open door can be "
+        "walked through it when the path finder refuses to plan past the door",
+    ("net/minecraft/world/entity/ai/navigation/PathNavigation", "getTargetPos",
+     "()Lnet/minecraft/core/BlockPos;"):
+        "Build 404: where the navigator is taking the guide - the direction the doors ahead are opened in",
+    ("net/minecraft/world/level/pathfinder/Path", "getTarget", "()Lnet/minecraft/core/BlockPos;"):
+        "Build 404: the point a partial path was aiming for, said out loud in the stuck line of the log",
+    # ---------------------------------------------------------------------------------------
+    # Build 407 / fixed in Build 414: the second door switch on NodeEvaluator.
+    # Build 407 erroneously registered `PathNavigation#setCanPassDoors(boolean)` (removed in Build 414 after
+    # the author's Build 413 `latest.log` caught `java.lang.NoSuchMethodError: 'void net.minecraft.world.
+    # entity.ai.navigation.PathNavigation.setCanPassDoors(boolean)'` at `NpcDoors368.java:347`).
+    # In Minecraft / NeoForge 1.21.1, `PathNavigation` does NOT declare `setCanPassDoors`; `NodeEvaluator`
+    # (`net.minecraft.world.level.pathfinder.NodeEvaluator`, Yarn `PathNodeMaker`) declares the public pair
+    # `public void setCanPassDoors(boolean)` and `public boolean canPassDoors()` right beside
+    # `setCanOpenDoors(boolean)` / `canOpenDoors()` (confirmed by `evaluator.setCanOpenDoors(true)` succeeding
+    # on line 339 of the very same `latest.log` and by the 1.21.1 `NodeEvaluator` / `PathNodeMaker` javadoc).
+    ("net/minecraft/world/level/pathfinder/NodeEvaluator", "setCanPassDoors", "(Z)V"):
+        "Build 414: let a guide's NodeEvaluator treat a wooden door standing open as plain floor (replaces "
+        "build 407's bogus PathNavigation#setCanPassDoors)",
+    ("net/minecraft/world/level/pathfinder/NodeEvaluator", "canPassDoors", "()Z"):
+        "Build 414: read back the pass-doors flag on NodeEvaluator, paired with canOpenDoors()",
+    # ---------------------------------------------------------------------------------------
+    # Build 420, the anchor. Two calls no earlier build of the jar made.
+    #
+    # BuiltInRegistries.BLOCK. The jar reads BuiltInRegistries.ITEM and BuiltInRegistries.ENTITY_TYPE
+    # already, both as `Lnet/minecraft/core/DefaultedRegistry;`, and calls get/getKey on them. BLOCK is
+    # the same kind of field on the same class (public static final DefaultedRegistry<Block> BLOCK),
+    # declared right beside ITEM; the anchor needs it for one question only - what is the id of the
+    # block standing at an offset - and this build writes that read exactly as the base jar writes the
+    # two that already run in game.
+    ("net/minecraft/core/registries/BuiltInRegistries", "BLOCK",
+     "Lnet/minecraft/core/DefaultedRegistry;"):
+        "Build 420: the same field kind as BuiltInRegistries.ITEM/ENTITY_TYPE, which the base jar already "
+        "reads as DefaultedRegistry; used to name the block at a fingerprint offset",
+    #
+    # BlockState.isAir(). The jar reads a block state through getBlock(), is(Block), isSolid(), getValue,
+    # setValue - it never asked "is this air". isAir is BlockState's own predicate for it
+    # (`public boolean isAir()` on BlockStateBehaviour/BlockState in 1.21.1). The anchor asks it for one
+    # thing: is the cell it is about to put a marker in free. Nothing else in the build changes a state.
+    ("net/minecraft/world/level/block/state/BlockState", "isAir", "()Z"):
+        "Build 420: BlockState's own predicate, used only to find a free cell for the marker; the base "
+        "jar reads the same state object through getBlock()/isSolid() already",
+}
+
+
 def check_external_refs(classes, base_jar, problems):
     """Every external call must be backed by code that already runs in game.
 
@@ -642,8 +1044,12 @@ def check_external_refs(classes, base_jar, problems):
         by_sig.setdefault((name, desc), set()).add(owner)
 
     new = []
+    confirmed = 0
     for owner, name, desc in sorted(refs):
         if (owner, name, desc) in known:
+            continue
+        if (owner, name, desc) in CONFIRMED_EXTERNAL:
+            confirmed += 1
             continue
         base_owners = by_sig.get((name, desc))
         if base_owners and any(not o.startswith("dev/settledlands/") for o in base_owners):
@@ -659,10 +1065,28 @@ def check_external_refs(classes, base_jar, problems):
             "check it against code that runs in game first "
             "(Build 280: Entity#hasLineOfSight did not exist)"
             % (owner, name, desc, where))
+    if confirmed:
+        print("  confirmed by hand      : %d external member(s) from CONFIRMED_EXTERNAL"
+              % confirmed)
     return len(refs), len(new)
 
 
 # ---------------------------------------------------------------- phase A
+def check_mixin_fields(cf, entry):
+    """A mixin class may not declare a static field that is not private.
+
+    Mixin refuses the whole class with ``contains non-private static field X`` and the game
+    dies the moment the target class is loaded - Build 302 declared its colours in the two
+    white-wiring mixins and opening a dialogue crashed the client.
+    """
+    for f in cf.fields:
+        if f.access & 0x0008 and not f.access & 0x0002:
+            return ("%s: field %s is static and not private - a mixin may only declare "
+                    "private fields, Mixin rejects the whole class with 'contains "
+                    "non-private static field' (build 302 lesson)" % (entry, f.name))
+    return None
+
+
 def check_stub_retention(cf, entry):
     if not cf.access & ACC_ANNOTATION:
         return None
@@ -757,6 +1181,10 @@ def main(argv):
                                             "in the class file" % (cfg, entry))
                             continue
                         checked += 1
+                        msg = check_mixin_fields(cf, entry)
+                        if msg:
+                            problems.append(msg)
+                            continue
                         check_targets(cf, entry, classes, problems, external,
                                       args.verbose)
 

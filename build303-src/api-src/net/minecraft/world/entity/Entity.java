@@ -1,0 +1,56 @@
+package net.minecraft.world.entity;
+import net.minecraft.network.chat.Component;
+import net.minecraft.world.level.Level;
+import java.util.UUID;
+public class Entity {
+    public int tickCount;
+
+    /**
+     * Build 404: true while the entity is pressed against something horizontally - the same field the
+     * game's own door goals read ({@code DoorInteractGoal#canUse}). Public on {@code Entity}.
+     */
+    public boolean horizontalCollision;
+    public boolean isAlive() { return true; }
+    public boolean isRemoved() { return false; }
+    public boolean isPassenger() { return false; }
+    public Level level() { return null; }
+    /**
+     * Build 420: the block an entity stands in. The base jar calls it on players and bodies already
+     * ({@code NpcPointsCommand}, {@code NpcEscortCommands}), so the name and the shape are the game's.
+     */
+    public net.minecraft.core.BlockPos blockPosition() { return null; }
+
+    public double getX() { return 0; }
+    public double getY() { return 0; }
+    public double getZ() { return 0; }
+    public float getYRot() { return 0; }
+    public double distanceToSqr(Entity other) { return 0; }
+    public Component getName() { return null; }
+    public UUID getUUID() { return null; }
+    public net.minecraft.world.phys.Vec3 getDeltaMovement() { return null; }
+    public double distanceToSqr(double x, double y, double z) { return 0; }
+    public net.minecraft.world.phys.AABB getBoundingBox() { return null; }
+    public final void moveTo(double x, double y, double z) {}
+    public void setDeltaMovement(double x, double y, double z) {}
+    /** Build 358: the eye height every aim in the jar uses (GuideDialogueScreen#face). */
+    public double getEyeY() { return 0; }
+    /** Build 358: descriptors read off the game's own GuideDialogueScreen#face bytecode. */
+    public void setYRot(float yRot) {}
+    public void setXRot(float xRot) {}
+    public float yRotO;
+    public float xRotO;
+
+    /**
+     * Build 420: identity, because the anchor keeps entities in a {@link java.util.List} and asks
+     * {@code contains} - a whole-object comparison would go through the world each time.
+     */
+    @Override
+    public boolean equals(Object other) {
+        return this == other;
+    }
+
+    @Override
+    public int hashCode() {
+        return System.identityHashCode(this);
+    }
+}
