@@ -8,6 +8,7 @@ import dev.settledlands.dungeon.DungeonEvents425;
 import dev.settledlands.dungeon.DungeonGenerator427;
 import dev.settledlands.dungeon.DungeonManager425;
 import dev.settledlands.dungeon.DungeonTemplate425;
+import dev.settledlands.npc.TeleportActions424;
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
@@ -43,6 +44,7 @@ import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
+import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 import net.neoforged.neoforge.event.tick.ServerTickEvent;
 
@@ -95,6 +97,7 @@ public final class HellDungeon427Probe {
         testConfigCreationAutoDiscoveryAndFilters();
         testStreamingPlacementSaveLoadAndProximity();
         testRealArchiveIfPresent();
+        testUniqueDungeonPerPlayerBuild428();
         testReflectionAndCommands();
         System.out.println("HellDungeon427Probe: " + passed + " checks passed");
     }
@@ -350,6 +353,145 @@ public final class HellDungeon427Probe {
             check("minecraft:nether_bricks".equals(hd.placedBlockId(12, -8, 0)),
                     "real старт rear arch (12,-8,0) sealed");
         } finally {
+            deleteTree(tmp);
+        }
+    }
+
+    private static void testUniqueDungeonPerPlayerBuild428() throws Exception {
+        Path tmp = Files.createTempDirectory("hd428_probe");
+        try {
+            Path bpDir = tmp.resolve("config/settledlands/blueprints");
+            Files.createDirectories(bpDir);
+            writeRoomBp(bpDir.resolve("старт.bp"), "старт", List.of("dungeon", "infernal"),
+                    0, 8, true, true, false, false, false);
+            for (int i = 1; i <= 6; i++) {
+                writeRoomBp(bpDir.resolve("corridor_" + i + ".bp"), "corridor_" + i,
+                        List.of("dungeon", "infernal"), 0, 6 + (i % 3) * 2, false, true, true, i % 2 == 0, false);
+            }
+            writeRoomBp(bpDir.resolve("тупик_1.bp"), "тупик_1", List.of("dungeon", "infernal"),
+                    0, 6, false, true, false, false, false);
+            writeRoomBp(bpDir.resolve("тупик_2.bp"), "тупик_2", List.of("dungeon", "infernal"),
+                    0, 8, false, true, false, false, false);
+
+            DungeonConfig427 defaultCfg = DungeonConfig427.loadOrCreate(tmp);
+            check(defaultCfg.uniqueDungeonPerEntry,
+                    "unique_dungeon_per_entry defaults to true in Build 428");
+            String propText = Files.readString(tmp.resolve("config/settledlands/dungeon.properties"),
+                    StandardCharsets.UTF_8);
+            check(propText.contains("unique_dungeon_per_entry=true"),
+                    "generated dungeon.properties documents unique_dungeon_per_entry=true");
+
+            // Point live DungeonBlueprints427 cache at our temporary blueprint directory
+            DungeonBlueprints427.Library lib = DungeonBlueprints427.reload(tmp);
+            check(lib.config.uniqueDungeonPerEntry && lib.hasExternalPieces(),
+                    "reloaded temp library has unique mode and external pieces");
+
+            MockServer srv = new MockServer();
+            MockLevel ow = new MockLevel(OVERWORLD_KEY, srv);
+            MockLevel hd = new MockLevel(DungeonManager425.HELL_DUNGEON_LEVEL, srv);
+            srv.overworld = ow;
+            srv.levels.put(OVERWORLD_KEY.toString(), ow);
+            srv.levels.put(DungeonManager425.HELL_DUNGEON_LEVEL.toString(), hd);
+
+            MockPlayer playerA = new MockPlayer(srv, ow, 10.0, 64.0, 20.0, new UUID(0x1111L, 0xAAAAL));
+            MockPlayer playerB = new MockPlayer(srv, ow, -30.0, 70.0, 40.0, new UUID(0x2222L, 0xBBBBL));
+
+            // 1. Player A enters via Teleport with blank coords -> unique cell 0
+            check(TeleportActions424.teleport(playerA, "trigger:teleport:settledlands:hell_dungeon|||"),
+                    "player A enters via blank Teleport coords");
+            DungeonData425 data = DungeonData425.get(srv);
+            check(data.instanceCount() == 1, "1 instance created after player A enters");
+            DungeonData425.Instance instA = data.allInstances().iterator().next();
+            check(instA.index == 0 && instA.originX == 0 && instA.originZ == 0,
+                    "player A lands in cell 0");
+            check(playerA.curLevel == hd && Math.abs(playerA.px - instA.spawnX) < 1e-6,
+                    "player A teleported to start chamber spawn, not (0,0,0)");
+            check(instA.pieces.size() > 1, "player A has procedural room plan (" + instA.pieces.size() + " rooms)");
+
+            // 2. Player B enters via Teleport with literal 0|0|0 -> unique cell 1 (512, 0, 0), NOT player A's corridor
+            check(TeleportActions424.teleport(playerB, "trigger:teleport:settledlands:hell_dungeon|0|0|0"),
+                    "player B enters via literal 0,0,0 Teleport coords");
+            check(data.instanceCount() == 2, "player B allocates a separate instance");
+            DungeonData425.Instance instB = null;
+            for (DungeonData425.Instance cand : data.allInstances()) {
+                if (!cand.id.equals(instA.id)) {
+                    instB = cand;
+                }
+            }
+            check(instB != null && instB.index == 1 && instB.originX == 512 && instB.originZ == 0,
+                    "player B gets separate grid cell (512, 0, 0)");
+            check(instB.seed != instA.seed, "player B receives distinct seed from player A");
+            check(Math.abs(playerB.px - instB.spawnX) < 1e-6 && Math.abs(playerB.pz - instB.spawnZ) < 1e-6,
+                    "player B placed at cell 1 entrance (" + instB.spawnX + "," + instB.spawnZ + ")");
+            check(playerB.px >= 500.0, "player B not placed in shared (0,0,0) corridor");
+
+            // Verify relative layouts actually differ (different piece sequence/rotations/offsets, not just cell origin)
+            List<String> layoutA = new ArrayList<>();
+            for (var pp : instA.pieces) {
+                layoutA.add(pp.pieceKey + "@" + pp.turns + ":"
+                        + (pp.ox - instA.originX) + "," + (pp.oz - instA.originZ));
+            }
+            List<String> layoutB = new ArrayList<>();
+            for (var pp : instB.pieces) {
+                layoutB.add(pp.pieceKey + "@" + pp.turns + ":"
+                        + (pp.ox - instB.originX) + "," + (pp.oz - instB.originZ));
+            }
+            check(!layoutA.equals(layoutB), "player A and player B received distinct dungeon layouts");
+
+            // 3. Player A leaves and enters again -> gets a 3rd unique instance
+            check(DungeonManager425.leaveDungeon(playerA) && playerA.curLevel == ow,
+                    "player A returned to overworld");
+            check(TeleportActions424.teleport(playerA, "trigger:teleport:settledlands:hell_dungeon|||"),
+                    "player A re-enters via Teleport");
+            check(data.instanceCount() == 3, "player A re-entry creates a fresh 3rd instance");
+            DungeonData425.Instance instA2 = null;
+            for (DungeonData425.Instance cand : data.allInstances()) {
+                if (cand.index == 2) instA2 = cand;
+            }
+            check(instA2 != null && instA2.seed != instA.seed && playerA.pz >= 500.0,
+                    "player A re-entry lands in cell 2 with fresh seed");
+
+            // 4. /settledlands dungeon enter (no id) creates 4th unique instance via DungeonManager425.enterUniqueOrDefault
+            DungeonData425.Instance instCmd = DungeonManager425.enterUniqueOrDefault(playerB);
+            check(instCmd != null && data.instanceCount() == 4 && instCmd.index == 3,
+                    "enterUniqueOrDefault creates 4th unique instance");
+
+            // 5. Explicit instance join allows co-op into Player A's first instance without creating a 5th instance
+            check(DungeonManager425.enterDungeon(playerB, instA.id) && data.instanceCount() == 4,
+                    "explicit instance id joins existing dungeon without creating new cell");
+            check(Math.abs(playerB.px - instA.spawnX) < 1e-6 && Math.abs(playerB.pz - instA.spawnZ) < 1e-6,
+                    "player B landed at player A's instance entrance");
+
+            // 6. Explicit non-zero Teleport coords target exact coordinate
+            check(TeleportActions424.teleport(playerB, "trigger:teleport:settledlands:hell_dungeon|516|-8|4")
+                    && Math.abs(playerB.px - 516.0) < 1e-6
+                    && Math.abs(playerB.py - (-8.0)) < 1e-6
+                    && Math.abs(playerB.pz - 4.0) < 1e-6,
+                    "explicit non-zero Teleport coords target exact coordinate");
+
+            // 7. Disabling unique_dungeon_per_entry reverts blank/command entry to shared default
+            Files.writeString(tmp.resolve("config/settledlands/dungeon.properties"),
+                    "blueprints_dir=auto\nunique_dungeon_per_entry=false\n", StandardCharsets.UTF_8);
+            DungeonBlueprints427.Library sharedLib = DungeonBlueprints427.reload(tmp);
+            check(!sharedLib.config.uniqueDungeonPerEntry, "unique_dungeon_per_entry=false parsed from config");
+            MockServer srvShared = new MockServer();
+            MockLevel owShared = new MockLevel(OVERWORLD_KEY, srvShared);
+            MockLevel hdShared = new MockLevel(DungeonManager425.HELL_DUNGEON_LEVEL, srvShared);
+            srvShared.overworld = owShared;
+            srvShared.levels.put(OVERWORLD_KEY.toString(), owShared);
+            srvShared.levels.put(DungeonManager425.HELL_DUNGEON_LEVEL.toString(), hdShared);
+            MockPlayer pSharedA = new MockPlayer(srvShared, owShared, 0, 64, 0, new UUID(1L, 1L));
+            MockPlayer pSharedB = new MockPlayer(srvShared, owShared, 0, 64, 0, new UUID(2L, 2L));
+            DungeonManager425.enterUniqueOrDefault(pSharedA);
+            DungeonData425 sharedData = DungeonData425.get(srvShared);
+            check(sharedData.getInstance(DungeonData425.DEFAULT_INSTANCE_ID) != null,
+                    "shared mode uses default instance");
+            check(sharedData.instanceCount() == 1, "created shared default instance once");
+            DungeonManager425.enterUniqueOrDefault(pSharedB);
+            check(sharedData.instanceCount() == 1,
+                    "shared mode reuses existing default instance for second player");
+        } finally {
+            DungeonBlueprints427.reload();
             deleteTree(tmp);
         }
     }
@@ -677,6 +819,7 @@ public final class HellDungeon427Probe {
         @Override public long getGameTime() { return 100L; }
         @Override public DimensionDataStorage getDataStorage() { return storage; }
         @Override public List<ServerPlayer> players() { return playersList; }
+        @Override public BlockPos getSharedSpawnPos() { return new BlockPos(0, 64, 0); }
 
         @Override public BlockState getBlockState(BlockPos pos) {
             return placedStates.get(pos.getX() + "," + pos.getY() + "," + pos.getZ());
@@ -699,20 +842,40 @@ public final class HellDungeon427Probe {
 
     private static final class MockPlayer extends ServerPlayer {
         final MinecraftServer srv;
-        final ServerLevel curLevel;
-        final double px, py, pz;
+        final UUID id;
+        ServerLevel curLevel;
+        double px, py, pz;
+        float yaw = 0.0F, pitch = 0.0F;
 
         MockPlayer(MinecraftServer srv, ServerLevel level, double x, double y, double z) {
+            this(srv, level, x, y, z, UUID.randomUUID());
+        }
+
+        MockPlayer(MinecraftServer srv, ServerLevel level, double x, double y, double z, UUID id) {
             this.srv = srv;
             this.curLevel = level;
             this.px = x; this.py = y; this.pz = z;
+            this.id = id;
         }
 
         @Override public MinecraftServer getServer() { return srv; }
+        @Override public UUID getUUID() { return id; }
         @Override public ServerLevel serverLevel() { return curLevel; }
         @Override public double getX() { return px; }
         @Override public double getY() { return py; }
         @Override public double getZ() { return pz; }
+        @Override public float getYRot() { return yaw; }
+        @Override public float getXRot() { return pitch; }
+        @Override public void clearFire() {}
+        @Override public void setDeltaMovement(Vec3 m) {}
+        @Override public void displayClientMessage(Component msg, boolean actionBar) {}
+        @Override public boolean teleportTo(ServerLevel level, double tx, double ty, double tz,
+                Set<?> relatives, float tyaw, float tpitch) {
+            this.curLevel = level;
+            this.px = tx; this.py = ty; this.pz = tz;
+            this.yaw = tyaw; this.pitch = tpitch;
+            return true;
+        }
     }
 
     private static final class MockServerTickPost extends ServerTickEvent.Post {

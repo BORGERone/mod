@@ -32,7 +32,7 @@ public final class DungeonCommand425 {
                     .then(Commands.literal("dungeon")
                             .then(Commands.literal("enter")
                                     .requires(src -> src.hasPermission(2))
-                                    .executes(ctx -> enter(ctx, DungeonData425.DEFAULT_INSTANCE_ID))
+                                    .executes(DungeonCommand425::enterDefault)
                                     .then(Commands.argument("id", StringArgumentType.word())
                                             .executes(ctx -> enter(ctx, StringArgumentType.getString(ctx, "id")))))
                             .then(Commands.literal("new")
@@ -56,6 +56,19 @@ public final class DungeonCommand425 {
         }
     }
 
+    private static int enterDefault(CommandContext<CommandSourceStack> ctx) {
+        ServerPlayer player = player(ctx);
+        if (player == null) return 0;
+        DungeonData425.Instance inst = DungeonManager425.enterUniqueOrDefault(player);
+        if (inst != null) {
+            String coords = inst.originX + ", " + inst.originY + ", " + inst.originZ;
+            String rooms = inst.pieces.isEmpty() ? "" : (", комнат в плане: " + inst.pieces.size());
+            tell(player, "данж: вход в '" + inst.id + "' (" + coords + ")" + rooms);
+            return 1;
+        }
+        return 0;
+    }
+
     private static int enter(CommandContext<CommandSourceStack> ctx, String id) {
         ServerPlayer player = player(ctx);
         if (player == null) return 0;
@@ -75,11 +88,14 @@ public final class DungeonCommand425 {
     private static int createNew(CommandContext<CommandSourceStack> ctx, String requestedId) {
         ServerPlayer player = player(ctx);
         if (player == null) return 0;
-        boolean ok = DungeonManager425.createAndEnterNewInstance(player, requestedId);
-        if (ok) {
-            tell(player, "данж: создан новый инстанс в сетке");
+        DungeonData425.Instance inst = DungeonManager425.createAndEnterUniqueInstance(player, requestedId);
+        if (inst != null) {
+            String coords = inst.originX + ", " + inst.originY + ", " + inst.originZ;
+            String rooms = inst.pieces.isEmpty() ? "" : (", комнат в плане: " + inst.pieces.size());
+            tell(player, "данж: создан новый инстанс '" + inst.id + "' (" + coords + ")" + rooms);
+            return 1;
         }
-        return ok ? 1 : 0;
+        return 0;
     }
 
     private static int leave(CommandContext<CommandSourceStack> ctx) {
@@ -111,6 +127,7 @@ public final class DungeonCommand425 {
                 + (dungeon == null ? "НЕ загружено (нужен новый мир)" : "готово")
                 + ", инстансов: " + data.instanceCount()
                 + ", шаг сетки: " + DungeonData425.GRID_SPACING
+                + ", уникальный/вход: " + (lib.config == null || lib.config.uniqueDungeonPerEntry)
                 + " | " + lib.summaryLine();
         ctx.getSource().sendSuccess(() -> Component.literal(msg), false);
         return 1;

@@ -478,28 +478,45 @@ public final class HellDungeon425Probe {
                 "safety resets applied on dungeon entry");
 
         DungeonData425 data = DungeonData425.get(srv);
-        DungeonData425.Instance def = data.getInstance("default");
-        check(def != null && def.placed, "default instance marked placed after first entry");
-        check(hd.setBlockCalls == 6018, "first entry placed 6018 blocks on default instance");
+        check(data.instanceCount() == 1, "first teleport entry creates first unique instance");
+        DungeonData425.Instance inst0 = data.allInstances().iterator().next();
+        check(inst0 != null && inst0.placed && inst0.index == 0,
+                "first unique instance placed at grid cell 0");
+        check(hd.setBlockCalls == 6018, "first entry placed 6018 blocks on cell 0");
         check(data.getReturnPoint(p.id) != null, "return point recorded from overworld");
 
-        // Second entry via Teleport with explicit coordinates preserves custom coords and does not overwrite return point
+        // Re-entering existing instance by explicit id + explicit coords does not rebuild blocks or overwrite return point
         int blocksAfterFirst = hd.setBlockCalls;
-        boolean enteredExplicit = TeleportActions424.teleport(p,
-                "trigger:teleport:settledlands:hell_dungeon|4|12|-8");
-        check(enteredExplicit && p.x == 4.0 && p.y == 12.0 && p.z == -8.0,
-                "explicit Teleport coordinates inside hell_dungeon honored");
+        boolean reEnteredSame = DungeonManager425.enterDungeon(p, 4.0, 12.0, -8.0, false, inst0.id);
+        check(reEnteredSame && p.x == 4.0 && p.y == 12.0 && p.z == -8.0,
+                "explicit instance + coordinates inside hell_dungeon honored");
         check(hd.setBlockCalls == blocksAfterFirst,
-                "re-entering default instance does not re-place blocks");
+                "re-entering existing instance does not re-place blocks");
         DungeonData425.ReturnPoint savedRp = data.getReturnPoint(p.id);
         check(savedRp != null && "minecraft:overworld".equals(savedRp.dimension),
                 "re-entering from inside hell_dungeon does not overwrite return point");
 
-        // Creating new grid instance places at (512, 0, 0) + entrance offset
-        boolean createdNew = DungeonManager425.createAndEnterNewInstance(p, "raid");
-        check(createdNew, "new grid instance created and entered");
+        // Second entry via Teleport with literal 0|0|0 allocates a NEW unique instance at (512, 0, 0) + entrance offset
+        boolean zeroCoordsNew = TeleportActions424.teleport(p, "trigger:teleport:settledlands:hell_dungeon|0|0|0");
+        check(zeroCoordsNew && data.instanceCount() == 2,
+                "zero-coord Teleport allocates a fresh unique instance instead of (0,0,0) ceiling");
         check(Math.abs(p.x - 522.5) < 1e-9 && Math.abs(p.y - (-8.0)) < 1e-9 && Math.abs(p.z - 0.5) < 1e-9,
                 "second instance lands at (512 + 10.5, -8.0, 0.5)");
+
+        // Explicit non-zero Teleport coords route to exact target coordinates
+        boolean enteredExplicit = TeleportActions424.teleport(p,
+                "trigger:teleport:settledlands:hell_dungeon|4|12|-8");
+        check(enteredExplicit && p.x == 4.0 && p.y == 12.0 && p.z == -8.0,
+                "explicit non-zero Teleport coordinates inside hell_dungeon honored");
+
+        // Creating named new grid instance allocates cell 3 (after inst0, inst1, default)
+        boolean createdNew = DungeonManager425.createAndEnterNewInstance(p, "raid");
+        DungeonData425.Instance raid = data.getInstance("raid");
+        check(createdNew && raid != null && raid.index >= 2, "new named grid instance created and entered");
+        check(Math.abs(p.x - (raid.originX + 10.5)) < 1e-9
+                        && Math.abs(p.y - (-8.0)) < 1e-9
+                        && Math.abs(p.z - (raid.originZ + 0.5)) < 1e-9,
+                "named instance lands at cell origin + entrance offset");
 
         // Leaving restores saved overworld coordinates (100.0, 65.0, -200.0)
         boolean left = DungeonManager425.leaveDungeon(p);
@@ -509,7 +526,7 @@ public final class HellDungeon425Probe {
         check(data.getReturnPoint(p.id) == null, "return point cleared after clean leave");
 
         // Leaving without saved return point falls back safely to overworld shared spawn
-        DungeonManager425.enterDungeon(p, "default");
+        DungeonManager425.enterDungeon(p, inst0.id);
         data.clearReturnPoint(p.id);
         boolean fallbackLeft = DungeonManager425.leaveDungeon(p);
         check(fallbackLeft && p.curLevel == ow, "leave fallback works without saved return point");

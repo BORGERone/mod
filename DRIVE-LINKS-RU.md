@@ -307,3 +307,23 @@ but class was expected` — маркер не ставился ни разу, о
 Прямая ссылка на мод: `https://drive.google.com/uc?export=download&id=15H-AX4Ovy4-cgwVCp_jPqx5RBgWZKLvy`
 Прямая ссылка на исходники: `https://drive.google.com/uc?export=download&id=1iQY3D4AZ72vDDQFNpBE3C7EnrdNSHPyA`
 
+## Build 428 — уникальный процедурный «Адский данж» для каждого игрока и входа (2026-11-16)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build428-unique-dungeon.jar | `1u3cII8eMFmSQuvCgZgMRWlcqszv4ESKv` | `7da58a6bdc6f04af489b6274ce72cc0cfb7e3038c7b7077aa164db4ba9ddcd78` |
+| SettledLands-Build428-UniqueDungeon-Source.zip | `1KzaEo5fisIdQxOGs_KWN2t1VtuLm_-zv` | `df8074701e4375bf7146d5ef46ceeef258615b307699acdc11c2e982573bb669` |
+
+База — 427. Исправлен вход в «Адский данж» через узел графа «Телепорт» и `/settledlands dungeon enter`:
+добавлен параметр `unique_dungeon_per_entry=true` (по умолчанию включён в `config/settledlands/dungeon.properties`).
+При пустых или нулевых (`0, 0, 0`) координатах узла «Телепорт» или при `/settledlands dungeon enter` (без `<id>`)
+для каждого игрока и каждого входа создаётся отдельный уникальный инстанс в новой ячейке сетки `512 × 512`
+с солью по UUID игрока и времени, и игрок телепортируется точно ко входу в стартовый зал новой ячейки (а не в
+общий старый коридор `"default"` и не в `(0, 0, 0)`). Явные ненулевые координаты и `/settledlands dungeon enter <id>`
+по-прежнему работают для точечного телепорта и совместного входа к другу.
+44/44 набора проверок PASS (`verify_jar --base build427`, `check_mixin_class --base build426`, `invoke_kind_check --base build427/426`,
+`hell_dungeon_check`: 6 297 + 371 221 JVM-проверок, `mixin_clash_check`, все 40+ гейтов), `cmp -s` PASS. В игре **ожидает проверки автором**.
+Прямая ссылка на мод: `https://drive.google.com/uc?export=download&id=1u3cII8eMFmSQuvCgZgMRWlcqszv4ESKv`
+Прямая ссылка на исходники: `https://drive.google.com/uc?export=download&id=1KzaEo5fisIdQxOGs_KWN2t1VtuLm_-zv`
+
+

@@ -181,6 +181,15 @@ def main(argv):
         for wanted in ("teleportTo", "displayClientMessage", "clearFire", "setDeltaMovement", "players"):
             if not any(f".{wanted}(" in r for r in mgr_refs):
                 return fail("DungeonManager425 missing %s" % wanted)
+        mgr_utf8 = {e[1] for e in mgr_info["cp"] if e and e[0] == 1}
+        for wanted_utf8 in ("createAndEnterUniqueInstance", "enterUniqueOrDefault", "isZeroCoord"):
+            if wanted_utf8 not in mgr_utf8:
+                return fail("DungeonManager425 missing Build 428 method %s" % wanted_utf8)
+
+        cfg_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonConfig427.class"))
+        cfg_utf8 = {e[1] for e in cfg_info["cp"] if e and e[0] == 1}
+        if "unique_dungeon_per_entry" not in cfg_utf8 or "uniqueDungeonPerEntry" not in cfg_utf8:
+            return fail("DungeonConfig427 missing Build 428 unique_dungeon_per_entry config")
 
         # Brigadier exception package verification (Build 426 hotfix for NeoForge 21.1.265 crash)
         for entry in names:

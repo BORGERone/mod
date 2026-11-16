@@ -283,8 +283,29 @@ public final class DungeonManager425 {
     public static boolean enterFromTeleportNode(ServerPlayer player, TeleportNode424.Parsed parsed) {
         if (player == null || parsed == null) return false;
         boolean blankCoords = parsed.rawX.isEmpty() && parsed.rawY.isEmpty() && parsed.rawZ.isEmpty();
+        boolean zeroOrBlank = blankCoords
+                || (isZeroCoord(parsed.rawX) && isZeroCoord(parsed.rawY) && isZeroCoord(parsed.rawZ));
+        DungeonBlueprints427.Library lib = DungeonBlueprints427.get();
+        boolean uniqueMode = lib == null || lib.config == null || lib.config.uniqueDungeonPerEntry;
+        if (uniqueMode && zeroOrBlank) {
+            return createAndEnterUniqueInstance(player, null) != null;
+        }
         return enterDungeon(player, parsed.x, parsed.y, parsed.z, blankCoords,
                 DungeonData425.DEFAULT_INSTANCE_ID);
+    }
+
+    public static DungeonData425.Instance enterUniqueOrDefault(ServerPlayer player) {
+        if (player == null) return null;
+        DungeonBlueprints427.Library lib = DungeonBlueprints427.get();
+        boolean uniqueMode = lib == null || lib.config == null || lib.config.uniqueDungeonPerEntry;
+        if (uniqueMode) {
+            return createAndEnterUniqueInstance(player, null);
+        }
+        if (!enterDungeon(player, DungeonData425.DEFAULT_INSTANCE_ID)) {
+            return null;
+        }
+        MinecraftServer server = player.getServer();
+        return server == null ? null : DungeonData425.get(server).getInstance(DungeonData425.DEFAULT_INSTANCE_ID);
     }
 
     public static boolean enterDungeon(ServerPlayer player, String instanceId) {
@@ -327,20 +348,32 @@ public final class DungeonManager425 {
     }
 
     public static boolean createAndEnterNewInstance(ServerPlayer player, String requestedId) {
-        if (player == null) return false;
+        return createAndEnterUniqueInstance(player, requestedId) != null;
+    }
+
+    public static DungeonData425.Instance createAndEnterUniqueInstance(
+            ServerPlayer player, String requestedId) {
+        if (player == null) return null;
         MinecraftServer server = player.getServer();
-        if (server == null) return false;
+        if (server == null) return null;
 
         ServerLevel dungeon = dungeonLevel(server);
         if (dungeon == null) {
             player.displayClientMessage(Component.translatable("message.settledlands.dungeon.not_loaded"), false);
-            return false;
+            return null;
         }
+
+        java.util.UUID pid = player.getUUID();
+        long extraSalt = System.nanoTime()
+                ^ (pid == null ? 0L : (pid.getMostSignificantBits() * 0x9E3779B97F4A7C15L ^ pid.getLeastSignificantBits()));
+        String baseId = (requestedId != null && !requestedId.trim().isEmpty())
+                ? requestedId
+                : (pid == null ? "run" : "p_" + Long.toHexString((pid.getMostSignificantBits() >>> 40) & 0xFFFFFFL));
 
         DungeonBlueprints427.Library lib = DungeonBlueprints427.get();
         DungeonData425 data = DungeonData425.get(server);
         DungeonData425.Instance inst = data.allocateNewInstance(
-                requestedId, dungeon.getSeed(), ((Level) dungeon).getGameTime());
+                baseId, dungeon.getSeed(), ((Level) dungeon).getGameTime(), extraSalt);
         ensureInstanceInitialized(dungeon, data, inst, lib);
         saveReturnPointIfOutside(player, data);
 
@@ -352,11 +385,21 @@ public final class DungeonManager425 {
                 inst.spawnZ,
                 inst.spawnYaw,
                 inst.spawnPitch);
-        if (ok && lib != null && !lib.hasExternalPieces()) {
+        if (!ok) return null;
+        if (lib != null && !lib.hasExternalPieces()) {
             player.displayClientMessage(
                     Component.translatable("message.settledlands.dungeon.no_blueprints"), false);
         }
-        return ok;
+        return inst;
+    }
+
+    private static boolean isZeroCoord(String raw) {
+        if (raw == null || raw.trim().isEmpty()) return true;
+        try {
+            return Math.abs(Double.parseDouble(raw.trim().replace(',', '.'))) < 1e-9;
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
     }
 
     public static boolean leaveDungeon(ServerPlayer player) {

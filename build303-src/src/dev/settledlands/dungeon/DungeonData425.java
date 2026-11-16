@@ -255,6 +255,10 @@ public final class DungeonData425 extends SavedData {
     }
 
     public Instance allocateNewInstance(String requestedId, long seed, long tick) {
+        return allocateNewInstance(requestedId, seed, tick, 0L);
+    }
+
+    public Instance allocateNewInstance(String requestedId, long seed, long tick, long extraSalt) {
         String base = (requestedId == null || requestedId.trim().isEmpty())
                 ? "dungeon_" + (nextIndex + 1)
                 : normalizeInstanceId(requestedId);
@@ -265,7 +269,7 @@ public final class DungeonData425 extends SavedData {
         }
         int idx = allocateNextIndex();
         int[] origin = gridOriginForIndex(idx);
-        long instSeed = mixSeed(seed, idx, id);
+        long instSeed = mixSeed(seed ^ extraSalt, idx, id);
         Instance created = new Instance(id, idx, origin[0], origin[1], origin[2], false, instSeed, tick);
         instances.put(id, created);
         setDirty();

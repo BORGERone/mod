@@ -45,6 +45,7 @@ public final class DungeonConfig427 {
     public final int immediatePieces;
     public final int blocksPerTick;
     public final boolean useEmbeddedStartFallback;
+    public final boolean uniqueDungeonPerEntry;
 
     public DungeonConfig427(
             Path baseDir,
@@ -61,6 +62,27 @@ public final class DungeonConfig427 {
             int immediatePieces,
             int blocksPerTick,
             boolean useEmbeddedStartFallback) {
+        this(baseDir, blueprintsDir, filterMode, startName, minPieces, maxPieces,
+                maxRadius, minY, maxY, sealStartEntrance, doorwayBlock,
+                immediatePieces, blocksPerTick, useEmbeddedStartFallback, true);
+    }
+
+    public DungeonConfig427(
+            Path baseDir,
+            String blueprintsDir,
+            String filterMode,
+            String startName,
+            int minPieces,
+            int maxPieces,
+            int maxRadius,
+            int minY,
+            int maxY,
+            boolean sealStartEntrance,
+            String doorwayBlock,
+            int immediatePieces,
+            int blocksPerTick,
+            boolean useEmbeddedStartFallback,
+            boolean uniqueDungeonPerEntry) {
         this.baseDir = baseDir == null ? Paths.get(".").toAbsolutePath().normalize() : baseDir.toAbsolutePath().normalize();
         this.blueprintsDir = (blueprintsDir == null || blueprintsDir.trim().isEmpty()) ? "auto" : blueprintsDir.trim();
         this.filterMode = (filterMode == null || filterMode.trim().isEmpty()) ? "auto" : filterMode.trim();
@@ -78,6 +100,7 @@ public final class DungeonConfig427 {
         this.immediatePieces = Math.max(1, Math.min(32, immediatePieces));
         this.blocksPerTick = Math.max(256, Math.min(32768, blocksPerTick));
         this.useEmbeddedStartFallback = useEmbeddedStartFallback;
+        this.uniqueDungeonPerEntry = uniqueDungeonPerEntry;
     }
 
     public static DungeonConfig427 defaults(Path baseDir) {
@@ -95,6 +118,7 @@ public final class DungeonConfig427 {
                 DungeonTemplate425.DOORWAY_REPLACEMENT,
                 8,
                 4096,
+                true,
                 true);
     }
 
@@ -152,7 +176,8 @@ public final class DungeonConfig427 {
                 p.getProperty("doorway_block", DungeonTemplate425.DOORWAY_REPLACEMENT),
                 parseInt(p.getProperty("immediate_pieces"), 8),
                 parseInt(p.getProperty("blocks_per_tick"), 4096),
-                parseBool(p.getProperty("use_embedded_start_fallback"), true));
+                parseBool(p.getProperty("use_embedded_start_fallback"), true),
+                parseBool(p.getProperty("unique_dungeon_per_entry"), true));
     }
 
     public List<Path> candidateBlueprintDirs() {
@@ -230,6 +255,10 @@ public final class DungeonConfig427 {
                 + "blocks_per_tick=4096\n"
                 + "\n"
                 + "# Использовать встроенный start.slbp как запасную стартовую комнату, если папка .bp пуста\n"
-                + "use_embedded_start_fallback=true\n";
+                + "use_embedded_start_fallback=true\n"
+                + "\n"
+                + "# Создавать новый уникальный данж в свободной ячейке сетки для каждого игрока и каждого входа\n"
+                + "# через узел «Телепорт» (или /settledlands dungeon enter без id)\n"
+                + "unique_dungeon_per_entry=true\n";
     }
 }
