@@ -1011,6 +1011,42 @@ CONFIRMED_EXTERNAL = {
     ("net/minecraft/world/level/block/state/BlockState", "isAir", "()Z"):
         "Build 420: BlockState's own predicate, used only to find a free cell for the marker; the base "
         "jar reads the same state object through getBlock()/isSolid() already",
+    # ---------------------------------------------------------------------------------------
+    # Build 425, Hell Dungeon («Адский данж»). All 12 calls below are on plain classes (verified
+    # directly in nekoyue/ForgeJavaDocs-NG javadoc/1.21.x-neoforge) and used only when reading or
+    # placing start.slbp / leaving the dungeon.
+    ("net/minecraft/nbt/NbtAccounter", "unlimitedHeap",
+     "()Lnet/minecraft/nbt/NbtAccounter;"):
+        "Build 425: MC 1.21.1 NbtAccounter.unlimitedHeap() factory for NbtIo.readCompressed",
+    ("net/minecraft/nbt/NbtIo", "readCompressed",
+     "(Ljava/io/InputStream;Lnet/minecraft/nbt/NbtAccounter;)Lnet/minecraft/nbt/CompoundTag;"):
+        "Build 425: MC 1.21.1 NbtIo.readCompressed(InputStream, NbtAccounter) loading start.slbp",
+    ("net/minecraft/nbt/CompoundTag", "copy",
+     "()Lnet/minecraft/nbt/CompoundTag;"):
+        "Build 425: CompoundTag.copy() so repeated placements never mutate cached start.slbp NBT",
+    ("net/minecraft/world/level/block/Block", "defaultBlockState",
+     "()Lnet/minecraft/world/level/block/state/BlockState;"):
+        "Build 425: Block.defaultBlockState() base state for schematic palette resolution",
+    ("net/minecraft/world/level/block/Block", "getStateDefinition",
+     "()Lnet/minecraft/world/level/block/state/StateDefinition;"):
+        "Build 425: Block.getStateDefinition() lookup for schematic block properties",
+    ("net/minecraft/world/level/block/state/StateDefinition", "getProperty",
+     "(Ljava/lang/String;)Lnet/minecraft/world/level/block/state/properties/Property;"):
+        "Build 425: StateDefinition.getProperty(String) resolving blockstate keys from start.slbp",
+    ("net/minecraft/world/level/block/state/properties/Property", "getValue",
+     "(Ljava/lang/String;)Ljava/util/Optional;"):
+        "Build 425: Property.getValue(String) parsing schematic blockstate property values",
+    ("net/minecraft/world/level/block/entity/BlockEntity", "loadWithComponents",
+     "(Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/core/HolderLookup$Provider;)V"):
+        "Build 425: MC 1.21.1 final BlockEntity.loadWithComponents(CompoundTag, HolderLookup.Provider)",
+    ("net/minecraft/world/level/block/entity/BlockEntity", "setChanged", "()V"):
+        "Build 425: BlockEntity.setChanged() persisting restored schematic block entity NBT",
+    ("net/minecraft/world/entity/Entity", "load", "(Lnet/minecraft/nbt/CompoundTag;)V"):
+        "Build 425: Entity.load(CompoundTag) restoring tags/attachments/PersistentData from start.slbp",
+    ("net/minecraft/server/level/ServerLevel", "getSeed", "()J"):
+        "Build 425: ServerLevel.getSeed() persisted per dungeon grid instance",
+    ("net/minecraft/world/level/Level", "getSharedSpawnPos", "()Lnet/minecraft/core/BlockPos;"):
+        "Build 425: Level.getSharedSpawnPos() fallback return position when leaving the dungeon",
 }
 
 

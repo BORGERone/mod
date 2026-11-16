@@ -58,6 +58,7 @@ public final class TeleportNode424 {
         "minecraft:the_nether",
         "minecraft:the_end",
         "settledlands:purgatory",
+        "settledlands:hell_dungeon",
     };
 
     private static final String[] WORLD_KEYS = {
@@ -65,6 +66,7 @@ public final class TeleportNode424 {
         "gui.settledlands.teleport.world.nether",
         "gui.settledlands.teleport.world.end",
         "gui.settledlands.teleport.world.purgatory",
+        "gui.settledlands.teleport.world.hell_dungeon",
     };
 
     public static final class Parsed {
@@ -219,6 +221,7 @@ public final class TeleportNode424 {
             if (lower.equals("nether") || lower.equals("the_nether")) return "minecraft:the_nether";
             if (lower.equals("end") || lower.equals("the_end")) return "minecraft:the_end";
             if (lower.equals("purgatory")) return "settledlands:purgatory";
+            if (lower.equals("hell_dungeon") || lower.equals("dungeon")) return "settledlands:hell_dungeon";
             return "minecraft:" + lower;
         }
         return clean.toLowerCase(java.util.Locale.ROOT);

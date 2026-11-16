@@ -1,5 +1,6 @@
 package dev.settledlands.npc;
 
+import dev.settledlands.dungeon.DungeonManager425;
 import java.util.Collections;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.resources.ResourceKey;
@@ -33,6 +34,10 @@ public final class TeleportActions424 {
 
         MinecraftServer server = player.getServer();
         if (server == null) return false;
+
+        if (DungeonManager425.isDungeonDimension(parsed.dimension)) {
+            return DungeonManager425.enterFromTeleportNode(player, parsed);
+        }
 
         ServerLevel target = resolveLevel(server, parsed.dimension);
         if (target == null) {

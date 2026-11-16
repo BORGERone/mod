@@ -57,6 +57,7 @@ LANG_KEYS = (
     "gui.settledlands.teleport.world.nether",
     "gui.settledlands.teleport.world.end",
     "gui.settledlands.teleport.world.purgatory",
+    "gui.settledlands.teleport.world.hell_dungeon",
     "gui.settledlands.teleport.coords_hint",
     "gui.settledlands.teleport.x",
     "gui.settledlands.teleport.y",
@@ -177,6 +178,7 @@ def main(argv):
             ROOT / "build303-src" / "api4-src",
             ROOT / "build303-src" / "api5-src",
             ROOT / "build303-src" / "api416-src",
+            ROOT / "build303-src" / "stubs425-src",
         )
         for layer in layers:
             for src in layer.rglob("*.java"):

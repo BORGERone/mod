@@ -25,7 +25,8 @@ def collect(readme, mixin_sources):
         if not path.is_file():
             raise SystemExit("no such readme: %s" % path)
         files.append((readme, path))
-    for pattern, base in (("*.py", ROOT / "tools"), ("*.java", ROOT / "tools" / "tests")):
+    for pattern, base in (("*.py", ROOT / "tools"), ("*.py", ROOT / "tools" / "dungeon"),
+                          ("*.java", ROOT / "tools" / "tests")):
         for path in sorted(base.glob(pattern)):
             files.append((path.relative_to(ROOT).as_posix(), path))
     for base in (ROOT / "build303-src" / "src", ROOT / "build303-src" / "api3-src",
@@ -33,13 +34,14 @@ def collect(readme, mixin_sources):
                  ROOT / "build303-src" / "api-src", ROOT / "build303-src" / "api5-src",
                  ROOT / "build303-src" / "api416-src",
                  ROOT / "build303-src" / "stubs", ROOT / "build303-src" / "stubs396-src",
-                 ROOT / "build303-src" / "stubs420-src"):
+                 ROOT / "build303-src" / "stubs420-src", ROOT / "build303-src" / "stubs425-src"):
         for path in sorted(base.rglob("*.java")):
             files.append((path.relative_to(ROOT).as_posix(), path))
-    data416 = ROOT / "build303-src" / "data416"
-    if data416.is_dir():
-        for path in sorted(data416.rglob("*.json")):
-            files.append((path.relative_to(ROOT).as_posix(), path))
+    for data_dir in (ROOT / "build303-src" / "data416", ROOT / "build303-src" / "data425"):
+        if data_dir.is_dir():
+            for path in sorted(data_dir.rglob("*")):
+                if path.is_file():
+                    files.append((path.relative_to(ROOT).as_posix(), path))
     # The compile mirrors of the mixin annotations and the JVM harness are part of how a build is
     # made: build 335 could not express its injection point without At.Shift in tools/api271.
     for base in (ROOT / "tools" / "api271", ROOT / "tools" / "harness"):

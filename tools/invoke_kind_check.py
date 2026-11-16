@@ -120,8 +120,35 @@ KNOWN_NEW = {
         "invokevirtual"},                 # Entity is a class; the jar itself calls moveTo(DDDFF)
     "net/minecraft/world/entity/Entity.setYRot(F)V": {
         "invokevirtual"},                 # Entity is a class; the jar calls setYRot on five entity types
+    "net/minecraft/world/entity/Entity.setXRot(F)V": {
+        "invokevirtual"},                 # Entity is a class; public void setXRot(float) in 1.21.x ForgeJavaDocs-NG
     "net/minecraft/world/level/block/state/BlockState.isAir()Z": {
         "invokevirtual"},                 # BlockState is a class (BlockBehaviour$BlockStateBase subtree)
+    # Build 425: Hell Dungeon («Адский данж») — every class/method verified in ForgeJavaDocs-NG 1.21.x-neoforge.
+    "net/minecraft/nbt/NbtAccounter.unlimitedHeap()Lnet/minecraft/nbt/NbtAccounter;": {
+        "invokestatic"},                  # public class NbtAccounter, public static NbtAccounter unlimitedHeap()
+    "net/minecraft/nbt/NbtIo.readCompressed(Ljava/io/InputStream;Lnet/minecraft/nbt/NbtAccounter;)Lnet/minecraft/nbt/CompoundTag;": {
+        "invokestatic"},                  # public class NbtIo, public static CompoundTag readCompressed(...)
+    "net/minecraft/nbt/CompoundTag.copy()Lnet/minecraft/nbt/CompoundTag;": {
+        "invokevirtual"},                 # public class CompoundTag, public CompoundTag copy()
+    "net/minecraft/world/level/block/Block.defaultBlockState()Lnet/minecraft/world/level/block/state/BlockState;": {
+        "invokevirtual"},                 # public class Block, public final BlockState defaultBlockState()
+    "net/minecraft/world/level/block/Block.getStateDefinition()Lnet/minecraft/world/level/block/state/StateDefinition;": {
+        "invokevirtual"},                 # public class Block, public StateDefinition getStateDefinition()
+    "net/minecraft/world/level/block/state/StateDefinition.getProperty(Ljava/lang/String;)Lnet/minecraft/world/level/block/state/properties/Property;": {
+        "invokevirtual"},                 # public class StateDefinition, public Property getProperty(String)
+    "net/minecraft/world/level/block/state/properties/Property.getValue(Ljava/lang/String;)Ljava/util/Optional;": {
+        "invokevirtual"},                 # public abstract class Property, public abstract Optional getValue(String)
+    "net/minecraft/world/level/block/entity/BlockEntity.loadWithComponents(Lnet/minecraft/nbt/CompoundTag;Lnet/minecraft/core/HolderLookup$Provider;)V": {
+        "invokevirtual"},                 # public abstract class BlockEntity, public final void loadWithComponents(...)
+    "net/minecraft/world/level/block/entity/BlockEntity.setChanged()V": {
+        "invokevirtual"},                 # public abstract class BlockEntity, public void setChanged()
+    "net/minecraft/world/entity/Entity.load(Lnet/minecraft/nbt/CompoundTag;)V": {
+        "invokevirtual"},                 # public abstract class Entity, public void load(CompoundTag)
+    "net/minecraft/server/level/ServerLevel.getSeed()J": {
+        "invokevirtual"},                 # public class ServerLevel, public long getSeed()
+    "net/minecraft/world/level/Level.getSharedSpawnPos()Lnet/minecraft/core/BlockPos;": {
+        "invokevirtual"},                 # public abstract class Level, public BlockPos getSharedSpawnPos()
 }
 
 

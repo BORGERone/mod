@@ -103,12 +103,20 @@ public final class Teleport424Probe {
     }
 
     private static void testWorldsAndCustomDimension() {
-        check(TeleportNode424.worldCount() == 4, "4 built-in dimensions");
+        check(TeleportNode424.worldCount() == 5, "5 built-in dimensions");
         check(TeleportNode424.worldIndexForId("minecraft:overworld") == 0, "overworld index 0");
         check(TeleportNode424.worldIndexForId("minecraft:the_nether") == 1, "nether index 1");
         check(TeleportNode424.worldIndexForId("minecraft:the_end") == 2, "end index 2");
         check(TeleportNode424.worldIndexForId("settledlands:purgatory") == 3, "purgatory index 3");
+        check(TeleportNode424.worldIndexForId("settledlands:hell_dungeon") == 4, "hell_dungeon index 4");
         check(TeleportNode424.worldIndexForId("twilightforest:twilight_forest") == -1, "custom dim = -1");
+
+        TeleportNode424.Parsed hdAlias = TeleportNode424.parse("trigger:teleport:hell_dungeon|||");
+        check(hdAlias != null && "settledlands:hell_dungeon".equals(hdAlias.dimension),
+                "hell_dungeon alias normalized");
+        TeleportNode424.Parsed dgAlias = TeleportNode424.parse("teleport dungeon 1 2 3");
+        check(dgAlias != null && "settledlands:hell_dungeon".equals(dgAlias.dimension),
+                "dungeon alias normalized");
 
         TeleportNode424.Parsed custom = TeleportNode424.parse(
                 "trigger:teleport:twilightforest:twilight_forest|10|80|-20");
@@ -211,11 +219,12 @@ public final class Teleport424Probe {
 
     private static void testTeleportCardDropdown() {
         List<Component> std = TeleportCard424.worldDropdownEntries("minecraft:the_end");
-        check(std.size() == 4, "standard dropdown has 4 entries");
+        check(std.size() == 5, "standard dropdown has 5 entries");
         check(TeleportCard424.worldDropdownIndex("minecraft:the_end") == 2, "the_end index 2");
+        check(TeleportCard424.worldDropdownIndex("settledlands:hell_dungeon") == 4, "hell_dungeon index 4");
 
         List<Component> cust = TeleportCard424.worldDropdownEntries("modid:dungeon_arena");
-        check(cust.size() == 5, "custom dim appends 5th entry");
-        check(TeleportCard424.worldDropdownIndex("modid:dungeon_arena") == 4, "custom dim selects index 4");
+        check(cust.size() == 6, "custom dim appends 6th entry");
+        check(TeleportCard424.worldDropdownIndex("modid:dungeon_arena") == 5, "custom dim selects index 5");
     }
 }
