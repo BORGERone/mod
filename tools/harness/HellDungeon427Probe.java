@@ -97,6 +97,7 @@ public final class HellDungeon427Probe {
         testConfigCreationAutoDiscoveryAndFilters();
         testStreamingPlacementSaveLoadAndProximity();
         testRealArchiveIfPresent();
+        testBiomeProgressionBuild429();
         testUniqueDungeonPerPlayerBuild428();
         testReflectionAndCommands();
         System.out.println("HellDungeon427Probe: " + passed + " checks passed");
@@ -171,6 +172,7 @@ public final class HellDungeon427Probe {
             check(Files.isRegularFile(tmp.resolve(DungeonConfig427.DEFAULT_BLUEPRINTS_REL)
                     .resolve("README-BLUEPRINTS-RU.txt")), "Russian blueprint README created");
             check("auto".equals(cfg.blueprintsDir) && "auto".equals(cfg.filterMode), "default auto modes");
+            check(cfg.minPieces == 75 && cfg.maxPieces == 95, "Build 429 default minPieces=75, maxPieces=95");
 
             // Empty folders -> embedded start.slbp fallback
             DungeonBlueprints427.Library emptyLib = DungeonBlueprints427.load(cfg);
@@ -188,17 +190,27 @@ public final class HellDungeon427Probe {
                     List.of("dungeon", "infernal"), 2, 10, false, true, true, false, false);
             writeRoomBp(axiomDir.resolve("г Коридор.bp"), "г Коридор",
                     List.of("dungeon", "crypt"), 2, 10, false, true, true, false, false);
+            writeRoomBp(axiomDir.resolve("к КоридорБезТега.bp"), "к КоридорБезТега",
+                    List.of(), 2, 10, false, true, true, false, false);
             writeRoomBp(axiomDir.resolve("а Тупик.bp"), "а Тупик",
                     List.of("dungeon", "infernal"), 0, 10, false, true, false, false, false);
+            writeRoomBp(axiomDir.resolve("п Коридор.bp"), "п Коридор",
+                    List.of("dungeon", "flesh"), 2, 10, false, true, true, false, false);
+            writeRoomBp(axiomDir.resolve("п Тупик.bp"), "п Тупик",
+                    List.of("dungeon", "flesh"), 0, 10, false, true, false, false, false);
+            writeRoomBp(axiomDir.resolve("с Канал.bp"), "с Канал",
+                    List.of("dungeon", "sewer"), 2, 10, false, true, true, false, false);
 
             DungeonBlueprints427.Library autoLib = DungeonBlueprints427.load(cfg);
             check(autoLib.sourceDir.equals(tmp.resolve("config/axiom/blueprints")),
                     "auto-discovered config/axiom/blueprints when settledlands/blueprints is empty");
             check(autoLib.skippedNoMarkers == 1, "house.bp without lapis_block skipped cleanly");
             check(autoLib.failedParse == 0, "0 parse failures");
-            check("auto->infernal".equals(autoLib.appliedFilter), "auto selected infernal among mixed themes");
-            check(autoLib.pieces.size() == 2 && autoLib.deadEnds.size() == 1,
-                    "filtered infernal pieces + deadEnds");
+            check("auto->biomes(к->а+п)".equals(autoLib.appliedFilter) && autoLib.biomeProgression,
+                    "auto selected biome progression к->а+п among mixed themes");
+            check(autoLib.pieces.size() == 6 && autoLib.cryptCount == 2 && autoLib.infernalCount == 2
+                    && autoLib.fleshCount == 2 && autoLib.deadEnds.size() == 2,
+                    "filtered к+а+п pieces (including prefix-only к) and excluded sewer");
 
             // Now drop a custom room directly in config/settledlands/blueprints -> takes priority, auto->all
             Path customDir = tmp.resolve(DungeonConfig427.DEFAULT_BLUEPRINTS_REL);
@@ -206,8 +218,9 @@ public final class HellDungeon427Probe {
                     List.of(), 1, 10, false, true, true, false, false);
             DungeonBlueprints427.Library customLib = DungeonBlueprints427.load(cfg);
             check(customLib.sourceDir.equals(customDir), "config/settledlands/blueprints takes priority");
-            check("auto->all".equals(customLib.appliedFilter) && customLib.pieces.size() == 1,
-                    "single-theme custom folder loads all pieces");
+            check("auto->all".equals(customLib.appliedFilter) && !customLib.biomeProgression
+                    && customLib.pieces.size() == 1,
+                    "single-theme custom folder loads all pieces without biome split");
             check(customLib.startPiece != null && customLib.startPiece.embeddedFallback,
                     "embedded start.slbp used when custom folder lacks старт.bp");
 
@@ -216,8 +229,9 @@ public final class HellDungeon427Probe {
                     tmp, axiomDir.toString(), "tag:crypt", "старт",
                     60, 80, 230, -52, 240, true, "minecraft:nether_bricks", 8, 4096, true);
             DungeonBlueprints427.Library cryptLib = DungeonBlueprints427.load(cryptCfg);
-            check(cryptLib.pieces.size() == 1 && "г Коридор".equals(cryptLib.pieces.get(0).key),
-                    "tag:crypt filter selects only crypt pieces");
+            check(cryptLib.pieces.size() == 1 && "г Коридор".equals(cryptLib.pieces.get(0).key)
+                    && !cryptLib.biomeProgression,
+                    "tag:crypt filter selects only tag:crypt pieces");
         } finally {
             deleteTree(tmp);
         }
@@ -316,11 +330,40 @@ public final class HellDungeon427Probe {
         try {
             DungeonConfig427 cfg = new DungeonConfig427(
                     tmp, realDir.toString(), "auto", "старт",
-                    60, 80, 230, -52, 240, true, "minecraft:nether_bricks", 8, 8192, true);
+                    75, 95, 230, -52, 240, true, "minecraft:nether_bricks", 8, 8192, true);
             DungeonBlueprints427.Library lib = DungeonBlueprints427.load(cfg);
             check(lib.totalBpFiles == 232 && lib.failedParse == 0, "all 232 real .bp parsed");
-            check("auto->infernal".equals(lib.appliedFilter) && lib.pieces.size() == 48,
-                    "infernal theme selected (48 pieces)");
+            check("auto->biomes(к->а+п)".equals(lib.appliedFilter) && lib.biomeProgression
+                    && lib.pieces.size() == 142 && lib.cryptCount == 51
+                    && lib.infernalCount == 48 && lib.fleshCount == 43,
+                    "biome pool к+а+п selected (142 pieces: 51 crypt, 48 infernal, 43 flesh)");
+
+            // Check 5 distinct seeds for strict crypt-near-start and both deep biomes present
+            for (int s = 0; s < 5; s++) {
+                DungeonGenerator427.Plan p = DungeonGenerator427.generate(lib, 0, 0, 0, 1000L + s * 7919L);
+                check(p.pieces.size() >= 75 && p.pieces.size() <= 95,
+                        "real biome plan #" + s + " size=" + p.pieces.size());
+                check(p.cryptCount >= 15 && p.infernalCount >= 12 && p.fleshCount >= 12,
+                        "real biome plan #" + s + " balanced [к=" + p.cryptCount
+                                + ", а=" + p.infernalCount + ", п=" + p.fleshCount + "]");
+                for (int i = 1; i < p.pieces.size(); i++) {
+                    var pp = p.pieces.get(i);
+                    if (pp.depth <= 3) {
+                        check(DungeonBlueprints427.THEME_CRYPT.equals(pp.biome),
+                                "real shallow room (depth=" + pp.depth + ") must be crypt, got " + pp.pieceKey);
+                    }
+                    // Dead-ends must belong to their branch's biome
+                    if (pp.pieceKey.contains("Тупик")) {
+                        if (DungeonBlueprints427.THEME_CRYPT.equals(pp.biome)) {
+                            check(pp.pieceKey.startsWith("к "), "crypt dead-end in crypt branch: " + pp.pieceKey);
+                        } else if (DungeonBlueprints427.THEME_INFERNAL.equals(pp.biome)) {
+                            check(pp.pieceKey.startsWith("а "), "infernal dead-end in infernal branch: " + pp.pieceKey);
+                        } else if (DungeonBlueprints427.THEME_FLESH.equals(pp.biome)) {
+                            check(pp.pieceKey.startsWith("п "), "flesh dead-end in flesh branch: " + pp.pieceKey);
+                        }
+                    }
+                }
+            }
 
             MockServer srv = new MockServer();
             MockLevel ow = new MockLevel(OVERWORLD_KEY, srv);
@@ -332,26 +375,86 @@ public final class HellDungeon427Probe {
             DungeonData425 data = DungeonData425.get(srv);
             DungeonData425.Instance inst = data.getOrCreateInstance("real", 7777L, 1L);
             DungeonManager425.ensureInstanceInitialized(hd, data, inst, lib);
-            check(inst.pieces.size() >= 60 && inst.pieces.size() <= 80,
-                    "real infernal plan has " + inst.pieces.size() + " rooms");
+            check(inst.pieces.size() >= 75 && inst.pieces.size() <= 95,
+                    "real biome plan has " + inst.pieces.size() + " rooms");
 
             int ticks = 0;
-            while (!inst.placed && ticks++ < 400) {
+            while (!inst.placed && ticks++ < 500) {
                 DungeonManager425.tickPendingGeneration(srv, lib);
             }
-            check(inst.placed, "real infernal dungeon finished in " + ticks + " ticks");
+            check(inst.placed, "real biome dungeon finished in " + ticks + " ticks");
             check(hd.placedStates.size() > 150000,
-                    "real infernal dungeon placed " + hd.placedStates.size() + " unique blocks");
+                    "real biome dungeon placed " + hd.placedStates.size() + " unique blocks");
             for (BlockState bs : hd.placedStates.values()) {
                 if (bs instanceof MockBlockState mbs) {
                     check(!"minecraft:lapis_block".equals(mbs.blockId)
                             && !"minecraft:redstone_block".equals(mbs.blockId),
-                            "zero raw marker blocks in real infernal build");
+                            "zero raw marker blocks in real biome build");
                 }
             }
             // Verify rear arch of старт is sealed (no void behind spawn)
             check("minecraft:nether_bricks".equals(hd.placedBlockId(12, -8, 0)),
                     "real старт rear arch (12,-8,0) sealed");
+        } finally {
+            deleteTree(tmp);
+        }
+    }
+
+    private static void testBiomeProgressionBuild429() throws Exception {
+        Path tmp = Files.createTempDirectory("hd429_biomes");
+        try {
+            Path bpDir = tmp.resolve("config/axiom/blueprints/Данж");
+            Files.createDirectories(bpDir);
+            writeRoomBp(bpDir.resolve("старт.bp"), "старт", List.of(),
+                    0, 8, true, true, false, false, true);
+            writeRoomBp(bpDir.resolve("к Коридор.bp"), "к Коридор", List.of("dungeon", "crypt"),
+                    0, 10, false, true, true, false, false);
+            writeRoomBp(bpDir.resolve("к Развилка.bp"), "к Развилка", List.of("dungeon", "crypt"),
+                    0, 8, false, true, true, true, false);
+            writeRoomBp(bpDir.resolve("к Тупик.bp"), "к Тупик", List.of("dungeon", "crypt"),
+                    0, 6, false, true, false, false, false);
+            writeRoomBp(bpDir.resolve("а Коридор.bp"), "а Коридор", List.of("dungeon", "infernal"),
+                    0, 10, false, true, true, false, false);
+            writeRoomBp(bpDir.resolve("а Развилка.bp"), "а Развилка", List.of("dungeon", "infernal"),
+                    0, 8, false, true, true, true, false);
+            writeRoomBp(bpDir.resolve("а Тупик.bp"), "а Тупик", List.of("dungeon", "infernal"),
+                    0, 6, false, true, false, false, false);
+            writeRoomBp(bpDir.resolve("п Коридор.bp"), "п Коридор", List.of("dungeon", "flesh"),
+                    0, 10, false, true, true, false, false);
+            writeRoomBp(bpDir.resolve("п Развилка.bp"), "п Развилка", List.of("dungeon", "flesh"),
+                    0, 8, false, true, true, true, false);
+            writeRoomBp(bpDir.resolve("п Тупик.bp"), "п Тупик", List.of("dungeon", "flesh"),
+                    0, 6, false, true, false, false, false);
+
+            DungeonConfig427 cfg = new DungeonConfig427(
+                    tmp, bpDir.toString(), "auto", "старт",
+                    28, 38, 220, -52, 240, true, "minecraft:nether_bricks", 8, 4096, true);
+            DungeonBlueprints427.Library lib = DungeonBlueprints427.load(cfg);
+            check(lib.biomeProgression && "auto->biomes(к->а+п)".equals(lib.appliedFilter),
+                    "synthetic folder activated biome progression к->а+п");
+
+            for (int s = 0; s < 5; s++) {
+                DungeonGenerator427.Plan plan = DungeonGenerator427.generate(lib, 0, 0, 0, 4242L + s * 31337L);
+                check(plan.pieces.size() >= 28 && plan.pieces.size() <= 38,
+                        "synthetic biome plan #" + s + " size=" + plan.pieces.size());
+                check(plan.cryptCount >= 5 && plan.infernalCount >= 4 && plan.fleshCount >= 4,
+                        "synthetic biome plan #" + s + " has crypt+infernal+flesh ("
+                                + plan.cryptCount + "/" + plan.infernalCount + "/" + plan.fleshCount + ")");
+                for (int i = 1; i < plan.pieces.size(); i++) {
+                    var pp = plan.pieces.get(i);
+                    if (pp.depth < 3) {
+                        check(DungeonBlueprints427.THEME_CRYPT.equals(pp.biome) && pp.pieceKey.startsWith("к "),
+                                "depth " + pp.depth + " near start must be crypt: " + pp.pieceKey);
+                    }
+                    if (DungeonBlueprints427.THEME_INFERNAL.equals(pp.biome)) {
+                        check(pp.pieceKey.startsWith("а "), "infernal piece must have prefix а: " + pp.pieceKey);
+                    } else if (DungeonBlueprints427.THEME_FLESH.equals(pp.biome)) {
+                        check(pp.pieceKey.startsWith("п "), "flesh piece must have prefix п: " + pp.pieceKey);
+                    } else if (DungeonBlueprints427.THEME_CRYPT.equals(pp.biome)) {
+                        check(pp.pieceKey.startsWith("к "), "crypt piece must have prefix к: " + pp.pieceKey);
+                    }
+                }
+            }
         } finally {
             deleteTree(tmp);
         }

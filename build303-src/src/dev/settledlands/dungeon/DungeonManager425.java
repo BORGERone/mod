@@ -88,8 +88,11 @@ public final class DungeonManager425 {
                     lib, inst.originX, inst.originY, inst.originZ, inst.seed);
             String src = lib.sourceDir == null ? "" : lib.sourceDir.toString();
             data.setPlan(inst, plan, lib.config.doorwayBlock, src);
+            String biomeInfo = lib.biomeProgression
+                    ? " [к:" + plan.cryptCount + ", а:" + plan.infernalCount + ", п:" + plan.fleshCount + "]"
+                    : "";
             LOG.info("settledlands: generated plan for '" + inst.id + "' ("
-                    + plan.pieces.size() + " rooms, " + plan.seals.size() + " seals) from " + src);
+                    + plan.pieces.size() + " rooms" + biomeInfo + ", " + plan.seals.size() + " seals) from " + src);
         }
 
         int immediateCount = Math.min(lib.config.immediatePieces, inst.pieces.size());

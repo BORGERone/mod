@@ -15,12 +15,20 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Build 427: scans an external Axiom blueprint folder ({@code *.bp}), parses each file natively,
- * applies theme/tag/prefix filtering, and indexes pieces for procedural dungeon generation.
+ * Build 427 / 429: scans an external Axiom blueprint folder ({@code *.bp}), parses each file
+ * natively, classifies rooms into themes ({@code crypt} / «к», {@code infernal} / «а»,
+ * {@code flesh} / «п», etc.), and indexes pieces for biome-layered procedural dungeon generation.
  */
 public final class DungeonBlueprints427 {
 
     private static final Logger LOG = LoggerFactory.getLogger("settledlands");
+
+    public static final String THEME_CRYPT = "crypt";
+    public static final String THEME_INFERNAL = "infernal";
+    public static final String THEME_FLESH = "flesh";
+    public static final String THEME_SEWER = "sewer";
+    public static final String THEME_COVE = "cove";
+    public static final String THEME_OTHER = "other";
 
     private static volatile Library cachedLibrary;
 
@@ -38,6 +46,12 @@ public final class DungeonBlueprints427 {
         public final int skippedNoMarkers;
         public final int failedParse;
         public final String appliedFilter;
+        public final boolean biomeProgression;
+        public final Map<String, List<AxiomBlueprint427.PieceTemplate>> connectorsByTheme;
+        public final Map<String, List<AxiomBlueprint427.PieceTemplate>> deadEndsByTheme;
+        public final int cryptCount;
+        public final int infernalCount;
+        public final int fleshCount;
 
         public Library(
                 DungeonConfig427 config,
@@ -49,23 +63,87 @@ public final class DungeonBlueprints427 {
                 int skippedNoMarkers,
                 int failedParse,
                 String appliedFilter) {
+            this(config, sourceDir, startPiece, pieces, byKey, totalBpFiles, skippedNoMarkers,
+                    failedParse, appliedFilter, inferBiomeMode(appliedFilter));
+        }
+
+        public Library(
+                DungeonConfig427 config,
+                Path sourceDir,
+                AxiomBlueprint427.PieceTemplate startPiece,
+                List<AxiomBlueprint427.PieceTemplate> pieces,
+                Map<String, AxiomBlueprint427.PieceTemplate> byKey,
+                int totalBpFiles,
+                int skippedNoMarkers,
+                int failedParse,
+                String appliedFilter,
+                boolean biomeProgression) {
             this.config = config;
             this.sourceDir = sourceDir;
             this.startPiece = startPiece;
             this.pieces = Collections.unmodifiableList(pieces);
+
             List<AxiomBlueprint427.PieceTemplate> conn = new ArrayList<>();
             List<AxiomBlueprint427.PieceTemplate> de = new ArrayList<>();
+            Map<String, List<AxiomBlueprint427.PieceTemplate>> connByT = new LinkedHashMap<>();
+            Map<String, List<AxiomBlueprint427.PieceTemplate>> deByT = new LinkedHashMap<>();
+            int cCrypt = 0;
+            int cInfernal = 0;
+            int cFlesh = 0;
+
             for (AxiomBlueprint427.PieceTemplate p : pieces) {
-                if (p.isDeadEnd()) de.add(p);
-                else conn.add(p);
+                String theme = themeOf(p);
+                if (THEME_CRYPT.equals(theme)) cCrypt++;
+                else if (THEME_INFERNAL.equals(theme)) cInfernal++;
+                else if (THEME_FLESH.equals(theme)) cFlesh++;
+
+                if (p.isDeadEnd()) {
+                    de.add(p);
+                    deByT.computeIfAbsent(theme, k -> new ArrayList<>()).add(p);
+                } else {
+                    conn.add(p);
+                    connByT.computeIfAbsent(theme, k -> new ArrayList<>()).add(p);
+                }
             }
             this.connectors = Collections.unmodifiableList(conn);
             this.deadEnds = Collections.unmodifiableList(de);
+            this.connectorsByTheme = freezeBuckets(connByT);
+            this.deadEndsByTheme = freezeBuckets(deByT);
+            this.cryptCount = cCrypt;
+            this.infernalCount = cInfernal;
+            this.fleshCount = cFlesh;
             this.byKey = Collections.unmodifiableMap(byKey);
             this.totalBpFiles = totalBpFiles;
             this.skippedNoMarkers = skippedNoMarkers;
             this.failedParse = failedParse;
             this.appliedFilter = appliedFilter;
+            this.biomeProgression = biomeProgression
+                    && cCrypt > 0 && (cInfernal > 0 || cFlesh > 0);
+        }
+
+        private static Map<String, List<AxiomBlueprint427.PieceTemplate>> freezeBuckets(
+                Map<String, List<AxiomBlueprint427.PieceTemplate>> src) {
+            Map<String, List<AxiomBlueprint427.PieceTemplate>> out = new LinkedHashMap<>();
+            for (Map.Entry<String, List<AxiomBlueprint427.PieceTemplate>> e : src.entrySet()) {
+                out.put(e.getKey(), Collections.unmodifiableList(e.getValue()));
+            }
+            return Collections.unmodifiableMap(out);
+        }
+
+        private static boolean inferBiomeMode(String appliedFilter) {
+            return appliedFilter != null && appliedFilter.contains("biomes");
+        }
+
+        public List<AxiomBlueprint427.PieceTemplate> connectorsForTheme(String theme) {
+            return connectorsByTheme.getOrDefault(theme, Collections.emptyList());
+        }
+
+        public List<AxiomBlueprint427.PieceTemplate> deadEndsForTheme(String theme) {
+            return deadEndsByTheme.getOrDefault(theme, Collections.emptyList());
+        }
+
+        public boolean hasTheme(String theme) {
+            return !connectorsForTheme(theme).isEmpty();
         }
 
         public AxiomBlueprint427.PieceTemplate resolvePiece(String key) {
@@ -86,9 +164,12 @@ public final class DungeonBlueprints427 {
 
         public String summaryLine() {
             String dirLabel = sourceDir == null ? "<none>" : sourceDir.toString();
+            String counts = biomeProgression
+                    ? pieces.size() + " [к:" + cryptCount + ", а:" + infernalCount + ", п:" + fleshCount + "]"
+                    : Integer.toString(pieces.size());
             return "папка: " + dirLabel
                     + ", фильтр: " + appliedFilter
-                    + ", комнат: " + pieces.size()
+                    + ", комнат: " + counts
                     + " (тупиков: " + deadEnds.size() + ")"
                     + ", старт: " + (startPiece == null ? "нет"
                             : (startPiece.embeddedFallback ? "встроенный start.slbp" : startPiece.key));
@@ -166,11 +247,7 @@ public final class DungeonBlueprints427 {
             }
         }
 
-        String appliedFilter = config.filterMode;
-        List<AxiomBlueprint427.PieceTemplate> selected = filterPieces(parsedPool, config.filterMode);
-        if ("auto".equalsIgnoreCase(config.filterMode)) {
-            appliedFilter = selected.size() == parsedPool.size() ? "auto->all" : "auto->infernal";
-        }
+        SelectionResult sel = selectPieces(parsedPool, config.filterMode);
 
         if (startPiece == null && config.useEmbeddedStartFallback) {
             try {
@@ -185,17 +262,33 @@ public final class DungeonBlueprints427 {
         if (startPiece != null) {
             byKey.put(startPiece.key, startPiece);
         }
-        for (AxiomBlueprint427.PieceTemplate pt : selected) {
+        for (AxiomBlueprint427.PieceTemplate pt : sel.pieces) {
             byKey.put(pt.key, pt);
         }
 
-        Library lib = new Library(config, chosenDir, startPiece, selected, byKey,
-                chosenFiles.size(), skippedNoMarkers, failedParse, appliedFilter);
+        Library lib = new Library(config, chosenDir, startPiece, sel.pieces, byKey,
+                chosenFiles.size(), skippedNoMarkers, failedParse, sel.appliedFilter, sel.biomeProgression);
         LOG.info("settledlands: blueprints loaded (" + lib.summaryLine()
                 + ", scanned=" + chosenFiles.size()
                 + ", skipped_no_lapis=" + skippedNoMarkers
                 + ", parse_errors=" + failedParse + ")");
         return lib;
+    }
+
+    public static String themeOf(AxiomBlueprint427.PieceTemplate p) {
+        if (p == null) return THEME_OTHER;
+        if (p.hasTag(THEME_CRYPT)) return THEME_CRYPT;
+        if (p.hasTag(THEME_INFERNAL)) return THEME_INFERNAL;
+        if (p.hasTag(THEME_FLESH)) return THEME_FLESH;
+        if (p.hasTag(THEME_SEWER)) return THEME_SEWER;
+        if (p.hasTag(THEME_COVE)) return THEME_COVE;
+        String bn = baseName(p.key).toLowerCase(Locale.ROOT);
+        if (bn.startsWith("к ") || bn.startsWith("к_")) return THEME_CRYPT;
+        if (bn.startsWith("а ") || bn.startsWith("а_")) return THEME_INFERNAL;
+        if (bn.startsWith("п ") || bn.startsWith("п_")) return THEME_FLESH;
+        if (bn.startsWith("с ") || bn.startsWith("с_")) return THEME_SEWER;
+        if (bn.startsWith("б ") || bn.startsWith("б_")) return THEME_COVE;
+        return THEME_OTHER;
     }
 
     private static List<Path> scanBpFiles(Path dir) {
@@ -239,18 +332,34 @@ public final class DungeonBlueprints427 {
     }
 
     private static String baseName(String key) {
+        if (key == null) return "";
         int slash = key.lastIndexOf('/');
         return slash >= 0 ? key.substring(slash + 1) : key;
     }
 
-    private static List<AxiomBlueprint427.PieceTemplate> filterPieces(
+    private static final class SelectionResult {
+        final List<AxiomBlueprint427.PieceTemplate> pieces;
+        final String appliedFilter;
+        final boolean biomeProgression;
+
+        SelectionResult(List<AxiomBlueprint427.PieceTemplate> pieces, String appliedFilter, boolean biomeProgression) {
+            this.pieces = pieces;
+            this.appliedFilter = appliedFilter;
+            this.biomeProgression = biomeProgression;
+        }
+    }
+
+    private static SelectionResult selectPieces(
             List<AxiomBlueprint427.PieceTemplate> all, String filterMode) {
-        if (all.isEmpty()) return Collections.emptyList();
+        if (all.isEmpty()) {
+            return new SelectionResult(Collections.emptyList(),
+                    filterMode == null ? "auto->all" : filterMode, false);
+        }
         String mode = filterMode == null ? "auto" : filterMode.trim();
         String low = mode.toLowerCase(Locale.ROOT);
 
         if ("all".equals(low) || "*".equals(low)) {
-            return new ArrayList<>(all);
+            return new SelectionResult(new ArrayList<>(all), mode, false);
         }
         if (low.startsWith("tag:")) {
             String tag = low.substring(4).trim();
@@ -258,7 +367,7 @@ public final class DungeonBlueprints427 {
             for (AxiomBlueprint427.PieceTemplate p : all) {
                 if (p.hasTag(tag)) out.add(p);
             }
-            return out;
+            return new SelectionResult(out, mode, false);
         }
         if (low.startsWith("prefix:")) {
             String pref = mode.substring(7);
@@ -266,26 +375,47 @@ public final class DungeonBlueprints427 {
             for (AxiomBlueprint427.PieceTemplate p : all) {
                 if (baseName(p.key).startsWith(pref)) out.add(p);
             }
-            return out;
+            return new SelectionResult(out, mode, false);
         }
 
-        // auto mode: if mixed themes from Данж.rar exist together, pick infernal cleanly;
-        // otherwise use every valid blueprint in the user's folder.
+        List<AxiomBlueprint427.PieceTemplate> crypt = new ArrayList<>();
         List<AxiomBlueprint427.PieceTemplate> infernal = new ArrayList<>();
-        boolean hasOtherThemes = false;
+        List<AxiomBlueprint427.PieceTemplate> flesh = new ArrayList<>();
+        List<AxiomBlueprint427.PieceTemplate> sewer = new ArrayList<>();
+        List<AxiomBlueprint427.PieceTemplate> cove = new ArrayList<>();
+
         for (AxiomBlueprint427.PieceTemplate p : all) {
-            String bn = baseName(p.key).toLowerCase(Locale.ROOT);
-            boolean isInf = p.hasTag("infernal") || bn.startsWith("а ");
-            if (isInf) {
-                infernal.add(p);
-            }
-            if (p.hasTag("crypt") || p.hasTag("sewer") || p.hasTag("cove") || p.hasTag("flesh")) {
-                hasOtherThemes = true;
-            }
+            String theme = themeOf(p);
+            if (THEME_CRYPT.equals(theme)) crypt.add(p);
+            else if (THEME_INFERNAL.equals(theme)) infernal.add(p);
+            else if (THEME_FLESH.equals(theme)) flesh.add(p);
+            else if (THEME_SEWER.equals(theme)) sewer.add(p);
+            else if (THEME_COVE.equals(theme)) cove.add(p);
         }
-        if (!infernal.isEmpty() && hasOtherThemes) {
-            return infernal;
+
+        boolean explicitBiomes = "biomes".equals(low);
+        if (explicitBiomes || (!crypt.isEmpty() && (!infernal.isEmpty() || !flesh.isEmpty()))) {
+            List<AxiomBlueprint427.PieceTemplate> combined = new ArrayList<>(
+                    crypt.size() + infernal.size() + flesh.size());
+            combined.addAll(crypt);
+            combined.addAll(infernal);
+            combined.addAll(flesh);
+            if (combined.isEmpty()) {
+                return new SelectionResult(new ArrayList<>(all),
+                        explicitBiomes ? "biomes->all" : "auto->all", false);
+            }
+            String desc;
+            if (!infernal.isEmpty() && !flesh.isEmpty()) desc = "к->а+п";
+            else if (!infernal.isEmpty()) desc = "к->а";
+            else if (!flesh.isEmpty()) desc = "к->п";
+            else desc = "к";
+            String label = (explicitBiomes ? "biomes(" : "auto->biomes(") + desc + ")";
+            return new SelectionResult(combined, label, !crypt.isEmpty() && (!infernal.isEmpty() || !flesh.isEmpty()));
         }
-        return new ArrayList<>(all);
+
+        if (!infernal.isEmpty() && (!sewer.isEmpty() || !cove.isEmpty())) {
+            return new SelectionResult(infernal, "auto->infernal", false);
+        }
+        return new SelectionResult(new ArrayList<>(all), "auto->all", false);
     }
 }

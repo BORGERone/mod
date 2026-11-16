@@ -109,8 +109,8 @@ public final class DungeonConfig427 {
                 "auto",
                 "auto",
                 "старт",
-                60,
-                80,
+                75,
+                95,
                 230,
                 -52,
                 240,
@@ -167,8 +167,8 @@ public final class DungeonConfig427 {
                 p.getProperty("blueprints_dir", "auto"),
                 p.getProperty("filter_mode", "auto"),
                 p.getProperty("start_name", "старт"),
-                parseInt(p.getProperty("min_pieces"), 60),
-                parseInt(p.getProperty("max_pieces"), 80),
+                parseInt(p.getProperty("min_pieces"), 75),
+                parseInt(p.getProperty("max_pieces"), 95),
                 parseInt(p.getProperty("max_radius"), 230),
                 parseInt(p.getProperty("min_y"), -52),
                 parseInt(p.getProperty("max_y"), 240),
@@ -227,8 +227,9 @@ public final class DungeonConfig427 {
                 + "blueprints_dir=auto\n"
                 + "\n"
                 + "# Фильтр комнат из папки:\n"
-                + "#   auto         — если в папке перемешано несколько тем (infernal/crypt/sewer/cove/flesh), берет только infernal; иначе берет все валидные .bp\n"
-                + "#   all          — брать все .bp с маркером входа lapis_block\n"
+                + "#   auto         — если в папке смешаны темы (к/а/п/с/б), строит старт с «к» (crypt) и вглубь биомы «а» (infernal) и «п» (flesh)\n"
+                + "#   biomes       — принудительно включить биомную прогрессию «к -> а + п»\n"
+                + "#   all          — брать все .bp с маркером входа lapis_block вперемешку\n"
                 + "#   tag:infernal — фильтр по тегу Axiom (или prefix:а )\n"
                 + "filter_mode=auto\n"
                 + "\n"
@@ -236,8 +237,8 @@ public final class DungeonConfig427 {
                 + "start_name=старт\n"
                 + "\n"
                 + "# Целевой размер одного инстанса данжа (в комнатах/коридорах)\n"
-                + "min_pieces=60\n"
-                + "max_pieces=80\n"
+                + "min_pieces=75\n"
+                + "max_pieces=95\n"
                 + "\n"
                 + "# Максимальный радиус от центра ячейки 512x512 и границы высоты\n"
                 + "max_radius=230\n"

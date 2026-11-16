@@ -22,6 +22,7 @@ Checks inside the shipped jar:
 
 import gzip
 import json
+import os
 import pathlib
 import shutil
 import subprocess
@@ -47,6 +48,7 @@ REQUIRED_CLASSES = (
     "dev/settledlands/dungeon/DungeonConfig427.class",
     "dev/settledlands/dungeon/DungeonBlueprints427.class",
     "dev/settledlands/dungeon/DungeonBlueprints427$Library.class",
+    "dev/settledlands/dungeon/DungeonBlueprints427$SelectionResult.class",
     "dev/settledlands/dungeon/DungeonGenerator427.class",
     "dev/settledlands/dungeon/DungeonGenerator427$OpenExit.class",
     "dev/settledlands/dungeon/DungeonGenerator427$Plan.class",
@@ -190,6 +192,20 @@ def main(argv):
         cfg_utf8 = {e[1] for e in cfg_info["cp"] if e and e[0] == 1}
         if "unique_dungeon_per_entry" not in cfg_utf8 or "uniqueDungeonPerEntry" not in cfg_utf8:
             return fail("DungeonConfig427 missing Build 428 unique_dungeon_per_entry config")
+        if not any("biomes" in s for s in cfg_utf8):
+            return fail("DungeonConfig427 missing Build 429 biomes mode docs")
+
+        bp_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonBlueprints427.class"))
+        bp_utf8 = {e[1] for e in bp_info["cp"] if e and e[0] == 1}
+        for wanted_bp in ("themeOf", "auto->biomes("):
+            if not any(wanted_bp in s for s in bp_utf8):
+                return fail("DungeonBlueprints427 missing Build 429 %s" % wanted_bp)
+
+        gen_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonGenerator427.class"))
+        gen_utf8 = {e[1] for e in gen_info["cp"] if e and e[0] == 1}
+        for wanted_gen in ("generateBiomePlan", "tryGenerateBiome"):
+            if wanted_gen not in gen_utf8:
+                return fail("DungeonGenerator427 missing Build 429 %s" % wanted_gen)
 
         # Brigadier exception package verification (Build 426 hotfix for NeoForge 21.1.265 crash)
         for entry in names:
@@ -343,9 +359,11 @@ public final class BuiltInRegistries {
         run_dir = tmp / "run_cwd"
         run_dir.mkdir()
         cp = f"{probe_out}:{jar.resolve()}:{stubs_out}"
+        run_env = os.environ.copy()
+        run_env["LC_ALL"] = "C.UTF-8"
         for probe_cls in ("HellDungeon425Probe", "HellDungeon427Probe"):
             r3 = subprocess.run([java, "-cp", cp, probe_cls],
-                                cwd=str(run_dir), capture_output=True, text=True)
+                                cwd=str(run_dir), env=run_env, capture_output=True, text=True)
             if r3.returncode != 0:
                 return fail("%s failed (rc=%d):\n%s\n%s" % (probe_cls, r3.returncode, r3.stdout, r3.stderr))
             sys.stdout.write(r3.stdout)

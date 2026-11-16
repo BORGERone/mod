@@ -326,4 +326,25 @@ but class was expected` — маркер не ставился ни разу, о
 Прямая ссылка на мод: `https://drive.google.com/uc?export=download&id=1u3cII8eMFmSQuvCgZgMRWlcqszv4ESKv`
 Прямая ссылка на исходники: `https://drive.google.com/uc?export=download&id=1KzaEo5fisIdQxOGs_KWN2t1VtuLm_-zv`
 
+## Build 429 — глубинные биомы «Адского данжа» (`к` у старта -> `а` и `п` вглубь) (2026-11-16)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build429-biome-dungeon.jar | `169W5cPTTAkclu52sWCJh0RIZ2bWZOeFW` | `ce74e3f85238db92b1661c73b0fb07e07ad569f21631dd9e18e1966f00cf9a9d` |
+| SettledLands-Build429-BiomeDungeon-Source.zip | `19Xt7w7D7RLabk3MXOXutAHLSMNoC_LYM` | `47c1edeed2d224671d8ba3a65e6c614c88194441209a8cec58b9e021c20e9424` |
+
+База — 428. В `DungeonBlueprints427` добавлена классификация тем по тегам Axiom и префиксам (`к `/`crypt`,
+`а `/`infernal`, `п `/`flesh`, `с `/`sewer`, `б `/`cove`, включая комнаты без тегов вроде `к Коридор 6`) и
+авто-режим `auto->biomes(к->а+п)` (`filter_mode=auto` или `biomes`, 142 комнаты: 51 к, 48 а, 43 п).
+В `DungeonConfig427` целевой размер по умолчанию поднят до `75..95` комнат (совместимо со старыми `60..80`).
+В `DungeonGenerator427` начальная область у `старт` строится строго из комнат `к`, а глубокие ответвления
+делятся на цельные связные биомы `а` (infernal) и `п` (flesh) со своими тупиками (`а Тупик 1..4` /
+`п Тупик 1..4`) без наложений в `512 × 512`. В `/settledlands dungeon info` и логах выводится `[к:..., а:..., п:...]`.
+44/44 набора проверок PASS (`verify_jar --base build428`, `check_mixin_class`, `invoke_kind_check --base build428`,
+`dangling_refs --base build428`, `hell_dungeon_check`: 6 297 + 168 026 JVM-проверок на 232 `.bp`, `mixin_clash_check`,
+все 44 гейта), `cmp -s` PASS. В игре **ожидает проверки автором**.
+Прямая ссылка на мод: `https://drive.google.com/uc?export=download&id=169W5cPTTAkclu52sWCJh0RIZ2bWZOeFW`
+Прямая ссылка на исходники: `https://drive.google.com/uc?export=download&id=19Xt7w7D7RLabk3MXOXutAHLSMNoC_LYM`
+
+
 
