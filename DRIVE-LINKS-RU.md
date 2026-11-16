@@ -263,6 +263,27 @@ but class was expected` — маркер не ставился ни разу, о
 `settledlands:guide_trigger` без `UUID`/`Pos`/`neoforge:attachments`) на спиральной сетке `512 × 512` (`SavedData`
 `settledlands_hell_dungeon`), 5-й мир в узле «Телепорт» и команды `/settledlands dungeon {enter,new,leave,info,list}`.
 41/41 гейтов PASS (`hell_dungeon_check.py`: 6 279 JVM-проверок; `teleport_check.py`: 88 JVM-проверок),
-`verify_jar --base 424` PASS, `invoke_kind_check --base 424` OK, `mixin_clash_check` OK, `cmp -s` PASS. В игре **не проверено**.
+`verify_jar --base 424` PASS, `invoke_kind_check --base 424` OK, `mixin_clash_check` OK, `cmp -s` PASS. В игре **не проверено**
+(упала на загрузке с `NoClassDefFoundError: com/mojang/brigadier/CommandSyntaxException`, исправлено в Build 426).
 Зеркало в репозитории: `https://github.com/BORGERone/mod/raw/fb61162e523a52d0ae242e13efd5f120a5a65241/settledlands-0.8.0-build425-hell-dungeon.jar`
+
+## Build 426 — исправление пакета Brigadier (`CommandSyntaxException`) (2026-11-16)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build426-dungeon-command-fix.jar | *(ожидает включения `google_drive`)* | `5b60063fb0000d22c3589fe6f1e1e3e70eb22371182bdcc8d8d68441e5fa964b` |
+| SettledLands-Build426-DungeonCommandFix-Source.zip | *(ожидает включения `google_drive`)* | `a7fa65a4431f2657dff9a74a8f256fdad8af92bc8d77d4d393d3085f65ea3208` |
+
+База — 425. Исправлена причина краша Build 425 в NeoForge 21.1.265 (`NoClassDefFoundError: com/mojang/brigadier/CommandSyntaxException`
+при `FMLModContainer.constructMod -> AutomaticEventSubscriber.inject -> Class.getDeclaredMethods`): заглушка `CommandSyntaxException`
+в `build303-src/stubs420-src` перенесена в `com.mojang.brigadier.exceptions.CommandSyntaxException`, обновлены `Command.java`,
+`CommandSourceStack.java` и `DungeonCommand425.java`, пересобран `DungeonCommand425.class`. Остальные 594 класса и ресурсы
+«Адского данжа» побайтово равны Build 425. Усилены `check_mixin_class.py` (Phase D: проверка внешних классов, дескрипторов и
+атрибутов `Exceptions` + `FORBIDDEN_EXTERNAL_CLASSES`) и `hell_dungeon_check.py` / `HellDungeon425Probe.java` (вызов
+`getDeclaredMethods()` и `onRegisterCommands`).
+41/41 гейтов PASS (`hell_dungeon_check.py`: 6 293 JVM-проверки; `teleport_check.py`: 88 JVM-проверок),
+`verify_jar --base 425` и `--base 424` PASS, `invoke_kind_check --base 425`/`424` OK, `mixin_clash_check` OK, `cmp -s` PASS.
+В игре **ожидает повторной проверки автором**.
+Зеркало в репозитории: `https://github.com/BORGERone/mod/raw/d75801f2ff96b50d4b437d7ff512e00da59cadef/settledlands-0.8.0-build426-dungeon-command-fix.jar`
+Исходники в репозитории: `https://github.com/BORGERone/mod/raw/d75801f2ff96b50d4b437d7ff512e00da59cadef/SettledLands-Build426-DungeonCommandFix-Source.zip`
 
