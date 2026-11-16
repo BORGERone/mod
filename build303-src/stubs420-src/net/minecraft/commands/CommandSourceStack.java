@@ -1,5 +1,6 @@
 package net.minecraft.commands;
 
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -22,7 +23,7 @@ public class CommandSourceStack {
         return null;
     }
 
-    public ServerPlayer getPlayerOrException() throws com.mojang.brigadier.CommandSyntaxException {
+    public ServerPlayer getPlayerOrException() throws CommandSyntaxException {
         return null;
     }
 

@@ -1,7 +1,9 @@
+import dev.settledlands.dungeon.DungeonCommand425;
 import dev.settledlands.dungeon.DungeonData425;
 import dev.settledlands.dungeon.DungeonEvents425;
 import dev.settledlands.dungeon.DungeonManager425;
 import dev.settledlands.dungeon.DungeonTemplate425;
+import dev.settledlands.npc.NpcGraphAnchorCommand420;
 import dev.settledlands.npc.TeleportActions424;
 import dev.settledlands.npc.TeleportNode424;
 import java.util.HashMap;
@@ -49,6 +51,7 @@ public final class HellDungeon425Probe {
         testSpawnFilteringRules();
         testTeleportRoutingMissingDimensionSafe();
         testEnterAndLeaveFlow();
+        testSubscriberReflectionAndCommandRegistration();
         System.out.println("HellDungeon425Probe: " + passed + " checks passed");
     }
 
@@ -516,5 +519,39 @@ public final class HellDungeon425Probe {
         // Verify world alias & registry integration on TeleportNode424
         check(TeleportNode424.worldCount() == 5, "TeleportNode424 exposes 5 worlds");
         check("settledlands:hell_dungeon".equals(TeleportNode424.worldId(4)), "5th world id is hell_dungeon");
+    }
+
+    private static void testSubscriberReflectionAndCommandRegistration() {
+        // Simulates NeoForge AutomaticEventSubscriber.inject() -> Class.getDeclaredMethods()
+        Class<?>[] subscribers = new Class<?>[] {
+            DungeonCommand425.class,
+            DungeonEvents425.class,
+            NpcGraphAnchorCommand420.class,
+            DungeonManager425.class,
+            DungeonData425.class,
+            DungeonTemplate425.class,
+        };
+        for (Class<?> cls : subscribers) {
+            check(cls.getDeclaredMethods().length > 0,
+                    cls.getSimpleName() + " getDeclaredMethods resolves cleanly");
+            check(cls.getDeclaredConstructors().length > 0,
+                    cls.getSimpleName() + " getDeclaredConstructors resolves cleanly");
+        }
+        check(DungeonCommand425.class.getDeclaredFields().length >= 0,
+                "DungeonCommand425 getDeclaredFields resolves cleanly");
+
+        // Exercise onRegisterCommands with null and a live dispatcher event
+        DungeonCommand425.onRegisterCommands(null);
+        com.mojang.brigadier.CommandDispatcher<net.minecraft.commands.CommandSourceStack> disp =
+                new com.mojang.brigadier.CommandDispatcher<>();
+        net.neoforged.neoforge.event.RegisterCommandsEvent ev =
+                new net.neoforged.neoforge.event.RegisterCommandsEvent() {
+                    @Override
+                    public com.mojang.brigadier.CommandDispatcher<net.minecraft.commands.CommandSourceStack> getDispatcher() {
+                        return disp;
+                    }
+                };
+        DungeonCommand425.onRegisterCommands(ev);
+        check(true, "DungeonCommand425.onRegisterCommands runs without exception");
     }
 }

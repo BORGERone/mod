@@ -1,0 +1,2 @@
+5b60063fb0000d22c3589fe6f1e1e3e70eb22371182bdcc8d8d68441e5fa964b  settledlands-0.8.0-build426-dungeon-command-fix.jar
+a7fa65a4431f2657dff9a74a8f256fdad8af92bc8d77d4d393d3085f65ea3208  SettledLands-Build426-DungeonCommandFix-Source.zip

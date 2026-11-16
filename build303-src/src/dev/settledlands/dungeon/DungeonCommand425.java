@@ -3,6 +3,7 @@ package dev.settledlands.dungeon;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import com.mojang.brigadier.builder.LiteralArgumentBuilder;
 import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
 import dev.settledlands.npc.BlockTrigger351;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -119,6 +120,8 @@ public final class DungeonCommand425 {
         if (ctx == null || ctx.getSource() == null) return null;
         try {
             return ctx.getSource().getPlayerOrException();
+        } catch (CommandSyntaxException ignored) {
+            return null;
         } catch (Throwable ignored) {
             return null;
         }

@@ -161,6 +161,20 @@ def main(argv):
             if not any(f".{wanted}(" in r for r in mgr_refs):
                 return fail("DungeonManager425 missing %s" % wanted)
 
+        # Brigadier exception package verification (Build 426 hotfix for NeoForge 21.1.265 crash)
+        for entry in names:
+            if not entry.endswith(".class"):
+                continue
+            cf = disasm.parse_class(zf.read(entry))
+            for e in cf["cp"]:
+                if e and e[0] == 1 and "com/mojang/brigadier/CommandSyntaxException" in e[1]:
+                    return fail("%s references invalid package com/mojang/brigadier/CommandSyntaxException "
+                                "(must be com/mojang/brigadier/exceptions/CommandSyntaxException)" % entry)
+        cmd_cf = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonCommand425.class"))
+        cmd_utf8 = {e[1] for e in cmd_cf["cp"] if e and e[0] == 1}
+        if "com/mojang/brigadier/exceptions/CommandSyntaxException" not in cmd_utf8:
+            return fail("DungeonCommand425 missing real com/mojang/brigadier/exceptions/CommandSyntaxException")
+
     probe = ROOT / "tools" / "harness" / "HellDungeon425Probe.java"
     if not probe.is_file():
         return fail("missing probe: %s" % probe)

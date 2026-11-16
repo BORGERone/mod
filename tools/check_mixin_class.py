@@ -66,6 +66,7 @@ Exit code 0 = pass, 1 = fail.
 import argparse
 import json
 import os
+import re
 import sys
 import zipfile
 
@@ -726,6 +727,75 @@ def external_refs(classes):
     return refs
 
 
+EXTERNAL_DESC_CLS = re.compile(r"L([A-Za-z0-9_$/]+);")
+
+# Build 426 (from Build 425 NeoForge 21.1.265 crash log): compile-time stubs may also define an
+# external class in the wrong package. `check_mixin_class` previously checked only Fieldref/Methodref/
+# InterfaceMethodref targets, missing catch/throws/descriptor types such as `com/mojang/brigadier/
+# CommandSyntaxException` (which actually lives in `com/mojang/brigadier/exceptions/CommandSyntaxException`)
+# emitted in DungeonCommand425's synthetic lambda `Exceptions` attributes.
+FORBIDDEN_EXTERNAL_CLASSES = {
+    "com/mojang/brigadier/CommandSyntaxException":
+        "Build 426: Mojang Brigadier declares CommandSyntaxException in "
+        "com/mojang/brigadier/exceptions/CommandSyntaxException, not com/mojang/brigadier "
+        "(Build 425 failed AutomaticEventSubscriber.inject -> Class.getDeclaredMethods with NoClassDefFoundError)",
+}
+
+CONFIRMED_EXTERNAL_CLASSES = {
+    "net/minecraft/nbt/NbtAccounter":
+        "Build 425: MC 1.21.1 net.minecraft.nbt.NbtAccounter (paired with NbtIo.readCompressed)",
+    "net/minecraft/world/level/block/state/StateDefinition":
+        "Build 425: MC 1.21.1 net.minecraft.world.level.block.state.StateDefinition",
+}
+
+
+def external_class_refs(classes):
+    """{owner: {referencing_class, ...}} for every external class named in CP, descriptors, or Exceptions."""
+    refs = {}
+    for cname, cf in classes.items():
+        if cf is None:
+            continue
+        try:
+            pool = list(cf.cp)
+            seen = set()
+            for i in range(1, len(pool)):
+                entry = pool[i]
+                if not entry:
+                    continue
+                if entry[0] == 7:
+                    target = cf.class_name(i)
+                    if target:
+                        if target.startswith("["):
+                            for m in EXTERNAL_DESC_CLS.finditer(target):
+                                seen.add(m.group(1))
+                        else:
+                            seen.add(target)
+                elif entry[0] == 1:
+                    text = cf.utf8(i)
+                    if text and ";" in text and " " not in text:
+                        for m in EXTERNAL_DESC_CLS.finditer(text):
+                            seen.add(m.group(1))
+            for m in cf.methods:
+                for attr in m.attrs:
+                    if attr.name == "Exceptions" and len(attr.data) >= 2:
+                        import struct as _st
+                        cnt = _st.unpack(">H", attr.data[:2])[0]
+                        for k in range(cnt):
+                            off = 2 + 2 * k
+                            if off + 2 <= len(attr.data):
+                                ci = _st.unpack(">H", attr.data[off:off + 2])[0]
+                                cls = cf.class_name(ci)
+                                if cls:
+                                    seen.add(cls)
+            for target in seen:
+                if target.startswith(SKIP_PREFIXES) or not target.startswith(EXTERNAL_PREFIXES):
+                    continue
+                refs.setdefault(target, set()).add(cname)
+        except ClassFormatError:
+            continue
+    return refs
+
+
 # External members that the base jar does not call, with the evidence that they exist. Every entry
 # here is a promise made by a person, not by the stub; add one only with something that can be
 # rechecked later, and keep the list short.
@@ -1104,6 +1174,24 @@ def check_external_refs(classes, base_jar, problems):
     if confirmed:
         print("  confirmed by hand      : %d external member(s) from CONFIRMED_EXTERNAL"
               % confirmed)
+
+    cls_refs = external_class_refs(classes)
+    base_cls_refs = external_class_refs(base_classes)
+    for bad_cls, reason in FORBIDDEN_EXTERNAL_CLASSES.items():
+        if bad_cls in cls_refs:
+            users = ", ".join(sorted(cls_refs[bad_cls])[:4])
+            problems.append("forbidden phantom external class %s referenced by [%s]: %s"
+                            % (bad_cls, users, reason))
+    for cls_name in sorted(cls_refs):
+        if cls_name in FORBIDDEN_EXTERNAL_CLASSES:
+            continue
+        if cls_name not in base_cls_refs and cls_name not in CONFIRMED_EXTERNAL_CLASSES:
+            users = ", ".join(sorted(cls_refs[cls_name])[:4])
+            problems.append(
+                "external class %s (referenced by [%s]) is not used by %s and is not in "
+                "CONFIRMED_EXTERNAL_CLASSES - verify its exact package in 1.21.1 first"
+                % (cls_name, users, os.path.basename(base_jar)))
+
     return len(refs), len(new)
 
 
@@ -1252,6 +1340,13 @@ def main(argv):
             api_refs = api_new = 0
             if args.base:
                 api_refs, api_new = check_external_refs(classes, args.base, problems)
+            else:
+                cls_refs = external_class_refs(classes)
+                for bad_cls, reason in FORBIDDEN_EXTERNAL_CLASSES.items():
+                    if bad_cls in cls_refs:
+                        users = ", ".join(sorted(cls_refs[bad_cls])[:4])
+                        problems.append("forbidden phantom external class %s referenced by [%s]: %s"
+                                        % (bad_cls, users, reason))
 
             for entry in sorted(n for n in names
                                 if n.startswith("org/spongepowered/asm")
