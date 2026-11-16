@@ -171,9 +171,11 @@ def main(argv):
         tmp = pathlib.Path(tmpdir)
         merged = tmp / "merged"
         stubs_out = tmp / "stubs_out"
+        probe_src = tmp / "probe_src"
         probe_out = tmp / "probe_out"
         merged.mkdir()
         stubs_out.mkdir()
+        probe_src.mkdir()
         probe_out.mkdir()
         layers = (
             ROOT / "tools" / "api271",
@@ -200,8 +202,90 @@ def main(argv):
         if r1.returncode != 0:
             return fail("probe stub compile failed:\n" + r1.stdout + r1.stderr)
 
+        # Provide live Proxy-backed BuiltInRegistries ONLY on probe_out so HellDungeon425Probe can exercise
+        # DungeonTemplate425.place() end-to-end on real start.slbp while keeping repo stubs420 untouched.
+        reg_dir = probe_src / "net" / "minecraft" / "core" / "registries"
+        reg_dir.mkdir(parents=True)
+        (reg_dir / "ProbeRegistries.java").write_text(
+            """package net.minecraft.core.registries;
+
+import java.lang.reflect.Proxy;
+import java.util.HashMap;
+import java.util.IdentityHashMap;
+import java.util.Map;
+import net.minecraft.core.DefaultedRegistry;
+import net.minecraft.resources.ResourceLocation;
+
+public final class ProbeRegistries {
+    public static final Map<String, Object> BLOCK_BY_ID = new HashMap<>();
+    public static final Map<Object, ResourceLocation> BLOCK_KEYS = new IdentityHashMap<>();
+    public static final Map<String, Object> ENTITY_BY_ID = new HashMap<>();
+    public static final Map<Object, ResourceLocation> ENTITY_KEYS = new IdentityHashMap<>();
+
+    @SuppressWarnings("unchecked")
+    public static <T> DefaultedRegistry<T> proxy(Map<String, Object> byId, Map<Object, ResourceLocation> keys) {
+        return (DefaultedRegistry<T>) Proxy.newProxyInstance(
+                DefaultedRegistry.class.getClassLoader(),
+                new Class<?>[] { DefaultedRegistry.class },
+                (p, m, args) -> {
+                    String name = m.getName();
+                    if ("get".equals(name) && args != null && args.length == 1 && args[0] instanceof ResourceLocation rl) {
+                        return byId.get(rl.toString());
+                    }
+                    if ("getKey".equals(name) && args != null && args.length == 1 && args[0] != null) {
+                        return keys.get(args[0]);
+                    }
+                    if ("containsKey".equals(name) && args != null && args.length == 1 && args[0] instanceof ResourceLocation rl) {
+                        return byId.containsKey(rl.toString());
+                    }
+                    return null;
+                });
+    }
+
+    public static void clear() {
+        BLOCK_BY_ID.clear();
+        BLOCK_KEYS.clear();
+        ENTITY_BY_ID.clear();
+        ENTITY_KEYS.clear();
+    }
+
+    public static void putBlock(ResourceLocation rl, Object block) {
+        BLOCK_BY_ID.put(rl.toString(), block);
+        BLOCK_KEYS.put(block, rl);
+    }
+
+    public static void putEntityType(ResourceLocation rl, Object type) {
+        ENTITY_BY_ID.put(rl.toString(), type);
+        ENTITY_KEYS.put(type, rl);
+    }
+}
+""",
+            encoding="utf-8",
+        )
+        (reg_dir / "BuiltInRegistries.java").write_text(
+            """package net.minecraft.core.registries;
+
+import net.minecraft.core.DefaultedRegistry;
+import net.minecraft.world.entity.EntityType;
+import net.minecraft.world.level.block.Block;
+
+public final class BuiltInRegistries {
+    public static final DefaultedRegistry<Block> BLOCK =
+            ProbeRegistries.proxy(ProbeRegistries.BLOCK_BY_ID, ProbeRegistries.BLOCK_KEYS);
+    public static final DefaultedRegistry<EntityType> ENTITY_TYPE =
+            ProbeRegistries.proxy(ProbeRegistries.ENTITY_BY_ID, ProbeRegistries.ENTITY_KEYS);
+    private BuiltInRegistries() {}
+}
+""",
+            encoding="utf-8",
+        )
+        probe_inputs = [
+            str(reg_dir / "ProbeRegistries.java"),
+            str(reg_dir / "BuiltInRegistries.java"),
+            str(probe),
+        ]
         r2 = subprocess.run([java, "-jar", str(ecj), "-21", "-proc:none", "-nowarn",
-                             "-cp", f"{jar}:{stubs_out}", "-d", str(probe_out), str(probe)],
+                             "-cp", f"{jar}:{stubs_out}", "-d", str(probe_out)] + probe_inputs,
                             capture_output=True, text=True)
         if r2.returncode != 0:
             return fail("HellDungeon425Probe compile failed:\n" + r2.stdout + r2.stderr)

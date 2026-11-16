@@ -10,6 +10,7 @@ import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.HolderLookup;
+import net.minecraft.core.registries.ProbeRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceKey;
@@ -20,6 +21,11 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.MobSpawnType;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.StateDefinition;
+import net.minecraft.world.level.block.state.properties.Property;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.level.storage.DimensionDataStorage;
 import net.minecraft.world.phys.Vec3;
@@ -36,12 +42,114 @@ public final class HellDungeon425Probe {
     private static int passed = 0;
 
     public static void main(String[] args) {
+        registerVanillaTestBlocks(false);
         testBundledStartTemplate();
+        testLiveStartPlacementAndOptionalModSafety();
         testGridOriginAllocationAndRoundTrip();
         testSpawnFilteringRules();
         testTeleportRoutingMissingDimensionSafe();
         testEnterAndLeaveFlow();
         System.out.println("HellDungeon425Probe: " + passed + " checks passed");
+    }
+
+    private static final String[] VANILLA_START_BLOCKS = {
+        "minecraft:blackstone",
+        "minecraft:bone_block",
+        "minecraft:chain",
+        "minecraft:chiseled_nether_bricks",
+        "minecraft:chiseled_polished_blackstone",
+        "minecraft:cracked_nether_bricks",
+        "minecraft:cracked_polished_blackstone_bricks",
+        "minecraft:gilded_blackstone",
+        "minecraft:lapis_block",
+        "minecraft:magma_block",
+        "minecraft:nether_brick_stairs",
+        "minecraft:nether_bricks",
+        "minecraft:polished_basalt",
+        "minecraft:polished_blackstone",
+        "minecraft:polished_blackstone_brick_slab",
+        "minecraft:polished_blackstone_brick_stairs",
+        "minecraft:polished_blackstone_bricks",
+        "minecraft:polished_blackstone_wall",
+        "minecraft:redstone_block",
+        "minecraft:shroomlight",
+        "minecraft:soul_fire",
+        "minecraft:soul_lantern",
+        "minecraft:soul_soil",
+        "minecraft:wither_skeleton_skull",
+    };
+
+    private static final class MockProperty extends Property<String> {
+        private final String propName;
+
+        MockProperty(String propName) {
+            this.propName = propName;
+        }
+
+        @Override public String getName() { return propName; }
+        @Override public java.util.Optional<String> getValue(String value) {
+            return java.util.Optional.ofNullable(value);
+        }
+    }
+
+    private static final class MockStateDef extends StateDefinition<Block, BlockState> {
+        private final Map<String, Property<?>> props = new HashMap<>();
+
+        @Override
+        public Property<?> getProperty(String name) {
+            return props.computeIfAbsent(name, MockProperty::new);
+        }
+    }
+
+    private static final class MockBlockState extends BlockState {
+        final String blockId;
+        final Block owner;
+        final Map<String, String> appliedProps = new HashMap<>();
+
+        MockBlockState(String blockId, Block owner) {
+            this.blockId = blockId;
+            this.owner = owner;
+        }
+
+        @Override public Block getBlock() { return owner; }
+
+        @Override
+        @SuppressWarnings("rawtypes")
+        public Object setValue(Property property, Comparable value) {
+            MockBlockState copy = new MockBlockState(blockId, owner);
+            copy.appliedProps.putAll(this.appliedProps);
+            copy.appliedProps.put(property.getName(), String.valueOf(value));
+            return copy;
+        }
+    }
+
+    private static final class MockBlock extends Block {
+        final String id;
+        final MockStateDef def = new MockStateDef();
+
+        MockBlock(String id) {
+            this.id = id;
+        }
+
+        @Override public BlockState defaultBlockState() { return new MockBlockState(id, this); }
+        @Override public StateDefinition<Block, BlockState> getStateDefinition() { return def; }
+    }
+
+    private static final class MockTrialSpawnerEntity extends BlockEntity {
+        boolean changedCalled = false;
+
+        @Override public void setChanged() { changedCalled = true; }
+    }
+
+    private static void registerVanillaTestBlocks(boolean includeTrialSpawner) {
+        ProbeRegistries.clear();
+        for (String id : VANILLA_START_BLOCKS) {
+            ProbeRegistries.putBlock(ResourceLocation.tryParse(id), new MockBlock(id));
+        }
+        if (includeTrialSpawner) {
+            ProbeRegistries.putBlock(ResourceLocation.tryParse("trialtuner:trial_spawner"),
+                    new MockBlock("trialtuner:trial_spawner"));
+        }
     }
 
     private static void check(boolean cond, String label) {
@@ -89,6 +197,50 @@ public final class HellDungeon425Probe {
         check(occupied.contains("10,-9,0"), "floor beneath entrance spawn (10,-9,0) exists");
         check(!occupied.contains("10,-8,0") && !occupied.contains("10,-7,0"),
                 "headroom at (10,-8..-7,0) is open air");
+    }
+
+    private static void testLiveStartPlacementAndOptionalModSafety() {
+        DungeonTemplate425.StartTemplate tpl = DungeonTemplate425.loadStart();
+        MockServer srv = new MockServer();
+        MockLevel hd = new MockLevel(DungeonManager425.HELL_DUNGEON_LEVEL, srv);
+        srv.levels.put("ResourceKey[minecraft:dimension / settledlands:hell_dungeon]", hd);
+
+        // Case 1: trialtuner absent -> skips 1 block + 1 block entity safely without throwing
+        registerVanillaTestBlocks(false);
+        DungeonTemplate425.PlacementStats absentStats = DungeonTemplate425.place(hd, tpl, 0, 0, 0);
+        check(absentStats.blocksPlaced == 6018, "absent trialtuner places 6018 vanilla blocks");
+        check(absentStats.blocksSkipped == 1, "absent trialtuner skips exactly 1 block");
+        check(absentStats.blockEntitiesSkipped == 1, "absent trialtuner skips 1 block entity safely");
+        check("minecraft:nether_bricks".equals(hd.placedBlockId(12, -10, 0)),
+                "east doorway lapis_block replaced by minecraft:nether_bricks");
+        check("minecraft:nether_bricks".equals(hd.placedBlockId(-12, -10, 0)),
+                "west doorway redstone_block replaced by minecraft:nether_bricks");
+        check(hd.placedBlockId(1, -8, -9) == null, "skipped block entity position untouched when absent");
+
+        // Case 2: trialtuner present -> places all 6019 blocks and loads BlockEntity at shifted origin
+        registerVanillaTestBlocks(true);
+        MockLevel hd2 = new MockLevel(DungeonManager425.HELL_DUNGEON_LEVEL, srv);
+        MockTrialSpawnerEntity spawnerBe = new MockTrialSpawnerEntity();
+        hd2.blockEntities.put("513,-8,-9", spawnerBe);
+        DungeonTemplate425.PlacementStats presentStats = DungeonTemplate425.place(hd2, tpl, 512, 0, 0);
+        check(presentStats.blocksPlaced == 6019, "present trialtuner places all 6019 blocks");
+        check(presentStats.blocksSkipped == 0, "present trialtuner skips 0 blocks");
+        check(presentStats.blockEntitiesLoaded == 1 && spawnerBe.changedCalled,
+                "shifted trial spawner BlockEntity loaded and marked changed");
+        check("trialtuner:trial_spawner".equals(hd2.placedBlockId(513, -8, -9)),
+                "trial spawner block placed at origin + (1, -8, -9)");
+        BlockState stairs = hd2.placedStates.get("522,-7,-5");
+        check(stairs == null || stairs instanceof MockBlockState, "block states recorded");
+        // Verify a stair block in start.slbp retains its blockstate properties
+        int propertyBearing = 0;
+        for (BlockState bs : hd2.placedStates.values()) {
+            if (bs instanceof MockBlockState mbs && !mbs.appliedProps.isEmpty()) {
+                propertyBearing++;
+            }
+        }
+        check(propertyBearing > 50, "palette blockstate properties applied (" + propertyBearing + " blocks)");
+
+        registerVanillaTestBlocks(false);
     }
 
     private static void testGridOriginAllocationAndRoundTrip() {
@@ -159,10 +311,22 @@ public final class HellDungeon425Probe {
         final MinecraftServer srv;
         final DimensionDataStorage storage = new MockStorage();
         final BlockPos sharedSpawn = new BlockPos(16, 68, -24);
+        final Map<String, BlockState> placedStates = new HashMap<>();
+        final Map<String, BlockEntity> blockEntities = new HashMap<>();
+        int setBlockCalls = 0;
 
         MockLevel(ResourceKey<Level> dim, MinecraftServer srv) {
             this.dim = dim;
             this.srv = srv;
+        }
+
+        private static String key(BlockPos pos) {
+            return pos.getX() + "," + pos.getY() + "," + pos.getZ();
+        }
+
+        String placedBlockId(int x, int y, int z) {
+            BlockState bs = placedStates.get(x + "," + y + "," + z);
+            return bs instanceof MockBlockState mbs ? mbs.blockId : null;
         }
 
         @Override public ResourceKey<Level> dimension() { return dim; }
@@ -171,6 +335,18 @@ public final class HellDungeon425Probe {
         @Override public long getGameTime() { return 4200L; }
         @Override public DimensionDataStorage getDataStorage() { return storage; }
         @Override public BlockPos getSharedSpawnPos() { return sharedSpawn; }
+
+        @Override
+        public boolean setBlock(BlockPos pos, BlockState state, int flags) {
+            setBlockCalls++;
+            placedStates.put(key(pos), state);
+            return true;
+        }
+
+        @Override
+        public BlockEntity getBlockEntity(BlockPos pos) {
+            return blockEntities.get(key(pos));
+        }
     }
 
     private static final class MockServer extends MinecraftServer {
@@ -301,13 +477,17 @@ public final class HellDungeon425Probe {
         DungeonData425 data = DungeonData425.get(srv);
         DungeonData425.Instance def = data.getInstance("default");
         check(def != null && def.placed, "default instance marked placed after first entry");
+        check(hd.setBlockCalls == 6018, "first entry placed 6018 blocks on default instance");
         check(data.getReturnPoint(p.id) != null, "return point recorded from overworld");
 
         // Second entry via Teleport with explicit coordinates preserves custom coords and does not overwrite return point
+        int blocksAfterFirst = hd.setBlockCalls;
         boolean enteredExplicit = TeleportActions424.teleport(p,
                 "trigger:teleport:settledlands:hell_dungeon|4|12|-8");
         check(enteredExplicit && p.x == 4.0 && p.y == 12.0 && p.z == -8.0,
                 "explicit Teleport coordinates inside hell_dungeon honored");
+        check(hd.setBlockCalls == blocksAfterFirst,
+                "re-entering default instance does not re-place blocks");
         DungeonData425.ReturnPoint savedRp = data.getReturnPoint(p.id);
         check(savedRp != null && "minecraft:overworld".equals(savedRp.dimension),
                 "re-entering from inside hell_dungeon does not overwrite return point");

@@ -24,5 +24,16 @@ public class ResourceLocation {
         return new ResourceLocation(location.indexOf(':') >= 0 ? location : "minecraft:" + location);
     }
 
+    @Override
+    public boolean equals(Object other) {
+        if (this == other) return true;
+        return other instanceof ResourceLocation rl && raw.equals(rl.raw);
+    }
+
+    @Override
+    public int hashCode() {
+        return raw.hashCode();
+    }
+
     @Override public String toString() { return raw; }
 }

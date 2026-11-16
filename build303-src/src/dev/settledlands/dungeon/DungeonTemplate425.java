@@ -207,7 +207,7 @@ public final class DungeonTemplate425 {
         if (entry == null || entry.id == null || entry.id.isEmpty()) return null;
         String mappedId = remapBlockId(entry.id);
         ResourceLocation rl = ResourceLocation.tryParse(mappedId);
-        if (rl == null) return null;
+        if (rl == null || BuiltInRegistries.BLOCK == null) return null;
 
         Block block = BuiltInRegistries.BLOCK.get(rl);
         if (block == null) return null;
@@ -296,7 +296,8 @@ public final class DungeonTemplate425 {
 
         for (EntitySpec eSpec : tpl.entities) {
             ResourceLocation rl = eSpec.id == null ? null : ResourceLocation.tryParse(eSpec.id);
-            EntityType type = rl == null ? null : BuiltInRegistries.ENTITY_TYPE.get(rl);
+            EntityType type = (rl == null || BuiltInRegistries.ENTITY_TYPE == null)
+                    ? null : BuiltInRegistries.ENTITY_TYPE.get(rl);
             ResourceLocation actualKey = type == null ? null : BuiltInRegistries.ENTITY_TYPE.getKey(type);
             if (type == null || actualKey == null || !rl.equals(actualKey)) {
                 stats.entitiesSkipped++;
