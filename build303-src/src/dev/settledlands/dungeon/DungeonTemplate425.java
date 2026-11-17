@@ -44,6 +44,8 @@ public final class DungeonTemplate425 {
 
     public static final String START_RESOURCE = "/data/settledlands/dungeon/start.slbp";
     public static final String DOORWAY_REPLACEMENT = "minecraft:nether_bricks";
+    /** UPDATE_CLIENTS (2) | UPDATE_KNOWN_SHAPE (16) | UPDATE_SUPPRESS_DROPS (32) = 50. */
+    public static final int PLACE_FLAGS = 2 | 16 | 32;
 
     /** Safe entrance inside {@code старт.bp} facing West (-X) into the chamber from the lapis sill. */
     public static final double SPAWN_OFFSET_X = 10.5D;
@@ -392,6 +394,33 @@ public final class DungeonTemplate425 {
         }
 
         int[] raw = tpl.blocks;
+        // Never split multi-block doors (e.g. valhelsia_structures:dungeon_door) across server ticks.
+        if (end > start && end < total) {
+            int lastPal = raw[(end - 1) * 4 + 3];
+            if (lastPal >= 0 && lastPal < tpl.palette.size()
+                    && AxiomBlueprint427.isDoorLike(tpl.palette.get(lastPal).id)) {
+                int extra = 0;
+                int prevX = raw[(end - 1) * 4];
+                int prevZ = raw[(end - 1) * 4 + 2];
+                while (end < total && extra < 16) {
+                    int nextPal = raw[end * 4 + 3];
+                    if (nextPal < 0 || nextPal >= tpl.palette.size()
+                            || !AxiomBlueprint427.isDoorLike(tpl.palette.get(nextPal).id)) {
+                        break;
+                    }
+                    int nx = raw[end * 4];
+                    int nz = raw[end * 4 + 2];
+                    if (Math.abs(nx - prevX) > 4 || Math.abs(nz - prevZ) > 4) {
+                        break;
+                    }
+                    prevX = nx;
+                    prevZ = nz;
+                    end++;
+                    extra++;
+                }
+            }
+        }
+
         for (int bi = start; bi < end; bi++) {
             int i = bi * 4;
             int palIdx = raw[i + 3];
@@ -403,7 +432,7 @@ public final class DungeonTemplate425 {
             int rx = DungeonGenerator427.rotX(raw[i], raw[i + 2], t);
             int rz = DungeonGenerator427.rotZ(raw[i], raw[i + 2], t);
             BlockPos pos = new BlockPos(originX + rx, originY + raw[i + 1], originZ + rz);
-            ((Level) level).setBlock(pos, state, 2);
+            ((Level) level).setBlock(pos, state, PLACE_FLAGS);
             if (stats != null) stats.blocksPlaced++;
         }
 
@@ -499,7 +528,7 @@ public final class DungeonTemplate425 {
                 BlockPos pos = new BlockPos(wx + tx * s, wy + dy, wz + tz * s);
                 BlockState existing = ((Level) level).getBlockState(pos);
                 if (existing == null || existing.isAir()) {
-                    ((Level) level).setBlock(pos, state, 2);
+                    ((Level) level).setBlock(pos, state, PLACE_FLAGS);
                     placed++;
                 }
             }

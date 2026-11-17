@@ -89,6 +89,7 @@ public final class HellDungeon427Probe {
         "minecraft:soul_fire",
         "minecraft:soul_soil",
         "minecraft:wither_skeleton_skull",
+        "valhelsia_structures:dungeon_door",
     };
 
     public static void main(String[] args) throws Exception {
@@ -96,6 +97,7 @@ public final class HellDungeon427Probe {
         testRotationMathAndProperties();
         testConfigCreationAutoDiscoveryAndFilters();
         testStreamingPlacementSaveLoadAndProximity();
+        testMultiBlockDoorSafetyBuild430();
         testRealArchiveIfPresent();
         testBiomeProgressionBuild429();
         testUniqueDungeonPerPlayerBuild428();
@@ -172,7 +174,8 @@ public final class HellDungeon427Probe {
             check(Files.isRegularFile(tmp.resolve(DungeonConfig427.DEFAULT_BLUEPRINTS_REL)
                     .resolve("README-BLUEPRINTS-RU.txt")), "Russian blueprint README created");
             check("auto".equals(cfg.blueprintsDir) && "auto".equals(cfg.filterMode), "default auto modes");
-            check(cfg.minPieces == 75 && cfg.maxPieces == 95, "Build 429 default minPieces=75, maxPieces=95");
+            check(cfg.minPieces == 85 && cfg.maxPieces == 110 && cfg.maxRadius == 240,
+                    "Build 430 default minPieces=85, maxPieces=110, maxRadius=240");
 
             // Empty folders -> embedded start.slbp fallback
             DungeonBlueprints427.Library emptyLib = DungeonBlueprints427.load(cfg);
@@ -330,7 +333,7 @@ public final class HellDungeon427Probe {
         try {
             DungeonConfig427 cfg = new DungeonConfig427(
                     tmp, realDir.toString(), "auto", "старт",
-                    75, 95, 230, -52, 240, true, "minecraft:nether_bricks", 8, 8192, true);
+                    85, 110, 240, -52, 240, true, "minecraft:nether_bricks", 8, 8192, true);
             DungeonBlueprints427.Library lib = DungeonBlueprints427.load(cfg);
             check(lib.totalBpFiles == 232 && lib.failedParse == 0, "all 232 real .bp parsed");
             check("auto->biomes(к->а+п)".equals(lib.appliedFilter) && lib.biomeProgression
@@ -338,19 +341,26 @@ public final class HellDungeon427Probe {
                     && lib.infernalCount == 48 && lib.fleshCount == 43,
                     "biome pool к+а+п selected (142 pieces: 51 crypt, 48 infernal, 43 flesh)");
 
-            // Check 5 distinct seeds for strict crypt-near-start and both deep biomes present
+            // Check 5 distinct seeds for large crypt core and far deep biomes
             for (int s = 0; s < 5; s++) {
                 DungeonGenerator427.Plan p = DungeonGenerator427.generate(lib, 0, 0, 0, 1000L + s * 7919L);
-                check(p.pieces.size() >= 75 && p.pieces.size() <= 95,
+                check(p.pieces.size() >= 85 && p.pieces.size() <= 110,
                         "real biome plan #" + s + " size=" + p.pieces.size());
-                check(p.cryptCount >= 15 && p.infernalCount >= 12 && p.fleshCount >= 12,
-                        "real biome plan #" + s + " balanced [к=" + p.cryptCount
+                check(p.cryptCount >= 32 && p.infernalCount >= 12 && p.fleshCount >= 12,
+                        "real biome plan #" + s + " large crypt + deep biomes [к=" + p.cryptCount
                                 + ", а=" + p.infernalCount + ", п=" + p.fleshCount + "]");
+                double minDeepDist = Double.MAX_VALUE;
                 for (int i = 1; i < p.pieces.size(); i++) {
                     var pp = p.pieces.get(i);
-                    if (pp.depth <= 3) {
+                    if (pp.depth <= 7) {
                         check(DungeonBlueprints427.THEME_CRYPT.equals(pp.biome),
                                 "real shallow room (depth=" + pp.depth + ") must be crypt, got " + pp.pieceKey);
+                    }
+                    if (!DungeonBlueprints427.THEME_CRYPT.equals(pp.biome)) {
+                        double cx = (pp.minX + pp.maxX) * 0.5;
+                        double cz = (pp.minZ + pp.maxZ) * 0.5;
+                        double d = Math.hypot(cx, cz);
+                        if (d < minDeepDist) minDeepDist = d;
                     }
                     // Dead-ends must belong to their branch's biome
                     if (pp.pieceKey.contains("Тупик")) {
@@ -363,6 +373,8 @@ public final class HellDungeon427Probe {
                         }
                     }
                 }
+                check(minDeepDist >= 95.0D,
+                        "real biome plan #" + s + " deep biomes far from spawn (minDeepDist=" + minDeepDist + ")");
             }
 
             MockServer srv = new MockServer();
@@ -375,7 +387,7 @@ public final class HellDungeon427Probe {
             DungeonData425 data = DungeonData425.get(srv);
             DungeonData425.Instance inst = data.getOrCreateInstance("real", 7777L, 1L);
             DungeonManager425.ensureInstanceInitialized(hd, data, inst, lib);
-            check(inst.pieces.size() >= 75 && inst.pieces.size() <= 95,
+            check(inst.pieces.size() >= 85 && inst.pieces.size() <= 110,
                     "real biome plan has " + inst.pieces.size() + " rooms");
 
             int ticks = 0;
@@ -398,6 +410,229 @@ public final class HellDungeon427Probe {
         } finally {
             deleteTree(tmp);
         }
+    }
+
+    private static void testMultiBlockDoorSafetyBuild430() throws Exception {
+        Path tmp = Files.createTempDirectory("hd430_doors");
+        try {
+            Path bpPath = tmp.resolve("старт_с_дверью.bp");
+            writeOutOfOrderDoorBp(bpPath);
+            AxiomBlueprint427.PieceTemplate piece = AxiomBlueprint427.loadFile(bpPath, "старт_с_дверью");
+            int[] raw = piece.content.blocks;
+            var pal = piece.content.palette;
+            int totalBlocks = piece.content.blockCount();
+
+            // Verify 3-phase ordering in blocksArr:
+            // 1) All structural blocks (stone/chain) come before wall/hanging decor (soul_lantern),
+            // 2) All decor comes before any valhelsia_structures:dungeon_door,
+            // 3) Every door column has lower immediately before upper (bottom-up wy).
+            int maxPhaseSeen = -1;
+            int doorCount = 0;
+            for (int bi = 0; bi < totalBlocks; bi++) {
+                int off = bi * 4;
+                int bx = raw[off], by = raw[off + 1], bz = raw[off + 2], pi = raw[off + 3];
+                String id = pal.get(pi).id;
+                int phase = id.contains("dungeon_door") ? 2 : (id.contains("lantern") ? 1 : 0);
+                check(phase >= maxPhaseSeen, "block order phase never goes backwards (idx=" + bi + ", id=" + id + ")");
+                maxPhaseSeen = phase;
+                if (phase == 2) {
+                    String half = pal.get(pi).properties.get("half");
+                    if ("lower".equals(half)) {
+                        check(bi + 1 < totalBlocks, "door upper immediately follows lower");
+                        int nOff = (bi + 1) * 4;
+                        int nx = raw[nOff], ny = raw[nOff + 1], nz = raw[nOff + 2], npi = raw[nOff + 3];
+                        String nextId = pal.get(npi).id;
+                        String nextHalf = pal.get(npi).properties.get("half");
+                        check("valhelsia_structures:dungeon_door".equals(nextId)
+                                && "upper".equals(nextHalf)
+                                && nx == bx && nz == bz && ny == by + 1,
+                                "upper half (" + nx + "," + ny + "," + nz
+                                        + ") grouped immediately after lower (" + bx + "," + by + "," + bz + ")");
+                    }
+                    doorCount++;
+                }
+            }
+            check(doorCount == 6, "3 double-height dungeon_door columns (6 blocks) parsed, got " + doorCount);
+
+            // Place in MockLevel with strict vanilla DoorBlock & updateShape physics simulation:
+            // - Any setBlock without UPDATE_KNOWN_SHAPE|UPDATE_SUPPRESS_DROPS (16|32) triggers neighbor drops
+            // - Placing door lower without solid below drops it
+            // - Placing door upper without door lower below drops it
+            // - Placing structural block adjacent to an already-placed door simulates shape update drop
+            for (int rot = 0; rot < 4; rot++) {
+                MockServer srv = new MockServer();
+                MockLevel hd = new MockLevel(DungeonManager425.HELL_DUNGEON_LEVEL, srv);
+                hd.strictDoorPhysics = true;
+                hd.blocksPerTickTestMode = true;
+
+                // Stream with tiny slice (7 blocks/tick) to verify tick boundaries NEVER split a door!
+                int cursor = 0;
+                int guard = 0;
+                while (cursor < totalBlocks && guard++ < 200) {
+                    int nextCursor = DungeonTemplate425.placeSlice(
+                            hd, piece.content, 100, 64, 100, rot, "minecraft:nether_bricks", cursor, 7, null);
+                    check(nextCursor > cursor, "placeSlice advances forward");
+                    // After EVERY SINGLE TICK, every placed lower half MUST already have its upper half!
+                    for (var entry : hd.placedStates.entrySet()) {
+                        if (entry.getValue() instanceof MockBlockState mbs
+                                && "valhelsia_structures:dungeon_door".equals(mbs.blockId)
+                                && "lower".equals(mbs.appliedProps.get("half"))) {
+                            String[] xyz = entry.getKey().split(",");
+                            int ux = Integer.parseInt(xyz[0]);
+                            int uy = Integer.parseInt(xyz[1]) + 1;
+                            int uz = Integer.parseInt(xyz[2]);
+                            BlockState up = hd.placedStates.get(ux + "," + uy + "," + uz);
+                            check(up instanceof MockBlockState umbs
+                                    && "valhelsia_structures:dungeon_door".equals(umbs.blockId)
+                                    && "upper".equals(umbs.appliedProps.get("half")),
+                                    "tick boundary never splits lower/upper door at rot=" + rot);
+                        }
+                    }
+                    cursor = nextCursor;
+                }
+                check(cursor == totalBlocks, "all blocks streamed cleanly at rot=" + rot);
+                check(hd.droppedDoors == 0, "zero dungeon_door drops at rot=" + rot);
+                check(hd.requiredFlagsSeen, "PLACE_FLAGS includes UPDATE_KNOWN_SHAPE | UPDATE_SUPPRESS_DROPS (50)");
+
+                // Count final surviving door blocks = 6 (all 3 two-block doors intact!)
+                int intactDoors = 0;
+                for (BlockState bs : hd.placedStates.values()) {
+                    if (bs instanceof MockBlockState mbs
+                            && "valhelsia_structures:dungeon_door".equals(mbs.blockId)) {
+                        intactDoors++;
+                    }
+                }
+                check(intactDoors == 6, "all 6 dungeon_door halves intact at rot=" + rot + ", got " + intactDoors);
+            }
+        } finally {
+            deleteTree(tmp);
+        }
+    }
+
+    /**
+     * Writes an Axiom .bp where section sy=0 appears BEFORE sy=-1 (worst-case vanilla section order),
+     * containing:
+     *  - a dungeon_door straddling sy=-1 (lower at y=-1) and sy=0 (upper at y=0),
+     *  - a double dungeon_door inside sy=0 (lower at y=0, upper at y=1) whose floor rests in sy=-1 (y=-1),
+     *  - a hanging soul_lantern under a chain.
+     */
+    private static void writeOutOfOrderDoorBp(Path path) throws IOException {
+        ByteArrayOutputStream hBaos = new ByteArrayOutputStream();
+        try (DataOutputStream ho = new DataOutputStream(hBaos)) {
+            ho.writeByte(10); ho.writeUTF("");
+            ho.writeByte(8); ho.writeUTF("Name"); ho.writeUTF("старт_с_дверью");
+            ho.writeByte(8); ho.writeUTF("Author"); ho.writeUTF("probe");
+            ho.writeByte(9); ho.writeUTF("Tags"); ho.writeByte(8); ho.writeInt(0);
+            ho.writeByte(3); ho.writeUTF("BlockCount"); ho.writeInt(30);
+            ho.writeByte(1); ho.writeUTF("Locked"); ho.writeByte(0);
+            ho.writeByte(0);
+        }
+        byte[] hdrBytes = hBaos.toByteArray();
+
+        // Write 2 chunk sections in WORST ORDER: sy=0 first, sy=-1 second!
+        class Sec {
+            final int sy;
+            final List<String> pal = new ArrayList<>();
+            final int[] idx = new int[4096];
+            Sec(int sy) {
+                this.sy = sy;
+                pal.add("minecraft:air");
+            }
+            void set(int lx, int ly, int lz, String state) {
+                int pi = pal.indexOf(state);
+                if (pi < 0) { pi = pal.size(); pal.add(state); }
+                idx[(ly << 8) | (lz << 4) | lx] = pi;
+            }
+        }
+        Sec sec0 = new Sec(0);
+        Sec secM1 = new Sec(-1);
+
+        // Door 1 & 2 (double door on floor at y=-1, doors at y=0..1)
+        secM1.set(4, 15, 4, "minecraft:blackstone");
+        secM1.set(5, 15, 4, "minecraft:blackstone");
+        sec0.set(4, 0, 4, "valhelsia_structures:dungeon_door[facing=north,half=lower,hinge=left,open=false,powered=false]");
+        sec0.set(4, 1, 4, "valhelsia_structures:dungeon_door[facing=north,half=upper,hinge=left,open=false,powered=false]");
+        sec0.set(5, 0, 4, "valhelsia_structures:dungeon_door[facing=north,half=lower,hinge=right,open=false,powered=false]");
+        sec0.set(5, 1, 4, "valhelsia_structures:dungeon_door[facing=north,half=upper,hinge=right,open=false,powered=false]");
+        // Jambs around double door at y=0..2
+        secM1.set(3, 15, 4, "minecraft:blackstone");
+        secM1.set(6, 15, 4, "minecraft:blackstone");
+        sec0.set(3, 0, 4, "minecraft:blackstone");
+        sec0.set(3, 1, 4, "minecraft:blackstone");
+        sec0.set(3, 2, 4, "minecraft:blackstone");
+        sec0.set(4, 2, 4, "minecraft:blackstone");
+        sec0.set(5, 2, 4, "minecraft:blackstone");
+        sec0.set(6, 0, 4, "minecraft:blackstone");
+        sec0.set(6, 1, 4, "minecraft:blackstone");
+        sec0.set(6, 2, 4, "minecraft:blackstone");
+
+        // Door 3 straddling sy=-1 (lower at y=-1) and sy=0 (upper at y=0), floor at y=-2
+        secM1.set(8, 14, 4, "minecraft:blackstone");
+        secM1.set(8, 15, 4, "valhelsia_structures:dungeon_door[facing=east,half=lower,hinge=left,open=false,powered=false]");
+        sec0.set(8, 0, 4, "valhelsia_structures:dungeon_door[facing=east,half=upper,hinge=left,open=false,powered=false]");
+        sec0.set(8, 1, 4, "minecraft:blackstone");
+
+        // Hanging lantern under chain in sy=0
+        sec0.set(2, 2, 2, "minecraft:chain[axis=y]");
+        sec0.set(2, 1, 2, "minecraft:soul_lantern[hanging=true]");
+
+        // Entrance lapis marker so AxiomBlueprint427 treats it as a valid piece
+        secM1.set(0, 14, 0, "minecraft:lapis_block");
+        secM1.set(0, 15, 0, "minecraft:blackstone");
+
+        ByteArrayOutputStream gzBaos = new ByteArrayOutputStream();
+        try (GZIPOutputStream gz = new GZIPOutputStream(gzBaos); DataOutputStream bo = new DataOutputStream(gz)) {
+            bo.writeByte(10); bo.writeUTF("");
+            bo.writeByte(9); bo.writeUTF("BlockRegion"); bo.writeByte(10); bo.writeInt(2);
+            for (Sec sec : new Sec[] { sec0, secM1 }) { // deliberately WRONG Y order!
+                bo.writeByte(3); bo.writeUTF("X"); bo.writeInt(0);
+                bo.writeByte(3); bo.writeUTF("Y"); bo.writeInt(sec.sy);
+                bo.writeByte(3); bo.writeUTF("Z"); bo.writeInt(0);
+                bo.writeByte(10); bo.writeUTF("BlockStates");
+                bo.writeByte(9); bo.writeUTF("palette"); bo.writeByte(10); bo.writeInt(sec.pal.size());
+                for (String ps : sec.pal) {
+                    int br = ps.indexOf('[');
+                    String bid = br < 0 ? ps : ps.substring(0, br);
+                    bo.writeByte(8); bo.writeUTF("Name"); bo.writeUTF(bid);
+                    if (br > 0) {
+                        bo.writeByte(10); bo.writeUTF("Properties");
+                        for (String kv : ps.substring(br + 1, ps.length() - 1).split(",")) {
+                            String[] p = kv.split("=");
+                            bo.writeByte(8); bo.writeUTF(p[0]); bo.writeUTF(p[1]);
+                        }
+                        bo.writeByte(0);
+                    }
+                    bo.writeByte(0);
+                }
+                int bpe = Math.max(4, 32 - Integer.numberOfLeadingZeros(sec.pal.size() - 1));
+                int perLong = 64 / bpe;
+                int longsLen = (4096 + perLong - 1) / perLong;
+                long[] packed = new long[longsLen];
+                for (int i = 0; i < 4096; i++) {
+                    int li = i / perLong;
+                    int bit = (i % perLong) * bpe;
+                    packed[li] |= ((long) sec.idx[i]) << bit;
+                }
+                bo.writeByte(12); bo.writeUTF("data"); bo.writeInt(longsLen);
+                for (long v : packed) bo.writeLong(v);
+                bo.writeByte(0);
+                bo.writeByte(0);
+            }
+            bo.writeByte(9); bo.writeUTF("BlockEntities"); bo.writeByte(10); bo.writeInt(0);
+            bo.writeByte(9); bo.writeUTF("Entities"); bo.writeByte(10); bo.writeInt(0);
+            bo.writeByte(0);
+        }
+        byte[] gzBytes = gzBaos.toByteArray();
+        ByteArrayOutputStream full = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(full)) {
+            out.writeInt(0x0AE5BB36);
+            out.writeInt(hdrBytes.length);
+            out.write(hdrBytes);
+            out.writeInt(0);
+            out.writeInt(gzBytes.length);
+            out.write(gzBytes);
+        }
+        Files.write(path, full.toByteArray());
     }
 
     private static void testBiomeProgressionBuild429() throws Exception {
@@ -905,6 +1140,10 @@ public final class HellDungeon427Probe {
         final DimensionDataStorage storage = new MockStorage();
         final Map<String, BlockState> placedStates = new HashMap<>();
         final List<ServerPlayer> playersList = new ArrayList<>();
+        boolean strictDoorPhysics = false;
+        boolean blocksPerTickTestMode = false;
+        boolean requiredFlagsSeen = false;
+        int droppedDoors = 0;
 
         MockLevel(ResourceKey<Level> dim, MinecraftServer srv) {
             this.dim = dim;
@@ -929,6 +1168,43 @@ public final class HellDungeon427Probe {
         }
 
         @Override public boolean setBlock(BlockPos pos, BlockState state, int flags) {
+            if ((flags & 16) != 0 && (flags & 32) != 0) {
+                requiredFlagsSeen = true;
+            }
+            if (strictDoorPhysics) {
+                if ((flags & 16) == 0 || (flags & 32) == 0) {
+                    droppedDoors++;
+                }
+                if (state instanceof MockBlockState mbs) {
+                    if ("valhelsia_structures:dungeon_door".equals(mbs.blockId)) {
+                        String half = mbs.appliedProps.get("half");
+                        BlockState below = placedStates.get(pos.getX() + "," + (pos.getY() - 1) + "," + pos.getZ());
+                        if ("lower".equals(half)) {
+                            if (!(below instanceof MockBlockState bbs) || bbs.isAir()
+                                    || bbs.blockId.contains("door")) {
+                                droppedDoors++;
+                                return false;
+                            }
+                        } else if ("upper".equals(half)) {
+                            if (!(below instanceof MockBlockState bbs)
+                                    || !"valhelsia_structures:dungeon_door".equals(bbs.blockId)
+                                    || !"lower".equals(bbs.appliedProps.get("half"))) {
+                                droppedDoors++;
+                                return false;
+                            }
+                        }
+                    } else if (!mbs.blockId.contains("lantern") && !mbs.isAir()) {
+                        // Structural block must never be placed adjacent to an already-placed door
+                        int[][] dirs = {{1,0,0},{-1,0,0},{0,1,0},{0,-1,0},{0,0,1},{0,0,-1}};
+                        for (int[] d : dirs) {
+                            BlockState nb = placedStates.get((pos.getX()+d[0]) + "," + (pos.getY()+d[1]) + "," + (pos.getZ()+d[2]));
+                            if (nb instanceof MockBlockState nmbs && nmbs.blockId.contains("dungeon_door")) {
+                                droppedDoors++;
+                            }
+                        }
+                    }
+                }
+            }
             placedStates.put(pos.getX() + "," + pos.getY() + "," + pos.getZ(), state);
             return true;
         }

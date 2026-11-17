@@ -194,6 +194,43 @@ def main(argv):
             return fail("DungeonConfig427 missing Build 428 unique_dungeon_per_entry config")
         if not any("biomes" in s for s in cfg_utf8):
             return fail("DungeonConfig427 missing Build 429 biomes mode docs")
+        if not any("min_pieces=85" in s and "max_pieces=110" in s and "max_radius=240" in s for s in cfg_utf8):
+            return fail("DungeonConfig427 missing Build 430 default size (85..110, max_radius=240)")
+
+        ax_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/AxiomBlueprint427.class"))
+        ax_utf8 = {e[1] for e in ax_info["cp"] if e and e[0] == 1}
+        for wanted_ax in ("placementPhase", "isDoorLike"):
+            if wanted_ax not in ax_utf8:
+                return fail("AxiomBlueprint427 missing Build 430 %s" % wanted_ax)
+
+        tmpl_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonTemplate425.class"))
+        tmpl_utf8 = {e[1] for e in tmpl_info["cp"] if e and e[0] == 1}
+        if "isDoorLike" not in tmpl_utf8 or "PLACE_FLAGS" not in tmpl_utf8:
+            return fail("DungeonTemplate425 missing Build 430 PLACE_FLAGS / isDoorLike")
+        # Direct ConstantValue check: tag=ConstantValue holds u2 cp index to Integer=50
+        tmpl_cp = tmpl_info["cp"]
+        place_flags_field = [f for f in tmpl_info["fields"] if tmpl_cp[f[1]][1] == "PLACE_FLAGS"]
+        pf_val = None
+        if place_flags_field:
+            for an, adata in place_flags_field[0][3]:
+                if tmpl_cp[an][1] == "ConstantValue" and len(adata) == 2:
+                    cidx = int.from_bytes(adata, "big")
+                    entry = tmpl_cp[cidx]
+                    if entry and entry[0] == 3:
+                        pf_val = int.from_bytes(entry[1], "big", signed=True)
+        if pf_val != 50:
+            return fail("DungeonTemplate425.PLACE_FLAGS must equal 50 (2|16|32), got %r" % pf_val)
+        # Also confirm no setBlock in placeSlice / placeSeal pushes constant 2 via iconst_2 without bipush 50
+        tmpl_code = []
+        for acc, ni, di, attrs in tmpl_info["methods"]:
+            mname = tmpl_cp[ni][1]
+            if mname in ("placeSlice", "placeSeal"):
+                for an, adata in attrs:
+                    if tmpl_cp[an][1] == "Code":
+                        tmpl_code.append((mname, adata))
+        for mname, adata in tmpl_code:
+            if b"\x10\x32" not in adata:  # bipush 50 (0x10 0x32)
+                return fail("DungeonTemplate425.%s does not push PLACE_FLAGS=50 (bipush 50)" % mname)
 
         bp_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonBlueprints427.class"))
         bp_utf8 = {e[1] for e in bp_info["cp"] if e and e[0] == 1}

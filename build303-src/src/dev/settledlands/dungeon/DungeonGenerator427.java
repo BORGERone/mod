@@ -218,12 +218,15 @@ public final class DungeonGenerator427 {
             AxiomBlueprint427.PieceTemplate start, int originX, int originY, int originZ, long seed) {
         boolean needInfernal = lib.hasTheme(DungeonBlueprints427.THEME_INFERNAL);
         boolean needFlesh = lib.hasTheme(DungeonBlueprints427.THEME_FLESH);
-        int wantCryptMin = Math.max(3, cfg.minPieces / 5);
-        int wantDeepMin = Math.max(3, cfg.minPieces / 6);
+        int wantCryptMin = Math.max(4, (int) Math.round(cfg.minPieces * 0.34D));
+        int wantDeepMin = Math.max(3, cfg.minPieces / 7);
+        int desiredDeepDist = (int) Math.min(Math.round(cfg.maxRadius * 0.45D), Math.max(12L, cfg.maxPieces));
+        long desiredDeepDistSq = (long) desiredDeepDist * (long) desiredDeepDist;
 
         int maxAttempts = 40;
         Plan best = null;
         int bestScore = Integer.MIN_VALUE;
+        int goodCount = 0;
 
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
             long attemptSeed = seed ^ ((long) attempt * 0x9E3779B97F4A7C15L);
@@ -232,14 +235,38 @@ public final class DungeonGenerator427 {
             boolean biomesOk = cand.cryptCount >= wantCryptMin
                     && (!needInfernal || cand.infernalCount >= wantDeepMin)
                     && (!needFlesh || cand.fleshCount >= wantDeepMin);
-            if (sizeOk && biomesOk) {
-                return cand;
+
+            long minDeepDistSq = Long.MAX_VALUE;
+            int minDeepDepth = Integer.MAX_VALUE;
+            for (int i = 1; i < cand.pieces.size(); i++) {
+                PlannedPiece pp = cand.pieces.get(i);
+                if (!DungeonBlueprints427.THEME_CRYPT.equals(pp.biome)) {
+                    long cx = ((long) pp.minX + pp.maxX) / 2L - originX;
+                    long cz = ((long) pp.minZ + pp.maxZ) / 2L - originZ;
+                    long d2 = cx * cx + cz * cz;
+                    if (d2 < minDeepDistSq) minDeepDistSq = d2;
+                    if (pp.depth < minDeepDepth) minDeepDepth = pp.depth;
+                }
             }
+            boolean farOk = minDeepDistSq == Long.MAX_VALUE || minDeepDistSq >= desiredDeepDistSq;
+            if (sizeOk && biomesOk && farOk) {
+                goodCount++;
+                if (goodCount >= 3 || cand.cryptCount >= (int) Math.round(cfg.maxPieces * 0.38D)) {
+                    return cand;
+                }
+            }
+
             int minTheme = cand.cryptCount;
             if (needInfernal) minTheme = Math.min(minTheme, cand.infernalCount);
             if (needFlesh) minTheme = Math.min(minTheme, cand.fleshCount);
-            int score = minTheme * 1000 + Math.min(cand.pieces.size(), cfg.maxPieces);
-            if (sizeOk) score += 200;
+            int deepDistScore = minDeepDistSq == Long.MAX_VALUE ? 0
+                    : (int) Math.min(400L, Math.round(Math.sqrt(minDeepDistSq)));
+            int score = (sizeOk ? 50000 : 0)
+                    + (biomesOk ? 20000 : 0)
+                    + minTheme * 500
+                    + deepDistScore * 20
+                    + (minDeepDepth == Integer.MAX_VALUE ? 0 : Math.min(12, minDeepDepth) * 40)
+                    + Math.min(cand.pieces.size(), cfg.maxPieces);
             if (best == null || score > bestScore) {
                 best = cand;
                 bestScore = score;
@@ -260,10 +287,16 @@ public final class DungeonGenerator427 {
         boolean hasInfernal = lib.hasTheme(DungeonBlueprints427.THEME_INFERNAL);
         boolean hasFlesh = lib.hasTheme(DungeonBlueprints427.THEME_FLESH);
 
-        int transitionDepth = Math.max(3, Math.min(4, cfg.maxPieces / 16));
-        int minCryptBeforeDeep = Math.max(4, Math.min(20, (int) Math.round(cfg.maxPieces * 0.24D)));
-        int minDist = Math.min(36, Math.max(8, cfg.maxPieces / 2));
+        // Larger crypt core & farther deep biomes:
+        //   maxPieces=110 -> transitionDepth=8, minCrypt=46, minDist=120 blocks
+        //   maxPieces=95  -> transitionDepth=7, minCrypt=40, minDist=109 blocks
+        //   maxPieces=80  -> transitionDepth=6, minCrypt=34, minDist=92 blocks
+        int transitionDepth = Math.max(4, Math.min(8, cfg.maxPieces / 12));
+        int minCryptBeforeDeep = Math.max(4, (int) Math.round(cfg.maxPieces * 0.42D));
+        int minDist = (int) Math.min(Math.round(cfg.maxRadius * 0.50D), Math.max(12L, Math.round(cfg.maxPieces * 1.15D)));
         long minDistSq = (long) minDist * (long) minDist;
+        int innerSafeRadius = (int) Math.round(minDist * 0.85D);
+        long innerSafeSq = (long) innerSafeRadius * (long) innerSafeRadius;
 
         int[] startBox = rotatedWorldBox(start, originX, originY, originZ, 0);
         placed.add(new PlannedPiece(start.key, originX, originY, originZ, 0,
@@ -313,9 +346,9 @@ public final class DungeonGenerator427 {
 
             int openSameBiome = countOpenForBiome(openExits, targetBiome);
             int placedInBiome = countForBiome(targetBiome, placedCrypt, placedInfernal, placedFlesh);
-            boolean earlyCryptBranch = DungeonBlueprints427.THEME_CRYPT.equals(targetBiome)
-                    && placedCrypt < minCryptBeforeDeep && openSameBiome < 3;
-            boolean earlyDeepBranch = !DungeonBlueprints427.THEME_CRYPT.equals(targetBiome)
+            boolean isCrypt = DungeonBlueprints427.THEME_CRYPT.equals(targetBiome);
+            boolean earlyCryptBranch = isCrypt && placedCrypt < minCryptBeforeDeep && openSameBiome < 3;
+            boolean earlyDeepBranch = !isCrypt
                     && openSameBiome < 2 && placedInBiome < 6
                     && placed.size() + openExits.size() < cfg.maxPieces - 8;
 
@@ -323,12 +356,12 @@ public final class DungeonGenerator427 {
             final int curOpen = openExits.size();
             Map<String, Double> jitter = new HashMap<>(pool.size() * 2);
             for (AxiomBlueprint427.PieceTemplate p : pool) {
-                double s = usedCounts.getOrDefault(p.key, 0) * 10.0D;
+                double s = usedCounts.getOrDefault(p.key, 0) * 14.0D;
                 int exCount = p.exits.size();
                 if (earlyCryptBranch && exCount >= 2) s -= 18.0D;
                 else if (earlyDeepBranch && exCount >= 2) s -= 14.0D;
-                else if (curPlaced < 12 && curOpen < 3 && exCount >= 2) s -= 8.0D;
-                else if (curPlaced + curOpen >= cfg.maxPieces - 5 && exCount >= 2) s += 22.0D;
+                else if (curPlaced < 14 && curOpen < 3 && exCount >= 2) s -= 8.0D;
+                else if (curPlaced + curOpen >= cfg.maxPieces - 6 && exCount >= 2) s += 22.0D;
                 else if (openSameBiome >= 4 && exCount >= 2) s += 14.0D;
                 s += rnd.nextDouble() * 5.0D;
                 jitter.put(p.key, s);
@@ -337,15 +370,27 @@ public final class DungeonGenerator427 {
 
             PlannedPiece chosen = null;
             AxiomBlueprint427.PieceTemplate chosenTpl = null;
+            PlannedPiece nearFallback = null;
+            AxiomBlueprint427.PieceTemplate nearFallbackTpl = null;
 
             for (AxiomBlueprint427.PieceTemplate cand : pool) {
                 PlannedPiece fit = tryFit(cand, cur, wantLapisDir, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
                         boxes, targetBiome, cur.depth + 1);
-                if (fit != null) {
-                    chosen = fit;
-                    chosenTpl = cand;
-                    break;
+                if (fit == null) continue;
+                if (!isCrypt && centerDistSq(fit, originX, originZ) < innerSafeSq) {
+                    if (nearFallback == null) {
+                        nearFallback = fit;
+                        nearFallbackTpl = cand;
+                    }
+                    continue;
                 }
+                chosen = fit;
+                chosenTpl = cand;
+                break;
+            }
+            if (chosen == null && nearFallback != null) {
+                chosen = nearFallback;
+                chosenTpl = nearFallbackTpl;
             }
 
             if (chosen == null) {
@@ -419,6 +464,12 @@ public final class DungeonGenerator427 {
         }
 
         return buildPlan(start, originX, originY, originZ, placed, seals);
+    }
+
+    private static long centerDistSq(PlannedPiece p, int originX, int originZ) {
+        long cx = ((long) p.minX + p.maxX) / 2L - originX;
+        long cz = ((long) p.minZ + p.maxZ) / 2L - originZ;
+        return cx * cx + cz * cz;
     }
 
     private static int pickNextBiomeExit(

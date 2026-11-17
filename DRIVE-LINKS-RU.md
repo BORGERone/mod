@@ -346,5 +346,26 @@ but class was expected` — маркер не ставился ни разу, о
 Прямая ссылка на мод: `https://drive.google.com/uc?export=download&id=169W5cPTTAkclu52sWCJh0RIZ2bWZOeFW`
 Прямая ссылка на исходники: `https://drive.google.com/uc?export=download&id=19Xt7w7D7RLabk3MXOXutAHLSMNoC_LYM`
 
+## Build 430 — увеличенный старт «к», дальние «а»/«п» и защита дверей при спавне (2026-11-17)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build430-dungeon-biomes-doors.jar | `1_ZukLhlGcVzIqMbmKZVeglaEXy4DRCkT` | `5f548a6df8d0b4f4123b6776f32923986324290d5acc188cc30f9cf06a9f89d8` |
+| SettledLands-Build430-DungeonBiomesDoors-Source.zip | `1NLNWOpjXlJCGwTVTeuLicNcMXK1nHC6Q` | `080a871193ccbf5f3bda18f051c9472e0a632d85d933fc0804edfbe7179623d3` |
+
+База — 429.
+1. **Расширен стартовый биом крипты (`к`) и отодвинуты вглубь биомы `а` (infernal) и `п` (flesh)**:
+   в `DungeonConfig427` размер по умолчанию поднят до `85..110` комнат и `max_radius=240` (совместимо со старыми `60..80` и `75..95`);
+   в `DungeonGenerator427` увеличена глубина перехода (`transitionDepth` до `8`), ранняя доля крипты (`~42%`) и добавлен
+   радиальный порог от спавна (`minDist` до `120` блоков / `innerSafeRadius`) с отбором лучшего плана по дистанции и глубине
+   (в 20 симуляциях `85..110` на 232 `.bp`: в среднем `105` комнат [`к=49.7`, `а=26.4`, `п=28.0`], ближайшие `а`/`п` — в **132 блоках** и **11–15 комнатах** от `старт`).
+2. **Исправлена поломка «Двери подземелья» (`valhelsia_structures:dungeon_door`) и хрупкого декора при спавне чертежей**:
+   `AxiomBlueprint427` сортирует блоки чертежей в 3 фазы (0: конструктив/стены/пол/цепи снизу вверх -> 1: хрупкий декор -> 2: двери `isDoorLike` колонками `(x,z,y)` `lower` перед `upper`);
+   `DungeonTemplate425` использует `PLACE_FLAGS = 50` (`UPDATE_CLIENTS | UPDATE_KNOWN_SHAPE | UPDATE_SUPPRESS_DROPS`) во всех `setBlock` и не разрывает соседние блоки двери на границе тиков `placeSlice`.
+44/44 гейтов PASS (`hell_dungeon_check.py`: `6 297` + `201 198` JVM-проверок, `verify_jar --base build429`, `check_mixin_class`, `invoke_kind_check --base build429`, `dangling_refs --base build429`, `mixin_clash_check`), `cmp -s` PASS. В игре **ожидает проверки автором**.
+Прямая ссылка на мод: `https://drive.google.com/uc?export=download&id=1_ZukLhlGcVzIqMbmKZVeglaEXy4DRCkT`
+Прямая ссылка на исходники: `https://drive.google.com/uc?export=download&id=1NLNWOpjXlJCGwTVTeuLicNcMXK1nHC6Q`
+
+
 
 

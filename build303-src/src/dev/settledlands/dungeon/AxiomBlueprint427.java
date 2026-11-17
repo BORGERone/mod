@@ -11,6 +11,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
@@ -354,9 +355,64 @@ public final class AxiomBlueprint427 {
             throw new IOException("Blueprint contains zero non-air blocks: " + key);
         }
 
+        // Build 430: Order blocks in 3 safe phases so floors/frames (phase 0) exist before fragile
+        // wall/ceiling attachments (phase 1) and multi-block doors such as valhelsia_structures:dungeon_door
+        // (phase 2, sorted by column (x, z, y) so LOWER always immediately precedes UPPER).
+        int nBlocks = flatBlocks.size() / 4;
+        int[] blockPhases = new int[palette.size()];
+        for (int p = 0; p < palette.size(); p++) {
+            blockPhases[p] = placementPhase(palette.get(p).id);
+        }
+        List<int[]> phase0 = new ArrayList<>(nBlocks);
+        List<int[]> phase1 = new ArrayList<>();
+        List<int[]> phase2 = new ArrayList<>();
+        for (int bi = 0; bi < nBlocks; bi++) {
+            int off = bi * 4;
+            int wx = flatBlocks.get(off);
+            int wy = flatBlocks.get(off + 1);
+            int wz = flatBlocks.get(off + 2);
+            int gIdx = flatBlocks.get(off + 3);
+            int ph = blockPhases[gIdx];
+            int[] entry = new int[] { wx, wy, wz, gIdx };
+            if (ph == 2) phase2.add(entry);
+            else if (ph == 1) phase1.add(entry);
+            else phase0.add(entry);
+        }
+        Comparator<int[]> byYFirst = (a, b) -> {
+            int c = Integer.compare(a[1], b[1]);
+            if (c != 0) return c;
+            c = Integer.compare(a[2], b[2]);
+            return c != 0 ? c : Integer.compare(a[0], b[0]);
+        };
+        Comparator<int[]> byColumnBottomUp = (a, b) -> {
+            int c = Integer.compare(a[0], b[0]);
+            if (c != 0) return c;
+            c = Integer.compare(a[2], b[2]);
+            return c != 0 ? c : Integer.compare(a[1], b[1]);
+        };
+        phase0.sort(byYFirst);
+        phase1.sort(byYFirst);
+        phase2.sort(byColumnBottomUp);
+
         int[] blocksArr = new int[flatBlocks.size()];
-        for (int i = 0; i < flatBlocks.size(); i++) {
-            blocksArr[i] = flatBlocks.get(i);
+        int outPos = 0;
+        for (int[] e : phase0) {
+            blocksArr[outPos++] = e[0];
+            blocksArr[outPos++] = e[1];
+            blocksArr[outPos++] = e[2];
+            blocksArr[outPos++] = e[3];
+        }
+        for (int[] e : phase1) {
+            blocksArr[outPos++] = e[0];
+            blocksArr[outPos++] = e[1];
+            blocksArr[outPos++] = e[2];
+            blocksArr[outPos++] = e[3];
+        }
+        for (int[] e : phase2) {
+            blocksArr[outPos++] = e[0];
+            blocksArr[outPos++] = e[1];
+            blocksArr[outPos++] = e[2];
+            blocksArr[outPos++] = e[3];
         }
 
         List<DungeonTemplate425.BlockEntitySpec> beSpecs = new ArrayList<>();
@@ -406,6 +462,61 @@ public final class AxiomBlueprint427 {
                 palette, blocksArr, beSpecs, entSpecs);
         return new PieceTemplate(key, displayName, tags,
                 minX, minY, minZ, maxX, maxY, maxZ, entrance, exits, content, false);
+    }
+
+    private static int placementPhase(String blockId) {
+        if (blockId == null || blockId.isEmpty()) return 0;
+        String low = blockId.toLowerCase(Locale.ROOT);
+        if (isDoorLike(low)) return 2;
+        if ((low.contains("lantern") && !low.contains("sea_lantern") && !low.contains("jack_o_lantern"))
+                || low.contains("torch")
+                || low.contains("candle")
+                || low.contains("campfire")
+                || low.contains("button")
+                || low.contains("lever")
+                || low.contains("pressure_plate")
+                || low.contains("_sign")
+                || low.contains("banner")
+                || low.contains("carpet")
+                || low.contains("rail")
+                || low.contains("ladder")
+                || low.contains("vine")
+                || low.contains("skull")
+                || low.contains("_head")
+                || low.contains("tripwire")
+                || low.contains("redstone_wire")
+                || low.contains("repeater")
+                || low.contains("comparator")
+                || low.contains("mushroom")
+                || low.contains("fungus")
+                || low.contains("roots")
+                || low.contains("sprouts")
+                || low.contains("wart")
+                || low.contains("flower")
+                || low.contains("potted_")
+                || low.contains("coral_fan")
+                || low.contains("moss_carpet")
+                || low.contains("fern")
+                || low.contains("sapling")
+                || low.contains("kelp")
+                || low.contains("dripstone")
+                || low.contains("amethyst_cluster")
+                || low.contains("amethyst_bud")
+                || low.contains("scaffolding")
+                || low.contains("flower_pot")
+                || low.contains("cake")
+                || low.contains("brewing_stand")
+                || low.endsWith("_bed")
+                || low.contains(":bell")) {
+            return 1;
+        }
+        return 0;
+    }
+
+    public static boolean isDoorLike(String blockId) {
+        if (blockId == null) return false;
+        String low = blockId.toLowerCase(Locale.ROOT);
+        return low.contains("door") && !low.contains("trapdoor");
     }
 
     public static int inferFaceDir(int x, int z, int minX, int maxX, int minZ, int maxZ) {

@@ -109,9 +109,9 @@ public final class DungeonConfig427 {
                 "auto",
                 "auto",
                 "старт",
-                75,
-                95,
-                230,
+                85,
+                110,
+                240,
                 -52,
                 240,
                 true,
@@ -167,9 +167,9 @@ public final class DungeonConfig427 {
                 p.getProperty("blueprints_dir", "auto"),
                 p.getProperty("filter_mode", "auto"),
                 p.getProperty("start_name", "старт"),
-                parseInt(p.getProperty("min_pieces"), 75),
-                parseInt(p.getProperty("max_pieces"), 95),
-                parseInt(p.getProperty("max_radius"), 230),
+                parseInt(p.getProperty("min_pieces"), 85),
+                parseInt(p.getProperty("max_pieces"), 110),
+                parseInt(p.getProperty("max_radius"), 240),
                 parseInt(p.getProperty("min_y"), -52),
                 parseInt(p.getProperty("max_y"), 240),
                 parseBool(p.getProperty("seal_start_entrance"), true),
@@ -237,11 +237,11 @@ public final class DungeonConfig427 {
                 + "start_name=старт\n"
                 + "\n"
                 + "# Целевой размер одного инстанса данжа (в комнатах/коридорах)\n"
-                + "min_pieces=75\n"
-                + "max_pieces=95\n"
+                + "min_pieces=85\n"
+                + "max_pieces=110\n"
                 + "\n"
                 + "# Максимальный радиус от центра ячейки 512x512 и границы высоты\n"
-                + "max_radius=230\n"
+                + "max_radius=240\n"
                 + "min_y=-52\n"
                 + "max_y=240\n"
                 + "\n"
