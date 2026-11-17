@@ -7,10 +7,12 @@ import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.ServerLevelAccessor;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 
 /**
- * Compile-time mirror (Build 425): preserves all Build 351/420 {@code ServerLevel} members,
- * implements {@link ServerLevelAccessor}, and adds {@link #getSeed()} and {@link #getBlockEntity(BlockPos)}.
+ * Compile-time mirror (Build 425 / 431): preserves all Build 351/420 {@code ServerLevel} members,
+ * implements {@link ServerLevelAccessor}, and adds {@link #getSeed()},
+ * {@link #getBlockEntity(BlockPos)}, and {@link #sendBlockUpdated}.
  */
 public class ServerLevel extends Level implements ServerLevelAccessor {
     @Override
@@ -42,4 +44,7 @@ public class ServerLevel extends Level implements ServerLevelAccessor {
     public BlockEntity getBlockEntity(BlockPos pos) {
         return null;
     }
+
+    @Override
+    public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {}
 }

@@ -74,13 +74,20 @@ public final class DungeonTemplate425 {
         public final int y;
         public final int z;
         public final CompoundTag nbt;
+        public final DungeonNbt431.NbtCompound rawNbt;
 
         public BlockEntitySpec(String id, int x, int y, int z, CompoundTag nbt) {
+            this(id, x, y, z, nbt, null);
+        }
+
+        public BlockEntitySpec(String id, int x, int y, int z, CompoundTag nbt,
+                DungeonNbt431.NbtCompound rawNbt) {
             this.id = id;
             this.x = x;
             this.y = y;
             this.z = z;
             this.nbt = nbt;
+            this.rawNbt = rawNbt;
         }
     }
 
@@ -92,8 +99,14 @@ public final class DungeonTemplate425 {
         public final float yaw;
         public final float pitch;
         public final CompoundTag nbt;
+        public final DungeonNbt431.NbtCompound rawNbt;
 
         public EntitySpec(String id, double dx, double dy, double dz, float yaw, float pitch, CompoundTag nbt) {
+            this(id, dx, dy, dz, yaw, pitch, nbt, null);
+        }
+
+        public EntitySpec(String id, double dx, double dy, double dz, float yaw, float pitch,
+                CompoundTag nbt, DungeonNbt431.NbtCompound rawNbt) {
             this.id = id;
             this.dx = dx;
             this.dy = dy;
@@ -101,6 +114,7 @@ public final class DungeonTemplate425 {
             this.yaw = yaw;
             this.pitch = pitch;
             this.nbt = nbt;
+            this.rawNbt = rawNbt;
         }
     }
 
@@ -109,13 +123,25 @@ public final class DungeonTemplate425 {
         public final int[] blocks;
         public final List<BlockEntitySpec> blockEntities;
         public final List<EntitySpec> entities;
+        public final int[] oldSchemaOrigin;
 
         public StartTemplate(List<PaletteEntry> palette, int[] blocks,
                 List<BlockEntitySpec> blockEntities, List<EntitySpec> entities) {
+            this(palette, blocks, blockEntities, entities, null);
+        }
+
+        public StartTemplate(List<PaletteEntry> palette, int[] blocks,
+                List<BlockEntitySpec> blockEntities, List<EntitySpec> entities, int[] oldSchemaOrigin) {
             this.palette = Collections.unmodifiableList(palette);
             this.blocks = blocks == null ? new int[0] : blocks;
             this.blockEntities = Collections.unmodifiableList(blockEntities);
             this.entities = Collections.unmodifiableList(entities);
+            if (oldSchemaOrigin == null) {
+                this.oldSchemaOrigin = null;
+            } else {
+                this.oldSchemaOrigin = new int[oldSchemaOrigin.length];
+                System.arraycopy(oldSchemaOrigin, 0, this.oldSchemaOrigin, 0, oldSchemaOrigin.length);
+            }
         }
 
         public int blockCount() {
@@ -213,6 +239,10 @@ public final class DungeonTemplate425 {
     }
 
     public static Map<String, String> rotateProps(Map<String, String> props, int turns) {
+        return rotateProps(props, turns, null);
+    }
+
+    public static Map<String, String> rotateProps(Map<String, String> props, int turns, String blockId) {
         int t = turns & 3;
         if (props == null || props.isEmpty() || t == 0) {
             return props == null ? Collections.emptyMap() : props;
@@ -222,11 +252,15 @@ public final class DungeonTemplate425 {
         String cE = props.get("east");
         String cS = props.get("south");
         String cW = props.get("west");
+        String gN = props.get("glueable_north");
+        String gE = props.get("glueable_east");
+        String gS = props.get("glueable_south");
+        String gW = props.get("glueable_west");
 
         for (Map.Entry<String, String> e : props.entrySet()) {
             String k = e.getKey();
             String v = e.getValue();
-            if ("facing".equals(k)) {
+            if ("facing".equals(k) || "target".equals(k)) {
                 out.put(k, rotateFacing(v, t));
             } else if ("axis".equals(k)) {
                 out.put(k, rotateAxis(v, t));
@@ -234,7 +268,11 @@ public final class DungeonTemplate425 {
                 out.put(k, rotateInt16(v, t));
             } else if ("shape".equals(k)) {
                 out.put(k, rotateShape(v, t));
-            } else if ("north".equals(k) || "east".equals(k) || "south".equals(k) || "west".equals(k)) {
+            } else if ("axis_along_first".equals(k) || "connected_along_first_coordinate".equals(k)) {
+                out.put(k, (t & 1) == 1 ? flipBoolString(v) : v);
+            } else if ("north".equals(k) || "east".equals(k) || "south".equals(k) || "west".equals(k)
+                    || "glueable_north".equals(k) || "glueable_east".equals(k)
+                    || "glueable_south".equals(k) || "glueable_west".equals(k)) {
                 // Reassigned below so cardinal connections map cleanly without losing order
                 out.put(k, v);
             } else {
@@ -251,7 +289,62 @@ public final class DungeonTemplate425 {
                 }
             }
         }
+        if (gN != null || gE != null || gS != null || gW != null) {
+            String[] ring = new String[] { gN, gE, gS, gW };
+            String[] names = new String[] { "glueable_north", "glueable_east", "glueable_south", "glueable_west" };
+            for (int i = 0; i < 4; i++) {
+                String val = ring[i];
+                if (val != null) {
+                    out.put(names[(i + t) & 3], val);
+                }
+            }
+        }
+
+        // Create EncasedCogwheel: top_shaft <-> bottom_shaft swap when horizontal axis flips sign
+        if (props.containsKey("top_shaft") && props.containsKey("bottom_shaft")) {
+            String ax = props.get("axis");
+            boolean swapShafts = ("x".equals(ax) && (t == 2 || t == 3))
+                    || ("z".equals(ax) && (t == 1 || t == 2));
+            if (swapShafts) {
+                out.put("top_shaft", props.get("bottom_shaft"));
+                out.put("bottom_shaft", props.get("top_shaft"));
+            }
+        }
+
+        // Create Belt (slope=vertical) and ChainDrive: swap part start <-> end when axis sign flips
+        String part = props.get("part");
+        if ("start".equals(part) || "end".equals(part)) {
+            boolean flipPart = false;
+            if ("vertical".equals(props.get("slope"))) {
+                String oldFacing = props.get("facing");
+                String newFacing = out.get("facing");
+                flipPart = isPositiveHorizontalDir(oldFacing) != isPositiveHorizontalDir(newFacing);
+            } else if (props.containsKey("connected_along_first_coordinate")
+                    || (blockId != null && blockId.contains("chain"))) {
+                String ax = props.get("axis");
+                boolean connFirst = "true".equals(props.get("connected_along_first_coordinate"));
+                String connAxis = connFirst
+                        ? ("x".equals(ax) ? "y" : "x")
+                        : ("z".equals(ax) ? "y" : "z");
+                flipPart = ("x".equals(connAxis) && (t == 2 || t == 3))
+                        || ("z".equals(connAxis) && (t == 1 || t == 2));
+            }
+            if (flipPart) {
+                out.put("part", "start".equals(part) ? "end" : "start");
+            }
+        }
+
         return out;
+    }
+
+    private static String flipBoolString(String v) {
+        if ("true".equals(v)) return "false";
+        if ("false".equals(v)) return "true";
+        return v;
+    }
+
+    private static boolean isPositiveHorizontalDir(String dir) {
+        return "east".equals(dir) || "south".equals(dir);
     }
 
     private static String rotateFacing(String v, int turns) {
@@ -339,7 +432,23 @@ public final class DungeonTemplate425 {
         StateDefinition<Block, BlockState> def = block.getStateDefinition();
         if (def == null) return state;
 
-        Map<String, String> rotatedProps = rotateProps(entry.properties, turns);
+        int t = turns & 3;
+        if (t != 0 && (mappedId.startsWith("create:") || !mappedId.startsWith("minecraft:"))
+                && CreateCompat431.isCreateAvailable()) {
+            BlockState unrotated = state;
+            for (Map.Entry<String, String> propEntry : entry.properties.entrySet()) {
+                Property<?> prop = def.getProperty(propEntry.getKey());
+                if (prop != null) {
+                    unrotated = applyProperty(unrotated, prop, propEntry.getValue());
+                }
+            }
+            BlockState transformed = CreateCompat431.transformBlockState(unrotated, t);
+            if (transformed != null) {
+                return transformed;
+            }
+        }
+
+        Map<String, String> rotatedProps = rotateProps(entry.properties, t, mappedId);
         for (Map.Entry<String, String> propEntry : rotatedProps.entrySet()) {
             Property<?> prop = def.getProperty(propEntry.getKey());
             if (prop != null) {
@@ -452,6 +561,7 @@ public final class DungeonTemplate425 {
             int originZ,
             int turns,
             PlacementStats stats) {
+        List<BlockPos> createPositions = new ArrayList<>();
         for (BlockEntitySpec beSpec : tpl.blockEntities) {
             int rx = DungeonGenerator427.rotX(beSpec.x, beSpec.z, turns);
             int rz = DungeonGenerator427.rotZ(beSpec.x, beSpec.z, turns);
@@ -462,15 +572,26 @@ public final class DungeonTemplate425 {
                 continue;
             }
             try {
-                CompoundTag nbt = beSpec.nbt == null ? new CompoundTag() : beSpec.nbt.copy();
-                if (beSpec.id != null && !beSpec.id.isEmpty()) {
-                    nbt.putString("id", beSpec.id);
+                CompoundTag nbt;
+                if (beSpec.rawNbt != null) {
+                    DungeonNbt431.NbtCompound transformed = DungeonNbt431.transformBlockEntityNbt(
+                            beSpec.id, beSpec.rawNbt, originX, originY, originZ,
+                            pos.getX(), pos.getY(), pos.getZ(), turns, tpl.oldSchemaOrigin);
+                    nbt = DungeonNbt431.toMinecraftTag(transformed);
+                } else {
+                    nbt = beSpec.nbt == null ? new CompoundTag() : beSpec.nbt.copy();
+                    if (beSpec.id != null && !beSpec.id.isEmpty()) {
+                        nbt.putString("id", beSpec.id);
+                    }
+                    nbt.putInt("x", pos.getX());
+                    nbt.putInt("y", pos.getY());
+                    nbt.putInt("z", pos.getZ());
                 }
-                nbt.putInt("x", pos.getX());
-                nbt.putInt("y", pos.getY());
-                nbt.putInt("z", pos.getZ());
                 be.loadWithComponents(nbt, ((Level) level).registryAccess());
                 be.setChanged();
+                if (CreateCompat431.isCreateBlockEntity(be, beSpec.id)) {
+                    createPositions.add(pos);
+                }
                 if (stats != null) stats.blockEntitiesLoaded++;
             } catch (Throwable ex) {
                 if (stats != null) stats.blockEntitiesSkipped++;
@@ -493,24 +614,32 @@ public final class DungeonTemplate425 {
                     if (stats != null) stats.entitiesSkipped++;
                     continue;
                 }
-                CompoundTag nbt = eSpec.nbt == null ? new CompoundTag() : eSpec.nbt.copy();
-                nbt.remove("UUID");
-                nbt.remove("Pos");
-                nbt.remove("neoforge:attachments");
-                if (!nbt.isEmpty()) {
-                    entity.load(nbt);
+                DungeonNbt431.TransformedEntity te = DungeonNbt431.transformEntityPlacement(
+                        eSpec, originX, originY, originZ, turns);
+                if (te.moveBeforeLoad) {
+                    // SuperGlueEntity.readAdditionalSaveData shifts From/To relative to position()
+                    entity.moveTo(te.wx, te.wy, te.wz);
+                    if (te.mcNbt != null && !te.mcNbt.isEmpty()) {
+                        entity.load(te.mcNbt);
+                    }
+                } else {
+                    if (te.mcNbt != null && !te.mcNbt.isEmpty()) {
+                        entity.load(te.mcNbt);
+                    }
+                    entity.moveTo(te.wx, te.wy, te.wz);
                 }
-                double edx = DungeonGenerator427.rotEntityX(eSpec.dx, eSpec.dz, turns);
-                double edz = DungeonGenerator427.rotEntityZ(eSpec.dx, eSpec.dz, turns);
-                entity.moveTo(originX + edx, originY + eSpec.dy, originZ + edz);
-                entity.setYRot(eSpec.yaw + 90.0F * turns);
-                entity.setXRot(eSpec.pitch);
+                entity.setYRot(te.yaw);
+                entity.setXRot(te.pitch);
                 level.addFreshEntity(entity);
                 if (stats != null) stats.entitiesSpawned++;
             } catch (Throwable ex) {
                 if (stats != null) stats.entitiesSkipped++;
                 LOG.warn("settledlands: skipped entity " + eSpec.id + ": " + ex.getMessage());
             }
+        }
+
+        if (!createPositions.isEmpty()) {
+            CreateCompat431.activateCreateRoom(level, createPositions);
         }
     }
 

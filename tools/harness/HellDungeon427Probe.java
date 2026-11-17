@@ -1,5 +1,7 @@
 import com.mojang.brigadier.CommandDispatcher;
 import dev.settledlands.dungeon.AxiomBlueprint427;
+import dev.settledlands.dungeon.CreateCompat431;
+import dev.settledlands.dungeon.CreateSchematic431;
 import dev.settledlands.dungeon.DungeonBlueprints427;
 import dev.settledlands.dungeon.DungeonCommand425;
 import dev.settledlands.dungeon.DungeonConfig427;
@@ -7,6 +9,7 @@ import dev.settledlands.dungeon.DungeonData425;
 import dev.settledlands.dungeon.DungeonEvents425;
 import dev.settledlands.dungeon.DungeonGenerator427;
 import dev.settledlands.dungeon.DungeonManager425;
+import dev.settledlands.dungeon.DungeonNbt431;
 import dev.settledlands.dungeon.DungeonTemplate425;
 import dev.settledlands.npc.TeleportActions424;
 import java.io.ByteArrayOutputStream;
@@ -39,6 +42,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.Property;
@@ -90,6 +94,22 @@ public final class HellDungeon427Probe {
         "minecraft:soul_soil",
         "minecraft:wither_skeleton_skull",
         "valhelsia_structures:dungeon_door",
+        "minecraft:oak_stairs",
+        "create:belt",
+        "create:encased_cogwheel",
+        "create:chain_drive",
+        "create:radial_chassis",
+        "create:creative_motor",
+        "create:fluid_tank",
+        "create:item_vault",
+        "create:redstone_link",
+        "create:windmill_bearing",
+        "create:mechanical_arm",
+        "create:chain_conveyor",
+        "create:display_link",
+        "create:mechanical_crafter",
+        "create:copycat_step",
+        "create:powered_shaft",
     };
 
     public static void main(String[] args) throws Exception {
@@ -98,6 +118,7 @@ public final class HellDungeon427Probe {
         testConfigCreationAutoDiscoveryAndFilters();
         testStreamingPlacementSaveLoadAndProximity();
         testMultiBlockDoorSafetyBuild430();
+        testCreateNbtAndSuperGlueBuild431();
         testRealArchiveIfPresent();
         testBiomeProgressionBuild429();
         testUniqueDungeonPerPlayerBuild428();
@@ -695,6 +716,440 @@ public final class HellDungeon427Probe {
         }
     }
 
+    private static void testCreateNbtAndSuperGlueBuild431() throws Exception {
+        // 1. Create blockstate property rotation coverage (no Create jar needed)
+        Map<String, String> vBelt = Map.of("facing", "north", "slope", "vertical", "part", "start", "casing", "true");
+        Map<String, String> rBelt1 = DungeonTemplate425.rotateProps(vBelt, 1, "create:belt");
+        check("east".equals(rBelt1.get("facing")) && "end".equals(rBelt1.get("part")),
+                "vertical belt NORTH->EAST swaps part start->end");
+        Map<String, String> rBelt3 = DungeonTemplate425.rotateProps(vBelt, 3, "create:belt");
+        check("west".equals(rBelt3.get("facing")) && "start".equals(rBelt3.get("part")),
+                "vertical belt NORTH->WEST preserves part start");
+
+        Map<String, String> cogX = Map.of("axis", "x", "top_shaft", "true", "bottom_shaft", "false");
+        Map<String, String> cogX1 = DungeonTemplate425.rotateProps(cogX, 1, "create:encased_cogwheel");
+        check("z".equals(cogX1.get("axis")) && "true".equals(cogX1.get("top_shaft")),
+                "encased_cogwheel axis=x CW90 keeps top_shaft=true");
+        Map<String, String> cogX3 = DungeonTemplate425.rotateProps(cogX, 3, "create:encased_cogwheel");
+        check("z".equals(cogX3.get("axis")) && "false".equals(cogX3.get("top_shaft"))
+                && "true".equals(cogX3.get("bottom_shaft")),
+                "encased_cogwheel axis=x CCW90 swaps top_shaft<->bottom_shaft");
+
+        Map<String, String> chain = Map.of("axis", "z", "connected_along_first_coordinate", "true", "part", "start");
+        Map<String, String> chain1 = DungeonTemplate425.rotateProps(chain, 1, "create:chain_drive");
+        check("x".equals(chain1.get("axis")) && "false".equals(chain1.get("connected_along_first_coordinate"))
+                && "start".equals(chain1.get("part")),
+                "chain_drive Z->X CW90 flips connected_along_first_coordinate & keeps +X->+Z part");
+        Map<String, String> chain3 = DungeonTemplate425.rotateProps(chain, 3, "create:chain_drive");
+        check("x".equals(chain3.get("axis")) && "false".equals(chain3.get("connected_along_first_coordinate"))
+                && "end".equals(chain3.get("part")),
+                "chain_drive Z->X CCW90 flips connected_along_first_coordinate & swaps +X->-Z part");
+        Map<String, String> chainVert = Map.of("axis", "x", "connected_along_first_coordinate", "true", "part", "start");
+        Map<String, String> chainVert1 = DungeonTemplate425.rotateProps(chainVert, 1, "create:chain_drive");
+        check("z".equals(chainVert1.get("axis")) && "false".equals(chainVert1.get("connected_along_first_coordinate"))
+                && "start".equals(chainVert1.get("part")),
+                "vertical chain_drive X->Z CW90 flips connected_along_first_coordinate & preserves vertical part");
+
+        Map<String, String> chassis = Map.of("axis", "y", "glueable_north", "true", "glueable_east", "false");
+        Map<String, String> chassis1 = DungeonTemplate425.rotateProps(chassis, 1, "create:radial_chassis");
+        check("true".equals(chassis1.get("glueable_east")) && "false".equals(chassis1.get("glueable_south")),
+                "chassis glueable_* rotates clockwise");
+
+        Map<String, String> gearshift = Map.of("axis", "y", "axis_along_first", "true");
+        check("false".equals(DungeonTemplate425.rotateProps(gearshift, 1).get("axis_along_first")),
+                "directional axis_along_first toggles on odd turns");
+
+        Map<String, String> deployer = Map.of("facing", "north", "target", "east");
+        Map<String, String> dep1 = DungeonTemplate425.rotateProps(deployer, 1);
+        check("east".equals(dep1.get("facing")) && "south".equals(dep1.get("target")),
+                "directed directional target rotates alongside facing");
+
+        // 2. Write a real gzipped Create .nbt schematic and load via AxiomBlueprint427 + CreateSchematic431
+        Path tmp = Files.createTempDirectory("hd431_probe");
+        try {
+            Path schemDir = tmp.resolve("schematics");
+            Files.createDirectories(schemDir);
+            Path roomNbt = schemDir.resolve("к комната_create.nbt");
+            writeTestCreateSchematicNbt(roomNbt);
+
+            AxiomBlueprint427.PieceTemplate piece = AxiomBlueprint427.loadFile(roomNbt, "к комната_create");
+            check(piece != null && piece.entrance != null && piece.exits.size() == 1,
+                    "Create .nbt loaded with 1 lapis entrance and 1 redstone exit");
+            for (DungeonTemplate425.PaletteEntry pe : piece.content.palette) {
+                check(!"minecraft:structure_void".equals(pe.id) && !"minecraft:air".equals(pe.id),
+                        "structure_void and air filtered from Create .nbt palette: " + pe.id);
+            }
+            check(piece.content.oldSchemaOrigin != null
+                    && piece.content.oldSchemaOrigin[0] == 999
+                    && piece.content.oldSchemaOrigin[1] == 69
+                    && piece.content.oldSchemaOrigin[2] == 1998,
+                    "oldSchemaOrigin inferred accurately from Create IsController+Controller");
+
+            // Check 4-phase placement order & MockBlockEntity + sendBlockUpdated
+            MockServer srv = new MockServer();
+            MockLevel lvl = new MockLevel(DungeonManager425.HELL_DUNGEON_LEVEL, srv);
+            lvl.createMockBlockEntities = true;
+            DungeonTemplate425.PlacementStats stats = new DungeonTemplate425.PlacementStats();
+            DungeonTemplate425.placeSlice(lvl, piece.content, 100, 50, 200, 1,
+                    DungeonTemplate425.DOORWAY_REPLACEMENT, 0, piece.blockCount(), stats);
+            check(stats.blocksPlaced == piece.blockCount(),
+                    "all Create .nbt blocks placed: " + stats.blocksPlaced + "/" + piece.blockCount());
+            check(stats.blockEntitiesLoaded == piece.content.blockEntities.size(),
+                    "all Create block entities loaded: " + stats.blockEntitiesLoaded);
+            check(lvl.sendBlockUpdatedCalls > 0 && lvl.beSetChangedCalls > 0,
+                    "post-room CreateCompat431 synced BEs via setChanged & sendBlockUpdated");
+            check(!CreateCompat431.isCreateAvailable(), "CreateCompat431 safely detects Create absent in unit env");
+
+            int idxStone = lvl.firstOrderIndex("minecraft:blackstone");
+            int idxBelt = lvl.firstOrderIndex("create:belt");
+            int idxLink = lvl.firstOrderIndex("create:redstone_link");
+            int idxDoor = lvl.firstOrderIndex("valhelsia_structures:dungeon_door");
+            check(idxStone >= 0 && idxBelt > idxStone && idxLink > idxBelt && idxDoor > idxLink,
+                    "4-phase order enforced: structural(" + idxStone + ") < create(" + idxBelt
+                            + ") < fragile(" + idxLink + ") < door(" + idxDoor + ")");
+
+            // Verify DungeonNbt431 BlockEntity rotation & kinetic reset directly
+            for (DungeonTemplate425.BlockEntitySpec beSpec : piece.content.blockEntities) {
+                int rbx = DungeonGenerator427.rotX(beSpec.x, beSpec.z, 1);
+                int rbz = DungeonGenerator427.rotZ(beSpec.x, beSpec.z, 1);
+                DungeonNbt431.NbtCompound tb = DungeonNbt431.transformBlockEntityNbt(
+                        beSpec.id, beSpec.rawNbt, 100, 50, 200,
+                        100 + rbx, 50 + beSpec.y, 200 + rbz, 1, piece.content.oldSchemaOrigin);
+                check(!tb.contains("Source") && !tb.contains("Network"),
+                        "stale kinetic Source/Network stripped on " + beSpec.id);
+                check(tb.getInt("NeedsSpeedUpdate") == 1,
+                        "NeedsSpeedUpdate=1 set on " + beSpec.id);
+                if ("create:windmill_bearing".equals(beSpec.id)) {
+                    check(tb.getInt("Running") == 0 && tb.getInt("QueueAssembly") == 1,
+                            "windmill bearing resets Running=0 and sets QueueAssembly=1");
+                }
+                if ("create:belt".equals(beSpec.id)) {
+                    check(!tb.contains("Controller") && tb.getInt("IsController") == 0 && tb.getInt("Length") == 0,
+                            "rotated belt clears Controller/Length for BeltBlock.initBelt");
+                }
+                if ("create:fluid_tank".equals(beSpec.id)) {
+                    check(!tb.contains("Controller") && tb.getInt("Uninitialized") == 1,
+                            "rotated fluid_tank resets Controller & sets Uninitialized=1");
+                }
+                if ("create:display_link".equals(beSpec.id)) {
+                    int[] toff = tb.getIntArray("TargetOffset");
+                    check(toff != null && toff[0] == 3 && toff[1] == 0 && toff[2] == 1,
+                            "DisplayLink TargetOffset (1,0,-3) CW90 -> (3,0,1)");
+                }
+                if ("create:chain_conveyor".equals(beSpec.id)) {
+                    int[] conn0 = tb.getList("Connections").get(0).val instanceof int[] ca ? ca : null;
+                    check(conn0 != null && conn0[0] == 0 && conn0[1] == 0 && conn0[2] == 2,
+                            "ChainConveyor Connection (2,0,0) CW90 -> (0,0,2)");
+                }
+                if ("create:mechanical_arm".equals(beSpec.id)) {
+                    DungeonNbt431.NbtCompound pt0 = tb.getList("InteractionPoints").get(0).val instanceof DungeonNbt431.NbtCompound c ? c : null;
+                    int[] ip = pt0 != null ? pt0.getIntArray("Pos") : null;
+                    check(ip != null && ip[0] == 2 && ip[1] == 1 && ip[2] == 0,
+                            "MechanicalArm InteractionPoint (0,1,-2) CW90 -> (2,1,0)");
+                }
+                if ("create:mechanical_crafter".equals(beSpec.id)) {
+                    DungeonNbt431.NbtCompound d0 = tb.getCompound("Input").getList("Data").get(0).val instanceof DungeonNbt431.NbtCompound c ? c : null;
+                    check(d0 != null && d0.getInt("X") == 0 && d0.getInt("Y") == 0 && d0.getInt("Z") == 1,
+                            "MechanicalCrafter Input.Data (1,0,0) CW90 -> (0,0,1)");
+                    DungeonNbt431.NbtCompound brProps = tb.getCompound("Bracket").getCompound("Properties");
+                    check("east".equals(brProps.getString("facing")), "Bracket facing north -> east");
+                }
+                if ("create:copycat_step".equals(beSpec.id)) {
+                    DungeonNbt431.NbtCompound matProps = tb.getCompound("Material").getCompound("Properties");
+                    check("south".equals(matProps.getString("facing")), "Copycat Material facing east -> south");
+                }
+                if ("create:powered_shaft".equals(beSpec.id)) {
+                    int[] ep = tb.getIntArray("EnginePos");
+                    // raw (1,1,2) relative to oldSchemaOrigin (999,69,1998) at CW90 -> rot(1,2,1)=(-2,1) -> (98, 51, 201)
+                    check(ep != null && ep[0] == 98 && ep[1] == 51 && ep[2] == 201,
+                            "PoweredShaft EnginePos translated & rotated accurately");
+                }
+            }
+
+            // Verify SuperGlue AABB transform across all 4 rotations + ItemFrame facing/block_pos
+            DungeonTemplate425.EntitySpec glueSpec = null;
+            DungeonTemplate425.EntitySpec frameSpec = null;
+            for (DungeonTemplate425.EntitySpec es : piece.content.entities) {
+                if ("create:super_glue".equals(es.id)) glueSpec = es;
+                if ("minecraft:item_frame".equals(es.id)) frameSpec = es;
+            }
+            check(glueSpec != null && frameSpec != null, "both super_glue and item_frame parsed from .nbt");
+
+            for (int t = 0; t < 4; t++) {
+                DungeonNbt431.TransformedEntity te = DungeonNbt431.transformEntityPlacement(
+                        glueSpec, 100, 50, 200, t);
+                check(te.moveBeforeLoad, "super_glue always sets moveBeforeLoad=true");
+                check(!te.mcNbt.contains("UUID") && !te.mcNbt.contains("Pos"),
+                        "super_glue strips UUID & Pos");
+                // Original box in schematic: x=[1..3], y=[2..4], z=[1..2]
+                // Compute rotated AABB corners and compare to transformed pos + From/To
+                double rx0 = DungeonGenerator427.rotEntityX(1.0, 1.0, t);
+                double rz0 = DungeonGenerator427.rotEntityZ(1.0, 1.0, t);
+                double rx1 = DungeonGenerator427.rotEntityX(3.0, 2.0, t);
+                double rz1 = DungeonGenerator427.rotEntityZ(3.0, 2.0, t);
+                double expCx = 100.0 + (Math.min(rx0, rx1) + Math.max(rx0, rx1)) * 0.5;
+                double expCz = 200.0 + (Math.min(rz0, rz1) + Math.max(rz0, rz1)) * 0.5;
+                check(Math.abs(te.wx - expCx) < 1e-6 && Math.abs(te.wy - 52.0) < 1e-6
+                        && Math.abs(te.wz - expCz) < 1e-6,
+                        "super_glue position matches rotated AABB center at turns=" + t);
+            }
+
+            DungeonNbt431.TransformedEntity frameTe = DungeonNbt431.transformEntityPlacement(
+                    frameSpec, 100, 50, 200, 1);
+            check(frameTe.mcNbt.getInt("facing") == 5, "item_frame facing 2(NORTH) CW90 -> 5(EAST)");
+            int[] fbp = frameTe.mcNbt.getIntArray("block_pos");
+            check(fbp.length == 3 && fbp[0] == (int) Math.floor(frameTe.wx)
+                    && fbp[1] == (int) Math.floor(frameTe.wy)
+                    && fbp[2] == (int) Math.floor(frameTe.wz),
+                    "item_frame block_pos updated to rotated world block coords");
+
+            // 3. Verify auto-discovery of schematics/ directory with .nbt start (0 lapis) + .nbt room
+            writeStartNbtWithoutLapis(schemDir.resolve("старт.nbt"));
+            DungeonConfig427 autoCfg = new DungeonConfig427(
+                    tmp, "auto", "auto", "старт", 4, 8, 128, 0, 128, true,
+                    DungeonTemplate425.DOORWAY_REPLACEMENT, 4, 4096, true, true);
+            DungeonBlueprints427.Library nbtLib = DungeonBlueprints427.load(autoCfg);
+            check(nbtLib.nbtCount == 2 && nbtLib.pieces.size() == 1 && nbtLib.startPiece != null
+                    && !nbtLib.startPiece.embeddedFallback,
+                    "auto-discovered schematics/ with старт.nbt (0 lapis) + room .nbt");
+            DungeonGenerator427.Plan nbtPlan = DungeonGenerator427.generate(nbtLib, 0, 64, 0, 777L);
+            check(nbtPlan != null && nbtPlan.pieces.size() >= 2,
+                    "dungeon generated seamlessly from .nbt start & rooms: " + nbtPlan.pieces.size());
+
+            // 4. Verify uncompressed vanilla NBT using `palettes` list-of-lists
+            DungeonNbt431.NbtCompound pRoot = new DungeonNbt431.NbtCompound();
+            List<DungeonNbt431.NbtValue> firstPal = new ArrayList<>();
+            DungeonNbt431.NbtCompound ps0 = new DungeonNbt431.NbtCompound();
+            ps0.putString("Name", "minecraft:blackstone");
+            firstPal.add(new DungeonNbt431.NbtValue(10, 0, ps0));
+            List<DungeonNbt431.NbtValue> outerPal = new ArrayList<>();
+            outerPal.add(new DungeonNbt431.NbtValue(9, 10, firstPal));
+            pRoot.values.put("palettes", new DungeonNbt431.NbtValue(9, 9, outerPal));
+            List<DungeonNbt431.NbtValue> pBlocks = new ArrayList<>();
+            pBlocks.add(makeNbtBlock(0, 0, 0, 0, null));
+            pRoot.values.put("blocks", new DungeonNbt431.NbtValue(9, 10, pBlocks));
+            ByteArrayOutputStream rawBaos = new ByteArrayOutputStream();
+            try (DataOutputStream rawOut = new DataOutputStream(rawBaos)) {
+                rawOut.writeByte(10);
+                DungeonNbt431.writeString(rawOut, "");
+                DungeonNbt431.writeCompound(rawOut, pRoot);
+            }
+            AxiomBlueprint427.PieceTemplate rawPalPiece = AxiomBlueprint427.parseBytes(
+                    rawBaos.toByteArray(), "raw_palettes");
+            check(rawPalPiece != null && rawPalPiece.blockCount() == 1
+                    && "minecraft:blackstone".equals(rawPalPiece.content.palette.get(0).id),
+                    "uncompressed palettes[0] .nbt decoded via AxiomBlueprint427.parseBytes");
+        } finally {
+            deleteTree(tmp);
+        }
+    }
+
+    private static void writeTestCreateSchematicNbt(Path path) throws IOException {
+        DungeonNbt431.NbtCompound root = new DungeonNbt431.NbtCompound();
+
+        // Palette: structure_void(0), blackstone(1), lapis(2), redstone(3), belt(4), fluid_tank(5),
+        // windmill(6), display_link(7), chain_conveyor(8), arm(9), crafter(10), copycat(11),
+        // powered_shaft(12), redstone_link(13), door_lower(14), door_upper(15)
+        String[] names = {
+            "minecraft:structure_void",
+            "minecraft:blackstone",
+            "minecraft:lapis_block",
+            "minecraft:redstone_block",
+            "create:belt",
+            "create:fluid_tank",
+            "create:windmill_bearing",
+            "create:display_link",
+            "create:chain_conveyor",
+            "create:mechanical_arm",
+            "create:mechanical_crafter",
+            "create:copycat_step",
+            "create:powered_shaft",
+            "create:redstone_link",
+            "valhelsia_structures:dungeon_door",
+            "valhelsia_structures:dungeon_door",
+        };
+        List<DungeonNbt431.NbtValue> palList = new ArrayList<>();
+        for (int i = 0; i < names.length; i++) {
+            DungeonNbt431.NbtCompound st = new DungeonNbt431.NbtCompound();
+            st.putString("Name", names[i]);
+            if (i == 4) {
+                DungeonNbt431.NbtCompound pr = new DungeonNbt431.NbtCompound();
+                pr.putString("facing", "north");
+                pr.putString("slope", "vertical");
+                pr.putString("part", "start");
+                st.putCompound("Properties", pr);
+            } else if (i == 14 || i == 15) {
+                DungeonNbt431.NbtCompound pr = new DungeonNbt431.NbtCompound();
+                pr.putString("facing", "north");
+                pr.putString("half", i == 14 ? "lower" : "upper");
+                st.putCompound("Properties", pr);
+            }
+            palList.add(new DungeonNbt431.NbtValue(10, 0, st));
+        }
+        root.values.put("palette", new DungeonNbt431.NbtValue(9, 10, palList));
+
+        // Blocks listed deliberately with doors & redstone_link FIRST to prove 4-phase re-ordering
+        List<DungeonNbt431.NbtValue> blocks = new ArrayList<>();
+        blocks.add(makeNbtBlock(4, 2, 1, 15, null)); // door upper
+        blocks.add(makeNbtBlock(4, 1, 1, 14, null)); // door lower
+        blocks.add(makeNbtBlock(2, 2, 1, 13, null)); // redstone_link (fragile phase 2)
+
+        // Create BEs (phase 1)
+        DungeonNbt431.NbtCompound beltNbt = new DungeonNbt431.NbtCompound();
+        beltNbt.putString("id", "create:belt");
+        beltNbt.putByte("IsController", (byte) 1);
+        beltNbt.putIntArray("Controller", new int[] { 1000, 70, 2000 }); // local (1,1,2) -> origin (999,69,1998)
+        beltNbt.putInt("Length", 3);
+        beltNbt.putFloat("Speed", 32.0F);
+        beltNbt.putIntArray("Source", new int[] { 999, 70, 2000 });
+        beltNbt.putByte("Network", (byte) 1);
+        blocks.add(makeNbtBlock(1, 1, 2, 4, beltNbt));
+
+        DungeonNbt431.NbtCompound tankNbt = new DungeonNbt431.NbtCompound();
+        tankNbt.putString("id", "create:fluid_tank");
+        tankNbt.putIntArray("Controller", new int[] { 999, 69, 1999 });
+        blocks.add(makeNbtBlock(2, 1, 2, 5, tankNbt));
+
+        DungeonNbt431.NbtCompound windNbt = new DungeonNbt431.NbtCompound();
+        windNbt.putString("id", "create:windmill_bearing");
+        windNbt.putByte("Running", (byte) 1);
+        blocks.add(makeNbtBlock(1, 2, 2, 6, windNbt));
+
+        DungeonNbt431.NbtCompound dlNbt = new DungeonNbt431.NbtCompound();
+        dlNbt.putString("id", "create:display_link");
+        dlNbt.putIntArray("TargetOffset", new int[] { 1, 0, -3 });
+        blocks.add(makeNbtBlock(3, 1, 2, 7, dlNbt));
+
+        DungeonNbt431.NbtCompound ccNbt = new DungeonNbt431.NbtCompound();
+        ccNbt.putString("id", "create:chain_conveyor");
+        List<DungeonNbt431.NbtValue> conns = new ArrayList<>();
+        conns.add(new DungeonNbt431.NbtValue(11, 0, new int[] { 2, 0, 0 }));
+        ccNbt.values.put("Connections", new DungeonNbt431.NbtValue(9, 11, conns));
+        blocks.add(makeNbtBlock(3, 2, 2, 8, ccNbt));
+
+        DungeonNbt431.NbtCompound armNbt = new DungeonNbt431.NbtCompound();
+        armNbt.putString("id", "create:mechanical_arm");
+        List<DungeonNbt431.NbtValue> ips = new ArrayList<>();
+        DungeonNbt431.NbtCompound ip0 = new DungeonNbt431.NbtCompound();
+        ip0.putIntArray("Pos", new int[] { 0, 1, -2 });
+        ips.add(new DungeonNbt431.NbtValue(10, 0, ip0));
+        armNbt.values.put("InteractionPoints", new DungeonNbt431.NbtValue(9, 10, ips));
+        blocks.add(makeNbtBlock(1, 3, 2, 9, armNbt));
+
+        DungeonNbt431.NbtCompound crNbt = new DungeonNbt431.NbtCompound();
+        crNbt.putString("id", "create:mechanical_crafter");
+        DungeonNbt431.NbtCompound inputTag = new DungeonNbt431.NbtCompound();
+        List<DungeonNbt431.NbtValue> dataList = new ArrayList<>();
+        DungeonNbt431.NbtCompound d0 = new DungeonNbt431.NbtCompound();
+        d0.putInt("X", 1); d0.putInt("Y", 0); d0.putInt("Z", 0);
+        dataList.add(new DungeonNbt431.NbtValue(10, 0, d0));
+        inputTag.values.put("Data", new DungeonNbt431.NbtValue(9, 10, dataList));
+        crNbt.putCompound("Input", inputTag);
+        DungeonNbt431.NbtCompound brTag = new DungeonNbt431.NbtCompound();
+        brTag.putString("Name", "create:andesite_bracket");
+        DungeonNbt431.NbtCompound brProps = new DungeonNbt431.NbtCompound();
+        brProps.putString("facing", "north");
+        brTag.putCompound("Properties", brProps);
+        crNbt.putCompound("Bracket", brTag);
+        blocks.add(makeNbtBlock(2, 3, 2, 10, crNbt));
+
+        DungeonNbt431.NbtCompound catNbt = new DungeonNbt431.NbtCompound();
+        catNbt.putString("id", "create:copycat_step");
+        DungeonNbt431.NbtCompound matTag = new DungeonNbt431.NbtCompound();
+        matTag.putString("Name", "minecraft:oak_stairs");
+        DungeonNbt431.NbtCompound matProps = new DungeonNbt431.NbtCompound();
+        matProps.putString("facing", "east");
+        matTag.putCompound("Properties", matProps);
+        catNbt.putCompound("Material", matTag);
+        blocks.add(makeNbtBlock(3, 3, 2, 11, catNbt));
+
+        DungeonNbt431.NbtCompound psNbt = new DungeonNbt431.NbtCompound();
+        psNbt.putString("id", "create:powered_shaft");
+        psNbt.putIntArray("EnginePos", new int[] { 1000, 70, 2000 });
+        blocks.add(makeNbtBlock(3, 3, 1, 12, psNbt));
+
+        // Structural floor + markers + structure_void
+        blocks.add(makeNbtBlock(1, 0, 1, 0, null)); // structure_void (filtered out)
+        blocks.add(makeNbtBlock(0, 1, 2, 2, null)); // lapis on West edge (x=0)
+        blocks.add(makeNbtBlock(4, 1, 2, 3, null)); // redstone on East edge (x=4)
+        for (int x = 0; x <= 4; x++) {
+            for (int z = 0; z <= 3; z++) {
+                blocks.add(makeNbtBlock(x, 0, z, 1, null));
+            }
+        }
+        root.values.put("blocks", new DungeonNbt431.NbtValue(9, 10, blocks));
+
+        // Entities: super_glue spanning [1..3, 2..4, 1..2] + item_frame facing NORTH (2)
+        List<DungeonNbt431.NbtValue> ents = new ArrayList<>();
+        DungeonNbt431.NbtCompound glueWrap = new DungeonNbt431.NbtCompound();
+        glueWrap.putDoubleList("pos", 2.0D, 2.0D, 1.5D);
+        DungeonNbt431.NbtCompound glueNbt = new DungeonNbt431.NbtCompound();
+        glueNbt.putString("id", "create:super_glue");
+        glueNbt.putDoubleList("From", -1.0D, 0.0D, -0.5D);
+        glueNbt.putDoubleList("To", 1.0D, 2.0D, 0.5D);
+        glueNbt.putIntArray("UUID", new int[] { 1, 2, 3, 4 });
+        glueNbt.putDoubleList("Pos", 1000.0D, 70.0D, 2000.0D);
+        glueWrap.putCompound("nbt", glueNbt);
+        ents.add(new DungeonNbt431.NbtValue(10, 0, glueWrap));
+
+        DungeonNbt431.NbtCompound frameWrap = new DungeonNbt431.NbtCompound();
+        frameWrap.putDoubleList("pos", 1.5D, 2.5D, 1.03125D);
+        DungeonNbt431.NbtCompound frameNbt = new DungeonNbt431.NbtCompound();
+        frameNbt.putString("id", "minecraft:item_frame");
+        frameNbt.putByte("facing", (byte) 2);
+        frameNbt.putIntArray("block_pos", new int[] { 999, 71, 1999 });
+        frameWrap.putCompound("nbt", frameNbt);
+        ents.add(new DungeonNbt431.NbtValue(10, 0, frameWrap));
+        root.values.put("entities", new DungeonNbt431.NbtValue(9, 10, ents));
+
+        try (GZIPOutputStream gz = new GZIPOutputStream(Files.newOutputStream(path));
+             DataOutputStream out = new DataOutputStream(gz)) {
+            out.writeByte(10);
+            DungeonNbt431.writeString(out, "");
+            DungeonNbt431.writeCompound(out, root);
+        }
+    }
+
+    private static DungeonNbt431.NbtValue makeNbtBlock(int x, int y, int z, int state,
+            DungeonNbt431.NbtCompound beNbt) {
+        DungeonNbt431.NbtCompound b = new DungeonNbt431.NbtCompound();
+        List<DungeonNbt431.NbtValue> pos = new ArrayList<>(3);
+        pos.add(new DungeonNbt431.NbtValue(3, 0, x));
+        pos.add(new DungeonNbt431.NbtValue(3, 0, y));
+        pos.add(new DungeonNbt431.NbtValue(3, 0, z));
+        b.values.put("pos", new DungeonNbt431.NbtValue(9, 3, pos));
+        b.putInt("state", state);
+        if (beNbt != null) {
+            b.putCompound("nbt", beNbt);
+        }
+        return new DungeonNbt431.NbtValue(10, 0, b);
+    }
+
+    private static void writeStartNbtWithoutLapis(Path path) throws IOException {
+        DungeonNbt431.NbtCompound root = new DungeonNbt431.NbtCompound();
+        List<DungeonNbt431.NbtValue> palList = new ArrayList<>();
+        for (String name : new String[] { "minecraft:blackstone", "minecraft:redstone_block" }) {
+            DungeonNbt431.NbtCompound st = new DungeonNbt431.NbtCompound();
+            st.putString("Name", name);
+            palList.add(new DungeonNbt431.NbtValue(10, 0, st));
+        }
+        root.values.put("palette", new DungeonNbt431.NbtValue(9, 10, palList));
+        List<DungeonNbt431.NbtValue> blocks = new ArrayList<>();
+        for (int x = 0; x <= 4; x++) {
+            for (int z = 0; z <= 4; z++) {
+                blocks.add(makeNbtBlock(x, 0, z, 0, null));
+            }
+        }
+        blocks.add(makeNbtBlock(4, 1, 2, 1, null)); // 1 redstone exit, 0 lapis markers
+        root.values.put("blocks", new DungeonNbt431.NbtValue(9, 10, blocks));
+        try (GZIPOutputStream gz = new GZIPOutputStream(Files.newOutputStream(path));
+             DataOutputStream out = new DataOutputStream(gz)) {
+            out.writeByte(10);
+            DungeonNbt431.writeString(out, "");
+            DungeonNbt431.writeCompound(out, root);
+        }
+    }
+
     private static void testUniqueDungeonPerPlayerBuild428() throws Exception {
         Path tmp = Files.createTempDirectory("hd428_probe");
         try {
@@ -1134,20 +1589,37 @@ public final class HellDungeon427Probe {
         }
     }
 
+    private static final class MockBlockEntity extends BlockEntity {
+        final MockLevel lvl;
+        MockBlockEntity(MockLevel lvl) { this.lvl = lvl; }
+        @Override public void setChanged() { lvl.beSetChangedCalls++; }
+    }
+
     private static final class MockLevel extends ServerLevel {
         final ResourceKey<Level> dim;
         final MinecraftServer srv;
         final DimensionDataStorage storage = new MockStorage();
         final Map<String, BlockState> placedStates = new HashMap<>();
+        final List<String> placementOrder = new ArrayList<>();
         final List<ServerPlayer> playersList = new ArrayList<>();
         boolean strictDoorPhysics = false;
         boolean blocksPerTickTestMode = false;
+        boolean createMockBlockEntities = false;
         boolean requiredFlagsSeen = false;
         int droppedDoors = 0;
+        int beSetChangedCalls = 0;
+        int sendBlockUpdatedCalls = 0;
 
         MockLevel(ResourceKey<Level> dim, MinecraftServer srv) {
             this.dim = dim;
             this.srv = srv;
+        }
+
+        int firstOrderIndex(String blockId) {
+            for (int i = 0; i < placementOrder.size(); i++) {
+                if (blockId.equals(placementOrder.get(i))) return i;
+            }
+            return -1;
         }
 
         String placedBlockId(int x, int y, int z) {
@@ -1167,9 +1639,25 @@ public final class HellDungeon427Probe {
             return placedStates.get(pos.getX() + "," + pos.getY() + "," + pos.getZ());
         }
 
+        @Override public BlockEntity getBlockEntity(BlockPos pos) {
+            if (!createMockBlockEntities || pos == null) return null;
+            BlockState bs = getBlockState(pos);
+            if (bs instanceof MockBlockState mbs && (mbs.blockId.startsWith("create:") || "minecraft:chest".equals(mbs.blockId))) {
+                return new MockBlockEntity(this);
+            }
+            return null;
+        }
+
+        @Override public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {
+            sendBlockUpdatedCalls++;
+        }
+
         @Override public boolean setBlock(BlockPos pos, BlockState state, int flags) {
             if ((flags & 16) != 0 && (flags & 32) != 0) {
                 requiredFlagsSeen = true;
+            }
+            if (state instanceof MockBlockState mbs) {
+                placementOrder.add(mbs.blockId);
             }
             if (strictDoorPhysics) {
                 if ((flags & 16) == 0 || (flags & 32) == 0) {

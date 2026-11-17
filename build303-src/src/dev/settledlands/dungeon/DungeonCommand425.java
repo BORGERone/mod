@@ -16,8 +16,9 @@ import net.neoforged.fml.common.EventBusSubscriber;
 import net.neoforged.neoforge.event.RegisterCommandsEvent;
 
 /**
- * Build 425 / 427: {@code /settledlands dungeon} commands for entering, creating grid instances,
- * listing progress, reloading external {@code .bp} folders, and leaving «Адский данж».
+ * Build 425 / 427 / 431: {@code /settledlands dungeon} commands for entering, creating grid
+ * instances, listing progress, reloading external {@code .bp} / {@code .nbt} folders, and leaving
+ * «Адский данж».
  */
 @EventBusSubscriber(modid = "settledlands")
 public final class DungeonCommand425 {
@@ -110,6 +111,7 @@ public final class DungeonCommand425 {
         if (ctx == null || ctx.getSource() == null) return 0;
         DungeonBlueprints427.Library lib = DungeonBlueprints427.reload();
         String msg = "данж: блупринты перечитаны — " + lib.summaryLine()
+                + ", Create: " + (CreateCompat431.isCreateAvailable() ? "активен" : "нет")
                 + (lib.skippedNoMarkers > 0 ? (", без lapis_block: " + lib.skippedNoMarkers) : "")
                 + (lib.failedParse > 0 ? (", ошибок: " + lib.failedParse) : "");
         ctx.getSource().sendSuccess(() -> Component.literal(msg), false);
@@ -128,6 +130,7 @@ public final class DungeonCommand425 {
                 + ", инстансов: " + data.instanceCount()
                 + ", шаг сетки: " + DungeonData425.GRID_SPACING
                 + ", уникальный/вход: " + (lib.config == null || lib.config.uniqueDungeonPerEntry)
+                + ", Create: " + (CreateCompat431.isCreateAvailable() ? "активен" : "нет")
                 + " | " + lib.summaryLine();
         ctx.getSource().sendSuccess(() -> Component.literal(msg), false);
         return 1;

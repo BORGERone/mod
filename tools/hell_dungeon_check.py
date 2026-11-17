@@ -38,12 +38,16 @@ import pack_start
 ROOT = pathlib.Path(__file__).resolve().parent.parent
 
 REQUIRED_CLASSES = (
+    "dev/settledlands/dungeon/DungeonNbt431.class",
+    "dev/settledlands/dungeon/DungeonNbt431$CountingInputStream.class",
+    "dev/settledlands/dungeon/DungeonNbt431$NbtCompound.class",
+    "dev/settledlands/dungeon/DungeonNbt431$NbtReader.class",
+    "dev/settledlands/dungeon/DungeonNbt431$NbtValue.class",
+    "dev/settledlands/dungeon/DungeonNbt431$TransformedEntity.class",
+    "dev/settledlands/dungeon/CreateSchematic431.class",
+    "dev/settledlands/dungeon/CreateCompat431.class",
     "dev/settledlands/dungeon/AxiomBlueprint427.class",
-    "dev/settledlands/dungeon/AxiomBlueprint427$CountingInputStream.class",
     "dev/settledlands/dungeon/AxiomBlueprint427$Marker.class",
-    "dev/settledlands/dungeon/AxiomBlueprint427$NbtCompound.class",
-    "dev/settledlands/dungeon/AxiomBlueprint427$NbtReader.class",
-    "dev/settledlands/dungeon/AxiomBlueprint427$NbtValue.class",
     "dev/settledlands/dungeon/AxiomBlueprint427$PieceTemplate.class",
     "dev/settledlands/dungeon/DungeonConfig427.class",
     "dev/settledlands/dungeon/DungeonBlueprints427.class",
@@ -234,9 +238,21 @@ def main(argv):
 
         bp_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonBlueprints427.class"))
         bp_utf8 = {e[1] for e in bp_info["cp"] if e and e[0] == 1}
-        for wanted_bp in ("themeOf", "auto->biomes("):
+        for wanted_bp in ("themeOf", "auto->biomes(", "isBlueprintOrNbt"):
             if not any(wanted_bp in s for s in bp_utf8):
-                return fail("DungeonBlueprints427 missing Build 429 %s" % wanted_bp)
+                return fail("DungeonBlueprints427 missing Build 429/431 %s" % wanted_bp)
+
+        nbt_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonNbt431.class"))
+        nbt_utf8 = {e[1] for e in nbt_info["cp"] if e and e[0] == 1}
+        for wanted_nbt in ("transformBlockEntityNbt", "transformEntityPlacement", "create:super_glue"):
+            if wanted_nbt not in nbt_utf8:
+                return fail("DungeonNbt431 missing Build 431 %s" % wanted_nbt)
+
+        compat_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/CreateCompat431.class"))
+        compat_utf8 = {e[1] for e in compat_info["cp"] if e and e[0] == 1}
+        for wanted_compat in ("activateCreateRoom", "StructureTransform"):
+            if not any(wanted_compat in s for s in compat_utf8):
+                return fail("CreateCompat431 missing Build 431 %s" % wanted_compat)
 
         gen_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonGenerator427.class"))
         gen_utf8 = {e[1] for e in gen_info["cp"] if e and e[0] == 1}

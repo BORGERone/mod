@@ -14,13 +14,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Build 427: configuration loader for external Axiom {@code .bp} blueprint folders and
- * procedural dungeon generation parameters.
+ * Build 427 / 431: configuration loader for external Axiom ({@code .bp}) and Create / vanilla
+ * ({@code .nbt}) schematic folders and procedural dungeon generation parameters.
  *
  * <p>Reads {@code config/settledlands/dungeon.properties} (creating it together with
  * {@code config/settledlands/blueprints/} on first run) and supports {@code blueprints_dir=auto}
  * to automatically inspect {@code config/settledlands/blueprints}, {@code config/axiom/blueprints},
- * and {@code blueprints}.</p>
+ * {@code blueprints}, and {@code schematics}.</p>
  */
 public final class DungeonConfig427 {
 
@@ -30,6 +30,7 @@ public final class DungeonConfig427 {
     public static final String DEFAULT_BLUEPRINTS_REL = "config/settledlands/blueprints";
     public static final String AXIOM_BLUEPRINTS_REL = "config/axiom/blueprints";
     public static final String ROOT_BLUEPRINTS_REL = "blueprints";
+    public static final String CREATE_SCHEMATICS_REL = "schematics";
 
     public final Path baseDir;
     public final String blueprintsDir;
@@ -136,8 +137,9 @@ public final class DungeonConfig427 {
             Path readme = defaultBpDir.resolve("README-BLUEPRINTS-RU.txt");
             if (!Files.exists(readme)) {
                 Files.writeString(readme,
-                        "Положите сюда ваши файлы .bp из Axiom (включая старт.bp и комнаты/коридоры с маркерами lapis_block и redstone_block).\n"
-                        + "При blueprints_dir=auto мод также сам проверяет папку Axiom: config/axiom/blueprints/ (включая подпапки).\n"
+                        "Положите сюда ваши файлы .bp из Axiom и/или схематики .nbt из Create / ванильного Structural Block\n"
+                        + "(включая старт.bp / старт.nbt и комнаты с маркерами lapis_block и redstone_block).\n"
+                        + "При blueprints_dir=auto мод также сам проверяет config/axiom/blueprints/, blueprints/ и schematics/.\n"
                         + "Путь и фильтр тем можно настроить в config/settledlands/dungeon.properties.\n"
                         + "Чтобы перечитать папку без перезапуска игры, используйте: /settledlands dungeon reload\n",
                         StandardCharsets.UTF_8);
@@ -186,6 +188,7 @@ public final class DungeonConfig427 {
             out.add(baseDir.resolve(DEFAULT_BLUEPRINTS_REL));
             out.add(baseDir.resolve(AXIOM_BLUEPRINTS_REL));
             out.add(baseDir.resolve(ROOT_BLUEPRINTS_REL));
+            out.add(baseDir.resolve(CREATE_SCHEMATICS_REL));
         } else {
             Path p = Paths.get(blueprintsDir);
             if (!p.isAbsolute()) {
@@ -221,9 +224,9 @@ public final class DungeonConfig427 {
         return "# Settled Lands — Настройки генерации «Адского данжа» (settledlands:hell_dungeon)\n"
                 + "# После изменений в игре выполните /settledlands dungeon reload\n"
                 + "\n"
-                + "# Папка с .bp файлами Axiom:\n"
-                + "#   auto — ищет .bp по очереди в config/settledlands/blueprints, config/axiom/blueprints и blueprints\n"
-                + "#   либо укажите точный путь, например: config/axiom/blueprints/Данж\n"
+                + "# Папка со схематиками (.bp из Axiom и/или .nbt из Create):\n"
+                + "#   auto — ищет .bp и .nbt в config/settledlands/blueprints, config/axiom/blueprints, blueprints и schematics\n"
+                + "#   либо укажите точный путь, например: config/axiom/blueprints/Данж или schematics\n"
                 + "blueprints_dir=auto\n"
                 + "\n"
                 + "# Фильтр комнат из папки:\n"

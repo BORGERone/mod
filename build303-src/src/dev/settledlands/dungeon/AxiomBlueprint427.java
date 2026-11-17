@@ -1,12 +1,7 @@
 package dev.settledlands.dungeon;
 
 import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
-import java.io.DataInputStream;
-import java.io.DataOutputStream;
-import java.io.EOFException;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -18,13 +13,11 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.TreeMap;
 import java.util.zip.GZIPInputStream;
-import java.util.zip.GZIPOutputStream;
 import net.minecraft.nbt.CompoundTag;
-import net.minecraft.nbt.NbtAccounter;
-import net.minecraft.nbt.NbtIo;
 
 /**
- * Build 427: pure-Java native reader for Axiom {@code .bp} blueprint files.
+ * Build 427 / 431: pure-Java native reader for Axiom {@code .bp} blueprints (plus transparent
+ * routing for Create / vanilla {@code .nbt} schematics via {@link CreateSchematic431}).
  *
  * <p>Decodes the Axiom header ({@code 0x0AE5BB36} magic + length-prefixed header NBT with
  * {@code Name}/{@code Tags}/{@code Version}), skips the embedded PNG thumbnail, decompresses the
@@ -165,24 +158,37 @@ public final class AxiomBlueprint427 {
 
     public static PieceTemplate loadFile(Path path, String key) throws IOException {
         byte[] raw = Files.readAllBytes(path);
+        String fname = path != null && path.getFileName() != null
+                ? path.getFileName().toString().toLowerCase(Locale.ROOT) : "";
+        if (fname.endsWith(".nbt") || (key != null && key.toLowerCase(Locale.ROOT).endsWith(".nbt"))) {
+            return CreateSchematic431.parseBytes(raw, key);
+        }
         return parseBytes(raw, key);
     }
 
     public static PieceTemplate parseBytes(byte[] raw, String key) throws IOException {
-        if (raw == null || raw.length < 16) {
+        if (raw == null || raw.length < 4) {
             throw new IOException("Blueprint file too short: " + key);
         }
 
-        int posAfterHeader = -1;
-        NbtCompound header = null;
+        if (key != null && key.toLowerCase(Locale.ROOT).endsWith(".nbt")) {
+            return CreateSchematic431.parseBytes(raw, key);
+        }
+        // Gzipped vanilla/Create .nbt root always starts with 0x1F 0x8B
+        if ((raw[0] & 0xFF) == 0x1F && (raw[1] & 0xFF) == 0x8B) {
+            return CreateSchematic431.parseBytes(raw, key);
+        }
 
-        int magic = readIntBE(raw, 0);
+        int posAfterHeader = -1;
+        DungeonNbt431.NbtCompound header = null;
+
+        int magic = raw.length >= 16 ? readIntBE(raw, 0) : 0;
         if (magic == AXIOM_MAGIC) {
             int hdrLen = readIntBE(raw, 4);
             if (hdrLen > 2 && 8 + hdrLen <= raw.length) {
                 try {
                     ByteArrayInputStream hin = new ByteArrayInputStream(raw, 8, hdrLen);
-                    NbtReader r = new NbtReader(hin);
+                    DungeonNbt431.NbtReader r = new DungeonNbt431.NbtReader(hin);
                     if (r.readRootType() == 10) {
                         r.readString();
                         header = r.readCompound();
@@ -198,15 +204,19 @@ public final class AxiomBlueprint427 {
             for (int off = 0; off <= Math.min(24, raw.length - 4); off++) {
                 if ((raw[off] & 0xFF) != 10) continue;
                 try {
-                    CountingInputStream cin = new CountingInputStream(raw, off);
-                    NbtReader r = new NbtReader(cin);
+                    DungeonNbt431.CountingInputStream cin = new DungeonNbt431.CountingInputStream(raw, off);
+                    DungeonNbt431.NbtReader r = new DungeonNbt431.NbtReader(cin);
                     r.readRootType();
                     r.readString();
-                    NbtCompound cand = r.readCompound();
+                    DungeonNbt431.NbtCompound cand = r.readCompound();
                     if (cand.values.containsKey("Version")) {
                         header = cand;
                         posAfterHeader = off + cin.bytesRead;
                         break;
+                    }
+                    if (off == 0 && (!cand.getList("palette").isEmpty() || !cand.getList("palettes").isEmpty())
+                            && cand.values.containsKey("blocks")) {
+                        return CreateSchematic431.parseBytes(raw, key);
                     }
                 } catch (IOException ignored) {
                 }
@@ -214,12 +224,12 @@ public final class AxiomBlueprint427 {
         }
 
         if (header == null || posAfterHeader < 0 || posAfterHeader + 8 > raw.length) {
-            throw new IOException("No valid Axiom NBT header in " + key);
+            throw new IOException("No valid Axiom or Create .nbt header in " + key);
         }
 
         String displayName = header.getString("Name");
         List<String> tags = new ArrayList<>();
-        for (NbtValue item : header.getList("Tags")) {
+        for (DungeonNbt431.NbtValue item : header.getList("Tags")) {
             if (item != null && item.val instanceof String s && !s.isEmpty()) {
                 tags.add(s.toLowerCase(Locale.ROOT));
             }
@@ -236,9 +246,9 @@ public final class AxiomBlueprint427 {
             throw new IOException("Invalid gzip blob length in Axiom blueprint " + key);
         }
 
-        NbtCompound body;
+        DungeonNbt431.NbtCompound body;
         try (GZIPInputStream gz = new GZIPInputStream(new ByteArrayInputStream(raw, blobStart, blobLen))) {
-            NbtReader r = new NbtReader(gz);
+            DungeonNbt431.NbtReader r = new DungeonNbt431.NbtReader(gz);
             if (r.readRootType() != 10) {
                 throw new IOException("Blueprint body root is not TAG_Compound: " + key);
             }
@@ -250,7 +260,7 @@ public final class AxiomBlueprint427 {
     }
 
     private static PieceTemplate buildPieceFromBody(String key, String displayName,
-            List<String> tags, NbtCompound body) throws IOException {
+            List<String> tags, DungeonNbt431.NbtCompound body) throws IOException {
         List<DungeonTemplate425.PaletteEntry> palette = new ArrayList<>();
         Map<String, Integer> palLookup = new LinkedHashMap<>();
         List<Integer> flatBlocks = new ArrayList<>(4096);
@@ -260,36 +270,37 @@ public final class AxiomBlueprint427 {
         List<int[]> lapisPts = new ArrayList<>();
         List<int[]> redPts = new ArrayList<>();
 
-        for (NbtValue regItem : body.getList("BlockRegion")) {
-            if (regItem == null || !(regItem.val instanceof NbtCompound reg)) continue;
+        for (DungeonNbt431.NbtValue regItem : body.getList("BlockRegion")) {
+            if (regItem == null || !(regItem.val instanceof DungeonNbt431.NbtCompound reg)) continue;
             int rx = reg.getInt("X") * 16;
             int ry = reg.getInt("Y") * 16;
             int rz = reg.getInt("Z") * 16;
-            NbtCompound bs = reg.getCompound("BlockStates");
+            DungeonNbt431.NbtCompound bs = reg.getCompound("BlockStates");
             if (bs == null) continue;
-            List<NbtValue> rawPal = bs.getList("palette");
+            List<DungeonNbt431.NbtValue> rawPal = bs.getList("palette");
             if (rawPal.isEmpty()) continue;
 
             // Pre-decode this section's palette entries once per section
             String[] secIds = new String[rawPal.size()];
             int[] globalPalIdx = new int[rawPal.size()];
             for (int p = 0; p < rawPal.size(); p++) {
-                NbtValue palItem = rawPal.get(p);
-                if (palItem == null || !(palItem.val instanceof NbtCompound st)) {
+                DungeonNbt431.NbtValue palItem = rawPal.get(p);
+                if (palItem == null || !(palItem.val instanceof DungeonNbt431.NbtCompound st)) {
                     secIds[p] = "minecraft:air";
                     globalPalIdx[p] = -1;
                     continue;
                 }
                 String name = st.getString("Name");
                 secIds[p] = name;
-                if (name.isEmpty() || "minecraft:air".equals(name) || "minecraft:void_air".equals(name)) {
+                if (name.isEmpty() || "minecraft:air".equals(name) || "minecraft:void_air".equals(name)
+                        || "minecraft:structure_void".equals(name)) {
                     globalPalIdx[p] = -1;
                     continue;
                 }
                 TreeMap<String, String> sortedProps = new TreeMap<>();
-                NbtCompound propsTag = st.getCompound("Properties");
+                DungeonNbt431.NbtCompound propsTag = st.getCompound("Properties");
                 if (propsTag != null) {
-                    for (Map.Entry<String, NbtValue> pe : propsTag.values.entrySet()) {
+                    for (Map.Entry<String, DungeonNbt431.NbtValue> pe : propsTag.values.entrySet()) {
                         sortedProps.put(pe.getKey(), String.valueOf(pe.getValue().val));
                     }
                 }
@@ -355,9 +366,11 @@ public final class AxiomBlueprint427 {
             throw new IOException("Blueprint contains zero non-air blocks: " + key);
         }
 
-        // Build 430: Order blocks in 3 safe phases so floors/frames (phase 0) exist before fragile
-        // wall/ceiling attachments (phase 1) and multi-block doors such as valhelsia_structures:dungeon_door
-        // (phase 2, sorted by column (x, z, y) so LOWER always immediately precedes UPPER).
+        // Build 430 / 431: Order blocks in 4 safe phases:
+        // 0 = terrain/structural walls & floors;
+        // 1 = Create kinetic blocks/belts/contraptions/tanks/vaults;
+        // 2 = fragile wall/ceiling attachments (torches, lanterns, buttons, Create redstone links/placards);
+        // 3 = multi-block doors (sorted by column (x, z, y) so LOWER always immediately precedes UPPER).
         int nBlocks = flatBlocks.size() / 4;
         int[] blockPhases = new int[palette.size()];
         for (int p = 0; p < palette.size(); p++) {
@@ -366,6 +379,7 @@ public final class AxiomBlueprint427 {
         List<int[]> phase0 = new ArrayList<>(nBlocks);
         List<int[]> phase1 = new ArrayList<>();
         List<int[]> phase2 = new ArrayList<>();
+        List<int[]> phase3 = new ArrayList<>();
         for (int bi = 0; bi < nBlocks; bi++) {
             int off = bi * 4;
             int wx = flatBlocks.get(off);
@@ -374,7 +388,8 @@ public final class AxiomBlueprint427 {
             int gIdx = flatBlocks.get(off + 3);
             int ph = blockPhases[gIdx];
             int[] entry = new int[] { wx, wy, wz, gIdx };
-            if (ph == 2) phase2.add(entry);
+            if (ph == 3) phase3.add(entry);
+            else if (ph == 2) phase2.add(entry);
             else if (ph == 1) phase1.add(entry);
             else phase0.add(entry);
         }
@@ -392,7 +407,8 @@ public final class AxiomBlueprint427 {
         };
         phase0.sort(byYFirst);
         phase1.sort(byYFirst);
-        phase2.sort(byColumnBottomUp);
+        phase2.sort(byYFirst);
+        phase3.sort(byColumnBottomUp);
 
         int[] blocksArr = new int[flatBlocks.size()];
         int outPos = 0;
@@ -414,34 +430,42 @@ public final class AxiomBlueprint427 {
             blocksArr[outPos++] = e[2];
             blocksArr[outPos++] = e[3];
         }
+        for (int[] e : phase3) {
+            blocksArr[outPos++] = e[0];
+            blocksArr[outPos++] = e[1];
+            blocksArr[outPos++] = e[2];
+            blocksArr[outPos++] = e[3];
+        }
 
         List<DungeonTemplate425.BlockEntitySpec> beSpecs = new ArrayList<>();
-        for (NbtValue beItem : body.getList("BlockEntities")) {
-            if (beItem == null || !(beItem.val instanceof NbtCompound be)) continue;
+        for (DungeonNbt431.NbtValue beItem : body.getList("BlockEntities")) {
+            if (beItem == null || !(beItem.val instanceof DungeonNbt431.NbtCompound be)) continue;
             String beId = be.getString("id");
             int bx = be.getInt("x");
             int by = be.getInt("y");
             int bz = be.getInt("z");
-            NbtCompound clean = be.withoutKeys("x", "y", "z");
-            CompoundTag mcTag = toMinecraftTag(clean);
-            beSpecs.add(new DungeonTemplate425.BlockEntitySpec(beId, bx, by, bz, mcTag));
+            DungeonNbt431.NbtCompound clean = be.withoutKeys("x", "y", "z");
+            CompoundTag mcTag = DungeonNbt431.toMinecraftTag(clean);
+            beSpecs.add(new DungeonTemplate425.BlockEntitySpec(beId, bx, by, bz, mcTag, clean));
         }
 
         List<DungeonTemplate425.EntitySpec> entSpecs = new ArrayList<>();
-        for (NbtValue entItem : body.getList("Entities")) {
-            if (entItem == null || !(entItem.val instanceof NbtCompound ent)) continue;
+        for (DungeonNbt431.NbtValue entItem : body.getList("Entities")) {
+            if (entItem == null || !(entItem.val instanceof DungeonNbt431.NbtCompound ent)) continue;
             String entId = ent.getString("id");
-            List<NbtValue> posList = ent.getList("Pos");
+            List<DungeonNbt431.NbtValue> posList = ent.getList("Pos");
             double dx = posList.size() > 0 && posList.get(0).val instanceof Number n ? n.doubleValue() : 0.0D;
             double dy = posList.size() > 1 && posList.get(1).val instanceof Number n ? n.doubleValue() : 0.0D;
             double dz = posList.size() > 2 && posList.get(2).val instanceof Number n ? n.doubleValue() : 0.0D;
-            List<NbtValue> rotList = ent.getList("Rotation");
+            List<DungeonNbt431.NbtValue> rotList = ent.getList("Rotation");
             float yaw = rotList.size() > 0 && rotList.get(0).val instanceof Number n ? n.floatValue() : 0.0F;
             float pitch = rotList.size() > 1 && rotList.get(1).val instanceof Number n ? n.floatValue() : 0.0F;
-            NbtCompound clean = ent.withoutKeys("UUID", "neoforge:attachments", "Pos");
-            CompoundTag mcTag = toMinecraftTag(clean);
-            entSpecs.add(new DungeonTemplate425.EntitySpec(entId, dx, dy, dz, yaw, pitch, mcTag));
+            DungeonNbt431.NbtCompound clean = ent.withoutKeys("UUID", "neoforge:attachments", "Pos");
+            CompoundTag mcTag = DungeonNbt431.toMinecraftTag(clean);
+            entSpecs.add(new DungeonTemplate425.EntitySpec(entId, dx, dy, dz, yaw, pitch, mcTag, clean));
         }
+
+        int[] oldSchemaOrigin = DungeonNbt431.inferSchemaOrigin(beSpecs);
 
         Marker entrance = lapisPts.size() == 1
                 ? new Marker(lapisPts.get(0)[0], lapisPts.get(0)[1], lapisPts.get(0)[2],
@@ -459,15 +483,15 @@ public final class AxiomBlueprint427 {
         }
 
         DungeonTemplate425.StartTemplate content = new DungeonTemplate425.StartTemplate(
-                palette, blocksArr, beSpecs, entSpecs);
+                palette, blocksArr, beSpecs, entSpecs, oldSchemaOrigin);
         return new PieceTemplate(key, displayName, tags,
                 minX, minY, minZ, maxX, maxY, maxZ, entrance, exits, content, false);
     }
 
-    private static int placementPhase(String blockId) {
+    public static int placementPhase(String blockId) {
         if (blockId == null || blockId.isEmpty()) return 0;
         String low = blockId.toLowerCase(Locale.ROOT);
-        if (isDoorLike(low)) return 2;
+        if (isDoorLike(low)) return 3;
         if ((low.contains("lantern") && !low.contains("sea_lantern") && !low.contains("jack_o_lantern"))
                 || low.contains("torch")
                 || low.contains("candle")
@@ -507,7 +531,19 @@ public final class AxiomBlueprint427 {
                 || low.contains("cake")
                 || low.contains("brewing_stand")
                 || low.endsWith("_bed")
-                || low.contains(":bell")) {
+                || low.contains(":bell")
+                || low.equals("create:redstone_link")
+                || low.equals("create:placard")
+                || low.contains("nixie_tube")
+                || low.equals("create:powered_latch")
+                || low.equals("create:powered_toggle_latch")
+                || low.equals("create:pulse_extender")
+                || low.equals("create:pulse_timer")
+                || low.equals("create:stock_link")
+                || low.equals("create:contraption_controls")) {
+            return 2;
+        }
+        if (low.startsWith("create:")) {
             return 1;
         }
         return 0;
@@ -599,232 +635,5 @@ public final class AxiomBlueprint427 {
                 | ((buf[off + 1] & 0xFF) << 16)
                 | ((buf[off + 2] & 0xFF) << 8)
                 | (buf[off + 3] & 0xFF);
-    }
-
-    /**
-     * Converts an internal NBT compound into a genuine Minecraft {@link CompoundTag} through the
-     * already-verified {@link NbtIo#readCompressed} path, avoiding any unverified MC NBT methods.
-     */
-    private static CompoundTag toMinecraftTag(NbtCompound compound) throws IOException {
-        if (compound == null || compound.values.isEmpty()) {
-            return new CompoundTag();
-        }
-        ByteArrayOutputStream rawBuf = new ByteArrayOutputStream();
-        try (GZIPOutputStream gz = new GZIPOutputStream(rawBuf);
-             DataOutputStream out = new DataOutputStream(gz)) {
-            out.writeByte(10);
-            writeString(out, "");
-            writeCompound(out, compound);
-        }
-        return NbtIo.readCompressed(new ByteArrayInputStream(rawBuf.toByteArray()),
-                NbtAccounter.unlimitedHeap());
-    }
-
-    // ---- lightweight internal NBT codec ----
-
-    private static final class NbtValue {
-        final int type;
-        final int listElemType;
-        final Object val;
-
-        NbtValue(int type, int listElemType, Object val) {
-            this.type = type;
-            this.listElemType = listElemType;
-            this.val = val;
-        }
-    }
-
-    private static final class NbtCompound {
-        final Map<String, NbtValue> values = new LinkedHashMap<>();
-
-        String getString(String key) {
-            NbtValue v = values.get(key);
-            return (v != null && v.val instanceof String s) ? s : "";
-        }
-
-        int getInt(String key) {
-            NbtValue v = values.get(key);
-            return (v != null && v.val instanceof Number n) ? n.intValue() : 0;
-        }
-
-        NbtCompound getCompound(String key) {
-            NbtValue v = values.get(key);
-            return (v != null && v.val instanceof NbtCompound c) ? c : null;
-        }
-
-        @SuppressWarnings("unchecked")
-        List<NbtValue> getList(String key) {
-            NbtValue v = values.get(key);
-            return (v != null && v.val instanceof List<?> l) ? (List<NbtValue>) l : Collections.emptyList();
-        }
-
-        long[] getLongArray(String key) {
-            NbtValue v = values.get(key);
-            return (v != null && v.val instanceof long[] a) ? a : new long[0];
-        }
-
-        NbtCompound withoutKeys(String... drop) {
-            NbtCompound copy = new NbtCompound();
-            for (Map.Entry<String, NbtValue> e : values.entrySet()) {
-                boolean skip = false;
-                for (String d : drop) {
-                    if (d.equals(e.getKey())) {
-                        skip = true;
-                        break;
-                    }
-                }
-                if (!skip) copy.values.put(e.getKey(), e.getValue());
-            }
-            return copy;
-        }
-    }
-
-    private static final class CountingInputStream extends ByteArrayInputStream {
-        int bytesRead = 0;
-
-        CountingInputStream(byte[] buf, int off) {
-            super(buf, off, buf.length - off);
-        }
-
-        @Override
-        public synchronized int read() {
-            int b = super.read();
-            if (b >= 0) bytesRead++;
-            return b;
-        }
-
-        @Override
-        public synchronized int read(byte[] b, int off, int len) {
-            int n = super.read(b, off, len);
-            if (n > 0) bytesRead += n;
-            return n;
-        }
-    }
-
-    private static final class NbtReader {
-        private final DataInputStream in;
-
-        NbtReader(java.io.InputStream stream) {
-            this.in = new DataInputStream(stream);
-        }
-
-        int readRootType() throws IOException {
-            return in.readUnsignedByte();
-        }
-
-        String readString() throws IOException {
-            int len = in.readUnsignedShort();
-            byte[] b = in.readNBytes(len);
-            if (b.length != len) throw new EOFException("Truncated NBT string");
-            return new String(b, StandardCharsets.UTF_8);
-        }
-
-        NbtCompound readCompound() throws IOException {
-            NbtCompound c = new NbtCompound();
-            while (true) {
-                int type = in.readUnsignedByte();
-                if (type == 0) return c;
-                String key = readString();
-                c.values.put(key, readValue(type));
-            }
-        }
-
-        NbtValue readValue(int type) throws IOException {
-            return switch (type) {
-                case 1 -> new NbtValue(1, 0, in.readByte());
-                case 2 -> new NbtValue(2, 0, in.readShort());
-                case 3 -> new NbtValue(3, 0, in.readInt());
-                case 4 -> new NbtValue(4, 0, in.readLong());
-                case 5 -> new NbtValue(5, 0, in.readFloat());
-                case 6 -> new NbtValue(6, 0, in.readDouble());
-                case 7 -> {
-                    int n = in.readInt();
-                    if (n < 0 || n > 64_000_000) throw new IOException("Bad byte[] len " + n);
-                    yield new NbtValue(7, 0, in.readNBytes(n));
-                }
-                case 8 -> new NbtValue(8, 0, readString());
-                case 9 -> {
-                    int elemType = in.readUnsignedByte();
-                    int n = in.readInt();
-                    if (n < 0 || n > 10_000_000) throw new IOException("Bad list len " + n);
-                    List<NbtValue> items = new ArrayList<>(n);
-                    for (int i = 0; i < n; i++) {
-                        items.add(elemType == 0 ? new NbtValue(0, 0, null) : readValue(elemType));
-                    }
-                    yield new NbtValue(9, elemType, items);
-                }
-                case 10 -> new NbtValue(10, 0, readCompound());
-                case 11 -> {
-                    int n = in.readInt();
-                    if (n < 0 || n > 16_000_000) throw new IOException("Bad int[] len " + n);
-                    int[] arr = new int[n];
-                    for (int i = 0; i < n; i++) arr[i] = in.readInt();
-                    yield new NbtValue(11, 0, arr);
-                }
-                case 12 -> {
-                    int n = in.readInt();
-                    if (n < 0 || n > 16_000_000) throw new IOException("Bad long[] len " + n);
-                    long[] arr = new long[n];
-                    for (int i = 0; i < n; i++) arr[i] = in.readLong();
-                    yield new NbtValue(12, 0, arr);
-                }
-                default -> throw new IOException("Unsupported NBT tag type: " + type);
-            };
-        }
-    }
-
-    private static void writeString(DataOutputStream out, String s) throws IOException {
-        byte[] raw = s.getBytes(StandardCharsets.UTF_8);
-        out.writeShort(raw.length);
-        out.write(raw);
-    }
-
-    private static void writeCompound(DataOutputStream out, NbtCompound c) throws IOException {
-        for (Map.Entry<String, NbtValue> e : c.values.entrySet()) {
-            NbtValue v = e.getValue();
-            out.writeByte(v.type);
-            writeString(out, e.getKey());
-            writeValue(out, v.type, v.listElemType, v.val);
-        }
-        out.writeByte(0);
-    }
-
-    @SuppressWarnings("unchecked")
-    private static void writeValue(DataOutputStream out, int type, int elemType, Object val) throws IOException {
-        switch (type) {
-            case 1 -> out.writeByte(((Number) val).byteValue());
-            case 2 -> out.writeShort(((Number) val).shortValue());
-            case 3 -> out.writeInt(((Number) val).intValue());
-            case 4 -> out.writeLong(((Number) val).longValue());
-            case 5 -> out.writeFloat(((Number) val).floatValue());
-            case 6 -> out.writeDouble(((Number) val).doubleValue());
-            case 7 -> {
-                byte[] b = (byte[]) val;
-                out.writeInt(b.length);
-                out.write(b);
-            }
-            case 8 -> writeString(out, (String) val);
-            case 9 -> {
-                List<NbtValue> items = (List<NbtValue>) val;
-                int et = items.isEmpty() ? 0 : elemType;
-                out.writeByte(et);
-                out.writeInt(items.size());
-                for (NbtValue item : items) {
-                    writeValue(out, et, item == null ? 0 : item.listElemType, item == null ? null : item.val);
-                }
-            }
-            case 10 -> writeCompound(out, (NbtCompound) val);
-            case 11 -> {
-                int[] a = (int[]) val;
-                out.writeInt(a.length);
-                for (int x : a) out.writeInt(x);
-            }
-            case 12 -> {
-                long[] a = (long[]) val;
-                out.writeInt(a.length);
-                for (long x : a) out.writeLong(x);
-            }
-            default -> throw new IOException("Unsupported NBT write type: " + type);
-        }
     }
 }

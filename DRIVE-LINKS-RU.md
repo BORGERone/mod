@@ -366,6 +366,26 @@ but class was expected` — маркер не ставился ни разу, о
 Прямая ссылка на мод: `https://drive.google.com/uc?export=download&id=1_ZukLhlGcVzIqMbmKZVeglaEXy4DRCkT`
 Прямая ссылка на исходники: `https://drive.google.com/uc?export=download&id=1NLNWOpjXlJCGwTVTeuLicNcMXK1nHC6Q`
 
+## Build 431 — поддержка схем Create / ванильных `.nbt` и точные повороты механизмов (2026-11-16)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build431-create-nbt-support.jar | `1vDe_KVVon_aCK0AvtVsoD-M13qDLFSgE` | `74476039f668f22188668cf4c387eadba1dbb9a7de89bbc87942b734e01d6c8a` |
+| SettledLands-Build431-CreateNbtSupport-Source.zip | `1AQhTvr0aLKysyTb-h8xygQfpiY5-HAkC` | `87888705e778180d2fac240f43344a2c927aa26ab80b7300fe6eae7444c0e22f` |
+
+База — 430. Без новых миксинов и без новых внешних API (`check_mixin_class`: 0 новых из `1 441`).
+1. **Нативная загрузка `.nbt` структур Create (`Schematic & Quill`) и Minecraft (`StructureTemplate`)**:
+   в `DungeonConfig427` (`blueprints_dir=auto`) добавлена папка `schematics/` наряду с `config/settledlands/blueprints`, `config/axiom/blueprints` и `blueprints`;
+   `DungeonBlueprints427` сканирует как `.bp`, так и `.nbt` (включая смешанные папки и `старт.nbt` без `lapis_block` со спавном в центре);
+   `CreateSchematic431` парсит gzip/raw `.nbt` (`palette` или `palettes[0]`, `blocks`, `entities`), маркеры `lapis_block`/`redstone_block` и 3-фазный безопасный порядок установки блоков.
+2. **Точный поворот NBT, блочных свойств и живых механизмов Create**:
+   `DungeonNbt431` (выделен из `AxiomBlueprint427`) поворачивает `x/z`, `TargetOffset`, `Target`, `Pos`, `From`, `To`, `Connections`, `InteractionPoints`, `TravellingPackages`, `Input`, `Bracket`, сбрасывает `Controller` и ставит `Size=1`/`Uninitialized=1b` для многоблочных `FluidTank`/`ItemVault`, пересчитывает `Belt` и `SuperGlueEntity`, сохраняет `QueueAssembly=1b` для `WindmillBearing`;
+   `DungeonTemplate425` и `CreateCompat431` чинят поворот `create:chain_drive` (`axis`, `connected_along_first_coordinate`, `part`), `encased_cogwheel` (`top_shaft`/`bottom_shaft`), `belt` (`slope=vertical`), делегируют поворот в Create `StructureTransform` (чистой рефлексией) и после завершения комнаты вызывают `BeltBlock.initBelt`, `updateConnectivity()`, `attachKinetics()`, пробуждение генераторов и `ServerLevel.sendBlockUpdated`.
+45/45 гейтов PASS (`hell_dungeon_check.py`: `6 297` + `8 556` JVM-проверок, `verify_jar --base build430`, `check_mixin_class`, `invoke_kind_check --base build430`, `dangling_refs --base build430`, `mixin_clash_check`, 41/41 `*_check.py`), `cmp -s` PASS. В игре **ожидает проверки автором**.
+Прямая ссылка на мод: `https://drive.google.com/uc?export=download&id=1vDe_KVVon_aCK0AvtVsoD-M13qDLFSgE`
+Прямая ссылка на исходники: `https://drive.google.com/uc?export=download&id=1AQhTvr0aLKysyTb-h8xygQfpiY5-HAkC`
+
+
 
 
 

@@ -6,18 +6,21 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.stream.Stream;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Build 427 / 429: scans an external Axiom blueprint folder ({@code *.bp}), parses each file
- * natively, classifies rooms into themes ({@code crypt} / «к», {@code infernal} / «а»,
- * {@code flesh} / «п», etc.), and indexes pieces for biome-layered procedural dungeon generation.
+ * Build 427 / 429 / 431: scans an external schematic folder ({@code *.bp} and {@code *.nbt}),
+ * parses each file natively, classifies rooms into themes ({@code crypt} / «к»,
+ * {@code infernal} / «а», {@code flesh} / «п», etc.), and indexes pieces for biome-layered
+ * procedural dungeon generation.
  */
 public final class DungeonBlueprints427 {
 
@@ -43,6 +46,7 @@ public final class DungeonBlueprints427 {
         public final List<AxiomBlueprint427.PieceTemplate> deadEnds;
         public final Map<String, AxiomBlueprint427.PieceTemplate> byKey;
         public final int totalBpFiles;
+        public final int nbtCount;
         public final int skippedNoMarkers;
         public final int failedParse;
         public final String appliedFilter;
@@ -64,7 +68,7 @@ public final class DungeonBlueprints427 {
                 int failedParse,
                 String appliedFilter) {
             this(config, sourceDir, startPiece, pieces, byKey, totalBpFiles, skippedNoMarkers,
-                    failedParse, appliedFilter, inferBiomeMode(appliedFilter));
+                    failedParse, appliedFilter, inferBiomeMode(appliedFilter), 0);
         }
 
         public Library(
@@ -78,6 +82,22 @@ public final class DungeonBlueprints427 {
                 int failedParse,
                 String appliedFilter,
                 boolean biomeProgression) {
+            this(config, sourceDir, startPiece, pieces, byKey, totalBpFiles, skippedNoMarkers,
+                    failedParse, appliedFilter, biomeProgression, 0);
+        }
+
+        public Library(
+                DungeonConfig427 config,
+                Path sourceDir,
+                AxiomBlueprint427.PieceTemplate startPiece,
+                List<AxiomBlueprint427.PieceTemplate> pieces,
+                Map<String, AxiomBlueprint427.PieceTemplate> byKey,
+                int totalBpFiles,
+                int skippedNoMarkers,
+                int failedParse,
+                String appliedFilter,
+                boolean biomeProgression,
+                int nbtCount) {
             this.config = config;
             this.sourceDir = sourceDir;
             this.startPiece = startPiece;
@@ -114,6 +134,7 @@ public final class DungeonBlueprints427 {
             this.fleshCount = cFlesh;
             this.byKey = Collections.unmodifiableMap(byKey);
             this.totalBpFiles = totalBpFiles;
+            this.nbtCount = nbtCount;
             this.skippedNoMarkers = skippedNoMarkers;
             this.failedParse = failedParse;
             this.appliedFilter = appliedFilter;
@@ -170,6 +191,7 @@ public final class DungeonBlueprints427 {
             return "папка: " + dirLabel
                     + ", фильтр: " + appliedFilter
                     + ", комнат: " + counts
+                    + (nbtCount > 0 ? " (.nbt:" + nbtCount + ")" : "")
                     + " (тупиков: " + deadEnds.size() + ")"
                     + ", старт: " + (startPiece == null ? "нет"
                             : (startPiece.embeddedFallback ? "встроенный start.slbp" : startPiece.key));
@@ -208,7 +230,7 @@ public final class DungeonBlueprints427 {
             List<Path> found = scanBpFiles(dir);
             if (!found.isEmpty()) {
                 // In auto mode, pick first candidate folder that actually contains at least one
-                // dungeon blueprint (either start piece or a piece with a lapis marker).
+                // dungeon blueprint or schematic (either start piece or a piece with a lapis marker).
                 if (!config.isAutoDir() || hasAnyUsableBlueprint(dir, found, config.startName)) {
                     chosenDir = dir;
                     chosenFiles = found;
@@ -222,14 +244,22 @@ public final class DungeonBlueprints427 {
 
         AxiomBlueprint427.PieceTemplate startPiece = null;
         List<AxiomBlueprint427.PieceTemplate> parsedPool = new ArrayList<>();
+        Set<String> seenKeys = new HashSet<>();
         int skippedNoMarkers = 0;
         int failedParse = 0;
+        int nbtCount = 0;
 
         for (Path p : chosenFiles) {
             String rel = chosenDir.relativize(p).toString().replace('\\', '/');
-            String key = rel.endsWith(".bp") ? rel.substring(0, rel.length() - 3) : rel;
+            boolean isNbt = rel.toLowerCase(Locale.ROOT).endsWith(".nbt");
+            String key = stripBlueprintExt(rel);
+            if (!seenKeys.add(key)) {
+                key = key + (isNbt ? "#nbt" : "#bp");
+                seenKeys.add(key);
+            }
             try {
                 AxiomBlueprint427.PieceTemplate pt = AxiomBlueprint427.loadFile(p, key);
+                if (isNbt) nbtCount++;
                 if (isStartMatch(key, pt, config.startName)) {
                     if (startPiece == null) {
                         startPiece = pt;
@@ -243,7 +273,7 @@ public final class DungeonBlueprints427 {
                 parsedPool.add(pt);
             } catch (Throwable ex) {
                 failedParse++;
-                LOG.warn("settledlands: failed parsing blueprint " + p + ": " + ex.getMessage());
+                LOG.warn("settledlands: failed parsing schematic " + p + ": " + ex.getMessage());
             }
         }
 
@@ -267,9 +297,11 @@ public final class DungeonBlueprints427 {
         }
 
         Library lib = new Library(config, chosenDir, startPiece, sel.pieces, byKey,
-                chosenFiles.size(), skippedNoMarkers, failedParse, sel.appliedFilter, sel.biomeProgression);
+                chosenFiles.size(), skippedNoMarkers, failedParse, sel.appliedFilter,
+                sel.biomeProgression, nbtCount);
         LOG.info("settledlands: blueprints loaded (" + lib.summaryLine()
                 + ", scanned=" + chosenFiles.size()
+                + ", nbt=" + nbtCount
                 + ", skipped_no_lapis=" + skippedNoMarkers
                 + ", parse_errors=" + failedParse + ")");
         return lib;
@@ -298,7 +330,7 @@ public final class DungeonBlueprints427 {
         List<Path> out = new ArrayList<>();
         try (Stream<Path> walk = Files.walk(dir, 8)) {
             walk.filter(Files::isRegularFile)
-                    .filter(p -> p.getFileName().toString().toLowerCase(Locale.ROOT).endsWith(".bp"))
+                    .filter(DungeonBlueprints427::isBlueprintOrNbt)
                     .sorted(Comparator.comparing(p -> dir.relativize(p).toString().replace('\\', '/')))
                     .forEach(out::add);
         } catch (IOException ex) {
@@ -307,10 +339,24 @@ public final class DungeonBlueprints427 {
         return out;
     }
 
+    private static boolean isBlueprintOrNbt(Path p) {
+        if (p == null || p.getFileName() == null) return false;
+        String low = p.getFileName().toString().toLowerCase(Locale.ROOT);
+        return low.endsWith(".bp") || low.endsWith(".nbt");
+    }
+
+    private static String stripBlueprintExt(String rel) {
+        if (rel == null) return "";
+        String low = rel.toLowerCase(Locale.ROOT);
+        if (low.endsWith(".bp")) return rel.substring(0, rel.length() - 3);
+        if (low.endsWith(".nbt")) return rel.substring(0, rel.length() - 4);
+        return rel;
+    }
+
     private static boolean hasAnyUsableBlueprint(Path dir, List<Path> files, String startName) {
         for (Path p : files) {
             String rel = dir.relativize(p).toString().replace('\\', '/');
-            String key = rel.endsWith(".bp") ? rel.substring(0, rel.length() - 3) : rel;
+            String key = stripBlueprintExt(rel);
             try {
                 AxiomBlueprint427.PieceTemplate pt = AxiomBlueprint427.loadFile(p, key);
                 if (isStartMatch(key, pt, startName) || pt.entrance != null) {
@@ -324,6 +370,8 @@ public final class DungeonBlueprints427 {
 
     private static boolean isStartMatch(String key, AxiomBlueprint427.PieceTemplate pt, String startName) {
         String base = baseName(key).toLowerCase(Locale.ROOT);
+        int hash = base.indexOf('#');
+        if (hash >= 0) base = base.substring(0, hash);
         String want = startName == null ? "старт" : startName.toLowerCase(Locale.ROOT);
         if (base.equals(want) || "start".equals(base) || "старт".equals(base)) {
             return true;
