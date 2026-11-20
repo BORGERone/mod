@@ -55,6 +55,7 @@ REQUIRED_CLASSES = (
     "dev/settledlands/dungeon/DungeonBlueprints427$SelectionResult.class",
     "dev/settledlands/dungeon/DungeonGenerator427.class",
     "dev/settledlands/dungeon/DungeonGenerator427$OpenExit.class",
+    "dev/settledlands/dungeon/DungeonGenerator427$PlacementAttempt.class",
     "dev/settledlands/dungeon/DungeonGenerator427$Plan.class",
     "dev/settledlands/dungeon/DungeonGenerator427$PlannedPiece.class",
     "dev/settledlands/dungeon/DungeonGenerator427$Seal.class",
@@ -256,9 +257,9 @@ def main(argv):
 
         gen_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonGenerator427.class"))
         gen_utf8 = {e[1] for e in gen_info["cp"] if e and e[0] == 1}
-        for wanted_gen in ("generateBiomePlan", "tryGenerateBiome"):
+        for wanted_gen in ("generateBiomePlan", "tryGenerateBiome", "tryPlaceWithCaps", "shortestBridgeCorridors"):
             if wanted_gen not in gen_utf8:
-                return fail("DungeonGenerator427 missing Build 429 %s" % wanted_gen)
+                return fail("DungeonGenerator427 missing Build 429/432 %s" % wanted_gen)
 
         # Brigadier exception package verification (Build 426 hotfix for NeoForge 21.1.265 crash)
         for entry in names:

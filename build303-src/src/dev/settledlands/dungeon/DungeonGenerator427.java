@@ -9,12 +9,14 @@ import java.util.Map;
 import java.util.Random;
 
 /**
- * Build 427 / 429: deterministic procedural dungeon planner over a {@link DungeonBlueprints427.Library}.
+ * Build 427 / 429 / 432: deterministic procedural dungeon planner over a
+ * {@link DungeonBlueprints427.Library}.
  *
  * <p>Stitches rooms and corridors from {@code старт} by matching rotated {@code lapis_block}
  * entrances against open {@code redstone_block} exits without any bounding-box overlap inside
- * the instance's {@code 512 x 512} grid cell, caps branches with dead-end rooms ({@code 0} exits)
- * and sealed walls so there are zero void leaks, and emits a BFS-ordered {@link Plan}.</p>
+ * the instance's {@code 512 x 512} grid cell. Maintains a reserved dead-end cap invariant on
+ * every open exit (when dead-end templates exist) so corridors and intersections always terminate
+ * cleanly in real dead-end rooms instead of flat {@code nether_bricks} seal walls.</p>
  *
  * <p>When {@link DungeonBlueprints427.Library#biomeProgression} is active (e.g. {@code Данж.rar}),
  * the entrance region around {@code старт} is built strictly from {@code crypt} («к») rooms,
@@ -119,6 +121,8 @@ public final class DungeonGenerator427 {
         final int outDir;
         final int depth;
         final String biome;
+        PlannedPiece reservedCap;
+        int[] reservedBox;
 
         OpenExit(int rx, int ry, int rz, int outDir, int depth, String biome) {
             this.rx = rx;
@@ -127,6 +131,20 @@ public final class DungeonGenerator427 {
             this.outDir = outDir & 3;
             this.depth = depth;
             this.biome = biome;
+        }
+    }
+
+    private static final class PlacementAttempt {
+        final PlannedPiece main;
+        final List<PlannedPiece> addedPieces = new ArrayList<>();
+        final List<String> addedKeys = new ArrayList<>();
+        final List<OpenExit> newExits = new ArrayList<>();
+        final Map<Integer, PlannedPiece> otherReReservations = new HashMap<>();
+
+        PlacementAttempt(PlannedPiece main, String key) {
+            this.main = main;
+            this.addedPieces.add(main);
+            this.addedKeys.add(key);
         }
     }
 
@@ -187,6 +205,10 @@ public final class DungeonGenerator427 {
                 || a[5] < b[2] || a[2] > b[5]);
     }
 
+    private static int[] boxOf(PlannedPiece p) {
+        return new int[] { p.minX, p.minY, p.minZ, p.maxX, p.maxY, p.maxZ };
+    }
+
     public static Plan generate(DungeonBlueprints427.Library lib, int originX, int originY, int originZ, long seed) {
         if (lib == null || lib.startPiece == null) {
             throw new IllegalStateException("No start blueprint available for dungeon generation");
@@ -200,15 +222,26 @@ public final class DungeonGenerator427 {
 
         // Flat single-pool generation (when filter_mode is tag:..., prefix:..., all, or single-theme folder)
         int maxAttempts = lib.connectors.isEmpty() ? 1 : 25;
+        int startSeals = (cfg.sealStartEntrance && start.entrance != null && lib.hasExternalPieces()) ? 1 : 0;
+        boolean hasCaps = !lib.deadEnds.isEmpty();
         Plan best = null;
+        int bestScore = Integer.MIN_VALUE;
+
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            boolean strictCaps = hasCaps && (attempt < 20 || (best != null && best.pieces.size() > 1));
             long attemptSeed = seed ^ ((long) attempt * 0x9E3779B97F4A7C15L);
-            Plan cand = tryGenerateFlat(lib, cfg, start, originX, originY, originZ, attemptSeed);
-            if (cand.pieces.size() >= cfg.minPieces && cand.pieces.size() <= cfg.maxPieces) {
+            Plan cand = tryGenerateFlat(lib, cfg, start, originX, originY, originZ, attemptSeed, strictCaps);
+            int nonStartSeals = Math.max(0, cand.seals.size() - startSeals);
+            boolean sizeOk = cand.pieces.size() >= cfg.minPieces && cand.pieces.size() <= cfg.maxPieces;
+            if (nonStartSeals == 0 && sizeOk) {
                 return cand;
             }
-            if (best == null || cand.pieces.size() > best.pieces.size()) {
+            int score = (nonStartSeals == 0 ? 500000 : -nonStartSeals * 50000)
+                    + (sizeOk ? 20000 : 0)
+                    + Math.min(cand.pieces.size(), cfg.maxPieces);
+            if (best == null || score > bestScore) {
                 best = cand;
+                bestScore = score;
             }
         }
         return best;
@@ -222,6 +255,8 @@ public final class DungeonGenerator427 {
         int wantDeepMin = Math.max(3, cfg.minPieces / 7);
         int desiredDeepDist = (int) Math.min(Math.round(cfg.maxRadius * 0.45D), Math.max(12L, cfg.maxPieces));
         long desiredDeepDistSq = (long) desiredDeepDist * (long) desiredDeepDist;
+        int startSeals = (cfg.sealStartEntrance && start.entrance != null && lib.hasExternalPieces()) ? 1 : 0;
+        boolean hasCaps = !lib.deadEnds.isEmpty();
 
         int maxAttempts = 40;
         Plan best = null;
@@ -229,8 +264,10 @@ public final class DungeonGenerator427 {
         int goodCount = 0;
 
         for (int attempt = 0; attempt < maxAttempts; attempt++) {
+            boolean strictCaps = hasCaps && (attempt < 35 || (best != null && best.pieces.size() >= 3));
             long attemptSeed = seed ^ ((long) attempt * 0x9E3779B97F4A7C15L);
-            Plan cand = tryGenerateBiome(lib, cfg, start, originX, originY, originZ, attemptSeed);
+            Plan cand = tryGenerateBiome(lib, cfg, start, originX, originY, originZ, attemptSeed, strictCaps);
+            int nonStartSeals = Math.max(0, cand.seals.size() - startSeals);
             boolean sizeOk = cand.pieces.size() >= cfg.minPieces && cand.pieces.size() <= cfg.maxPieces;
             boolean biomesOk = cand.cryptCount >= wantCryptMin
                     && (!needInfernal || cand.infernalCount >= wantDeepMin)
@@ -249,7 +286,7 @@ public final class DungeonGenerator427 {
                 }
             }
             boolean farOk = minDeepDistSq == Long.MAX_VALUE || minDeepDistSq >= desiredDeepDistSq;
-            if (sizeOk && biomesOk && farOk) {
+            if (nonStartSeals == 0 && sizeOk && biomesOk && farOk) {
                 goodCount++;
                 if (goodCount >= 3 || cand.cryptCount >= (int) Math.round(cfg.maxPieces * 0.38D)) {
                     return cand;
@@ -261,7 +298,8 @@ public final class DungeonGenerator427 {
             if (needFlesh) minTheme = Math.min(minTheme, cand.fleshCount);
             int deepDistScore = minDeepDistSq == Long.MAX_VALUE ? 0
                     : (int) Math.min(400L, Math.round(Math.sqrt(minDeepDistSq)));
-            int score = (sizeOk ? 50000 : 0)
+            int score = (nonStartSeals == 0 ? 500000 : -nonStartSeals * 50000)
+                    + (sizeOk ? 50000 : 0)
                     + (biomesOk ? 20000 : 0)
                     + minTheme * 500
                     + deepDistScore * 20
@@ -276,7 +314,8 @@ public final class DungeonGenerator427 {
     }
 
     private static Plan tryGenerateBiome(DungeonBlueprints427.Library lib, DungeonConfig427 cfg,
-            AxiomBlueprint427.PieceTemplate start, int originX, int originY, int originZ, long seed) {
+            AxiomBlueprint427.PieceTemplate start, int originX, int originY, int originZ, long seed,
+            boolean strictCaps) {
         Random rnd = new Random(seed);
         List<PlannedPiece> placed = new ArrayList<>();
         List<int[]> boxes = new ArrayList<>();
@@ -298,21 +337,6 @@ public final class DungeonGenerator427 {
         int innerSafeRadius = (int) Math.round(minDist * 0.85D);
         long innerSafeSq = (long) innerSafeRadius * (long) innerSafeRadius;
 
-        int[] startBox = rotatedWorldBox(start, originX, originY, originZ, 0);
-        placed.add(new PlannedPiece(start.key, originX, originY, originZ, 0,
-                startBox[0], startBox[1], startBox[2], startBox[3], startBox[4], startBox[5],
-                "start", 0));
-        boxes.add(startBox);
-
-        for (AxiomBlueprint427.Marker ex : start.exits) {
-            openExits.add(new OpenExit(originX + ex.x, originY + ex.y, originZ + ex.z,
-                    ex.dir, 0, DungeonBlueprints427.THEME_CRYPT));
-        }
-        if (cfg.sealStartEntrance && start.entrance != null && lib.hasExternalPieces()) {
-            seals.add(new Seal(originX + start.entrance.x, originY + start.entrance.y,
-                    originZ + start.entrance.z, start.entrance.dir));
-        }
-
         int minBX = originX - cfg.maxRadius;
         int maxBX = originX + cfg.maxRadius;
         int minBZ = originZ - cfg.maxRadius;
@@ -320,20 +344,43 @@ public final class DungeonGenerator427 {
         int minBY = originY + cfg.minY;
         int maxBY = originY + cfg.maxY;
 
+        int[] startBox = rotatedWorldBox(start, originX, originY, originZ, 0);
+        placed.add(new PlannedPiece(start.key, originX, originY, originZ, 0,
+                startBox[0], startBox[1], startBox[2], startBox[3], startBox[4], startBox[5],
+                "start", 0));
+        boxes.add(startBox);
+
+        for (AxiomBlueprint427.Marker ex : start.exits) {
+            OpenExit oe = new OpenExit(originX + ex.x, originY + ex.y, originZ + ex.z,
+                    ex.dir, 0, DungeonBlueprints427.THEME_CRYPT);
+            if (strictCaps) {
+                PlannedPiece cap = findCapAvoiding(lib, oe.rx, oe.ry, oe.rz, oe.outDir, oe.biome, 1,
+                        minBX, maxBX, minBY, maxBY, minBZ, maxBZ, boxes, null, null, openExits, -1, null,
+                        true, false, rnd);
+                if (cap != null) {
+                    oe.reservedCap = cap;
+                    oe.reservedBox = boxOf(cap);
+                }
+            }
+            openExits.add(oe);
+        }
+        if (cfg.sealStartEntrance && start.entrance != null && lib.hasExternalPieces()) {
+            seals.add(new Seal(originX + start.entrance.x, originY + start.entrance.y,
+                    originZ + start.entrance.z, start.entrance.dir));
+        }
+
         int placedCrypt = 0;
         int placedInfernal = 0;
         int placedFlesh = 0;
+        boolean useCapsBiome = strictCaps && !lib.deadEnds.isEmpty();
 
-        while (!openExits.isEmpty() && placed.size() < cfg.maxPieces) {
-            if (placed.size() + openExits.size() >= cfg.maxPieces) {
-                break;
-            }
-
+        while (!openExits.isEmpty() && (useCapsBiome
+                ? placed.size() + openExits.size() < cfg.maxPieces
+                : placed.size() < cfg.maxPieces)) {
             int pickIdx = pickNextBiomeExit(openExits, rnd, transitionDepth, minCryptBeforeDeep,
                     minDistSq, originX, originZ, placedCrypt, placedInfernal, placedFlesh,
                     hasInfernal, hasFlesh);
             OpenExit cur = openExits.remove(pickIdx);
-            int wantLapisDir = (cur.outDir + 2) & 3;
 
             String targetBiome = resolveTargetBiome(cur, rnd, transitionDepth, minCryptBeforeDeep,
                     minDistSq, originX, originZ, placedCrypt, placedInfernal, placedFlesh,
@@ -368,102 +415,562 @@ public final class DungeonGenerator427 {
             }
             pool.sort(Comparator.comparingDouble(p -> jitter.getOrDefault(p.key, 0.0D)));
 
-            PlannedPiece chosen = null;
-            AxiomBlueprint427.PieceTemplate chosenTpl = null;
-            PlannedPiece nearFallback = null;
-            AxiomBlueprint427.PieceTemplate nearFallbackTpl = null;
+            int slotsRemaining = cfg.maxPieces - placed.size() - openExits.size();
+            PlacementAttempt chosen = null;
+            PlacementAttempt nearFallback = null;
 
             for (AxiomBlueprint427.PieceTemplate cand : pool) {
-                PlannedPiece fit = tryFit(cand, cur, wantLapisDir, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
-                        boxes, targetBiome, cur.depth + 1);
-                if (fit == null) continue;
-                if (!isCrypt && centerDistSq(fit, originX, originZ) < innerSafeSq) {
-                    if (nearFallback == null) {
-                        nearFallback = fit;
-                        nearFallbackTpl = cand;
-                    }
+                if (useCapsBiome && hasCapsFor(lib, targetBiome, true) && 1 + cand.exits.size() > slotsRemaining) {
                     continue;
                 }
-                chosen = fit;
-                chosenTpl = cand;
+                PlacementAttempt pa = tryPlaceWithCaps(lib, cand, cur, targetBiome, cur.depth + 1,
+                        slotsRemaining, minBX, maxBX, minBY, maxBY, minBZ, maxBZ, boxes, openExits,
+                        true, strictCaps, rnd);
+                if (pa == null) continue;
+                if (!isCrypt && centerDistSq(pa.main, originX, originZ) < innerSafeSq) {
+                    if (nearFallback == null) nearFallback = pa;
+                    continue;
+                }
+                chosen = pa;
                 break;
             }
-            if (chosen == null && nearFallback != null) {
-                chosen = nearFallback;
-                chosenTpl = nearFallbackTpl;
-            }
+            if (chosen == null) chosen = nearFallback;
 
-            if (chosen == null) {
-                List<AxiomBlueprint427.PieceTemplate> deSrc = lib.deadEndsForTheme(targetBiome);
-                if (deSrc.isEmpty()) deSrc = lib.deadEnds;
-                if (!deSrc.isEmpty()) {
-                    List<AxiomBlueprint427.PieceTemplate> dePool = new ArrayList<>(deSrc);
-                    Collections.shuffle(dePool, rnd);
-                    for (AxiomBlueprint427.PieceTemplate cand : dePool) {
-                        PlannedPiece fit = tryFit(cand, cur, wantLapisDir, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
-                                boxes, targetBiome, cur.depth + 1);
-                        if (fit != null) {
-                            chosen = fit;
-                            chosenTpl = cand;
-                            break;
-                        }
-                    }
+            if (chosen != null) {
+                for (Map.Entry<Integer, PlannedPiece> e : chosen.otherReReservations.entrySet()) {
+                    OpenExit other = openExits.get(e.getKey());
+                    other.reservedCap = e.getValue();
+                    other.reservedBox = boxOf(e.getValue());
                 }
-            }
-
-            if (chosen != null && chosenTpl != null) {
-                placed.add(chosen);
-                boxes.add(new int[] { chosen.minX, chosen.minY, chosen.minZ, chosen.maxX, chosen.maxY, chosen.maxZ });
-                usedCounts.put(chosenTpl.key, usedCounts.getOrDefault(chosenTpl.key, 0) + 1);
-                if (DungeonBlueprints427.THEME_CRYPT.equals(targetBiome)) placedCrypt++;
-                else if (DungeonBlueprints427.THEME_INFERNAL.equals(targetBiome)) placedInfernal++;
-                else if (DungeonBlueprints427.THEME_FLESH.equals(targetBiome)) placedFlesh++;
-
-                for (AxiomBlueprint427.Marker ex : chosenTpl.exits) {
-                    int rx = rotX(ex.x, ex.z, chosen.turns);
-                    int rz = rotZ(ex.x, ex.z, chosen.turns);
-                    openExits.add(new OpenExit(
-                            chosen.ox + rx,
-                            chosen.oy + ex.y,
-                            chosen.oz + rz,
-                            (ex.dir + chosen.turns) & 3,
-                            cur.depth + 1,
-                            targetBiome));
+                for (int ai = 0; ai < chosen.addedPieces.size(); ai++) {
+                    PlannedPiece pp = chosen.addedPieces.get(ai);
+                    String key = chosen.addedKeys.get(ai);
+                    placed.add(pp);
+                    boxes.add(boxOf(pp));
+                    usedCounts.put(key, usedCounts.getOrDefault(key, 0) + 1);
+                    if (DungeonBlueprints427.THEME_CRYPT.equals(pp.biome)) placedCrypt++;
+                    else if (DungeonBlueprints427.THEME_INFERNAL.equals(pp.biome)) placedInfernal++;
+                    else if (DungeonBlueprints427.THEME_FLESH.equals(pp.biome)) placedFlesh++;
                 }
+                openExits.addAll(chosen.newExits);
             } else {
-                seals.add(new Seal(cur.rx, cur.ry, cur.rz, cur.outDir));
+                // Close this branch cleanly with a matching dead-end room instead of a seal wall.
+                PlannedPiece cap = findCapAvoiding(lib, cur.rx, cur.ry, cur.rz, cur.outDir, cur.biome,
+                        cur.depth + 1, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
+                        boxes, null, null, openExits, -1, null, true, true, rnd);
+                if (cap == null) cap = cur.reservedCap;
+                if (cap != null) {
+                    placed.add(cap);
+                    boxes.add(boxOf(cap));
+                    if (DungeonBlueprints427.THEME_CRYPT.equals(cap.biome)) placedCrypt++;
+                    else if (DungeonBlueprints427.THEME_INFERNAL.equals(cap.biome)) placedInfernal++;
+                    else if (DungeonBlueprints427.THEME_FLESH.equals(cap.biome)) placedFlesh++;
+                } else {
+                    seals.add(new Seal(cur.rx, cur.ry, cur.rz, cur.outDir));
+                }
             }
         }
 
         // Cap all remaining open exits with dead-end rooms strictly matching their branch's biome.
-        for (OpenExit cur : openExits) {
+        for (int i = 0; i < openExits.size(); i++) {
+            OpenExit cur = openExits.get(i);
             if (placed.size() < cfg.maxPieces) {
-                List<AxiomBlueprint427.PieceTemplate> deSrc = lib.deadEndsForTheme(cur.biome);
-                if (deSrc.isEmpty()) deSrc = lib.deadEnds;
-                if (!deSrc.isEmpty()) {
-                    int wantLapisDir = (cur.outDir + 2) & 3;
-                    List<AxiomBlueprint427.PieceTemplate> dePool = new ArrayList<>(deSrc);
-                    Collections.shuffle(dePool, rnd);
-                    PlannedPiece cap = null;
-                    for (AxiomBlueprint427.PieceTemplate cand : dePool) {
-                        PlannedPiece fit = tryFit(cand, cur, wantLapisDir, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
-                                boxes, cur.biome, cur.depth + 1);
-                        if (fit != null) {
-                            cap = fit;
-                            break;
-                        }
-                    }
-                    if (cap != null) {
-                        placed.add(cap);
-                        boxes.add(new int[] { cap.minX, cap.minY, cap.minZ, cap.maxX, cap.maxY, cap.maxZ });
-                        continue;
-                    }
+                PlannedPiece cap = findCapAvoiding(lib, cur.rx, cur.ry, cur.rz, cur.outDir, cur.biome,
+                        cur.depth + 1, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
+                        boxes, null, null, openExits, i, null, true, true, rnd);
+                if (cap == null) cap = cur.reservedCap;
+                if (cap != null) {
+                    placed.add(cap);
+                    boxes.add(boxOf(cap));
+                    cur.reservedCap = cap;
+                    cur.reservedBox = boxOf(cap);
+                    continue;
                 }
+            } else if (cur.reservedCap != null) {
+                placed.add(cur.reservedCap);
+                boxes.add(boxOf(cur.reservedCap));
+                continue;
             }
             seals.add(new Seal(cur.rx, cur.ry, cur.rz, cur.outDir));
         }
 
         return buildPlan(start, originX, originY, originZ, placed, seals);
+    }
+
+    private static Plan tryGenerateFlat(DungeonBlueprints427.Library lib, DungeonConfig427 cfg,
+            AxiomBlueprint427.PieceTemplate start, int originX, int originY, int originZ, long seed,
+            boolean strictCaps) {
+        Random rnd = new Random(seed);
+        List<PlannedPiece> placed = new ArrayList<>();
+        List<int[]> boxes = new ArrayList<>();
+        List<OpenExit> openExits = new ArrayList<>();
+        List<Seal> seals = new ArrayList<>();
+        Map<String, Integer> usedCounts = new HashMap<>();
+
+        int minBX = originX - cfg.maxRadius;
+        int maxBX = originX + cfg.maxRadius;
+        int minBZ = originZ - cfg.maxRadius;
+        int maxBZ = originZ + cfg.maxRadius;
+        int minBY = originY + cfg.minY;
+        int maxBY = originY + cfg.maxY;
+
+        int[] startBox = rotatedWorldBox(start, originX, originY, originZ, 0);
+        placed.add(new PlannedPiece(start.key, originX, originY, originZ, 0,
+                startBox[0], startBox[1], startBox[2], startBox[3], startBox[4], startBox[5],
+                "start", 0));
+        boxes.add(startBox);
+
+        String startTheme = DungeonBlueprints427.themeOf(start);
+        for (AxiomBlueprint427.Marker ex : start.exits) {
+            OpenExit oe = new OpenExit(originX + ex.x, originY + ex.y, originZ + ex.z,
+                    ex.dir, 0, startTheme);
+            if (strictCaps) {
+                PlannedPiece cap = findCapAvoiding(lib, oe.rx, oe.ry, oe.rz, oe.outDir, oe.biome, 1,
+                        minBX, maxBX, minBY, maxBY, minBZ, maxBZ, boxes, null, null, openExits, -1, null,
+                        false, false, rnd);
+                if (cap != null) {
+                    oe.reservedCap = cap;
+                    oe.reservedBox = boxOf(cap);
+                }
+            }
+            openExits.add(oe);
+        }
+        if (cfg.sealStartEntrance && start.entrance != null && lib.hasExternalPieces()) {
+            seals.add(new Seal(originX + start.entrance.x, originY + start.entrance.y,
+                    originZ + start.entrance.z, start.entrance.dir));
+        }
+
+        boolean useCapsFlat = strictCaps && !lib.deadEnds.isEmpty();
+        while (!openExits.isEmpty() && (useCapsFlat
+                ? placed.size() + openExits.size() < cfg.maxPieces
+                : placed.size() < cfg.maxPieces)) {
+            int pickIdx = rnd.nextDouble() < 0.75D ? 0 : rnd.nextInt(openExits.size());
+            OpenExit cur = openExits.remove(pickIdx);
+
+            List<AxiomBlueprint427.PieceTemplate> pool = new ArrayList<>(lib.connectors);
+            Collections.shuffle(pool, rnd);
+
+            final int curPlaced = placed.size();
+            final int curOpen = openExits.size();
+            Map<String, Double> jitter = new HashMap<>(pool.size() * 2);
+            for (AxiomBlueprint427.PieceTemplate p : pool) {
+                double s = usedCounts.getOrDefault(p.key, 0) * 10.0D;
+                int exCount = p.exits.size();
+                if (curPlaced < 12 && curOpen < 3 && exCount >= 2) s -= 8.0D;
+                else if (curPlaced + curOpen >= cfg.maxPieces - 4 && exCount >= 2) s += 20.0D;
+                else if (curOpen >= 4 && exCount >= 2) s += 12.0D;
+                s += rnd.nextDouble() * 5.0D;
+                jitter.put(p.key, s);
+            }
+            pool.sort(Comparator.comparingDouble(p -> jitter.getOrDefault(p.key, 0.0D)));
+
+            int slotsRemaining = cfg.maxPieces - placed.size() - openExits.size();
+            PlacementAttempt chosen = null;
+
+            for (AxiomBlueprint427.PieceTemplate cand : pool) {
+                if (strictCaps && !lib.deadEnds.isEmpty() && 1 + cand.exits.size() > slotsRemaining) continue;
+                String candBiome = DungeonBlueprints427.themeOf(cand);
+                PlacementAttempt pa = tryPlaceWithCaps(lib, cand, cur, candBiome, cur.depth + 1,
+                        slotsRemaining, minBX, maxBX, minBY, maxBY, minBZ, maxBZ, boxes, openExits,
+                        false, strictCaps, rnd);
+                if (pa != null) {
+                    chosen = pa;
+                    break;
+                }
+            }
+
+            if (chosen != null) {
+                for (Map.Entry<Integer, PlannedPiece> e : chosen.otherReReservations.entrySet()) {
+                    OpenExit other = openExits.get(e.getKey());
+                    other.reservedCap = e.getValue();
+                    other.reservedBox = boxOf(e.getValue());
+                }
+                for (int ai = 0; ai < chosen.addedPieces.size(); ai++) {
+                    PlannedPiece pp = chosen.addedPieces.get(ai);
+                    String key = chosen.addedKeys.get(ai);
+                    placed.add(pp);
+                    boxes.add(boxOf(pp));
+                    usedCounts.put(key, usedCounts.getOrDefault(key, 0) + 1);
+                }
+                openExits.addAll(chosen.newExits);
+            } else {
+                PlannedPiece cap = findCapAvoiding(lib, cur.rx, cur.ry, cur.rz, cur.outDir, cur.biome,
+                        cur.depth + 1, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
+                        boxes, null, null, openExits, -1, null, false, true, rnd);
+                if (cap == null) cap = cur.reservedCap;
+                if (cap != null) {
+                    placed.add(cap);
+                    boxes.add(boxOf(cap));
+                } else {
+                    seals.add(new Seal(cur.rx, cur.ry, cur.rz, cur.outDir));
+                }
+            }
+        }
+
+        for (int i = 0; i < openExits.size(); i++) {
+            OpenExit cur = openExits.get(i);
+            if (placed.size() < cfg.maxPieces) {
+                PlannedPiece cap = findCapAvoiding(lib, cur.rx, cur.ry, cur.rz, cur.outDir, cur.biome,
+                        cur.depth + 1, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
+                        boxes, null, null, openExits, i, null, false, true, rnd);
+                if (cap == null) cap = cur.reservedCap;
+                if (cap != null) {
+                    placed.add(cap);
+                    boxes.add(boxOf(cap));
+                    cur.reservedCap = cap;
+                    cur.reservedBox = boxOf(cap);
+                    continue;
+                }
+            } else if (cur.reservedCap != null) {
+                placed.add(cur.reservedCap);
+                boxes.add(boxOf(cur.reservedCap));
+                continue;
+            }
+            seals.add(new Seal(cur.rx, cur.ry, cur.rz, cur.outDir));
+        }
+
+        return buildPlan(start, originX, originY, originZ, placed, seals);
+    }
+
+    private static PlacementAttempt tryPlaceWithCaps(
+            DungeonBlueprints427.Library lib,
+            AxiomBlueprint427.PieceTemplate cand,
+            OpenExit cur,
+            String biome,
+            int depth,
+            int slotsRemaining,
+            int minBX,
+            int maxBX,
+            int minBY,
+            int maxBY,
+            int minBZ,
+            int maxBZ,
+            List<int[]> boxes,
+            List<OpenExit> openExits,
+            boolean strictThemeCaps,
+            boolean strictCaps,
+            Random rnd) {
+        int wantDir = (cur.outDir + 2) & 3;
+        PlannedPiece fit = tryFit(cand, cur, wantDir, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
+                boxes, biome, depth);
+        if (fit == null) return null;
+
+        if (!strictCaps || !hasCapsFor(lib, biome, strictThemeCaps)) {
+            PlacementAttempt pa = new PlacementAttempt(fit, cand.key);
+            for (AxiomBlueprint427.Marker ex : cand.exits) {
+                int rx = fit.ox + rotX(ex.x, ex.z, fit.turns);
+                int rz = fit.oz + rotZ(ex.x, ex.z, fit.turns);
+                pa.newExits.add(new OpenExit(rx, fit.oy + ex.y, rz,
+                        (ex.dir + fit.turns) & 3, depth, biome));
+            }
+            return pa;
+        }
+
+        int[] wbb = boxOf(fit);
+
+        // Keep every existing open exit safely capable of terminating in a dead-end room.
+        Map<Integer, int[]> reResBoxes = new HashMap<>();
+        Map<Integer, PlannedPiece> reResCaps = new HashMap<>();
+        for (int i = 0; i < openExits.size(); i++) {
+            OpenExit other = openExits.get(i);
+            if (other.reservedBox != null && overlaps(wbb, other.reservedBox)) {
+                PlannedPiece alt = findCapAvoiding(lib, other.rx, other.ry, other.rz, other.outDir,
+                        other.biome, other.depth + 1, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
+                        boxes, wbb, null, openExits, i, reResBoxes, strictThemeCaps, false, rnd);
+                if (alt == null) {
+                    return null;
+                }
+                reResCaps.put(i, alt);
+                reResBoxes.put(i, boxOf(alt));
+            }
+        }
+
+        PlacementAttempt pa = new PlacementAttempt(fit, cand.key);
+        pa.otherReReservations.putAll(reResCaps);
+        List<int[]> newCapBoxes = new ArrayList<>();
+        List<AxiomBlueprint427.Marker> missingCapsFor = new ArrayList<>();
+
+        for (AxiomBlueprint427.Marker ex : cand.exits) {
+            int rx = fit.ox + rotX(ex.x, ex.z, fit.turns);
+            int ry = fit.oy + ex.y;
+            int rz = fit.oz + rotZ(ex.x, ex.z, fit.turns);
+            int eDir = (ex.dir + fit.turns) & 3;
+            PlannedPiece cap = findCapAvoiding(lib, rx, ry, rz, eDir, biome, depth + 1,
+                    minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
+                    boxes, wbb, newCapBoxes, openExits, -1, reResBoxes, strictThemeCaps, false, rnd);
+            if (cap != null) {
+                OpenExit ne = new OpenExit(rx, ry, rz, eDir, depth, biome);
+                ne.reservedCap = cap;
+                ne.reservedBox = boxOf(cap);
+                newCapBoxes.add(ne.reservedBox);
+                pa.newExits.add(ne);
+            } else {
+                missingCapsFor.add(ex);
+            }
+        }
+
+        // Handle tight multi-exit pieces (e.g. Перекрёсток 1) where adjacent dead-ends clip corners:
+        // extend the conflicting exit by one narrow 1-exit corridor that safely leads to a dead-end.
+        if (!missingCapsFor.isEmpty()) {
+            List<AxiomBlueprint427.PieceTemplate> bridges = shortestBridgeCorridors(lib, biome, strictThemeCaps);
+            if (bridges.isEmpty()) return null;
+            List<int[]> allOtherCaps = new ArrayList<>(openExits.size());
+            for (int i = 0; i < openExits.size(); i++) {
+                int[] b = reResBoxes.containsKey(i) ? reResBoxes.get(i) : openExits.get(i).reservedBox;
+                if (b != null) allOtherCaps.add(b);
+            }
+            for (int mi = 0; mi < missingCapsFor.size(); mi++) {
+                int remAfter = missingCapsFor.size() - (mi + 1);
+                if (pa.addedPieces.size() + pa.newExits.size() + 2 + remAfter > slotsRemaining) {
+                    return null;
+                }
+                AxiomBlueprint427.Marker ex = missingCapsFor.get(mi);
+                int rx = fit.ox + rotX(ex.x, ex.z, fit.turns);
+                int ry = fit.oy + ex.y;
+                int rz = fit.oz + rotZ(ex.x, ex.z, fit.turns);
+                int eDir = (ex.dir + fit.turns) & 3;
+                boolean bridged = false;
+
+                for (AxiomBlueprint427.PieceTemplate br : bridges) {
+                    PlannedPiece bfit = fitExtra(br, rx, ry, rz, eDir,
+                            minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
+                            boxes, pa.addedPieces, newCapBoxes, allOtherCaps, biome, depth + 1);
+                    if (bfit == null) continue;
+
+                    AxiomBlueprint427.Marker bex = br.exits.get(0);
+                    int brx = bfit.ox + rotX(bex.x, bex.z, bfit.turns);
+                    int bry = bfit.oy + bex.y;
+                    int brz = bfit.oz + rotZ(bex.x, bex.z, bfit.turns);
+                    int beDir = (bex.dir + bfit.turns) & 3;
+
+                    List<int[]> extraForCap = new ArrayList<>(newCapBoxes.size() + pa.addedPieces.size());
+                    extraForCap.addAll(newCapBoxes);
+                    for (PlannedPiece ap : pa.addedPieces) extraForCap.add(boxOf(ap));
+
+                    PlannedPiece cap = findCapAvoiding(lib, brx, bry, brz, beDir, biome, depth + 2,
+                            minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
+                            boxes, boxOf(bfit), extraForCap, openExits, -1, reResBoxes,
+                            strictThemeCaps, false, rnd);
+                    if (cap != null) {
+                        pa.addedPieces.add(bfit);
+                        pa.addedKeys.add(br.key);
+                        OpenExit ne = new OpenExit(brx, bry, brz, beDir, depth + 1, biome);
+                        ne.reservedCap = cap;
+                        ne.reservedBox = boxOf(cap);
+                        newCapBoxes.add(ne.reservedBox);
+                        pa.newExits.add(ne);
+                        bridged = true;
+                        break;
+                    }
+                }
+                if (!bridged) return null;
+            }
+        }
+
+        return pa;
+    }
+
+    private static boolean hasCapsFor(DungeonBlueprints427.Library lib, String biome, boolean strictTheme) {
+        if (strictTheme) {
+            List<AxiomBlueprint427.PieceTemplate> themed = lib.deadEndsForTheme(biome);
+            if (!themed.isEmpty()) return true;
+        }
+        return !lib.deadEnds.isEmpty();
+    }
+
+    private static List<AxiomBlueprint427.PieceTemplate> sortedCaps(
+            DungeonBlueprints427.Library lib, String biome, boolean strictTheme, boolean randomize, Random rnd) {
+        List<AxiomBlueprint427.PieceTemplate> themed = (biome == null || biome.isEmpty())
+                ? Collections.emptyList() : lib.deadEndsForTheme(biome);
+        List<AxiomBlueprint427.PieceTemplate> out;
+        if (strictTheme) {
+            out = new ArrayList<>(themed.isEmpty() ? lib.deadEnds : themed);
+            if (randomize && out.size() > 1) {
+                Collections.shuffle(out, rnd);
+            } else {
+                out.sort(Comparator.comparingLong(DungeonGenerator427::pieceVolume));
+            }
+            return out;
+        }
+        if (!themed.isEmpty() && themed.size() < lib.deadEnds.size()) {
+            List<AxiomBlueprint427.PieceTemplate> head = new ArrayList<>(themed);
+            List<AxiomBlueprint427.PieceTemplate> tail = new ArrayList<>(lib.deadEnds.size());
+            for (AxiomBlueprint427.PieceTemplate p : lib.deadEnds) {
+                if (!themed.contains(p)) tail.add(p);
+            }
+            if (randomize) {
+                Collections.shuffle(head, rnd);
+                Collections.shuffle(tail, rnd);
+            } else {
+                head.sort(Comparator.comparingLong(DungeonGenerator427::pieceVolume));
+                tail.sort(Comparator.comparingLong(DungeonGenerator427::pieceVolume));
+            }
+            head.addAll(tail);
+            return head;
+        }
+        out = new ArrayList<>(lib.deadEnds);
+        if (randomize && out.size() > 1) {
+            Collections.shuffle(out, rnd);
+        } else {
+            out.sort(Comparator.comparingLong(DungeonGenerator427::pieceVolume));
+        }
+        return out;
+    }
+
+    private static long pieceVolume(AxiomBlueprint427.PieceTemplate p) {
+        return (long) (p.maxX - p.minX + 1) * (long) (p.maxY - p.minY + 1) * (long) (p.maxZ - p.minZ + 1);
+    }
+
+    private static List<AxiomBlueprint427.PieceTemplate> shortestBridgeCorridors(
+            DungeonBlueprints427.Library lib, String biome, boolean strictTheme) {
+        List<AxiomBlueprint427.PieceTemplate> src = strictTheme
+                ? lib.connectorsForTheme(biome) : lib.connectors;
+        if (src.isEmpty()) src = lib.connectors;
+        List<AxiomBlueprint427.PieceTemplate> out = new ArrayList<>();
+        for (AxiomBlueprint427.PieceTemplate p : src) {
+            if (p.exits.size() == 1 && (p.maxX - p.minX + 1) <= 13 && (p.maxZ - p.minZ + 1) <= 22) {
+                out.add(p);
+            }
+        }
+        out.sort(Comparator.comparingLong(p ->
+                (long) (p.maxX - p.minX + 1) * (long) (p.maxZ - p.minZ + 1)));
+        return out;
+    }
+
+    private static PlannedPiece findCapAvoiding(
+            DungeonBlueprints427.Library lib,
+            int rx,
+            int ry,
+            int rz,
+            int outDir,
+            String biome,
+            int depth,
+            int minBX,
+            int maxBX,
+            int minBY,
+            int maxBY,
+            int minBZ,
+            int maxBZ,
+            List<int[]> boxes,
+            int[] extraBox1,
+            List<int[]> extraBoxes2,
+            List<OpenExit> openExits,
+            int skipOpenIdx,
+            Map<Integer, int[]> overrides,
+            boolean strictTheme,
+            boolean randomize,
+            Random rnd) {
+        List<AxiomBlueprint427.PieceTemplate> caps = sortedCaps(lib, biome, strictTheme, randomize, rnd);
+        if (caps.isEmpty()) return null;
+
+        List<int[]> otherCaps = new ArrayList<>(openExits.size());
+        for (int i = 0; i < openExits.size(); i++) {
+            if (i == skipOpenIdx) continue;
+            int[] ob = (overrides != null && overrides.containsKey(i))
+                    ? overrides.get(i) : openExits.get(i).reservedBox;
+            if (ob != null) otherCaps.add(ob);
+        }
+
+        int wantDir = (outDir + 2) & 3;
+        for (AxiomBlueprint427.PieceTemplate de : caps) {
+            if (de == null || de.entrance == null) continue;
+            int turns = (wantDir - de.entrance.dir) & 3;
+            int lx = rotX(de.entrance.x, de.entrance.z, turns);
+            int lz = rotZ(de.entrance.x, de.entrance.z, turns);
+            int ox = rx + AxiomBlueprint427.DX[outDir] - lx;
+            int oy = ry - de.entrance.y;
+            int oz = rz + AxiomBlueprint427.DZ[outDir] - lz;
+
+            int[] wbb = rotatedWorldBox(de, ox, oy, oz, turns);
+            if (wbb[0] < minBX || wbb[3] > maxBX
+                    || wbb[2] < minBZ || wbb[5] > maxBZ
+                    || wbb[1] < minBY || wbb[4] > maxBY) {
+                continue;
+            }
+            if (extraBox1 != null && overlaps(wbb, extraBox1)) continue;
+            boolean clash = false;
+            for (int[] b : boxes) {
+                if (overlaps(wbb, b)) {
+                    clash = true;
+                    break;
+                }
+            }
+            if (clash) continue;
+            if (extraBoxes2 != null) {
+                for (int[] b : extraBoxes2) {
+                    if (b != null && overlaps(wbb, b)) {
+                        clash = true;
+                        break;
+                    }
+                }
+                if (clash) continue;
+            }
+            for (int[] b : otherCaps) {
+                if (overlaps(wbb, b)) {
+                    clash = true;
+                    break;
+                }
+            }
+            if (clash) continue;
+            return new PlannedPiece(de.key, ox, oy, oz, turns,
+                    wbb[0], wbb[1], wbb[2], wbb[3], wbb[4], wbb[5], biome, depth);
+        }
+        return null;
+    }
+
+    private static PlannedPiece fitExtra(
+            AxiomBlueprint427.PieceTemplate cand,
+            int rx,
+            int ry,
+            int rz,
+            int outDir,
+            int minBX,
+            int maxBX,
+            int minBY,
+            int maxBY,
+            int minBZ,
+            int maxBZ,
+            List<int[]> boxes,
+            List<PlannedPiece> extraPlaced,
+            List<int[]> extraBoxes2,
+            List<int[]> extraBoxes3,
+            String biome,
+            int depth) {
+        if (cand == null || cand.entrance == null) return null;
+        int wantDir = (outDir + 2) & 3;
+        int turns = (wantDir - cand.entrance.dir) & 3;
+        int lx = rotX(cand.entrance.x, cand.entrance.z, turns);
+        int lz = rotZ(cand.entrance.x, cand.entrance.z, turns);
+        int ox = rx + AxiomBlueprint427.DX[outDir] - lx;
+        int oy = ry - cand.entrance.y;
+        int oz = rz + AxiomBlueprint427.DZ[outDir] - lz;
+
+        int[] wbb = rotatedWorldBox(cand, ox, oy, oz, turns);
+        if (wbb[0] < minBX || wbb[3] > maxBX
+                || wbb[2] < minBZ || wbb[5] > maxBZ
+                || wbb[1] < minBY || wbb[4] > maxBY) {
+            return null;
+        }
+        for (int[] b : boxes) {
+            if (overlaps(wbb, b)) return null;
+        }
+        if (extraPlaced != null) {
+            for (PlannedPiece ep : extraPlaced) {
+                if (overlaps(wbb, boxOf(ep))) return null;
+            }
+        }
+        if (extraBoxes2 != null) {
+            for (int[] b : extraBoxes2) {
+                if (b != null && overlaps(wbb, b)) return null;
+            }
+        }
+        if (extraBoxes3 != null) {
+            for (int[] b : extraBoxes3) {
+                if (b != null && overlaps(wbb, b)) return null;
+            }
+        }
+        return new PlannedPiece(cand.key, ox, oy, oz, turns,
+                wbb[0], wbb[1], wbb[2], wbb[3], wbb[4], wbb[5], biome, depth);
     }
 
     private static long centerDistSq(PlannedPiece p, int originX, int originZ) {
@@ -639,138 +1146,6 @@ public final class DungeonGenerator427 {
         if (DungeonBlueprints427.THEME_INFERNAL.equals(biome)) return cInf;
         if (DungeonBlueprints427.THEME_FLESH.equals(biome)) return cFl;
         return 0;
-    }
-
-    private static Plan tryGenerateFlat(DungeonBlueprints427.Library lib, DungeonConfig427 cfg,
-            AxiomBlueprint427.PieceTemplate start, int originX, int originY, int originZ, long seed) {
-        Random rnd = new Random(seed);
-        List<PlannedPiece> placed = new ArrayList<>();
-        List<int[]> boxes = new ArrayList<>();
-        List<OpenExit> openExits = new ArrayList<>();
-        List<Seal> seals = new ArrayList<>();
-        Map<String, Integer> usedCounts = new HashMap<>();
-
-        int[] startBox = rotatedWorldBox(start, originX, originY, originZ, 0);
-        placed.add(new PlannedPiece(start.key, originX, originY, originZ, 0,
-                startBox[0], startBox[1], startBox[2], startBox[3], startBox[4], startBox[5],
-                "start", 0));
-        boxes.add(startBox);
-
-        for (AxiomBlueprint427.Marker ex : start.exits) {
-            openExits.add(new OpenExit(originX + ex.x, originY + ex.y, originZ + ex.z,
-                    ex.dir, 0, DungeonBlueprints427.THEME_OTHER));
-        }
-        if (cfg.sealStartEntrance && start.entrance != null && lib.hasExternalPieces()) {
-            seals.add(new Seal(originX + start.entrance.x, originY + start.entrance.y,
-                    originZ + start.entrance.z, start.entrance.dir));
-        }
-
-        int minBX = originX - cfg.maxRadius;
-        int maxBX = originX + cfg.maxRadius;
-        int minBZ = originZ - cfg.maxRadius;
-        int maxBZ = originZ + cfg.maxRadius;
-        int minBY = originY + cfg.minY;
-        int maxBY = originY + cfg.maxY;
-
-        while (!openExits.isEmpty() && placed.size() < cfg.maxPieces) {
-            if (placed.size() + openExits.size() >= cfg.maxPieces) {
-                break;
-            }
-            int pickIdx = rnd.nextDouble() < 0.75D ? 0 : rnd.nextInt(openExits.size());
-            OpenExit cur = openExits.remove(pickIdx);
-            int wantLapisDir = (cur.outDir + 2) & 3;
-
-            List<AxiomBlueprint427.PieceTemplate> pool = new ArrayList<>(lib.connectors);
-            Collections.shuffle(pool, rnd);
-
-            final int curPlaced = placed.size();
-            final int curOpen = openExits.size();
-            Map<String, Double> jitter = new HashMap<>(pool.size() * 2);
-            for (AxiomBlueprint427.PieceTemplate p : pool) {
-                double s = usedCounts.getOrDefault(p.key, 0) * 10.0D;
-                int exCount = p.exits.size();
-                if (curPlaced < 12 && curOpen < 3 && exCount >= 2) s -= 8.0D;
-                else if (curPlaced + curOpen >= cfg.maxPieces - 4 && exCount >= 2) s += 20.0D;
-                else if (curOpen >= 4 && exCount >= 2) s += 12.0D;
-                s += rnd.nextDouble() * 5.0D;
-                jitter.put(p.key, s);
-            }
-            pool.sort(Comparator.comparingDouble(p -> jitter.getOrDefault(p.key, 0.0D)));
-
-            PlannedPiece chosen = null;
-            AxiomBlueprint427.PieceTemplate chosenTpl = null;
-
-            for (AxiomBlueprint427.PieceTemplate cand : pool) {
-                String candBiome = DungeonBlueprints427.themeOf(cand);
-                PlannedPiece fit = tryFit(cand, cur, wantLapisDir, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
-                        boxes, candBiome, cur.depth + 1);
-                if (fit != null) {
-                    chosen = fit;
-                    chosenTpl = cand;
-                    break;
-                }
-            }
-
-            if (chosen == null && !lib.deadEnds.isEmpty()) {
-                List<AxiomBlueprint427.PieceTemplate> dePool = new ArrayList<>(lib.deadEnds);
-                Collections.shuffle(dePool, rnd);
-                for (AxiomBlueprint427.PieceTemplate cand : dePool) {
-                    String candBiome = DungeonBlueprints427.themeOf(cand);
-                    PlannedPiece fit = tryFit(cand, cur, wantLapisDir, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
-                            boxes, candBiome, cur.depth + 1);
-                    if (fit != null) {
-                        chosen = fit;
-                        chosenTpl = cand;
-                        break;
-                    }
-                }
-            }
-
-            if (chosen != null && chosenTpl != null) {
-                placed.add(chosen);
-                boxes.add(new int[] { chosen.minX, chosen.minY, chosen.minZ, chosen.maxX, chosen.maxY, chosen.maxZ });
-                usedCounts.put(chosenTpl.key, usedCounts.getOrDefault(chosenTpl.key, 0) + 1);
-                for (AxiomBlueprint427.Marker ex : chosenTpl.exits) {
-                    int rx = rotX(ex.x, ex.z, chosen.turns);
-                    int rz = rotZ(ex.x, ex.z, chosen.turns);
-                    openExits.add(new OpenExit(
-                            chosen.ox + rx,
-                            chosen.oy + ex.y,
-                            chosen.oz + rz,
-                            (ex.dir + chosen.turns) & 3,
-                            cur.depth + 1,
-                            DungeonBlueprints427.THEME_OTHER));
-                }
-            } else {
-                seals.add(new Seal(cur.rx, cur.ry, cur.rz, cur.outDir));
-            }
-        }
-
-        for (OpenExit cur : openExits) {
-            if (placed.size() < cfg.maxPieces && !lib.deadEnds.isEmpty()) {
-                int wantLapisDir = (cur.outDir + 2) & 3;
-                List<AxiomBlueprint427.PieceTemplate> dePool = new ArrayList<>(lib.deadEnds);
-                Collections.shuffle(dePool, rnd);
-                PlannedPiece cap = null;
-                for (AxiomBlueprint427.PieceTemplate cand : dePool) {
-                    String candBiome = DungeonBlueprints427.themeOf(cand);
-                    PlannedPiece fit = tryFit(cand, cur, wantLapisDir, minBX, maxBX, minBY, maxBY, minBZ, maxBZ,
-                            boxes, candBiome, cur.depth + 1);
-                    if (fit != null) {
-                        cap = fit;
-                        break;
-                    }
-                }
-                if (cap != null) {
-                    placed.add(cap);
-                    boxes.add(new int[] { cap.minX, cap.minY, cap.minZ, cap.maxX, cap.maxY, cap.maxZ });
-                    continue;
-                }
-            }
-            seals.add(new Seal(cur.rx, cur.ry, cur.rz, cur.outDir));
-        }
-
-        return buildPlan(start, originX, originY, originZ, placed, seals);
     }
 
     private static Plan buildPlan(AxiomBlueprint427.PieceTemplate start, int originX, int originY, int originZ,

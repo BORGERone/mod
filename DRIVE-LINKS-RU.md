@@ -385,6 +385,28 @@ but class was expected` — маркер не ставился ни разу, о
 Прямая ссылка на мод: `https://drive.google.com/uc?export=download&id=1vDe_KVVon_aCK0AvtVsoD-M13qDLFSgE`
 Прямая ссылка на исходники: `https://drive.google.com/uc?export=download&id=1AQhTvr0aLKysyTb-h8xygQfpiY5-HAkC`
 
+## Build 432 — все коридоры «Адского данжа» заканчиваются тупиками, 0 заглушек (2026-11-16)
+
+| файл | id | sha256 |
+|---|---|---|
+| settledlands-0.8.0-build432-deadend-corridors.jar | `1a1wd-rnDxjjYqQTMFPNY5dGdCA5hUzKx` | `ac2733d9f71b6737ce7885e062083fc6b33bd3a96a54a1ce08dc2f436662636c` |
+| SettledLands-Build432-DeadEndCorridors-Source.zip | `1prDnjG7sWN0IrG17GhJAyDVgxsmiRSHs` | `3d20f5368d6c03c8a19c43baeb1775cccee5268600c2103227602ec535864d11` |
+
+База — 431. Без новых миксинов и без новых внешних API (`check_mixin_class`: 0 новых из `1 441`).
+1. **Инвариант зарезервированных тупиков в `DungeonGenerator427`**:
+   для каждого открытого выхода (`OpenExit`) резервируется валидный тупик без пересечений и выхода за `max_radius`
+   (с перерезервированием задетых соседних веток и бюджетом `1 + newExits <= slotsRemaining` до постановки комнаты),
+   что исключает обрывы веток плоскими стенами из незерских кирпичей (`minecraft:nether_bricks`) при столкновениях и
+   достижении лимита комнат в обоих режимах (биомном и плоском; при полном отсутствии тупиков в папке — мягкий fallback).
+2. **Авто-мосты для тесных перекрёстков и равномерное закрытие `Тупик 1..4`**:
+   узкие 3-выходные перекрёстки (вроде `к/а/п Перекрёсток 1` `9×11×9`) при конфликте углов смежных тупиков автоматически
+   достраивают короткий 1-выходной коридор до тупика; при закрытии веток случайно выбираются все варианты тупиков
+   темы (`12/12` `Тупик 1..4`). В 230 прогонах по 232 `.bp` `Данж.rar`: **0 не-стартовых стен из незерака** (вместо `18.4` в 431), **0 пересечений**, `100%` достижение `max_pieces`.
+45/45 гейтов PASS (`hell_dungeon_check.py`: `6 297` + `439 575` JVM-проверок, `verify_jar --base build431`, `check_mixin_class`, `invoke_kind_check --base build431`, `dangling_refs --base build431`, `mixin_clash_check`, 40/40 профильных `*_check.py`), `cmp -s` PASS. В игре **ожидает проверки автором**.
+Прямая ссылка на мод: `https://drive.google.com/uc?export=download&id=1a1wd-rnDxjjYqQTMFPNY5dGdCA5hUzKx`
+Прямая ссылка на исходники: `https://drive.google.com/uc?export=download&id=1prDnjG7sWN0IrG17GhJAyDVgxsmiRSHs`
+
+
 
 
 

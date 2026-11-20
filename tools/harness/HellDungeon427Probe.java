@@ -95,6 +95,19 @@ public final class HellDungeon427Probe {
         "minecraft:wither_skeleton_skull",
         "valhelsia_structures:dungeon_door",
         "minecraft:oak_stairs",
+        "minecraft:deepslate_bricks",
+        "minecraft:nether_wart_block",
+        "minecraft:deepslate_tiles",
+        "minecraft:cracked_deepslate_bricks",
+        "minecraft:crimson_hyphae",
+        "minecraft:red_nether_bricks",
+        "minecraft:cobbled_deepslate",
+        "minecraft:netherrack",
+        "minecraft:polished_deepslate",
+        "minecraft:stripped_crimson_hyphae",
+        "minecraft:tuff_bricks",
+        "minecraft:deepslate_brick_stairs",
+        "minecraft:cracked_deepslate_tiles",
         "create:belt",
         "create:encased_cogwheel",
         "create:chain_drive",
@@ -121,6 +134,7 @@ public final class HellDungeon427Probe {
         testCreateNbtAndSuperGlueBuild431();
         testRealArchiveIfPresent();
         testBiomeProgressionBuild429();
+        testZeroSealDeadEndInvariantBuild432();
         testUniqueDungeonPerPlayerBuild428();
         testReflectionAndCommands();
         System.out.println("HellDungeon427Probe: " + passed + " checks passed");
@@ -294,6 +308,13 @@ public final class HellDungeon427Probe {
             boolean init = DungeonManager425.ensureInstanceInitialized(hd, data, inst, lib);
             check(init && inst.planGenerated && inst.pieces.size() >= 8,
                     "plan generated (" + inst.pieces.size() + " pieces)");
+            check(inst.seals.size() == 1,
+                    "flat plan has ZERO corridor seal walls (only start entrance), got " + inst.seals.size());
+            boolean hasDeadEnd = false;
+            for (var pp : inst.pieces) {
+                if (pp.pieceKey.contains("Тупик")) { hasDeadEnd = true; break; }
+            }
+            check(hasDeadEnd, "flat plan terminates branches in dead-end rooms");
             check(!inst.placed && inst.donePieceCount() == 3,
                     "only immediatePieces (3) placed synchronously, rest queued for ticks");
             check(lib.startPiece.content.entities.size() == 1, "start entity parsed from synthetic .bp");
@@ -362,15 +383,27 @@ public final class HellDungeon427Probe {
                     && lib.infernalCount == 48 && lib.fleshCount == 43,
                     "biome pool к+а+п selected (142 pieces: 51 crypt, 48 infernal, 43 flesh)");
 
-            // Check 5 distinct seeds for large crypt core and far deep biomes
+            // Check 5 distinct seeds for large crypt core, far deep biomes, ZERO overlaps, and ZERO corridor seals
             for (int s = 0; s < 5; s++) {
                 DungeonGenerator427.Plan p = DungeonGenerator427.generate(lib, 0, 0, 0, 1000L + s * 7919L);
                 check(p.pieces.size() >= 85 && p.pieces.size() <= 110,
                         "real biome plan #" + s + " size=" + p.pieces.size());
+                check(p.seals.size() == 1,
+                        "real biome plan #" + s + " has ZERO corridor seal walls (seals=" + p.seals.size() + ")");
                 check(p.cryptCount >= 32 && p.infernalCount >= 12 && p.fleshCount >= 12,
                         "real biome plan #" + s + " large crypt + deep biomes [к=" + p.cryptCount
                                 + ", а=" + p.infernalCount + ", п=" + p.fleshCount + "]");
                 double minDeepDist = Double.MAX_VALUE;
+                for (int i = 0; i < p.pieces.size(); i++) {
+                    var a = p.pieces.get(i);
+                    for (int j = i + 1; j < p.pieces.size(); j++) {
+                        var b = p.pieces.get(j);
+                        check(!DungeonGenerator427.overlaps(
+                                new int[] { a.minX, a.minY, a.minZ, a.maxX, a.maxY, a.maxZ },
+                                new int[] { b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ }),
+                                "no overlap in real biome plan #" + s + ": " + a.pieceKey + " vs " + b.pieceKey);
+                    }
+                }
                 for (int i = 1; i < p.pieces.size(); i++) {
                     var pp = p.pieces.get(i);
                     if (pp.depth <= 7) {
@@ -410,6 +443,8 @@ public final class HellDungeon427Probe {
             DungeonManager425.ensureInstanceInitialized(hd, data, inst, lib);
             check(inst.pieces.size() >= 85 && inst.pieces.size() <= 110,
                     "real biome plan has " + inst.pieces.size() + " rooms");
+            check(inst.seals.size() == 1,
+                    "real streamed instance has ZERO corridor seal walls (seals=" + inst.seals.size() + ")");
 
             int ticks = 0;
             while (!inst.placed && ticks++ < 500) {
@@ -693,6 +728,8 @@ public final class HellDungeon427Probe {
                 DungeonGenerator427.Plan plan = DungeonGenerator427.generate(lib, 0, 0, 0, 4242L + s * 31337L);
                 check(plan.pieces.size() >= 28 && plan.pieces.size() <= 38,
                         "synthetic biome plan #" + s + " size=" + plan.pieces.size());
+                check(plan.seals.size() == 1,
+                        "synthetic biome plan #" + s + " has ZERO corridor seal walls (seals=" + plan.seals.size() + ")");
                 check(plan.cryptCount >= 5 && plan.infernalCount >= 4 && plan.fleshCount >= 4,
                         "synthetic biome plan #" + s + " has crypt+infernal+flesh ("
                                 + plan.cryptCount + "/" + plan.infernalCount + "/" + plan.fleshCount + ")");
@@ -714,6 +751,234 @@ public final class HellDungeon427Probe {
         } finally {
             deleteTree(tmp);
         }
+    }
+
+    private static void testZeroSealDeadEndInvariantBuild432() throws Exception {
+        // 1. Tight radius in flat mode (branches rapidly hit maxRadius=36 boundary & siblings)
+        Path tmpTight = Files.createTempDirectory("hd432_tight");
+        try {
+            Path bpDir = tmpTight.resolve(DungeonConfig427.DEFAULT_BLUEPRINTS_REL);
+            Files.createDirectories(bpDir);
+            writeRoomBp(bpDir.resolve("старт.bp"), "старт", List.of(), 0, 8, true, true, false, false, false);
+            writeRoomBp(bpDir.resolve("Коридор.bp"), "Коридор", List.of(), 0, 8, false, true, true, false, false);
+            writeRoomBp(bpDir.resolve("Развилка.bp"), "Развилка", List.of(), 0, 8, false, true, true, true, false);
+            writeRoomBp(bpDir.resolve("Тупик.bp"), "Тупик", List.of(), 0, 6, false, true, false, false, false);
+
+            DungeonConfig427 cfg = new DungeonConfig427(
+                    tmpTight, bpDir.toString(), "auto", "старт",
+                    12, 22, 36, -52, 240, true, "minecraft:nether_bricks", 8, 4096, true);
+            DungeonBlueprints427.Library lib = DungeonBlueprints427.load(cfg);
+            for (int s = 0; s < 8; s++) {
+                DungeonGenerator427.Plan p = DungeonGenerator427.generate(lib, 0, 0, 0, 91000L + s * 4099L);
+                check(p.seals.size() == 1,
+                        "tight maxRadius=36 seed #" + s + " has ZERO non-start seals (seals=" + p.seals.size() + ")");
+                check(p.pieces.size() >= 6, "tight plan #" + s + " built " + p.pieces.size() + " rooms");
+                for (var pp : p.pieces) {
+                    check(pp.minX >= -36 && pp.maxX <= 36 && pp.minZ >= -36 && pp.maxZ <= 36,
+                            "tight plan piece inside [-36..36]: " + pp.pieceKey);
+                }
+            }
+        } finally {
+            deleteTree(tmpTight);
+        }
+
+        // 2. Tight 3-way crossroad (9x8x9) whose wide 15x8x15 dead-ends conflict unless bridged by a corridor
+        Path tmpCross = Files.createTempDirectory("hd432_cross");
+        try {
+            Path bpDir = tmpCross.resolve(DungeonConfig427.DEFAULT_BLUEPRINTS_REL);
+            Files.createDirectories(bpDir);
+            writeRoomBp(bpDir.resolve("старт.bp"), "старт", List.of(), 0, 8, true, true, false, false, false);
+            writeCustomBoxRoomBp(bpDir.resolve("Коридор.bp"), "Коридор", 8, 8, true, true, false, false);
+            writeCustomBoxRoomBp(bpDir.resolve("Перекрёсток 1.bp"), "Перекрёсток 1", 8, 8, true, true, true, true);
+            writeCustomBoxRoomBp(bpDir.resolve("Тупик широкий.bp"), "Тупик широкий", 14, 14, true, false, false, false);
+
+            DungeonConfig427 cfg = new DungeonConfig427(
+                    tmpCross, bpDir.toString(), "auto", "старт",
+                    18, 28, 180, -52, 240, true, "minecraft:nether_bricks", 8, 4096, true);
+            DungeonBlueprints427.Library lib = DungeonBlueprints427.load(cfg);
+            boolean sawCrossroad = false;
+            for (int s = 0; s < 6; s++) {
+                DungeonGenerator427.Plan p = DungeonGenerator427.generate(lib, 0, 0, 0, 50500L + s * 7919L);
+                check(p.seals.size() == 1,
+                        "tight crossroad plan #" + s + " has ZERO non-start seals (seals=" + p.seals.size() + ")");
+                check(p.pieces.size() >= 18 && p.pieces.size() <= 28,
+                        "tight crossroad plan #" + s + " size=" + p.pieces.size());
+                for (int i = 0; i < p.pieces.size(); i++) {
+                    var a = p.pieces.get(i);
+                    if ("Перекрёсток 1".equals(a.pieceKey)) sawCrossroad = true;
+                    for (int j = i + 1; j < p.pieces.size(); j++) {
+                        var b = p.pieces.get(j);
+                        check(!DungeonGenerator427.overlaps(
+                                new int[] { a.minX, a.minY, a.minZ, a.maxX, a.maxY, a.maxZ },
+                                new int[] { b.minX, b.minY, b.minZ, b.maxX, b.maxY, b.maxZ }),
+                                "no overlap with bridged crossroad");
+                    }
+                }
+            }
+            check(sawCrossroad, "tight 3-way Перекрёсток 1 placed via automatic bridge corridor");
+        } finally {
+            deleteTree(tmpCross);
+        }
+
+        // 3. Fallback when blueprint library has ZERO dead-ends at all
+        Path tmpNoCap = Files.createTempDirectory("hd432_nocap");
+        try {
+            Path bpDir = tmpNoCap.resolve(DungeonConfig427.DEFAULT_BLUEPRINTS_REL);
+            Files.createDirectories(bpDir);
+            writeRoomBp(bpDir.resolve("старт.bp"), "старт", List.of(), 0, 8, true, true, false, false, false);
+            writeRoomBp(bpDir.resolve("Коридор.bp"), "Коридор", List.of(), 0, 8, false, true, true, false, false);
+            DungeonConfig427 cfg = new DungeonConfig427(
+                    tmpNoCap, bpDir.toString(), "auto", "старт",
+                    5, 8, 120, -52, 240, true, "minecraft:nether_bricks", 8, 4096, true);
+            DungeonBlueprints427.Library lib = DungeonBlueprints427.load(cfg);
+            DungeonGenerator427.Plan p = DungeonGenerator427.generate(lib, 0, 0, 0, 12345L);
+            check(p.pieces.size() == 8, "library without dead-ends still generates full fallback plan");
+        } finally {
+            deleteTree(tmpNoCap);
+        }
+
+        // 4. Real archive stress check (biome [75..95] and flat "all") when /tmp/dungeonz/Данж is present
+        Path realDir = Paths.get("/tmp/dungeonz/Данж");
+        if (Files.isDirectory(realDir)) {
+            Path tmpReal = Files.createTempDirectory("hd432_real");
+            try {
+                DungeonConfig427 cfgBiome = new DungeonConfig427(
+                        tmpReal, realDir.toString(), "auto", "старт",
+                        75, 95, 240, -52, 240, true, "minecraft:nether_bricks", 8, 4096, true);
+                DungeonBlueprints427.Library libBiome = DungeonBlueprints427.load(cfgBiome);
+                for (int s = 0; s < 10; s++) {
+                    var p = DungeonGenerator427.generate(libBiome, 0, 120, 0, 300000L + s * 1234567L);
+                    check(p.seals.size() == 1, "real [75..95] #" + s + " has ZERO non-start seals");
+                    check(p.pieces.size() >= 75 && p.pieces.size() <= 95,
+                            "real [75..95] #" + s + " size=" + p.pieces.size());
+                }
+                DungeonConfig427 cfgFlat = new DungeonConfig427(
+                        tmpReal, realDir.toString(), "all", "старт",
+                        40, 60, 220, -52, 240, true, "minecraft:nether_bricks", 8, 4096, true);
+                DungeonBlueprints427.Library libFlat = DungeonBlueprints427.load(cfgFlat);
+                for (int s = 0; s < 10; s++) {
+                    var p = DungeonGenerator427.generate(libFlat, 512, 120, 512, 400000L + s * 99991L);
+                    check(p.seals.size() == 1, "real flat all #" + s + " has ZERO non-start seals");
+                    check(p.pieces.size() >= 40 && p.pieces.size() <= 60,
+                            "real flat all #" + s + " size=" + p.pieces.size());
+                }
+            } finally {
+                deleteTree(tmpReal);
+            }
+        }
+    }
+
+    private static void writeCustomBoxRoomBp(Path path, String name, int maxX, int maxZ,
+            boolean hasLapis, boolean hasForwardRed, boolean hasEastRed, boolean hasWestRed) throws IOException {
+        Map<String, Integer> palIdx = new LinkedHashMap<>();
+        List<String> palNames = new ArrayList<>();
+        palIdx.put("minecraft:air", 0);
+        palNames.add("minecraft:air");
+        List<int[]> voxels = new ArrayList<>();
+        java.util.function.BiConsumer<int[], String> put = (xyz, id) -> {
+            Integer pi = palIdx.computeIfAbsent(id, k -> {
+                palNames.add(k);
+                return palNames.size() - 1;
+            });
+            voxels.add(new int[] { xyz[0], xyz[1], xyz[2], pi });
+        };
+        int maxY = 7;
+        for (int x = 0; x <= maxX; x++) {
+            for (int z = 0; z <= maxZ; z++) {
+                put.accept(new int[] { x, 0, z }, "minecraft:nether_bricks");
+                put.accept(new int[] { x, 1, z }, "minecraft:polished_blackstone");
+                put.accept(new int[] { x, maxY, z }, "minecraft:nether_bricks");
+                if (x == 0 || x == maxX || z == 0 || z == maxZ) {
+                    for (int y = 2; y < maxY; y++) put.accept(new int[] { x, y, z }, "minecraft:blackstone");
+                }
+            }
+        }
+        int midX = maxX / 2;
+        int midZ = maxZ / 2;
+        if (hasLapis) {
+            put.accept(new int[] { midX, 0, 0 }, "minecraft:lapis_block");
+            for (int dx = -1; dx <= 1; dx++)
+                for (int y = 2; y <= 6; y++) put.accept(new int[] { midX + dx, y, 0 }, "minecraft:air");
+        }
+        if (hasForwardRed) {
+            put.accept(new int[] { midX, 0, maxZ }, "minecraft:redstone_block");
+            for (int dx = -1; dx <= 1; dx++)
+                for (int y = 2; y <= 6; y++) put.accept(new int[] { midX + dx, y, maxZ }, "minecraft:air");
+        }
+        if (hasEastRed) {
+            put.accept(new int[] { maxX, 0, midZ }, "minecraft:redstone_block");
+            for (int dz = -1; dz <= 1; dz++)
+                for (int y = 2; y <= 6; y++) put.accept(new int[] { maxX, y, midZ + dz }, "minecraft:air");
+        }
+        if (hasWestRed) {
+            put.accept(new int[] { 0, 0, midZ }, "minecraft:redstone_block");
+            for (int dz = -1; dz <= 1; dz++)
+                for (int y = 2; y <= 6; y++) put.accept(new int[] { 0, y, midZ + dz }, "minecraft:air");
+        }
+        ByteArrayOutputStream hdrBaos = new ByteArrayOutputStream();
+        try (DataOutputStream ho = new DataOutputStream(hdrBaos)) {
+            ho.writeByte(10); ho.writeUTF("");
+            ho.writeByte(3); ho.writeUTF("Version"); ho.writeInt(2);
+            ho.writeByte(8); ho.writeUTF("Name"); ho.writeUTF(name);
+            ho.writeByte(9); ho.writeUTF("Tags"); ho.writeByte(8); ho.writeInt(0);
+            ho.writeByte(0);
+        }
+        byte[] hdrBytes = hdrBaos.toByteArray();
+        Map<String, int[]> secBlocks = new LinkedHashMap<>();
+        for (int[] v : voxels) {
+            int sx = Math.floorDiv(v[0], 16), sy = Math.floorDiv(v[1], 16), sz = Math.floorDiv(v[2], 16);
+            String sk = sx + "," + sy + "," + sz;
+            int[] arr = secBlocks.computeIfAbsent(sk, k -> new int[4096]);
+            int lx = Math.floorMod(v[0], 16), ly = Math.floorMod(v[1], 16), lz = Math.floorMod(v[2], 16);
+            arr[lx + (lz << 4) + (ly << 8)] = v[3];
+        }
+        ByteArrayOutputStream gzBaos = new ByteArrayOutputStream();
+        try (GZIPOutputStream gz = new GZIPOutputStream(gzBaos); DataOutputStream bo = new DataOutputStream(gz)) {
+            bo.writeByte(10); bo.writeUTF("");
+            bo.writeByte(9); bo.writeUTF("BlockRegion"); bo.writeByte(10); bo.writeInt(secBlocks.size());
+            for (Map.Entry<String, int[]> se : secBlocks.entrySet()) {
+                String[] c = se.getKey().split(",");
+                bo.writeByte(3); bo.writeUTF("X"); bo.writeInt(Integer.parseInt(c[0]));
+                bo.writeByte(3); bo.writeUTF("Y"); bo.writeInt(Integer.parseInt(c[1]));
+                bo.writeByte(3); bo.writeUTF("Z"); bo.writeInt(Integer.parseInt(c[2]));
+                bo.writeByte(10); bo.writeUTF("BlockStates");
+                bo.writeByte(9); bo.writeUTF("palette"); bo.writeByte(10); bo.writeInt(palNames.size());
+                for (String pn : palNames) {
+                    bo.writeByte(8); bo.writeUTF("Name"); bo.writeUTF(pn);
+                    bo.writeByte(0);
+                }
+                int bpe = Math.max(4, Integer.SIZE - Integer.numberOfLeadingZeros(palNames.size() - 1));
+                int perLong = 64 / bpe;
+                int nLongs = (4096 + perLong - 1) / perLong;
+                bo.writeByte(12); bo.writeUTF("data"); bo.writeInt(nLongs);
+                int[] arr = se.getValue();
+                for (int li = 0; li < nLongs; li++) {
+                    long word = 0L;
+                    for (int k = 0; k < perLong; k++) {
+                        int idx = li * perLong + k;
+                        if (idx >= 4096) break;
+                        word |= ((long) arr[idx]) << (k * bpe);
+                    }
+                    bo.writeLong(word);
+                }
+                bo.writeByte(0);
+                bo.writeByte(0);
+            }
+            bo.writeByte(9); bo.writeUTF("BlockEntities"); bo.writeByte(10); bo.writeInt(0);
+            bo.writeByte(9); bo.writeUTF("Entities"); bo.writeByte(10); bo.writeInt(0);
+            bo.writeByte(0);
+        }
+        byte[] gzBytes = gzBaos.toByteArray();
+        ByteArrayOutputStream full = new ByteArrayOutputStream();
+        try (DataOutputStream out = new DataOutputStream(full)) {
+            out.writeInt(0x0AE5BB36);
+            out.writeInt(hdrBytes.length);
+            out.write(hdrBytes);
+            out.writeInt(0);
+            out.writeInt(gzBytes.length);
+            out.write(gzBytes);
+        }
+        Files.write(path, full.toByteArray());
     }
 
     private static void testCreateNbtAndSuperGlueBuild431() throws Exception {
@@ -1298,6 +1563,7 @@ public final class HellDungeon427Probe {
             "dev.settledlands.dungeon.DungeonBlueprints427",
             "dev.settledlands.dungeon.DungeonBlueprints427$Library",
             "dev.settledlands.dungeon.DungeonGenerator427",
+            "dev.settledlands.dungeon.DungeonGenerator427$PlacementAttempt",
             "dev.settledlands.dungeon.DungeonGenerator427$Plan",
             "dev.settledlands.dungeon.DungeonGenerator427$PlannedPiece",
             "dev.settledlands.dungeon.DungeonGenerator427$Seal",
