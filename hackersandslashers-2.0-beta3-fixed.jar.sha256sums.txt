@@ -1,1 +1,1 @@
-0053bb36e1c000aa66d047d19905914b7ab8adac94a6439f2082e9c3e22065fe  hackersandslashers-2.0-beta3-fixed.jar
+798628bf90e4c96b0bf0c8fb92389511d14d06fc1e5421eed6634511adb4f83a  hackersandslashers-2.0-beta3-fixed.jar
