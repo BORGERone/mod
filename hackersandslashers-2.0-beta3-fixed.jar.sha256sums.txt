@@ -1,1 +1,2 @@
-798628bf90e4c96b0bf0c8fb92389511d14d06fc1e5421eed6634511adb4f83a  hackersandslashers-2.0-beta3-fixed.jar
+8bffda351000bd4a1293f7004414afeef89bbab76d09b62035fd84cb7f6afb5f  hackersandslashers-2.0-beta3-fixed.jar
+de086a5babbc9e1a1fe79b3da5d475919d52649f777f530f27177f16471d04f2  HnS-2.0-beta3-Fixed-Source.zip
