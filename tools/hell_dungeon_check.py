@@ -252,9 +252,10 @@ def main(argv):
         nbt_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonNbt431.class"))
         nbt_utf8 = {e[1] for e in nbt_info["cp"] if e and e[0] == 1}
         for wanted_nbt in ("transformBlockEntityNbt", "transformEntityPlacement", "create:super_glue",
-                           "transformContraptionNbt", "prepareContraptionNbt"):
+                           "transformContraptionNbt", "prepareContraptionNbt", "rotateHorizontalVec",
+                           "CapturedMultiblocks"):
             if wanted_nbt not in nbt_utf8:
-                return fail("DungeonNbt431 missing Build 431/433 %s" % wanted_nbt)
+                return fail("DungeonNbt431 missing Build 431/433/434 %s" % wanted_nbt)
 
         pt_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/AxiomBlueprint427$PieceTemplate.class"))
         pt_utf8 = {e[1] for e in pt_info["cp"] if e and e[0] == 1}
@@ -263,9 +264,14 @@ def main(argv):
 
         compat_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/CreateCompat431.class"))
         compat_utf8 = {e[1] for e in compat_info["cp"] if e and e[0] == 1}
-        for wanted_compat in ("activateCreateRoom", "StructureTransform"):
+        for wanted_compat in ("activateCreateRoom", "attachContraption", "StructureTransform",
+                              "MechanicalBearingBlockEntity", "ControlledContraptionEntity", "IControlContraption"):
             if not any(wanted_compat in s for s in compat_utf8):
-                return fail("CreateCompat431 missing Build 431 %s" % wanted_compat)
+                return fail("CreateCompat431 missing Build 431/434 %s" % wanted_compat)
+
+        tmpl_utf8 = {e[1] for e in tmpl_info["cp"] if e and e[0] == 1}
+        if "attachContraption" not in tmpl_utf8:
+            return fail("DungeonTemplate425 missing Build 434 CreateCompat431.attachContraption call")
 
         gen_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonGenerator427.class"))
         gen_utf8 = {e[1] for e in gen_info["cp"] if e and e[0] == 1}
@@ -411,6 +417,172 @@ public final class BuiltInRegistries {
 """,
             encoding="utf-8",
         )
+        # Build 434: isolated Create mock classes (probe_src only, never packaged) to execute
+        # CreateCompat431.attachContraption & activateCreateRoom in real JVM reflection.
+        create_mocks = {
+            "net/minecraft/core/Direction.java": """package net.minecraft.core;
+public enum Direction {
+    DOWN, UP, NORTH, SOUTH, WEST, EAST;
+    public enum Axis { X, Y, Z }
+}
+""",
+            "net/minecraft/world/level/block/Rotation.java": """package net.minecraft.world.level.block;
+public enum Rotation {
+    NONE, CLOCKWISE_90, CLOCKWISE_180, COUNTERCLOCKWISE_90
+}
+""",
+            "net/minecraft/world/level/block/Mirror.java": """package net.minecraft.world.level.block;
+public enum Mirror {
+    NONE, LEFT_RIGHT, FRONT_BACK
+}
+""",
+            "com/simibubi/create/content/contraptions/StructureTransform.java": """package com.simibubi.create.content.contraptions;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.Direction;
+import net.minecraft.world.level.block.Mirror;
+import net.minecraft.world.level.block.Rotation;
+import net.minecraft.world.level.block.state.BlockState;
+public class StructureTransform {
+    public StructureTransform(BlockPos offset, Direction.Axis axis, Rotation rotation, Mirror mirror) {}
+    public BlockState apply(BlockState state) { return state; }
+}
+""",
+            "com/simibubi/create/foundation/blockEntity/SmartBlockEntity.java": """package com.simibubi.create.foundation.blockEntity;
+import net.minecraft.world.level.block.entity.BlockEntity;
+public class SmartBlockEntity extends BlockEntity {
+    public int sendDataCalls;
+    public void sendData() { sendDataCalls++; }
+}
+""",
+            "com/simibubi/create/content/kinetics/base/KineticBlockEntity.java": """package com.simibubi.create.content.kinetics.base;
+import com.simibubi.create.foundation.blockEntity.SmartBlockEntity;
+public class KineticBlockEntity extends SmartBlockEntity {
+    public int preventSpeedUpdate = 99;
+    public boolean updateSpeed = false;
+    public int attachKineticsCalls;
+    public void attachKinetics() { attachKineticsCalls++; }
+}
+""",
+            "com/simibubi/create/content/kinetics/base/GeneratingKineticBlockEntity.java": """package com.simibubi.create.content.kinetics.base;
+public class GeneratingKineticBlockEntity extends KineticBlockEntity {
+    public boolean reActivateSource = false;
+    public int updateGeneratedRotationCalls;
+    public void updateGeneratedRotation() { updateGeneratedRotationCalls++; }
+}
+""",
+            "com/simibubi/create/content/contraptions/AbstractContraptionEntity.java": """package com.simibubi.create.content.contraptions;
+import net.minecraft.world.entity.Entity;
+public class AbstractContraptionEntity extends Entity {}
+""",
+            "com/simibubi/create/content/contraptions/ControlledContraptionEntity.java": """package com.simibubi.create.content.contraptions;
+import net.minecraft.core.BlockPos;
+public class ControlledContraptionEntity extends AbstractContraptionEntity {
+    public BlockPos controllerPos;
+    protected IControlContraption getController() { return null; }
+}
+""",
+            "com/simibubi/create/content/contraptions/IControlContraption.java": """package com.simibubi.create.content.contraptions;
+public interface IControlContraption {
+    boolean isAttachedTo(AbstractContraptionEntity entity);
+    void attach(ControlledContraptionEntity entity);
+}
+""",
+            "com/simibubi/create/content/contraptions/bearing/MechanicalBearingBlockEntity.java": """package com.simibubi.create.content.contraptions.bearing;
+import com.simibubi.create.content.kinetics.base.GeneratingKineticBlockEntity;
+import com.simibubi.create.content.contraptions.AbstractContraptionEntity;
+import com.simibubi.create.content.contraptions.ControlledContraptionEntity;
+import com.simibubi.create.content.contraptions.IControlContraption;
+public class MechanicalBearingBlockEntity extends GeneratingKineticBlockEntity implements IControlContraption {
+    public ControlledContraptionEntity movedContraption;
+    public boolean running;
+    public int attachCalls;
+    @Override
+    public boolean isAttachedTo(AbstractContraptionEntity entity) {
+        return movedContraption == entity;
+    }
+    @Override
+    public void attach(ControlledContraptionEntity entity) {
+        attachCalls++;
+        movedContraption = entity;
+        running = true;
+    }
+}
+""",
+            "com/simibubi/create/content/contraptions/bearing/WindmillBearingBlockEntity.java": """package com.simibubi.create.content.contraptions.bearing;
+public class WindmillBearingBlockEntity extends MechanicalBearingBlockEntity {}
+""",
+            "CreateCompat434Probe.java": """import com.simibubi.create.content.contraptions.ControlledContraptionEntity;
+import com.simibubi.create.content.contraptions.bearing.MechanicalBearingBlockEntity;
+import com.simibubi.create.content.contraptions.bearing.WindmillBearingBlockEntity;
+import com.simibubi.create.content.kinetics.base.GeneratingKineticBlockEntity;
+import dev.settledlands.dungeon.CreateCompat431;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import net.minecraft.core.BlockPos;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+
+public final class CreateCompat434Probe {
+    public static void main(String[] args) {
+        if (!CreateCompat431.isCreateAvailable()) {
+            throw new AssertionError("CreateCompat431 failed to detect Create mocks");
+        }
+        BlockPos bearingPos = new BlockPos(10, 64, 20);
+        BlockPos motorPos = new BlockPos(11, 64, 20);
+        BlockPos windmillPos = new BlockPos(20, 64, 20);
+        MechanicalBearingBlockEntity bearing = new MechanicalBearingBlockEntity();
+        GeneratingKineticBlockEntity motor = new GeneratingKineticBlockEntity();
+        WindmillBearingBlockEntity windmill = new WindmillBearingBlockEntity();
+        Map<BlockPos, BlockEntity> bes = new HashMap<>();
+        bes.put(bearingPos, bearing);
+        bes.put(motorPos, motor);
+        bes.put(windmillPos, windmill);
+        int[] updated = { 0 };
+        BlockState dummyState = new BlockState();
+        ServerLevel level = new ServerLevel() {
+            @Override
+            public BlockEntity getBlockEntity(BlockPos pos) { return bes.get(pos); }
+            @Override
+            public BlockState getBlockState(BlockPos pos) { return dummyState; }
+            @Override
+            public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {
+                updated[0]++;
+            }
+        };
+        ControlledContraptionEntity contraption = new ControlledContraptionEntity();
+        contraption.controllerPos = bearingPos;
+        CreateCompat431.attachContraption(level, contraption);
+        if (!bearing.running || bearing.movedContraption != contraption || bearing.attachCalls != 1) {
+            throw new AssertionError("attachContraption did not bind bearing to contraption");
+        }
+        // Idempotent second call must not re-attach
+        CreateCompat431.attachContraption(level, contraption);
+        if (bearing.attachCalls != 1) {
+            throw new AssertionError("attachContraption attached twice despite isAttachedTo=true");
+        }
+        CreateCompat431.activateCreateRoom(level, List.of(bearingPos, motorPos, windmillPos));
+        if (bearing.attachKineticsCalls != 1 || bearing.preventSpeedUpdate != 0 || !bearing.updateSpeed) {
+            throw new AssertionError("MechanicalBearing must attachKinetics in Pass 1");
+        }
+        if (bearing.updateGeneratedRotationCalls != 0) {
+            throw new AssertionError("MechanicalBearing must NOT call updateGeneratedRotation at speed=0");
+        }
+        if (windmill.updateGeneratedRotationCalls != 0) {
+            throw new AssertionError("WindmillBearing must NOT call updateGeneratedRotation prematurely");
+        }
+        if (motor.updateGeneratedRotationCalls != 1 || !motor.reActivateSource) {
+            throw new AssertionError("True generator (motor) must wake in Pass 2");
+        }
+        if (bearing.sendDataCalls != 1 || motor.sendDataCalls != 1 || updated[0] != 3) {
+            throw new AssertionError("Expected client sync on all Create block entities");
+        }
+        System.out.println("CreateCompat434Probe: 7 checks passed");
+    }
+}
+""",
+        }
         probe_inputs = [
             str(reg_dir / "ProbeRegistries.java"),
             str(reg_dir / "BuiltInRegistries.java"),
@@ -423,6 +595,22 @@ public final class BuiltInRegistries {
         if r2.returncode != 0:
             return fail("HellDungeon probes compile failed:\n" + r2.stdout + r2.stderr)
 
+        create_probe_src = tmp / "create_probe_src"
+        create_probe_out = tmp / "create_probe_out"
+        create_probe_src.mkdir()
+        create_probe_out.mkdir()
+        create_inputs = []
+        for rel_path, code in create_mocks.items():
+            dst = create_probe_src / rel_path
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            dst.write_text(code, encoding="utf-8")
+            create_inputs.append(str(dst))
+        r2b = subprocess.run([java, "-jar", str(ecj), "-21", "-proc:none", "-nowarn",
+                              "-cp", f"{jar.resolve()}:{stubs_out}", "-d", str(create_probe_out)] + create_inputs,
+                             capture_output=True, text=True)
+        if r2b.returncode != 0:
+            return fail("CreateCompat434Probe compile failed:\n" + r2b.stdout + r2b.stderr)
+
         run_dir = tmp / "run_cwd"
         run_dir.mkdir()
         cp = f"{probe_out}:{jar.resolve()}:{stubs_out}"
@@ -434,6 +622,13 @@ public final class BuiltInRegistries {
             if r3.returncode != 0:
                 return fail("%s failed (rc=%d):\n%s\n%s" % (probe_cls, r3.returncode, r3.stdout, r3.stderr))
             sys.stdout.write(r3.stdout)
+
+        cp_create = f"{create_probe_out}:{probe_out}:{jar.resolve()}:{stubs_out}"
+        r3c = subprocess.run([java, "-cp", cp_create, "CreateCompat434Probe"],
+                             cwd=str(run_dir), env=run_env, capture_output=True, text=True)
+        if r3c.returncode != 0:
+            return fail("CreateCompat434Probe failed (rc=%d):\n%s\n%s" % (r3c.returncode, r3c.stdout, r3c.stderr))
+        sys.stdout.write(r3c.stdout)
 
     print("hell_dungeon_check: PASS")
     return 0

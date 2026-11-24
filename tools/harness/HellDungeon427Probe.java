@@ -1146,8 +1146,8 @@ public final class HellDungeon427Probe {
                 DungeonNbt431.TransformedEntity te = DungeonNbt431.transformEntityPlacement(
                         glueSpec, 100, 50, 200, t);
                 check(te.moveBeforeLoad, "super_glue always sets moveBeforeLoad=true");
-                check(!te.mcNbt.contains("UUID") && !te.mcNbt.contains("Pos"),
-                        "super_glue strips UUID & Pos");
+                check(!te.mcNbt.contains("UUID") && te.mcNbt.contains("Pos"),
+                        "super_glue strips UUID and preserves transformed Pos");
                 // Original box in schematic: x=[1..3], y=[2..4], z=[1..2]
                 // Compute rotated AABB corners and compare to transformed pos + From/To
                 double rx0 = DungeonGenerator427.rotEntityX(1.0, 1.0, t);
@@ -1164,6 +1164,7 @@ public final class HellDungeon427Probe {
             DungeonNbt431.TransformedEntity frameTe = DungeonNbt431.transformEntityPlacement(
                     frameSpec, 100, 50, 200, 1);
             check(frameTe.mcNbt.getInt("facing") == 5, "item_frame facing 2(NORTH) CW90 -> 5(EAST)");
+            check(frameTe.mcNbt.contains("Pos"), "item_frame keeps transformed Pos");
             int[] fbp = frameTe.mcNbt.getIntArray("block_pos");
             check(fbp.length == 3 && fbp[0] == (int) Math.floor(frameTe.wx)
                     && fbp[1] == (int) Math.floor(frameTe.wy)
@@ -1568,12 +1569,20 @@ public final class HellDungeon427Probe {
                 DungeonNbt431.TransformedEntity te = DungeonNbt431.transformEntityPlacement(scSpec, ox, oy, oz, t);
                 check(te.moveBeforeLoad && te.yaw == 0.0F && te.pitch == 0.0F,
                         "contraption sets moveBeforeLoad=true and zero yaw/pitch at t=" + t);
+                check(!te.mcNbt.contains("UUID") && te.mcNbt.contains("Pos"),
+                        "contraption mcNbt strips UUID and preserves transformed Pos at t=" + t);
                 check(te.wx == ox + DungeonGenerator427.rotX(4, 3, t)
                         && te.wy == oy + 3.0D
                         && te.wz == oz + DungeonGenerator427.rotZ(4, 3, t),
                         "integer-corner contraption placed without +1 block shift at t=" + t);
 
                 DungeonNbt431.NbtCompound raw = DungeonNbt431.prepareContraptionNbt(scSpec, ox, oy, oz, t);
+                List<DungeonNbt431.NbtValue> posList = raw.getList("Pos");
+                check(posList.size() == 3
+                        && Math.abs(((Number) posList.get(0).val).doubleValue() - te.wx) < 1e-6
+                        && Math.abs(((Number) posList.get(1).val).doubleValue() - te.wy) < 1e-6
+                        && Math.abs(((Number) posList.get(2).val).doubleValue() - te.wz) < 1e-6,
+                        "prepareContraptionNbt sets exact world Pos=[wx,wy,wz] at t=" + t);
                 int[] cr = raw.getIntArray("ControllerRelative");
                 check(cr != null && cr.length == 3
                         && ((int) Math.floor(te.wx)) + cr[0] == bx
@@ -1685,6 +1694,62 @@ public final class HellDungeon427Probe {
             check(astroSpawns >= 8 && customSpawns >= 8,
                     "first-placement .nbt priority ensures high spawn rate: astro=" + astroSpawns
                     + "/12, custom=" + customSpawns + "/12");
+
+            // Build 434: verify fractional piston-like contraption ControllerRelative + optional real Astrolabe file
+            DungeonNbt431.NbtCompound pistonRaw = new DungeonNbt431.NbtCompound();
+            pistonRaw.putString("id", "create:stationary_contraption");
+            pistonRaw.putDoubleList("Pos", 10.35D, 64.0D, 20.0D);
+            pistonRaw.putIntArray("ControllerRelative", new int[] { -1, 0, 0 });
+            DungeonNbt431.NbtCompound pContr = new DungeonNbt431.NbtCompound();
+            pContr.putIntArray("Anchor", new int[] { 10, 64, 20 });
+            pistonRaw.putCompound("Contraption", pContr);
+            DungeonTemplate425.EntitySpec pistonSpec = new DungeonTemplate425.EntitySpec(
+                    "create:stationary_contraption", 4.35D, 3.0D, 3.0D, 0.0F, 0.0F, new CompoundTag(), pistonRaw);
+            for (int t = 0; t < 4; t++) {
+                DungeonNbt431.NbtCompound pr = DungeonNbt431.prepareContraptionNbt(pistonSpec, 500, 40, -300, t);
+                List<DungeonNbt431.NbtValue> pp = pr.getList("Pos");
+                double ex = ((Number) pp.get(0).val).doubleValue();
+                double ey = ((Number) pp.get(1).val).doubleValue();
+                double ez = ((Number) pp.get(2).val).doubleValue();
+                int[] pcr = pr.getIntArray("ControllerRelative");
+                int targetCtrlX = 500 + DungeonGenerator427.rotX(3, 3, t);
+                int targetCtrlY = 40 + 3;
+                int targetCtrlZ = -300 + DungeonGenerator427.rotZ(3, 3, t);
+                check(((int) Math.floor(ex)) + pcr[0] == targetCtrlX
+                        && ((int) Math.floor(ey)) + pcr[1] == targetCtrlY
+                        && ((int) Math.floor(ez)) + pcr[2] == targetCtrlZ,
+                        "fractional contraption ControllerRelative hits exact controller at t=" + t);
+            }
+
+            Path realAstro = Paths.get("google_drive/а Астролябия 1.nbt");
+            if (!Files.isRegularFile(realAstro)) {
+                realAstro = Paths.get("/home/user/mod/google_drive/а Астролябия 1.nbt");
+            }
+            if (Files.isRegularFile(realAstro)) {
+                AxiomBlueprint427.PieceTemplate astroTpl = AxiomBlueprint427.loadFile(realAstro, "а Астролябия 1");
+                check(astroTpl.content.entities.size() == 1, "real Astrolabe has 1 contraption entity");
+                DungeonTemplate425.BlockEntitySpec realBearing = null;
+                for (var be : astroTpl.content.blockEntities) {
+                    if ("create:mechanical_bearing".equals(be.id)) realBearing = be;
+                }
+                check(realBearing != null, "real Astrolabe has mechanical_bearing");
+                DungeonTemplate425.EntitySpec realSc = astroTpl.content.entities.get(0);
+                for (int t = 0; t < 4; t++) {
+                    DungeonNbt431.TransformedEntity rTe = DungeonNbt431.transformEntityPlacement(realSc, 1000, 64, -500, t);
+                    DungeonNbt431.NbtCompound rRaw = DungeonNbt431.prepareContraptionNbt(realSc, 1000, 64, -500, t);
+                    List<DungeonNbt431.NbtValue> rPos = rRaw.getList("Pos");
+                    check(rTe.mcNbt.contains("Pos") && rPos.size() == 3,
+                            "real Astrolabe mcNbt has Pos at t=" + t);
+                    int rbx = 1000 + DungeonGenerator427.rotX(realBearing.x, realBearing.z, t);
+                    int rby = 64 + realBearing.y;
+                    int rbz = -500 + DungeonGenerator427.rotZ(realBearing.x, realBearing.z, t);
+                    int[] rcr = rRaw.getIntArray("ControllerRelative");
+                    check(((int) Math.floor(rTe.wx)) + rcr[0] == rbx
+                            && ((int) Math.floor(rTe.wy)) + rcr[1] == rby
+                            && ((int) Math.floor(rTe.wz)) + rcr[2] == rbz,
+                            "real Astrolabe ControllerRelative hits bearing at t=" + t);
+                }
+            }
         } finally {
             deleteTree(tmp);
         }

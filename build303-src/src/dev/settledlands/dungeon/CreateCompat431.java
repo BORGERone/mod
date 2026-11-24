@@ -6,6 +6,7 @@ import java.lang.reflect.Method;
 import java.util.List;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
+import net.minecraft.world.entity.Entity;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
@@ -42,7 +43,15 @@ public final class CreateCompat431 {
     private static Class<?> clsGenKineticBe;
     private static Method mGenUpdateRotation;
     private static Field fGenReActivateSource;
+    private static Class<?> clsBearingBe;
     private static Class<?> clsWindmillBe;
+    private static Class<?> clsAbstractContraption;
+    private static Class<?> clsControlledContraption;
+    private static Class<?> clsIControlContraption;
+    private static Method mControlledGetController;
+    private static Field fControlledControllerPos;
+    private static Method mIControlIsAttachedTo;
+    private static Method mIControlAttach;
     private static Class<?> clsBeltBe;
     private static Method mBeltGetController;
     private static Field fBeltLength;
@@ -101,7 +110,18 @@ public final class CreateCompat431 {
             mGenUpdateRotation = methodOpt(clsGenKineticBe, "updateGeneratedRotation");
             fGenReActivateSource = fieldOpt(clsGenKineticBe, "reActivateSource");
 
+            clsBearingBe = loadOpt("com.simibubi.create.content.contraptions.bearing.MechanicalBearingBlockEntity", cl);
             clsWindmillBe = loadOpt("com.simibubi.create.content.contraptions.bearing.WindmillBearingBlockEntity", cl);
+
+            clsAbstractContraption = loadOpt("com.simibubi.create.content.contraptions.AbstractContraptionEntity", cl);
+            clsControlledContraption = loadOpt("com.simibubi.create.content.contraptions.ControlledContraptionEntity", cl);
+            clsIControlContraption = loadOpt("com.simibubi.create.content.contraptions.IControlContraption", cl);
+            mControlledGetController = methodOpt(clsControlledContraption, "getController");
+            fControlledControllerPos = fieldOpt(clsControlledContraption, "controllerPos");
+            mIControlIsAttachedTo = (clsIControlContraption != null && clsAbstractContraption != null)
+                    ? methodOpt(clsIControlContraption, "isAttachedTo", clsAbstractContraption) : null;
+            mIControlAttach = (clsIControlContraption != null && clsControlledContraption != null)
+                    ? methodOpt(clsIControlContraption, "attach", clsControlledContraption) : null;
 
             clsBeltBe = loadOpt("com.simibubi.create.content.kinetics.belt.BeltBlockEntity", cl);
             mBeltGetController = methodOpt(clsBeltBe, "getController");
@@ -201,6 +221,43 @@ public final class CreateCompat431 {
     }
 
     /**
+     * Build 434: immediately binds a spawned {@code ControlledContraptionEntity} (such as
+     * {@code create:stationary_contraption}) to its {@code IControlContraption} bearing/piston
+     * block entity so the controller already holds {@code movedContraption != null} and
+     * {@code running = true} before the first server tick.
+     */
+    public static void attachContraption(ServerLevel level, Entity entity) {
+        if (entity == null || !isCreateAvailable()) return;
+        if (clsControlledContraption == null || !clsControlledContraption.isInstance(entity)) return;
+        try {
+            Object controller = mControlledGetController != null ? mControlledGetController.invoke(entity) : null;
+            if (controller == null && level != null && fControlledControllerPos != null) {
+                Object posObj = fControlledControllerPos.get(entity);
+                if (posObj instanceof BlockPos cp) {
+                    BlockEntity be = level.getBlockEntity(cp);
+                    if (clsIControlContraption != null && clsIControlContraption.isInstance(be)) {
+                        controller = be;
+                    }
+                }
+            }
+            if (controller != null && clsIControlContraption != null && clsIControlContraption.isInstance(controller)) {
+                boolean alreadyAttached = false;
+                if (mIControlIsAttachedTo != null) {
+                    Object res = mIControlIsAttachedTo.invoke(controller, entity);
+                    if (res instanceof Boolean b) {
+                        alreadyAttached = b;
+                    }
+                }
+                if (!alreadyAttached && mIControlAttach != null) {
+                    mIControlAttach.invoke(controller, entity);
+                }
+            }
+        } catch (Throwable ex) {
+            LOG.warn("settledlands: attachContraption failed: " + ex.getMessage());
+        }
+    }
+
+    /**
      * Post-placement activation hook for Create block entities within a single completed room.
      *
      * <p>Runs after all blocks, block entities, and {@code create:super_glue} entities in the room
@@ -213,6 +270,9 @@ public final class CreateCompat431 {
         Level lvl = (Level) level;
 
         // Pass 1: initialize belts missing a controller and attach non-generator kinetics
+        // (including non-windmill MechanicalBearingBlockEntity, which extends GeneratingKineticBlockEntity
+        // solely for WindmillBearingBlockEntity inheritance and must NOT call updateGeneratedRotation()
+        // with speed=0 before real generators propagate speed).
         for (BlockPos pos : createPositions) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be == null) continue;
@@ -243,8 +303,10 @@ public final class CreateCompat431 {
                     } catch (Throwable ignored) {
                     }
                 }
+                boolean isNonWindmillBearing = clsBearingBe != null && clsBearingBe.isInstance(be)
+                        && (clsWindmillBe == null || !clsWindmillBe.isInstance(be));
                 if (clsKineticBe != null && clsKineticBe.isInstance(be)
-                        && (clsGenKineticBe == null || !clsGenKineticBe.isInstance(be))) {
+                        && (clsGenKineticBe == null || !clsGenKineticBe.isInstance(be) || isNonWindmillBearing)) {
                     try {
                         if (fKineticPreventSpeedUpdate != null) fKineticPreventSpeedUpdate.setInt(be, 0);
                         if (fKineticUpdateSpeed != null) fKineticUpdateSpeed.setBoolean(be, true);
@@ -256,11 +318,13 @@ public final class CreateCompat431 {
             }
         }
 
-        // Pass 2: re-activate kinetic generators (except WindmillBearingBlockEntity which queues assembly in tick)
+        // Pass 2: re-activate true kinetic generators (skip bearings: WindmillBearing queues assembly
+        // in tick(), and MechanicalBearing gets its speed via RotationPropagator from true generators).
         if (createLoaded && clsGenKineticBe != null) {
             for (BlockPos pos : createPositions) {
                 BlockEntity be = level.getBlockEntity(pos);
                 if (be == null || !clsGenKineticBe.isInstance(be)) continue;
+                if (clsBearingBe != null && clsBearingBe.isInstance(be)) continue;
                 if (clsWindmillBe != null && clsWindmillBe.isInstance(be)) continue;
                 try {
                     if (fGenReActivateSource != null) {

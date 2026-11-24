@@ -657,13 +657,17 @@ public final class DungeonNbt431 {
 
                 double cx = (minX + maxX) * 0.5D;
                 double cz = (minZ + maxZ) * 0.5D;
+                double wx = originX + cx;
+                double wy = originY + minY;
+                double wz = originZ + cz;
                 nbt.putDoubleList("From", minX - cx, 0.0D, minZ - cz);
                 nbt.putDoubleList("To", maxX - cx, maxY - minY, maxZ - cz);
                 nbt.remove("UUID");
-                nbt.remove("Pos");
+                // Preserve transformed "Pos" because Vanilla Entity.load(CompoundTag) reads "Pos"
+                // (defaulting to [0,0,0] if stripped) before SuperGlueEntity.readAdditionalSaveData.
+                nbt.putDoubleList("Pos", wx, wy, wz);
                 nbt.remove("neoforge:attachments");
-                return new TransformedEntity(originX + cx, originY + minY, originZ + cz,
-                        0.0F, 0.0F, true, toMinecraftTag(nbt));
+                return new TransformedEntity(wx, wy, wz, 0.0F, 0.0F, true, toMinecraftTag(nbt));
             }
         }
 
@@ -682,7 +686,7 @@ public final class DungeonNbt431 {
 
         if (nbt != null) {
             nbt.remove("UUID");
-            nbt.remove("Pos");
+            nbt.putDoubleList("Pos", wx, wy, wz);
             nbt.remove("neoforge:attachments");
             if (nbt.contains("facing")) {
                 int f = nbt.getInt("facing");
@@ -746,17 +750,44 @@ public final class DungeonNbt431 {
             int originZ,
             int t,
             double[] outCoords) {
+        NbtCompound contr = nbt.getCompound("Contraption");
+        int[] oldAnchor = contr != null ? readBlockPosArray(contr.values.get("Anchor")) : null;
+        double[] oldPosVec = readDoubleVec3(nbt.getList("Pos"));
+
         double wx;
         double wy = originY + eSpec.dy;
         double wz;
+        int anchorX;
+        int anchorY;
+        int anchorZ;
         if (isWholeCoord(eSpec.dx) && isWholeCoord(eSpec.dz)) {
             int bx = (int) Math.round(eSpec.dx);
             int bz = (int) Math.round(eSpec.dz);
             wx = originX + DungeonGenerator427.rotX(bx, bz, t);
             wz = originZ + DungeonGenerator427.rotZ(bx, bz, t);
+            anchorX = (int) Math.floor(wx);
+            anchorY = (int) Math.floor(wy);
+            anchorZ = (int) Math.floor(wz);
+        } else if (oldAnchor != null && oldPosVec != null) {
+            double offX = oldPosVec[0] - oldAnchor[0];
+            double offY = oldPosVec[1] - oldAnchor[1];
+            double offZ = oldPosVec[2] - oldAnchor[2];
+            int oldAnchorLocalX = (int) Math.round(eSpec.dx - offX);
+            int oldAnchorLocalY = (int) Math.round(eSpec.dy - offY);
+            int oldAnchorLocalZ = (int) Math.round(eSpec.dz - offZ);
+            anchorX = originX + DungeonGenerator427.rotX(oldAnchorLocalX, oldAnchorLocalZ, t);
+            anchorY = originY + oldAnchorLocalY;
+            anchorZ = originZ + DungeonGenerator427.rotZ(oldAnchorLocalX, oldAnchorLocalZ, t);
+            double[] rotOff = rotateHorizontalVec(offX, offZ, t);
+            wx = anchorX + rotOff[0];
+            wy = anchorY + offY;
+            wz = anchorZ + rotOff[1];
         } else {
             wx = originX + DungeonGenerator427.rotEntityX(eSpec.dx, eSpec.dz, t);
             wz = originZ + DungeonGenerator427.rotEntityZ(eSpec.dx, eSpec.dz, t);
+            anchorX = (int) Math.floor(wx);
+            anchorY = (int) Math.floor(wy);
+            anchorZ = (int) Math.floor(wz);
         }
         if (outCoords != null && outCoords.length >= 3) {
             outCoords[0] = wx;
@@ -764,12 +795,49 @@ public final class DungeonNbt431 {
             outCoords[2] = wz;
         }
 
+        int newEntBx = (int) Math.floor(wx);
+        int newEntBy = (int) Math.floor(wy);
+        int newEntBz = (int) Math.floor(wz);
+
         nbt.remove("UUID");
-        nbt.remove("Pos");
+        // Critical: Entity.load(CompoundTag) reads "Pos" (defaulting to [0,0,0] if absent!) BEFORE
+        // ControlledContraptionEntity.readAdditional computes controllerPos = ControllerRelative + blockPosition().
+        nbt.putDoubleList("Pos", wx, wy, wz);
         nbt.remove("neoforge:attachments");
 
+        if (nbt.contains("ControllerRelative")) {
+            int[] oldCtrlRel = readBlockPosArray(nbt.values.get("ControllerRelative"));
+            if (oldCtrlRel != null) {
+                int oldEntBx = (int) Math.floor(eSpec.dx);
+                int oldEntBy = (int) Math.floor(eSpec.dy);
+                int oldEntBz = (int) Math.floor(eSpec.dz);
+                int oldCtrlLocalX = oldEntBx + oldCtrlRel[0];
+                int oldCtrlLocalY = oldEntBy + oldCtrlRel[1];
+                int oldCtrlLocalZ = oldEntBz + oldCtrlRel[2];
+                int newCtrlWx = originX + DungeonGenerator427.rotX(oldCtrlLocalX, oldCtrlLocalZ, t);
+                int newCtrlWy = originY + oldCtrlLocalY;
+                int newCtrlWz = originZ + DungeonGenerator427.rotZ(oldCtrlLocalX, oldCtrlLocalZ, t);
+                int[] exactRel = new int[] {
+                        newCtrlWx - newEntBx,
+                        newCtrlWy - newEntBy,
+                        newCtrlWz - newEntBz
+                };
+                NbtValue crPrev = nbt.values.get("ControllerRelative");
+                if (crPrev != null && crPrev.val instanceof NbtCompound) {
+                    NbtCompound crComp = new NbtCompound();
+                    crComp.putInt("X", exactRel[0]);
+                    crComp.putInt("Y", exactRel[1]);
+                    crComp.putInt("Z", exactRel[2]);
+                    nbt.putCompound("ControllerRelative", crComp);
+                } else {
+                    nbt.putIntArray("ControllerRelative", exactRel);
+                }
+            } else if (t != 0) {
+                rotatePosField(nbt, "ControllerRelative", t);
+            }
+        }
+
         if (t != 0) {
-            rotatePosField(nbt, "ControllerRelative", t);
             if ((t & 1) == 1 && nbt.contains("Axis")) {
                 String ax = nbt.getString("Axis");
                 if ("X".equals(ax)) nbt.putString("Axis", "Z");
@@ -780,13 +848,7 @@ public final class DungeonNbt431 {
             rotateVec3Horizontal(nbt, "Motion", t);
         }
 
-        int anchorX = (int) Math.floor(wx);
-        int anchorY = (int) Math.floor(wy);
-        int anchorZ = (int) Math.floor(wz);
-
-        NbtCompound contr = nbt.getCompound("Contraption");
         if (contr != null) {
-            int[] oldAnchor = readBlockPosArray(contr.values.get("Anchor"));
             contr.putIntArray("Anchor", new int[] { anchorX, anchorY, anchorZ });
 
             if (t != 0) {
@@ -829,6 +891,7 @@ public final class DungeonNbt431 {
                                 if (data.contains("x")) data.putInt("x", nlx);
                                 if (data.contains("y")) data.putInt("y", ly);
                                 if (data.contains("z")) data.putInt("z", nlz);
+                                rotatePosField(data, "Controller", t);
                                 rotatePosField(data, "TargetOffset", t);
                                 rotateStateTag(data.getCompound("Bracket"), t);
                                 rotateStateTag(data.getCompound("Material"), t);
@@ -875,6 +938,22 @@ public final class DungeonNbt431 {
                         }
                     }
                 }
+
+                for (NbtValue mbItem : contr.getList("CapturedMultiblocks")) {
+                    if (mbItem == null || !(mbItem.val instanceof NbtCompound mb)) continue;
+                    rotatePosField(mb, "Controller", t);
+                    for (NbtValue pItem : mb.getList("Parts")) {
+                        if (pItem == null || !(pItem.val instanceof NbtCompound pc)) continue;
+                        if (pc.contains("Pos")) rotatePosField(pc, "Pos", t);
+                        else rotateXyzCompound(pc, t);
+                    }
+                }
+
+                for (NbtValue interItem : contr.getList("Interactors")) {
+                    if (interItem != null && interItem.val instanceof NbtCompound ic) {
+                        rotatePosField(ic, "Pos", t);
+                    }
+                }
             }
 
             for (NbtValue actorItem : contr.getList("Actors")) {
@@ -905,6 +984,15 @@ public final class DungeonNbt431 {
         }
 
         return nbt;
+    }
+
+    private static double[] rotateHorizontalVec(double vx, double vz, int turns) {
+        return switch (turns & 3) {
+            case 1 -> new double[] { -vz, vx };
+            case 2 -> new double[] { -vx, -vz };
+            case 3 -> new double[] { vz, -vx };
+            default -> new double[] { vx, vz };
+        };
     }
 
     private static void rotateVec3Horizontal(NbtCompound c, String key, int turns) {

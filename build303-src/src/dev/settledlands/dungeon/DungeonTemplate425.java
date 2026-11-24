@@ -617,11 +617,14 @@ public final class DungeonTemplate425 {
                 DungeonNbt431.TransformedEntity te = DungeonNbt431.transformEntityPlacement(
                         eSpec, originX, originY, originZ, turns);
                 if (te.moveBeforeLoad) {
-                    // SuperGlueEntity.readAdditionalSaveData shifts From/To relative to position()
+                    // SuperGlueEntity.readAdditionalSaveData shifts From/To relative to position(),
+                    // and ControlledContraptionEntity.readAdditional adds ControllerRelative to blockPosition();
+                    // moveTo after load refreshes contraption AABB from Contraption.bounds.
                     entity.moveTo(te.wx, te.wy, te.wz);
                     if (te.mcNbt != null && !te.mcNbt.isEmpty()) {
                         entity.load(te.mcNbt);
                     }
+                    entity.moveTo(te.wx, te.wy, te.wz);
                 } else {
                     if (te.mcNbt != null && !te.mcNbt.isEmpty()) {
                         entity.load(te.mcNbt);
@@ -631,6 +634,7 @@ public final class DungeonTemplate425 {
                 entity.setYRot(te.yaw);
                 entity.setXRot(te.pitch);
                 level.addFreshEntity(entity);
+                CreateCompat431.attachContraption(level, entity);
                 if (stats != null) stats.entitiesSpawned++;
             } catch (Throwable ex) {
                 if (stats != null) stats.entitiesSkipped++;
