@@ -226,7 +226,11 @@ public final class CreateSchematic431 {
             if (pos == null) {
                 int[] bp = readIntVec3(entWrapper.values.get("blockPos"));
                 if (bp != null) {
-                    pos = new double[] { bp[0] + 0.5D, bp[1], bp[2] + 0.5D };
+                    boolean contr = entNbt.contains("Contraption")
+                            || (entId.startsWith("create:") && entId.contains("contraption"));
+                    pos = contr
+                            ? new double[] { bp[0], bp[1], bp[2] }
+                            : new double[] { bp[0] + 0.5D, bp[1], bp[2] + 0.5D };
                 } else {
                     pos = readDoubleVec3(entNbt.getList("Pos"));
                 }
@@ -272,7 +276,7 @@ public final class CreateSchematic431 {
                 palette, blocksArr, beSpecs, entSpecs, oldSchemaOrigin);
         String displayName = baseName(key);
         return new AxiomBlueprint427.PieceTemplate(key, displayName, Collections.emptyList(),
-                minX, minY, minZ, maxX, maxY, maxZ, entrance, exits, content, false);
+                minX, minY, minZ, maxX, maxY, maxZ, entrance, exits, content, false, true);
     }
 
     private static int[] readIntVec3(DungeonNbt431.NbtValue v) {

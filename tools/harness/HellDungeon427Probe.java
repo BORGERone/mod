@@ -116,6 +116,7 @@ public final class HellDungeon427Probe {
         "create:fluid_tank",
         "create:item_vault",
         "create:redstone_link",
+        "create:mechanical_bearing",
         "create:windmill_bearing",
         "create:mechanical_arm",
         "create:chain_conveyor",
@@ -132,6 +133,7 @@ public final class HellDungeon427Probe {
         testStreamingPlacementSaveLoadAndProximity();
         testMultiBlockDoorSafetyBuild430();
         testCreateNbtAndSuperGlueBuild431();
+        testBuild433ContraptionAndNbtSpawning();
         testRealArchiveIfPresent();
         testBiomeProgressionBuild429();
         testZeroSealDeadEndInvariantBuild432();
@@ -1412,6 +1414,279 @@ public final class HellDungeon427Probe {
             out.writeByte(10);
             DungeonNbt431.writeString(out, "");
             DungeonNbt431.writeCompound(out, root);
+        }
+    }
+
+    private static long packContraptionPos(int x, int y, int z) {
+        return (((long) x & 0x3FFFFFFL) << 38) | (((long) z & 0x3FFFFFFL) << 12) | ((long) y & 0xFFFL);
+    }
+
+    private static int[] unpackContraptionPos(long pos) {
+        return new int[] { (int) (pos >> 38), (int) ((pos << 52) >> 52), (int) ((pos << 26) >> 38) };
+    }
+
+    private static void writeTestContraptionRoomNbt(Path path) throws IOException {
+        DungeonNbt431.NbtCompound root = new DungeonNbt431.NbtCompound();
+        String[] names = {
+            "minecraft:blackstone",
+            "minecraft:lapis_block",
+            "minecraft:redstone_block",
+            "create:mechanical_bearing",
+            "create:creative_motor"
+        };
+        List<DungeonNbt431.NbtValue> palList = new ArrayList<>();
+        for (int i = 0; i < names.length; i++) {
+            DungeonNbt431.NbtCompound st = new DungeonNbt431.NbtCompound();
+            st.putString("Name", names[i]);
+            if (i >= 3) {
+                DungeonNbt431.NbtCompound pr = new DungeonNbt431.NbtCompound();
+                pr.putString("facing", "west");
+                st.putCompound("Properties", pr);
+            }
+            palList.add(new DungeonNbt431.NbtValue(10, 0, st));
+        }
+        root.values.put("palette", new DungeonNbt431.NbtValue(9, 10, palList));
+
+        List<DungeonNbt431.NbtValue> blocks = new ArrayList<>();
+        for (int x = 0; x <= 6; x++) {
+            for (int z = 0; z <= 6; z++) {
+                int s = (x == 3 && z == 0) ? 1 : (x == 3 && z == 6) ? 2 : 0;
+                blocks.add(makeNbtBlock(x, 0, z, s, null));
+            }
+        }
+        DungeonNbt431.NbtCompound bearingNbt = new DungeonNbt431.NbtCompound();
+        bearingNbt.putString("id", "create:mechanical_bearing");
+        bearingNbt.putByte("Running", (byte) 1);
+        bearingNbt.putFloat("Angle", -94.197F);
+        bearingNbt.putFloat("Speed", -1.0F);
+        bearingNbt.putByte("NeedsSpeedUpdate", (byte) 1);
+        bearingNbt.putIntArray("Source", new int[] { -10, -40, 20 });
+        bearingNbt.putCompound("Network", new DungeonNbt431.NbtCompound());
+        blocks.add(makeNbtBlock(5, 3, 3, 3, bearingNbt));
+
+        DungeonNbt431.NbtCompound motorNbt = new DungeonNbt431.NbtCompound();
+        motorNbt.putString("id", "create:motor");
+        motorNbt.putInt("ScrollValue", 1);
+        motorNbt.putFloat("Speed", -1.0F);
+        motorNbt.putCompound("Network", new DungeonNbt431.NbtCompound());
+        blocks.add(makeNbtBlock(6, 3, 3, 4, motorNbt));
+        root.values.put("blocks", new DungeonNbt431.NbtValue(9, 10, blocks));
+
+        // create:stationary_contraption at exact integer corner [4.0, 3.0, 3.0]
+        DungeonNbt431.NbtCompound scWrap = new DungeonNbt431.NbtCompound();
+        scWrap.putDoubleList("pos", 4.0D, 3.0D, 3.0D);
+        DungeonNbt431.NbtCompound scNbt = new DungeonNbt431.NbtCompound();
+        scNbt.putString("id", "create:stationary_contraption");
+        scNbt.putIntArray("ControllerRelative", new int[] { 1, 0, 0 });
+        scNbt.putString("Axis", "X");
+        scNbt.putFloat("Angle", -94.197F);
+        scNbt.putByte("Initialized", (byte) 1);
+
+        DungeonNbt431.NbtCompound contr = new DungeonNbt431.NbtCompound();
+        contr.putString("Type", "create:bearing");
+        contr.putIntArray("Anchor", new int[] { -12, -40, 20 });
+        contr.putInt("Facing", 4); // WEST
+        List<DungeonNbt431.NbtValue> bf = new ArrayList<>();
+        for (float f : new float[] { -3.0F, -2.0F, -2.0F, 1.0F, 3.0F, 3.0F }) {
+            bf.add(new DungeonNbt431.NbtValue(5, 0, f));
+        }
+        contr.values.put("BoundsFront", new DungeonNbt431.NbtValue(9, 5, bf));
+
+        DungeonNbt431.NbtCompound cBlocks = new DungeonNbt431.NbtCompound();
+        List<DungeonNbt431.NbtValue> cPal = new ArrayList<>();
+        DungeonNbt431.NbtCompound chainSt = new DungeonNbt431.NbtCompound();
+        chainSt.putString("Name", "minecraft:chain");
+        DungeonNbt431.NbtCompound chainProps = new DungeonNbt431.NbtCompound();
+        chainProps.putString("axis", "x");
+        chainProps.putString("waterlogged", "false");
+        chainSt.putCompound("Properties", chainProps);
+        cPal.add(new DungeonNbt431.NbtValue(10, 0, chainSt));
+        cBlocks.values.put("Palette", new DungeonNbt431.NbtValue(9, 10, cPal));
+
+        List<DungeonNbt431.NbtValue> cList = new ArrayList<>();
+        for (int lx : new int[] { 0, -1, -2, -3 }) {
+            DungeonNbt431.NbtCompound be = new DungeonNbt431.NbtCompound();
+            be.putInt("State", 0);
+            be.putLong("Pos", packContraptionPos(lx, 0, 0));
+            cList.add(new DungeonNbt431.NbtValue(10, 0, be));
+        }
+        cBlocks.values.put("BlockList", new DungeonNbt431.NbtValue(9, 10, cList));
+        contr.putCompound("Blocks", cBlocks);
+
+        DungeonNbt431.NbtCompound actor0 = new DungeonNbt431.NbtCompound();
+        actor0.putIntArray("Pos", new int[] { -2, 0, 0 });
+        actor0.putDoubleList("Position", -13.5D, -39.5D, 20.5D);
+        actor0.putDoubleList("Motion", 0.01D, 0.0D, 0.0D);
+        actor0.putDoubleList("RelativeMotion", 0.01D, 0.0D, 0.0D);
+        List<DungeonNbt431.NbtValue> actors = new ArrayList<>();
+        actors.add(new DungeonNbt431.NbtValue(10, 0, actor0));
+        contr.values.put("Actors", new DungeonNbt431.NbtValue(9, 10, actors));
+
+        scNbt.putCompound("Contraption", contr);
+        scWrap.putCompound("nbt", scNbt);
+        List<DungeonNbt431.NbtValue> ents = new ArrayList<>();
+        ents.add(new DungeonNbt431.NbtValue(10, 0, scWrap));
+        root.values.put("entities", new DungeonNbt431.NbtValue(9, 10, ents));
+
+        try (GZIPOutputStream gz = new GZIPOutputStream(Files.newOutputStream(path));
+             DataOutputStream out = new DataOutputStream(gz)) {
+            out.writeByte(10);
+            DungeonNbt431.writeString(out, "");
+            DungeonNbt431.writeCompound(out, root);
+        }
+    }
+
+    private static void testBuild433ContraptionAndNbtSpawning() throws Exception {
+        Path tmp = Files.createTempDirectory("hd433_probe");
+        try {
+            Path nbtFile = tmp.resolve("а АстролябияТест.nbt");
+            writeTestContraptionRoomNbt(nbtFile);
+            AxiomBlueprint427.PieceTemplate piece = AxiomBlueprint427.loadFile(nbtFile, "а АстролябияТест");
+            check(piece.isNbt, "Build 433 marks .nbt PieceTemplate with isNbt=true");
+            check(piece.content.entities.size() == 1, "contraption entity loaded");
+
+            DungeonTemplate425.BlockEntitySpec bearingBe = null;
+            for (DungeonTemplate425.BlockEntitySpec be : piece.content.blockEntities) {
+                if ("create:mechanical_bearing".equals(be.id)) bearingBe = be;
+            }
+            check(bearingBe != null, "mechanical_bearing BlockEntitySpec parsed");
+            DungeonTemplate425.EntitySpec scSpec = piece.content.entities.get(0);
+
+            int ox = 500, oy = 40, oz = -300;
+            String[] expAxis = { "X", "Z", "X", "Z" };
+            int[] expFacing = { 4, 2, 5, 3 };
+            String[] expChainAxis = { "x", "z", "x", "z" };
+            for (int t = 0; t < 4; t++) {
+                int bx = ox + DungeonGenerator427.rotX(bearingBe.x, bearingBe.z, t);
+                int by = oy + bearingBe.y;
+                int bz = oz + DungeonGenerator427.rotZ(bearingBe.x, bearingBe.z, t);
+                DungeonNbt431.NbtCompound tb = DungeonNbt431.transformBlockEntityNbt(
+                        bearingBe.id, bearingBe.rawNbt, ox, oy, oz, bx, by, bz, t, null);
+                check(tb.getBoolean("Running"), "mechanical_bearing Running=1 preserved at t=" + t);
+                check(!tb.contains("QueueAssembly"), "mechanical_bearing does not inject QueueAssembly at t=" + t);
+
+                DungeonNbt431.TransformedEntity te = DungeonNbt431.transformEntityPlacement(scSpec, ox, oy, oz, t);
+                check(te.moveBeforeLoad && te.yaw == 0.0F && te.pitch == 0.0F,
+                        "contraption sets moveBeforeLoad=true and zero yaw/pitch at t=" + t);
+                check(te.wx == ox + DungeonGenerator427.rotX(4, 3, t)
+                        && te.wy == oy + 3.0D
+                        && te.wz == oz + DungeonGenerator427.rotZ(4, 3, t),
+                        "integer-corner contraption placed without +1 block shift at t=" + t);
+
+                DungeonNbt431.NbtCompound raw = DungeonNbt431.prepareContraptionNbt(scSpec, ox, oy, oz, t);
+                int[] cr = raw.getIntArray("ControllerRelative");
+                check(cr != null && cr.length == 3
+                        && ((int) Math.floor(te.wx)) + cr[0] == bx
+                        && ((int) Math.floor(te.wy)) + cr[1] == by
+                        && ((int) Math.floor(te.wz)) + cr[2] == bz,
+                        "ControllerRelative points directly at rotated bearing at t=" + t);
+                check(expAxis[t].equals(raw.getString("Axis")), "Axis rotated at t=" + t);
+
+                DungeonNbt431.NbtCompound contr = raw.getCompound("Contraption");
+                int[] anc = contr.getIntArray("Anchor");
+                check(anc != null && anc[0] == (int) Math.floor(te.wx) && anc[2] == (int) Math.floor(te.wz),
+                        "Contraption.Anchor updated to world coords at t=" + t);
+                check(contr.getInt("Facing") == expFacing[t], "Contraption.Facing rotated at t=" + t);
+                DungeonNbt431.NbtValue bfVal = contr.values.get("BoundsFront");
+                check(bfVal != null && bfVal.type == 9 && bfVal.listElemType == 5,
+                        "Contraption.BoundsFront keeps TAG_Float listElemType=5 at t=" + t);
+
+                DungeonNbt431.NbtCompound cBlocks = contr.getCompound("Blocks");
+                DungeonNbt431.NbtCompound chainState = (DungeonNbt431.NbtCompound) cBlocks.getList("Palette").get(0).val;
+                check(expChainAxis[t].equals(chainState.getCompound("Properties").getString("axis")),
+                        "Contraption Palette chain axis rotated at t=" + t);
+                for (DungeonNbt431.NbtValue bItem : cBlocks.getList("BlockList")) {
+                    DungeonNbt431.NbtCompound entry = (DungeonNbt431.NbtCompound) bItem.val;
+                    int[] xyz = unpackContraptionPos(((Number) entry.values.get("Pos").val).longValue());
+                    if (t == 1) check(xyz[0] == 0 && xyz[2] <= 0 && xyz[2] >= -3, "t=1 BlockList along -Z");
+                    if (t == 2) check(xyz[2] == 0 && xyz[0] >= 0 && xyz[0] <= 3, "t=2 BlockList along +X");
+                    if (t == 3) check(xyz[0] == 0 && xyz[2] >= 0 && xyz[2] <= 3, "t=3 BlockList along +Z");
+                }
+                DungeonNbt431.NbtCompound act = (DungeonNbt431.NbtCompound) contr.getList("Actors").get(0).val;
+                int[] ap = act.getIntArray("Pos");
+                check(ap != null && ap[0] == DungeonGenerator427.rotX(-2, 0, t)
+                        && ap[2] == DungeonGenerator427.rotZ(-2, 0, t), "Actor.Pos rotated at t=" + t);
+                List<DungeonNbt431.NbtValue> apos = act.getList("Position");
+                double ax = ((Number) apos.get(0).val).doubleValue() - anc[0];
+                double az = ((Number) apos.get(2).val).doubleValue() - anc[2];
+                check(Math.abs(ax - (ap[0] + 0.5D)) < 1e-6 && Math.abs(az - (ap[2] + 0.5D)) < 1e-6,
+                        "Actor.Position matches rotated Pos relative to Anchor at t=" + t);
+            }
+
+            // Test .nbt overriding same-key .bp + unprefixed .nbt in auto biome mode + unused schematics/ hint
+            Path worldDir = tmp.resolve("world_test");
+            Path axiomDir = worldDir.resolve("config/axiom/blueprints/Данж");
+            Path schemDir = worldDir.resolve("schematics");
+            Files.createDirectories(axiomDir);
+            Files.createDirectories(schemDir);
+            writeRoomBp(axiomDir.resolve("старт.bp"), "старт", List.of(), 0, 8, true, true, false, false, true);
+            writeRoomBp(axiomDir.resolve("к Коридор.bp"), "к Коридор", List.of("dungeon", "crypt"),
+                    0, 10, false, true, true, false, false);
+            writeRoomBp(axiomDir.resolve("к Развилка.bp"), "к Развилка", List.of("dungeon", "crypt"),
+                    0, 8, false, true, true, true, false);
+            writeRoomBp(axiomDir.resolve("к Тупик.bp"), "к Тупик", List.of("dungeon", "crypt"),
+                    0, 6, false, true, false, false, false);
+            for (int i = 1; i <= 15; i++) {
+                writeRoomBp(axiomDir.resolve("а Комната_" + i + ".bp"), "а Комната_" + i,
+                        List.of("dungeon", "infernal"), 0, 10, false, true, true, false, false);
+            }
+            writeRoomBp(axiomDir.resolve("а Развилка.bp"), "а Развилка", List.of("dungeon", "infernal"),
+                    0, 8, false, true, true, true, false);
+            writeRoomBp(axiomDir.resolve("а АстролябияТест.bp"), "а АстролябияТест",
+                    List.of("dungeon", "infernal"), 0, 8, false, true, true, false, false);
+            writeRoomBp(axiomDir.resolve("а Тупик.bp"), "а Тупик", List.of("dungeon", "infernal"),
+                    0, 6, false, true, false, false, false);
+            writeRoomBp(axiomDir.resolve("п Коридор.bp"), "п Коридор", List.of("dungeon", "flesh"),
+                    0, 10, false, true, true, false, false);
+            writeRoomBp(axiomDir.resolve("п Развилка.bp"), "п Развилка", List.of("dungeon", "flesh"),
+                    0, 8, false, true, true, true, false);
+            writeRoomBp(axiomDir.resolve("п Тупик.bp"), "п Тупик", List.of("dungeon", "flesh"),
+                    0, 6, false, true, false, false, false);
+            Files.copy(nbtFile, axiomDir.resolve("а АстролябияТест.nbt"));
+            writeTestContraptionRoomNbt(axiomDir.resolve("СвояНБТ.nbt"));
+            writeTestContraptionRoomNbt(schemDir.resolve("Забытая.nbt"));
+
+            DungeonConfig427 autoCfg = new DungeonConfig427(
+                    worldDir, "auto", "auto", "старт", 24, 34, 160, -52, 240, true,
+                    DungeonTemplate425.DOORWAY_REPLACEMENT, 8, 4096, true, true);
+            DungeonBlueprints427.Library lib = DungeonBlueprints427.load(autoCfg);
+            int astroCount = 0;
+            boolean astroNbt = false;
+            boolean foundUnprefixedNbt = false;
+            for (AxiomBlueprint427.PieceTemplate p : lib.pieces) {
+                if (p.key.contains("АстролябияТест")) {
+                    astroCount++;
+                    astroNbt = p.isNbt;
+                }
+                if (p.key.contains("СвояНБТ")) {
+                    foundUnprefixedNbt = p.isNbt;
+                }
+            }
+            check(astroCount == 1 && astroNbt, ".nbt replaces same-key .bp cleanly without #nbt duplicate");
+            check(foundUnprefixedNbt, "unprefixed .nbt retained in auto->biomes mode");
+            check(lib.nbtCount == 2 && lib.nbtInPoolCount == 2 && lib.nbtFilteredCount == 0,
+                    "active vs total .nbt counts tracked accurately");
+            check(lib.unusedNbtInOtherDirs == 1 && lib.unusedNbtOtherDirHint.endsWith("schematics"),
+                    "detects unused .nbt sitting in schematics/ when axiom folder is active");
+            check(!lib.connectorsForTheme(DungeonBlueprints427.THEME_INFERNAL).isEmpty()
+                    && lib.connectorsForTheme(DungeonBlueprints427.THEME_INFERNAL)
+                            .stream().anyMatch(p -> p.key.contains("СвояНБТ")),
+                    "unprefixed .nbt routed into deep infernal biome");
+
+            int astroSpawns = 0;
+            int customSpawns = 0;
+            for (int s = 1; s <= 12; s++) {
+                DungeonGenerator427.Plan plan = DungeonGenerator427.generate(lib, 0, 64, 0, s * 997L + 17L);
+                for (DungeonGenerator427.PlannedPiece pp : plan.pieces) {
+                    if (pp.pieceKey.contains("АстролябияТест")) astroSpawns++;
+                    if (pp.pieceKey.contains("СвояНБТ")) customSpawns++;
+                }
+            }
+            check(astroSpawns >= 8 && customSpawns >= 8,
+                    "first-placement .nbt priority ensures high spawn rate: astro=" + astroSpawns
+                    + "/12, custom=" + customSpawns + "/12");
+        } finally {
+            deleteTree(tmp);
         }
     }
 

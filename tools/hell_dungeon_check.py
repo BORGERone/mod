@@ -239,15 +239,27 @@ def main(argv):
 
         bp_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonBlueprints427.class"))
         bp_utf8 = {e[1] for e in bp_info["cp"] if e and e[0] == 1}
-        for wanted_bp in ("themeOf", "auto->biomes(", "isBlueprintOrNbt"):
+        for wanted_bp in ("themeOf", "auto->biomes(", "isBlueprintOrNbt", "replaceMatchingBpInBucket"):
             if not any(wanted_bp in s for s in bp_utf8):
-                return fail("DungeonBlueprints427 missing Build 429/431 %s" % wanted_bp)
+                return fail("DungeonBlueprints427 missing Build 429/431/433 %s" % wanted_bp)
+
+        bp_lib_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonBlueprints427$Library.class"))
+        bp_lib_utf8 = {e[1] for e in bp_lib_info["cp"] if e and e[0] == 1}
+        for wanted_lib in ("nbtInPoolCount", "unusedNbtInOtherDirs"):
+            if wanted_lib not in bp_lib_utf8:
+                return fail("DungeonBlueprints427$Library missing Build 433 %s" % wanted_lib)
 
         nbt_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonNbt431.class"))
         nbt_utf8 = {e[1] for e in nbt_info["cp"] if e and e[0] == 1}
-        for wanted_nbt in ("transformBlockEntityNbt", "transformEntityPlacement", "create:super_glue"):
+        for wanted_nbt in ("transformBlockEntityNbt", "transformEntityPlacement", "create:super_glue",
+                           "transformContraptionNbt", "prepareContraptionNbt"):
             if wanted_nbt not in nbt_utf8:
-                return fail("DungeonNbt431 missing Build 431 %s" % wanted_nbt)
+                return fail("DungeonNbt431 missing Build 431/433 %s" % wanted_nbt)
+
+        pt_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/AxiomBlueprint427$PieceTemplate.class"))
+        pt_utf8 = {e[1] for e in pt_info["cp"] if e and e[0] == 1}
+        if "isNbt" not in pt_utf8:
+            return fail("AxiomBlueprint427$PieceTemplate missing Build 433 isNbt")
 
         compat_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/CreateCompat431.class"))
         compat_utf8 = {e[1] for e in compat_info["cp"] if e and e[0] == 1}
@@ -257,9 +269,10 @@ def main(argv):
 
         gen_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonGenerator427.class"))
         gen_utf8 = {e[1] for e in gen_info["cp"] if e and e[0] == 1}
-        for wanted_gen in ("generateBiomePlan", "tryGenerateBiome", "tryPlaceWithCaps", "shortestBridgeCorridors"):
+        for wanted_gen in ("generateBiomePlan", "tryGenerateBiome", "tryPlaceWithCaps",
+                           "shortestBridgeCorridors", "isNbt"):
             if wanted_gen not in gen_utf8:
-                return fail("DungeonGenerator427 missing Build 429/432 %s" % wanted_gen)
+                return fail("DungeonGenerator427 missing Build 429/432/433 %s" % wanted_gen)
 
         # Brigadier exception package verification (Build 426 hotfix for NeoForge 21.1.265 crash)
         for entry in names:

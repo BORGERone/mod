@@ -113,7 +113,11 @@ public final class DungeonCommand425 {
         String msg = "данж: блупринты перечитаны — " + lib.summaryLine()
                 + ", Create: " + (CreateCompat431.isCreateAvailable() ? "активен" : "нет")
                 + (lib.skippedNoMarkers > 0 ? (", без lapis_block: " + lib.skippedNoMarkers) : "")
-                + (lib.failedParse > 0 ? (", ошибок: " + lib.failedParse) : "");
+                + (lib.failedParse > 0 ? (", ошибок: " + lib.failedParse) : "")
+                + (lib.unusedNbtInOtherDirs > 0
+                        ? (" | ВНИМАНИЕ: ещё .nbt (" + lib.unusedNbtInOtherDirs + ") найдены в "
+                                + lib.unusedNbtOtherDirHint + " — перенесите их в " + lib.sourceDir)
+                        : "");
         ctx.getSource().sendSuccess(() -> Component.literal(msg), false);
         return 1;
     }
@@ -131,7 +135,11 @@ public final class DungeonCommand425 {
                 + ", шаг сетки: " + DungeonData425.GRID_SPACING
                 + ", уникальный/вход: " + (lib.config == null || lib.config.uniqueDungeonPerEntry)
                 + ", Create: " + (CreateCompat431.isCreateAvailable() ? "активен" : "нет")
-                + " | " + lib.summaryLine();
+                + " | " + lib.summaryLine()
+                + (lib.unusedNbtInOtherDirs > 0
+                        ? (" | ВНИМАНИЕ: ещё .nbt (" + lib.unusedNbtInOtherDirs + ") найдены в "
+                                + lib.unusedNbtOtherDirHint + " — перенесите их в " + lib.sourceDir)
+                        : "");
         ctx.getSource().sendSuccess(() -> Component.literal(msg), false);
         return 1;
     }

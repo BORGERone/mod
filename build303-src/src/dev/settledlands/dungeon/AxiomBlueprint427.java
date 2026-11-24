@@ -69,6 +69,7 @@ public final class AxiomBlueprint427 {
         public final List<Marker> exits;
         public final DungeonTemplate425.StartTemplate content;
         public final boolean embeddedFallback;
+        public final boolean isNbt;
 
         public PieceTemplate(
                 String key,
@@ -80,6 +81,21 @@ public final class AxiomBlueprint427 {
                 List<Marker> exits,
                 DungeonTemplate425.StartTemplate content,
                 boolean embeddedFallback) {
+            this(key, displayName, tags, minX, minY, minZ, maxX, maxY, maxZ,
+                    entrance, exits, content, embeddedFallback, false);
+        }
+
+        public PieceTemplate(
+                String key,
+                String displayName,
+                List<String> tags,
+                int minX, int minY, int minZ,
+                int maxX, int maxY, int maxZ,
+                Marker entrance,
+                List<Marker> exits,
+                DungeonTemplate425.StartTemplate content,
+                boolean embeddedFallback,
+                boolean isNbt) {
             this.key = key;
             this.displayName = displayName == null || displayName.isEmpty() ? key : displayName;
             this.tags = tags == null ? Collections.emptyList() : Collections.unmodifiableList(tags);
@@ -93,6 +109,7 @@ public final class AxiomBlueprint427 {
             this.exits = exits == null ? Collections.emptyList() : Collections.unmodifiableList(exits);
             this.content = content;
             this.embeddedFallback = embeddedFallback;
+            this.isNbt = isNbt;
         }
 
         public int blockCount() {

@@ -403,7 +403,9 @@ public final class DungeonGenerator427 {
             final int curOpen = openExits.size();
             Map<String, Double> jitter = new HashMap<>(pool.size() * 2);
             for (AxiomBlueprint427.PieceTemplate p : pool) {
-                double s = usedCounts.getOrDefault(p.key, 0) * 14.0D;
+                int used = usedCounts.getOrDefault(p.key, 0);
+                double s = used * 14.0D;
+                if (p.isNbt && used == 0) s -= 7.0D;
                 int exCount = p.exits.size();
                 if (earlyCryptBranch && exCount >= 2) s -= 18.0D;
                 else if (earlyDeepBranch && exCount >= 2) s -= 14.0D;
@@ -554,7 +556,9 @@ public final class DungeonGenerator427 {
             final int curOpen = openExits.size();
             Map<String, Double> jitter = new HashMap<>(pool.size() * 2);
             for (AxiomBlueprint427.PieceTemplate p : pool) {
-                double s = usedCounts.getOrDefault(p.key, 0) * 10.0D;
+                int used = usedCounts.getOrDefault(p.key, 0);
+                double s = used * 10.0D;
+                if (p.isNbt && used == 0) s -= 7.0D;
                 int exCount = p.exits.size();
                 if (curPlaced < 12 && curOpen < 3 && exCount >= 2) s -= 8.0D;
                 else if (curPlaced + curOpen >= cfg.maxPieces - 4 && exCount >= 2) s += 20.0D;

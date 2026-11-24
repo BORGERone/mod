@@ -1,0 +1,1 @@
+7b19e1c3d0c3dd5b01d451f723ea0b7d65bed35f1709545df82ab8a62fb20865  settledlands-0.8.0-build433-nbt-contraption-and-spawn.jar

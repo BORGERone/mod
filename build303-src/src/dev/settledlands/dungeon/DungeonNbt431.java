@@ -133,8 +133,16 @@ public final class DungeonNbt431 {
             values.put(key, new NbtValue(3, 0, val));
         }
 
+        public void putLong(String key, long val) {
+            values.put(key, new NbtValue(4, 0, val));
+        }
+
         public void putFloat(String key, float val) {
             values.put(key, new NbtValue(5, 0, val));
+        }
+
+        public void putDouble(String key, double val) {
+            values.put(key, new NbtValue(6, 0, val));
         }
 
         public void putString(String key, String val) {
@@ -443,12 +451,12 @@ public final class DungeonNbt431 {
             nbt.putFloat("Speed", 0.0F);
             nbt.putByte("NeedsSpeedUpdate", (byte) 1);
 
-            if (nbt.getBoolean("Running")) {
-                nbt.putByte("Running", (byte) 0);
-            }
             if ("create:windmill_bearing".equals(lowId)
                     || nbt.contains("LastGenerated")
                     || nbt.contains("QueueAssembly")) {
+                if (nbt.getBoolean("Running")) {
+                    nbt.putByte("Running", (byte) 0);
+                }
                 nbt.putByte("QueueAssembly", (byte) 1);
             }
         }
@@ -659,6 +667,12 @@ public final class DungeonNbt431 {
             }
         }
 
+        boolean isContraption = nbt != null && (nbt.contains("Contraption")
+                || (eSpec.id != null && eSpec.id.startsWith("create:") && eSpec.id.contains("contraption")));
+        if (isContraption) {
+            return transformContraptionEntity(eSpec, nbt, originX, originY, originZ, t);
+        }
+
         double edx = DungeonGenerator427.rotEntityX(eSpec.dx, eSpec.dz, t);
         double edz = DungeonGenerator427.rotEntityZ(eSpec.dx, eSpec.dz, t);
         double wx = originX + edx;
@@ -695,6 +709,278 @@ public final class DungeonNbt431 {
         fallback.remove("Pos");
         fallback.remove("neoforge:attachments");
         return new TransformedEntity(wx, wy, wz, yaw, eSpec.pitch, false, fallback);
+    }
+
+    private static boolean isWholeCoord(double v) {
+        return Math.abs(v - Math.rint(v)) < 1.0E-5D;
+    }
+
+    public static NbtCompound prepareContraptionNbt(
+            DungeonTemplate425.EntitySpec eSpec,
+            int originX,
+            int originY,
+            int originZ,
+            int turns) {
+        if (eSpec == null || eSpec.rawNbt == null) return null;
+        return transformContraptionNbt(eSpec, eSpec.rawNbt.copy(), originX, originY, originZ, turns & 3, null);
+    }
+
+    private static TransformedEntity transformContraptionEntity(
+            DungeonTemplate425.EntitySpec eSpec,
+            NbtCompound nbt,
+            int originX,
+            int originY,
+            int originZ,
+            int t) throws IOException {
+        double[] outCoords = new double[3];
+        NbtCompound transformed = transformContraptionNbt(eSpec, nbt, originX, originY, originZ, t, outCoords);
+        return new TransformedEntity(outCoords[0], outCoords[1], outCoords[2], 0.0F, 0.0F, true,
+                toMinecraftTag(transformed));
+    }
+
+    private static NbtCompound transformContraptionNbt(
+            DungeonTemplate425.EntitySpec eSpec,
+            NbtCompound nbt,
+            int originX,
+            int originY,
+            int originZ,
+            int t,
+            double[] outCoords) {
+        double wx;
+        double wy = originY + eSpec.dy;
+        double wz;
+        if (isWholeCoord(eSpec.dx) && isWholeCoord(eSpec.dz)) {
+            int bx = (int) Math.round(eSpec.dx);
+            int bz = (int) Math.round(eSpec.dz);
+            wx = originX + DungeonGenerator427.rotX(bx, bz, t);
+            wz = originZ + DungeonGenerator427.rotZ(bx, bz, t);
+        } else {
+            wx = originX + DungeonGenerator427.rotEntityX(eSpec.dx, eSpec.dz, t);
+            wz = originZ + DungeonGenerator427.rotEntityZ(eSpec.dx, eSpec.dz, t);
+        }
+        if (outCoords != null && outCoords.length >= 3) {
+            outCoords[0] = wx;
+            outCoords[1] = wy;
+            outCoords[2] = wz;
+        }
+
+        nbt.remove("UUID");
+        nbt.remove("Pos");
+        nbt.remove("neoforge:attachments");
+
+        if (t != 0) {
+            rotatePosField(nbt, "ControllerRelative", t);
+            if ((t & 1) == 1 && nbt.contains("Axis")) {
+                String ax = nbt.getString("Axis");
+                if ("X".equals(ax)) nbt.putString("Axis", "Z");
+                else if ("Z".equals(ax)) nbt.putString("Axis", "X");
+                else if ("x".equals(ax)) nbt.putString("Axis", "z");
+                else if ("z".equals(ax)) nbt.putString("Axis", "x");
+            }
+            rotateVec3Horizontal(nbt, "Motion", t);
+        }
+
+        int anchorX = (int) Math.floor(wx);
+        int anchorY = (int) Math.floor(wy);
+        int anchorZ = (int) Math.floor(wz);
+
+        NbtCompound contr = nbt.getCompound("Contraption");
+        if (contr != null) {
+            int[] oldAnchor = readBlockPosArray(contr.values.get("Anchor"));
+            contr.putIntArray("Anchor", new int[] { anchorX, anchorY, anchorZ });
+
+            if (t != 0) {
+                NbtValue fv = contr.values.get("Facing");
+                if (fv != null && fv.val instanceof Number fn) {
+                    int f = fn.intValue();
+                    if (f >= 2 && f <= 5) {
+                        int nf = rotateDirectionByte3D(f, t);
+                        if (fv.type == 1) contr.putByte("Facing", (byte) nf);
+                        else contr.putInt("Facing", nf);
+                    }
+                }
+
+                rotateBoundsField(contr, "BoundsFront", t);
+
+                NbtCompound blocksTag = contr.getCompound("Blocks");
+                if (blocksTag != null) {
+                    for (NbtValue palItem : blocksTag.getList("Palette")) {
+                        if (palItem != null && palItem.val instanceof NbtCompound stateTag) {
+                            rotateStateTag(stateTag, t);
+                        }
+                    }
+                    for (NbtValue blkItem : blocksTag.getList("BlockList")) {
+                        if (blkItem == null || !(blkItem.val instanceof NbtCompound entry)) continue;
+                        NbtValue pv = entry.values.get("Pos");
+                        if (pv != null && pv.val instanceof Number pn) {
+                            long pos = pn.longValue();
+                            int lx = (int) (pos >> 38);
+                            int ly = (int) ((pos << 52) >> 52);
+                            int lz = (int) ((pos << 26) >> 38);
+                            int nlx = DungeonGenerator427.rotX(lx, lz, t);
+                            int nlz = DungeonGenerator427.rotZ(lx, lz, t);
+                            long npos = (((long) nlx & 0x3FFFFFFL) << 38)
+                                    | (((long) nlz & 0x3FFFFFFL) << 12)
+                                    | ((long) ly & 0xFFFL);
+                            entry.putLong("Pos", npos);
+
+                            NbtCompound data = entry.getCompound("Data");
+                            if (data != null && !data.isEmpty()) {
+                                if (data.contains("x")) data.putInt("x", nlx);
+                                if (data.contains("y")) data.putInt("y", ly);
+                                if (data.contains("z")) data.putInt("z", nlz);
+                                rotatePosField(data, "TargetOffset", t);
+                                rotateStateTag(data.getCompound("Bracket"), t);
+                                rotateStateTag(data.getCompound("Material"), t);
+                            }
+                        }
+                    }
+                }
+
+                NbtValue seatsVal = contr.values.get("Seats");
+                if (seatsVal != null && seatsVal.type == 9 && seatsVal.val instanceof List<?> rawSeats) {
+                    @SuppressWarnings("unchecked")
+                    List<NbtValue> seats = (List<NbtValue>) rawSeats;
+                    for (int i = 0; i < seats.size(); i++) {
+                        NbtValue rotSeat = rotatePosValue(seats.get(i), t);
+                        if (rotSeat != null) {
+                            seats.set(i, rotSeat);
+                        }
+                    }
+                }
+
+                NbtValue sgVal = contr.values.get("Superglue");
+                if (sgVal != null && sgVal.type == 9 && sgVal.val instanceof List<?> rawSg) {
+                    @SuppressWarnings("unchecked")
+                    List<NbtValue> sgList = (List<NbtValue>) rawSg;
+                    for (int i = 0; i < sgList.size(); i++) {
+                        NbtValue item = sgList.get(i);
+                        if (item == null) continue;
+                        if (item.type == 9 && item.val instanceof List<?>) {
+                            NbtValue rotatedBox = rotateAabbList(item, t);
+                            if (rotatedBox != null) sgList.set(i, rotatedBox);
+                        } else if (item.val instanceof NbtCompound sgc) {
+                            if (sgc.contains("From") && sgc.contains("To")) {
+                                double[] from = readDoubleVec3(sgc.getList("From"));
+                                double[] to = readDoubleVec3(sgc.getList("To"));
+                                if (from != null && to != null) {
+                                    double rx0 = DungeonGenerator427.rotEntityX(from[0], from[2], t);
+                                    double rz0 = DungeonGenerator427.rotEntityZ(from[0], from[2], t);
+                                    double rx1 = DungeonGenerator427.rotEntityX(to[0], to[2], t);
+                                    double rz1 = DungeonGenerator427.rotEntityZ(to[0], to[2], t);
+                                    sgc.putDoubleList("From", Math.min(rx0, rx1), Math.min(from[1], to[1]), Math.min(rz0, rz1));
+                                    sgc.putDoubleList("To", Math.max(rx0, rx1), Math.max(from[1], to[1]), Math.max(rz0, rz1));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            for (NbtValue actorItem : contr.getList("Actors")) {
+                if (actorItem == null || !(actorItem.val instanceof NbtCompound actor)) continue;
+                if (t != 0) {
+                    rotatePosField(actor, "Pos", t);
+                    rotateVec3Horizontal(actor, "Motion", t);
+                    rotateVec3Horizontal(actor, "RelativeMotion", t);
+                }
+                double[] oldPos = readDoubleVec3(actor.getList("Position"));
+                if (oldPos != null && oldAnchor != null) {
+                    double dx = oldPos[0] - oldAnchor[0];
+                    double dy = oldPos[1] - oldAnchor[1];
+                    double dz = oldPos[2] - oldAnchor[2];
+                    double nx = t == 0 ? anchorX + dx : anchorX + DungeonGenerator427.rotEntityX(dx, dz, t);
+                    double nz = t == 0 ? anchorZ + dz : anchorZ + DungeonGenerator427.rotEntityZ(dx, dz, t);
+                    actor.putDoubleList("Position", nx, anchorY + dy, nz);
+                } else {
+                    int[] localPos = readBlockPosArray(actor.values.get("Pos"));
+                    if (localPos != null) {
+                        actor.putDoubleList("Position",
+                                anchorX + localPos[0] + 0.5D,
+                                anchorY + localPos[1] + 0.5D,
+                                anchorZ + localPos[2] + 0.5D);
+                    }
+                }
+            }
+        }
+
+        return nbt;
+    }
+
+    private static void rotateVec3Horizontal(NbtCompound c, String key, int turns) {
+        if (c == null || turns == 0 || !c.contains(key)) return;
+        NbtValue v = c.values.get(key);
+        if (v == null || v.type != 9 || !(v.val instanceof List<?> raw) || raw.size() < 3) return;
+        double[] vec = readDoubleVec3(c.getList(key));
+        if (vec == null) return;
+        double nx = switch (turns & 3) {
+            case 1 -> -vec[2];
+            case 2 -> -vec[0];
+            case 3 -> vec[2];
+            default -> vec[0];
+        };
+        double nz = switch (turns & 3) {
+            case 1 -> vec[0];
+            case 2 -> -vec[2];
+            case 3 -> -vec[0];
+            default -> vec[2];
+        };
+        if (v.listElemType == 5) {
+            List<NbtValue> list = new ArrayList<>(3);
+            list.add(new NbtValue(5, 0, (float) nx));
+            list.add(new NbtValue(5, 0, (float) vec[1]));
+            list.add(new NbtValue(5, 0, (float) nz));
+            c.values.put(key, new NbtValue(9, 5, list));
+        } else {
+            c.putDoubleList(key, nx, vec[1], nz);
+        }
+    }
+
+    private static void rotateBoundsField(NbtCompound c, String key, int turns) {
+        if (c == null || turns == 0 || !c.contains(key)) return;
+        NbtValue rotated = rotateAabbList(c.values.get(key), turns);
+        if (rotated != null) {
+            c.values.put(key, rotated);
+        }
+    }
+
+    private static NbtValue rotateAabbList(NbtValue v, int turns) {
+        if (v == null || v.type != 9 || !(v.val instanceof List<?> raw) || raw.size() < 6) return null;
+        double[] b = new double[6];
+        for (int i = 0; i < 6; i++) {
+            Object item = raw.get(i);
+            if (!(item instanceof NbtValue nv) || !(nv.val instanceof Number num)) return null;
+            b[i] = num.doubleValue();
+        }
+        double rx0 = DungeonGenerator427.rotEntityX(b[0], b[2], turns);
+        double rz0 = DungeonGenerator427.rotEntityZ(b[0], b[2], turns);
+        double rx1 = DungeonGenerator427.rotEntityX(b[3], b[5], turns);
+        double rz1 = DungeonGenerator427.rotEntityZ(b[3], b[5], turns);
+        double minX = Math.min(rx0, rx1);
+        double minY = Math.min(b[1], b[4]);
+        double minZ = Math.min(rz0, rz1);
+        double maxX = Math.max(rx0, rx1);
+        double maxY = Math.max(b[1], b[4]);
+        double maxZ = Math.max(rz0, rz1);
+
+        int et = v.listElemType == 5 ? 5 : 6;
+        List<NbtValue> out = new ArrayList<>(6);
+        if (et == 5) {
+            out.add(new NbtValue(5, 0, (float) minX));
+            out.add(new NbtValue(5, 0, (float) minY));
+            out.add(new NbtValue(5, 0, (float) minZ));
+            out.add(new NbtValue(5, 0, (float) maxX));
+            out.add(new NbtValue(5, 0, (float) maxY));
+            out.add(new NbtValue(5, 0, (float) maxZ));
+        } else {
+            out.add(new NbtValue(6, 0, minX));
+            out.add(new NbtValue(6, 0, minY));
+            out.add(new NbtValue(6, 0, minZ));
+            out.add(new NbtValue(6, 0, maxX));
+            out.add(new NbtValue(6, 0, maxY));
+            out.add(new NbtValue(6, 0, maxZ));
+        }
+        return new NbtValue(9, et, out);
     }
 
     private static int rotateDirectionByte3D(int d, int turns) {
@@ -789,7 +1075,7 @@ public final class DungeonNbt431 {
                 inMap.put(e.getKey(), String.valueOf(e.getValue().val));
             }
         }
-        Map<String, String> rotMap = DungeonTemplate425.rotateProps(inMap, turns);
+        Map<String, String> rotMap = DungeonTemplate425.rotateProps(inMap, turns, stateTag.getString("Name"));
         NbtCompound outProps = new NbtCompound();
         for (Map.Entry<String, String> e : rotMap.entrySet()) {
             outProps.putString(e.getKey(), e.getValue());
