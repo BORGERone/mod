@@ -606,12 +606,15 @@ public final class DungeonTemplate425 {
             ResourceLocation actualKey = type == null ? null : BuiltInRegistries.ENTITY_TYPE.getKey(type);
             if (type == null || actualKey == null || !rl.equals(actualKey)) {
                 if (stats != null) stats.entitiesSkipped++;
+                LOG.warn("settledlands: skipped unknown/unregistered entity type '" + eSpec.id
+                        + "' (resolved=" + actualKey + ")");
                 continue;
             }
             try {
                 Entity entity = type.create((Level) level);
                 if (entity == null) {
                     if (stats != null) stats.entitiesSkipped++;
+                    LOG.warn("settledlands: EntityType.create returned null for '" + eSpec.id + "'");
                     continue;
                 }
                 DungeonNbt431.TransformedEntity te = DungeonNbt431.transformEntityPlacement(
@@ -633,9 +636,25 @@ public final class DungeonTemplate425 {
                 }
                 entity.setYRot(te.yaw);
                 entity.setXRot(te.pitch);
-                level.addFreshEntity(entity);
+                boolean added = level.addFreshEntity(entity);
                 CreateCompat431.attachContraption(level, entity);
-                if (stats != null) stats.entitiesSpawned++;
+                BlockPos ePos = new BlockPos((int) Math.floor(te.wx), (int) Math.floor(te.wy), (int) Math.floor(te.wz));
+                boolean ticking = level.isPositionEntityTicking(ePos);
+                if (!added || entity.isRemoved()) {
+                    if (stats != null) stats.entitiesSkipped++;
+                    LOG.warn("settledlands: entity " + eSpec.id + " at " + ePos
+                            + " was rejected/removed on spawn (added=" + added
+                            + ", removed=" + entity.isRemoved()
+                            + ", ticking=" + ticking + ")");
+                } else {
+                    if (stats != null) stats.entitiesSpawned++;
+                    if (eSpec.id != null && eSpec.id.contains("contraption")) {
+                        LOG.info("settledlands: spawned " + eSpec.id + " at " + ePos
+                                + " (exact=" + te.wx + "," + te.wy + "," + te.wz
+                                + ") turns=" + turns + " ticking=" + ticking
+                                + " createCompat=" + CreateCompat431.isCreateAvailable());
+                    }
+                }
             } catch (Throwable ex) {
                 if (stats != null) stats.entitiesSkipped++;
                 LOG.warn("settledlands: skipped entity " + eSpec.id + ": " + ex.getMessage());

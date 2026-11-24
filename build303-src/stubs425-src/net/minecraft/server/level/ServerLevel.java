@@ -47,4 +47,8 @@ public class ServerLevel extends Level implements ServerLevelAccessor {
 
     @Override
     public void sendBlockUpdated(BlockPos pos, BlockState oldState, BlockState newState, int flags) {}
+
+    public boolean isPositionEntityTicking(BlockPos pos) {
+        return true;
+    }
 }

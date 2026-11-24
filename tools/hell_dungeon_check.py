@@ -189,9 +189,10 @@ def main(argv):
             if not any(f".{wanted}(" in r for r in mgr_refs):
                 return fail("DungeonManager425 missing %s" % wanted)
         mgr_utf8 = {e[1] for e in mgr_info["cp"] if e and e[0] == 1}
-        for wanted_utf8 in ("createAndEnterUniqueInstance", "enterUniqueOrDefault", "isZeroCoord"):
+        for wanted_utf8 in ("createAndEnterUniqueInstance", "enterUniqueOrDefault", "isZeroCoord",
+                            "isPositionEntityTicking", "isPieceEntityAreaReady", "hasEntities"):
             if wanted_utf8 not in mgr_utf8:
-                return fail("DungeonManager425 missing Build 428 method %s" % wanted_utf8)
+                return fail("DungeonManager425 missing Build 428/435 method/ref %s" % wanted_utf8)
 
         cfg_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonConfig427.class"))
         cfg_utf8 = {e[1] for e in cfg_info["cp"] if e and e[0] == 1}
@@ -272,6 +273,9 @@ def main(argv):
         tmpl_utf8 = {e[1] for e in tmpl_info["cp"] if e and e[0] == 1}
         if "attachContraption" not in tmpl_utf8:
             return fail("DungeonTemplate425 missing Build 434 CreateCompat431.attachContraption call")
+        for wanted_tmpl435 in ("isPositionEntityTicking", "isRemoved"):
+            if wanted_tmpl435 not in tmpl_utf8:
+                return fail("DungeonTemplate425 missing Build 435 %s" % wanted_tmpl435)
 
         gen_info = disasm.parse_class(zf.read("dev/settledlands/dungeon/DungeonGenerator427.class"))
         gen_utf8 = {e[1] for e in gen_info["cp"] if e and e[0] == 1}

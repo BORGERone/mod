@@ -138,6 +138,7 @@ public final class HellDungeon427Probe {
         testBiomeProgressionBuild429();
         testZeroSealDeadEndInvariantBuild432();
         testUniqueDungeonPerPlayerBuild428();
+        testEntityTickingDeferralBuild435();
         testReflectionAndCommands();
         System.out.println("HellDungeon427Probe: " + passed + " checks passed");
     }
@@ -1755,6 +1756,121 @@ public final class HellDungeon427Probe {
         }
     }
 
+    private static void testEntityTickingDeferralBuild435() throws Exception {
+        Path tmp = Files.createTempDirectory("hd435_probe");
+        try {
+            Path cfgDir = tmp.resolve("config/settledlands");
+            Path axiomDir = tmp.resolve("config/axiom/blueprints/Данж");
+            Files.createDirectories(cfgDir);
+            Files.createDirectories(axiomDir);
+            Files.writeString(cfgDir.resolve("dungeon.properties"),
+                    "blueprint_dir=auto\nstart_piece=старт\nmin_pieces=5\nmax_pieces=7\n"
+                    + "max_radius=128\nuse_biomes=false\nblocks_per_tick=32\nimmediate_pieces=10\n",
+                    StandardCharsets.UTF_8);
+
+            writeRoomBp(axiomDir.resolve("старт.bp"), "старт", List.of("dungeon"),
+                    0, 8, true, true, false, false, false);
+            for (int i = 1; i <= 4; i++) {
+                writeRoomBp(axiomDir.resolve("а Коридор_" + i + ".bp"), "а Коридор_" + i,
+                        List.of("dungeon", "infernal"), 0, 8, false, true, true, false, false);
+            }
+            writeRoomBp(axiomDir.resolve("а Тупик.bp"), "а Тупик", List.of("dungeon", "infernal"),
+                    0, 6, false, true, false, false, false);
+            writeTestContraptionRoomNbt(axiomDir.resolve("а АстролябияТест.nbt"));
+
+            DungeonBlueprints427.Library lib = DungeonBlueprints427.reload(tmp);
+            AxiomBlueprint427.PieceTemplate astroPt = null;
+            for (AxiomBlueprint427.PieceTemplate pt : lib.pieces) {
+                if (pt.key.contains("АстролябияТест")) astroPt = pt;
+            }
+            check(astroPt != null && astroPt.blockCount() > 32 && !astroPt.content.entities.isEmpty(),
+                    "Build 435 contraption room exceeds per-tick budget ("
+                    + (astroPt == null ? 0 : astroPt.blockCount()) + " > 32)");
+
+            MockServer srv = new MockServer();
+            MockLevel ow = new MockLevel(OVERWORLD_KEY, srv);
+            MockLevel hd = new MockLevel(DungeonManager425.HELL_DUNGEON_LEVEL, srv);
+            hd.entityTickingFlag = false;
+            srv.overworld = ow;
+            srv.levels.put(OVERWORLD_KEY.toString(), ow);
+            srv.levels.put(DungeonManager425.HELL_DUNGEON_LEVEL.toString(), hd);
+
+            MockPlayer player = new MockPlayer(srv, ow, 0.0, 64.0, 0.0, new UUID(0x4350L, 0x1111L));
+            check(TeleportActions424.teleport(player, "trigger:teleport:settledlands:hell_dungeon|||"),
+                    "Build 435 player entered dungeon");
+            DungeonData425.Instance inst = DungeonData425.get(srv).allInstances().iterator().next();
+            List<DungeonData425.PieceProgress> astroList = new ArrayList<>();
+            for (DungeonData425.PieceProgress pp : inst.pieces) {
+                if (pp.pieceKey.contains("АстролябияТест")) astroList.add(pp);
+            }
+            check(!astroList.isEmpty(), "Build 435 plan includes contraption piece");
+            check(inst.pieces.get(0).done, "start piece built immediately on entry");
+            for (DungeonData425.PieceProgress pp : astroList) {
+                check(!pp.done && pp.blockCursor == 0,
+                        "contraption piece deferred out of immediatePieces when chunks not ENTITY_TICKING");
+            }
+
+            // Drain all non-entity pieces over ticks while entityTickingFlag stays false
+            for (int t = 0; t < 250; t++) {
+                DungeonManager425.tickPendingGeneration(srv);
+            }
+            int nonEntityTotal = 0;
+            int nonEntityDone = 0;
+            for (DungeonData425.PieceProgress pp : inst.pieces) {
+                if (pp.pieceKey.contains("АстролябияТест")) {
+                    check(!pp.done && pp.blockCursor == 0,
+                            "contraption piece remains deferred while isPositionEntityTicking=false");
+                } else {
+                    nonEntityTotal++;
+                    if (pp.done) nonEntityDone++;
+                }
+            }
+            check(nonEntityDone == nonEntityTotal,
+                    "all non-entity rooms completed (" + nonEntityDone + "/" + nonEntityTotal
+                    + ") without blocking on deferred contraption room");
+
+            // Enable all chunks except one corner chunk of first astroPp -> still deferred!
+            DungeonData425.PieceProgress astroPp = astroList.get(0);
+            hd.entityTickingFlag = true;
+            int minCx = Math.floorDiv(astroPp.minX, 16);
+            int maxCx = Math.floorDiv(astroPp.maxX, 16);
+            int minCz = Math.floorDiv(astroPp.minZ, 16);
+            int maxCz = Math.floorDiv(astroPp.maxZ, 16);
+            for (int cx = minCx - 2; cx <= maxCx + 2; cx++) {
+                for (int cz = minCz - 2; cz <= maxCz + 2; cz++) {
+                    if (cx == maxCx && cz == maxCz) continue;
+                    hd.entityTickingChunks.add((((long) cx) << 32) ^ (cz & 0xffffffffL));
+                }
+            }
+            DungeonManager425.tickPendingGeneration(srv);
+            check(!astroPp.done && astroPp.blockCursor == 0,
+                    "contraption piece stays deferred when even one corner chunk lacks ENTITY_TICKING");
+
+            // Now allow all chunks for all contraption pieces; verify first completes in ONE tick!
+            hd.entityTickingChunks.clear();
+            DungeonManager425.tickPendingGeneration(srv);
+            check(astroPp.done && astroPp.blockCursor == astroPt.blockCount(),
+                    "contraption piece placed atomically in 1 single tick once all chunks are ENTITY_TICKING");
+            for (int k = 1; k < astroList.size() + 2; k++) {
+                DungeonManager425.tickPendingGeneration(srv);
+            }
+            check(inst.placed && !inst.hasPendingWork(),
+                    "instance transitions to placed=true once deferred contraption finishes");
+            boolean bearingFound = false;
+            for (DungeonTemplate425.BlockEntitySpec be : astroPt.content.blockEntities) {
+                if ("create:mechanical_bearing".equals(be.id)) {
+                    int wx = astroPp.ox + DungeonGenerator427.rotX(be.x, be.z, astroPp.turns);
+                    int wy = astroPp.oy + be.y;
+                    int wz = astroPp.oz + DungeonGenerator427.rotZ(be.x, be.z, astroPp.turns);
+                    bearingFound = "create:mechanical_bearing".equals(hd.placedBlockId(wx, wy, wz));
+                }
+            }
+            check(bearingFound, "mechanical_bearing placed at rotated world coords after deferral ends");
+        } finally {
+            deleteTree(tmp);
+        }
+    }
+
     private static void testUniqueDungeonPerPlayerBuild428() throws Exception {
         Path tmp = Files.createTempDirectory("hd428_probe");
         try {
@@ -2215,10 +2331,22 @@ public final class HellDungeon427Probe {
         int droppedDoors = 0;
         int beSetChangedCalls = 0;
         int sendBlockUpdatedCalls = 0;
+        boolean entityTickingFlag = true;
+        final Set<Long> entityTickingChunks = new HashSet<>();
 
         MockLevel(ResourceKey<Level> dim, MinecraftServer srv) {
             this.dim = dim;
             this.srv = srv;
+        }
+
+        @Override public boolean isPositionEntityTicking(BlockPos pos) {
+            if (!entityTickingFlag) return false;
+            if (!entityTickingChunks.isEmpty() && pos != null) {
+                int cx = Math.floorDiv(pos.getX(), 16);
+                int cz = Math.floorDiv(pos.getZ(), 16);
+                return entityTickingChunks.contains((((long) cx) << 32) ^ (cz & 0xffffffffL));
+            }
+            return true;
         }
 
         int firstOrderIndex(String blockId) {

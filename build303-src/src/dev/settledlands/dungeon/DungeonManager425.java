@@ -105,6 +105,12 @@ public final class DungeonManager425 {
                 pp.done = true;
                 continue;
             }
+            if (i > 0 && hasEntities(pt)) {
+                // Defer non-start pieces containing entities/contraptions until tickPendingGeneration
+                // sees all target chunks are ENTITY_TICKING (after player teleportation).
+                didWork = true;
+                continue;
+            }
             DungeonTemplate425.placeSlice(
                     dungeon, pt.content, pp.ox, pp.oy, pp.oz, pp.turns,
                     inst.doorwayBlock, pp.blockCursor, pt.blockCount() - pp.blockCursor, null);
@@ -160,7 +166,7 @@ public final class DungeonManager425 {
             if (!inst.hasPendingWork() || budget <= 0) continue;
 
             while (budget > 0) {
-                DungeonData425.PieceProgress next = pickNextPiece(inst, players);
+                DungeonData425.PieceProgress next = pickNextPiece(inst, players, dungeon, lib);
                 if (next == null) break;
 
                 AxiomBlueprint427.PieceTemplate pt = lib.resolvePiece(next.pieceKey);
@@ -173,7 +179,8 @@ public final class DungeonManager425 {
                 }
 
                 int remaining = Math.max(0, pt.blockCount() - next.blockCursor);
-                boolean urgent = isUrgentForAnyPlayer(next, players);
+                boolean urgent = isUrgentForAnyPlayer(next, players)
+                        || (hasEntities(pt) && remaining <= 16384);
                 int sliceSize = urgent ? remaining : Math.min(remaining, budget);
                 if (sliceSize <= 0 && pt.blockCount() == 0) {
                     next.done = true;
@@ -188,6 +195,14 @@ public final class DungeonManager425 {
                 next.blockCursor = newCursor;
                 if (newCursor >= pt.blockCount()) {
                     next.done = true;
+                    if (hasEntities(pt) || stats.entitiesSkipped > 0 || stats.blockEntitiesSkipped > 0) {
+                        LOG.info("settledlands: placed piece '" + next.pieceKey + "' in '" + inst.id
+                                + "' @ (" + next.ox + ", " + next.oy + ", " + next.oz + ") turns=" + next.turns
+                                + ": blocks=" + stats.blocksPlaced
+                                + ", be=" + stats.blockEntitiesLoaded + "/" + stats.blockEntitiesSkipped
+                                + ", ents=" + stats.entitiesSpawned + "/" + stats.entitiesSkipped
+                                + ", createCompat=" + CreateCompat431.isCreateAvailable());
+                    }
                 }
                 int used = Math.max(1, sliceSize);
                 budget -= used;
@@ -227,13 +242,20 @@ public final class DungeonManager425 {
     }
 
     private static DungeonData425.PieceProgress pickNextPiece(
-            DungeonData425.Instance inst, List<ServerPlayer> players) {
+            DungeonData425.Instance inst,
+            List<ServerPlayer> players,
+            ServerLevel dungeon,
+            DungeonBlueprints427.Library lib) {
         DungeonData425.PieceProgress closestUrgent = null;
         double closestDist = PRIORITY_RADIUS_SQ;
         DungeonData425.PieceProgress firstPending = null;
 
         for (DungeonData425.PieceProgress pp : inst.pieces) {
             if (pp.done) continue;
+            AxiomBlueprint427.PieceTemplate pt = lib.resolvePiece(pp.pieceKey);
+            if (hasEntities(pt) && !isPieceEntityAreaReady(dungeon, pt, pp)) {
+                continue;
+            }
             if (firstPending == null) {
                 firstPending = pp;
             }
@@ -249,6 +271,47 @@ public final class DungeonManager425 {
             }
         }
         return closestUrgent != null ? closestUrgent : firstPending;
+    }
+
+    private static boolean hasEntities(AxiomBlueprint427.PieceTemplate pt) {
+        return pt != null && pt.content != null
+                && pt.content.entities != null && !pt.content.entities.isEmpty();
+    }
+
+    private static boolean isPieceEntityAreaReady(
+            ServerLevel dungeon,
+            AxiomBlueprint427.PieceTemplate pt,
+            DungeonData425.PieceProgress pp) {
+        if (dungeon == null || pt == null || pp == null) return false;
+        int minCx = Math.floorDiv(pp.minX, 16);
+        int maxCx = Math.floorDiv(pp.maxX, 16);
+        int minCz = Math.floorDiv(pp.minZ, 16);
+        int maxCz = Math.floorDiv(pp.maxZ, 16);
+        for (int cx = minCx; cx <= maxCx; cx++) {
+            for (int cz = minCz; cz <= maxCz; cz++) {
+                if (!dungeon.isPositionEntityTicking(new BlockPos((cx << 4) + 8, pp.minY, (cz << 4) + 8))) {
+                    return false;
+                }
+            }
+        }
+        if (pt.content != null) {
+            for (DungeonTemplate425.BlockEntitySpec be : pt.content.blockEntities) {
+                int wx = pp.ox + DungeonGenerator427.rotX(be.x, be.z, pp.turns);
+                int wz = pp.oz + DungeonGenerator427.rotZ(be.x, be.z, pp.turns);
+                if (!dungeon.isPositionEntityTicking(new BlockPos(wx, pp.oy + be.y, wz))) {
+                    return false;
+                }
+            }
+            for (DungeonTemplate425.EntitySpec e : pt.content.entities) {
+                int wx = (int) Math.floor(pp.ox + DungeonGenerator427.rotEntityX(e.dx, e.dz, pp.turns));
+                int wy = (int) Math.floor(pp.oy + e.dy);
+                int wz = (int) Math.floor(pp.oz + DungeonGenerator427.rotEntityZ(e.dx, e.dz, pp.turns));
+                if (!dungeon.isPositionEntityTicking(new BlockPos(wx, wy, wz))) {
+                    return false;
+                }
+            }
+        }
+        return true;
     }
 
     private static boolean isUrgentForAnyPlayer(DungeonData425.PieceProgress pp, List<ServerPlayer> players) {

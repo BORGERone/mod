@@ -137,8 +137,17 @@ public final class CreateCompat431 {
             mVaultUpdateConn = methodOpt(clsItemVaultBe, "updateConnectivity");
 
             available = true;
-        } catch (Throwable ignored) {
+            if (clsBearingBe == null || clsControlledContraption == null || clsIControlContraption == null
+                    || mIControlAttach == null || mControlledGetController == null) {
+                LOG.warn("settledlands: Create compat partial reflection (bearing=" + (clsBearingBe != null)
+                        + ", controlled=" + (clsControlledContraption != null)
+                        + ", ctrlIf=" + (clsIControlContraption != null)
+                        + ", getCtrl=" + (mControlledGetController != null)
+                        + ", attach=" + (mIControlAttach != null) + ")");
+            }
+        } catch (Throwable ex) {
             available = false;
+            LOG.warn("settledlands: Create compat init failed: " + ex);
         }
     }
 
@@ -230,14 +239,12 @@ public final class CreateCompat431 {
         if (entity == null || !isCreateAvailable()) return;
         if (clsControlledContraption == null || !clsControlledContraption.isInstance(entity)) return;
         try {
+            Object posObj = fControlledControllerPos != null ? fControlledControllerPos.get(entity) : null;
             Object controller = mControlledGetController != null ? mControlledGetController.invoke(entity) : null;
-            if (controller == null && level != null && fControlledControllerPos != null) {
-                Object posObj = fControlledControllerPos.get(entity);
-                if (posObj instanceof BlockPos cp) {
-                    BlockEntity be = level.getBlockEntity(cp);
-                    if (clsIControlContraption != null && clsIControlContraption.isInstance(be)) {
-                        controller = be;
-                    }
+            if (controller == null && level != null && posObj instanceof BlockPos cp) {
+                BlockEntity be = level.getBlockEntity(cp);
+                if (clsIControlContraption != null && clsIControlContraption.isInstance(be)) {
+                    controller = be;
                 }
             }
             if (controller != null && clsIControlContraption != null && clsIControlContraption.isInstance(controller)) {
@@ -251,6 +258,25 @@ public final class CreateCompat431 {
                 if (!alreadyAttached && mIControlAttach != null) {
                     mIControlAttach.invoke(controller, entity);
                 }
+                boolean attachedNow = alreadyAttached;
+                if (!attachedNow && mIControlIsAttachedTo != null) {
+                    Object res = mIControlIsAttachedTo.invoke(controller, entity);
+                    if (res instanceof Boolean b) {
+                        attachedNow = b;
+                    }
+                }
+                if (!attachedNow) {
+                    LOG.warn("settledlands: attachContraption did not bind entity=" + entity.blockPosition()
+                            + " to controller=" + posObj + " (" + controller.getClass().getSimpleName() + ")");
+                }
+            } else {
+                BlockPos cp = posObj instanceof BlockPos p ? p : null;
+                BlockEntity rawBe = (level != null && cp != null) ? level.getBlockEntity(cp) : null;
+                BlockState rawSt = (level != null && cp != null) ? ((Level) level).getBlockState(cp) : null;
+                LOG.warn("settledlands: attachContraption found NO controller for entity="
+                        + entity.blockPosition() + ", controllerPos=" + cp
+                        + ", be=" + (rawBe == null ? "null" : rawBe.getClass().getName())
+                        + ", state=" + rawSt);
             }
         } catch (Throwable ex) {
             LOG.warn("settledlands: attachContraption failed: " + ex.getMessage());
