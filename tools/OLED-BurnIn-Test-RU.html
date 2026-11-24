@@ -69,12 +69,21 @@
   #badge.show{opacity:1}
   #wipe{position:fixed;inset:0;display:none;align-items:center;justify-content:center;z-index:25;
     font-size:64px;font-variant-numeric:tabular-nums;color:#111;font-weight:700}
+  /* стирание остаточного следа — движущаяся белая полоса */
+  #eraser{position:fixed;inset:0;display:none;z-index:26;background:#000;overflow:hidden}
+  #eraser .bar{position:absolute;top:0;bottom:0;width:24vw;left:-26vw;
+    background:linear-gradient(90deg,transparent 0%,#fff 32%,#fff 68%,transparent 100%);
+    animation:slideBar 5.5s linear infinite}
+  @keyframes slideBar{from{left:-26vw}to{left:104vw}}
+  #eraser .tick{position:absolute;right:18px;bottom:14px;font-size:13px;color:rgba(255,255,255,.35);
+    letter-spacing:1.2px;font-variant-numeric:tabular-nums}
 </style>
 </head>
 <body>
 
 <div id="stage"></div>
 <div id="wipe"></div>
+<div id="eraser"><div class="bar"></div><div class="tick" id="eraserTick">60 с</div></div>
 <div id="badge">UI скрыт · H — вернуть</div>
 
 <div id="hud">
@@ -117,11 +126,12 @@
     <div class="row">
       <button class="primary" id="startBtn">Начать проверку (F)</button>
       <button class="ghost" id="wipeBtn">Очистка экрана (белый, 3 мин)</button>
+      <button class="ghost" id="eraserBtn">Стереть остаточный след (60 с)</button>
     </div>
     <p class="keys">
       <kbd>→</kbd> / <kbd>Пробел</kbd> — следующая заливка &nbsp;·&nbsp; <kbd>←</kbd> — назад &nbsp;·&nbsp;
       <kbd>1</kbd>…<kbd>9</kbd> — быстрый переход &nbsp;·&nbsp; <kbd>H</kbd> — скрыть/показать подписи &nbsp;·&nbsp;
-      <kbd>F</kbd> — полный экран &nbsp;·&nbsp; <kbd>Esc</kbd> — выход
+      <kbd>F</kbd> — полный экран &nbsp;·&nbsp; <kbd>Esc</kbd> — выход &nbsp;·&nbsp; <kbd>E</kbd> — стереть след (60 с)
     </p>
   </div>
 </div>
@@ -137,6 +147,8 @@
   const dotsEl = document.getElementById('dots');
   const intro  = document.getElementById('intro');
   const wipe   = document.getElementById('wipe');
+  const eraser = document.getElementById('eraser');
+  const eraserTick = document.getElementById('eraserTick');
 
   const slides = [
     { name:'Чёрный',                 bg:'#000000', meta:'#000000 · 0 %',
@@ -145,6 +157,8 @@
       hint:'Самый чувствительный тест на остаточный след. Смотрите в темноте, глаза дайте привыкнуть 20–30 с.' },
     { name:'Серый 5 %',              bg:'#0d0d0d', meta:'#0d0d0d · 5 %',
       hint:'Здесь обычно проявляются контуры панели задач, таскбара, вкладок браузера и HUD.' },
+    { name:'Ступени 0–8 %',          bg:'linear-gradient(to right,#000 0 11.111%,#020202 11.111% 22.222%,#040404 22.222% 33.333%,#060606 33.333% 44.444%,#080808 44.444% 55.555%,#0a0a0a 55.555% 66.666%,#0c0c0c 66.666% 77.777%,#0e0e0e 77.777% 88.888%,#101010 88.888% 100%)', meta:'9 полос: 0 / 1 / 2 / 3 / 4 / 5 / 6 / 7 / 8 %',
+      hint:'Диагностика «линий»: плавные вертикальные полосы одинаковой ширины и по всей высоте = banding панели (норма), а не выгорание.' },
     { name:'Серый 10 %',             bg:'#1a1a1a', meta:'#1a1a1a · 10 %',
       hint:'Проверьте нижнюю полосу (панель задач) и верхнюю (заголовки окон) — они страдают первыми.' },
     { name:'Серый 25 %',             bg:'#404040', meta:'#404040 · 25 %',
@@ -175,7 +189,8 @@
       hint:'Финальный взгляд на равномерность панели целиком.' }
   ];
 
-  let idx = 0, running = false, uiPinned = false, hideTimer = null, wipeTimer = null;
+  let idx = 0, running = false, uiPinned = false, hideTimer = null, wipeTimer = null, eraserTimer = null;
+  const overlayOn = ()=> wipe.style.display === 'flex' || eraser.style.display === 'block';
 
   slides.forEach((_,i)=>{
     const d = document.createElement('div');
@@ -262,12 +277,40 @@
     wipe.style.display = 'none';
   }
 
+  /* ---------- стирание остаточного следа ---------- */
+  function startEraser(){
+    intro.style.display = 'none';
+    running = true;
+    stage.style.background = '#000';
+    eraser.style.display = 'block';
+    let left = 60;
+    eraserTick.textContent = left + ' с';
+    document.documentElement.requestFullscreen?.().catch(()=>{});
+    clearInterval(eraserTimer);
+    eraserTimer = setInterval(()=>{
+      left--;
+      if (left <= 0){
+        clearInterval(eraserTimer);
+        eraser.style.display = 'none';
+        stage.style.background = '#000';
+        exitTest();
+        return;
+      }
+      eraserTick.textContent = left + ' с';
+    }, 1000);
+  }
+  function stopEraser(){
+    clearInterval(eraserTimer);
+    eraser.style.display = 'none';
+  }
+
   /* ---------- события ---------- */
   document.getElementById('startBtn').onclick = start;
   document.getElementById('wipeBtn').onclick  = startWipe;
+  document.getElementById('eraserBtn').onclick = startEraser;
 
   stage.addEventListener('click', (e)=>{
-    if (!running || wipe.style.display === 'flex') return;
+    if (!running || overlayOn()) return;
     (e.clientX > window.innerWidth/2) ? go(idx+1) : go(idx-1);
   });
 
@@ -280,7 +323,7 @@
 
   window.addEventListener('keydown', (e)=>{
     const k = e.key;
-    if (k === 'Escape'){ stopWipe(); exitTest(); return; }
+    if (k === 'Escape'){ stopWipe(); stopEraser(); exitTest(); return; }
     if (k === 'f' || k === 'F' || k === 'а' || k === 'А'){
       document.fullscreenElement ? document.exitFullscreen?.() : document.documentElement.requestFullscreen?.();
       return;
@@ -289,11 +332,12 @@
     if (k === 'ArrowRight' || k === ' ' || k === 'Enter'){ e.preventDefault(); go(idx+1); }
     else if (k === 'ArrowLeft'){ e.preventDefault(); go(idx-1); }
     else if (k === 'h' || k === 'H' || k === 'р' || k === 'Р'){ toggleUi(); }
+    else if (k === 'e' || k === 'E' || k === 'у' || k === 'У'){ startEraser(); }
     else if (/^[1-9]$/.test(k)){ go(parseInt(k,10)-1); }
   });
 
   document.addEventListener('fullscreenchange', ()=>{
-    if (!document.fullscreenElement && running && wipe.style.display !== 'flex'){
+    if (!document.fullscreenElement && running && !overlayOn()){
       // пользователь вышел из полноэкранного режима — продолжаем, но подсказываем
       showHud();
     }
