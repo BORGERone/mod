@@ -21,5 +21,6 @@ public final class ChestOpenWatch401 {
     @SubscribeEvent
     public static void onClientTick(ClientTickEvent.Post event) {
         ChestOpen401.watch();
+        DiegesisScatterClient439.tickWatch();
     }
 }

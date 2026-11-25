@@ -198,6 +198,7 @@ public final class LootPoolManager436 {
         Collections.shuffle(freeSlots, rnd);
 
         int placedStacks = 0;
+        List<Integer> populatedSlots = new ArrayList<>();
         for (NpcDialogueGraph.Node node : poolNodes) {
             LootPool436.Parsed spec = LootPool436.parse(node.action);
             if (spec == null || spec.poolFile.isEmpty()) continue;
@@ -232,6 +233,7 @@ public final class LootPoolManager436 {
                     if (chosenIdx < 0) break;
                     int slot = freeSlots.remove(chosenIdx);
                     container.setItem(slot, stack);
+                    populatedSlots.add(slot);
                     placedStacks++;
                     remaining -= put;
                 }
@@ -239,6 +241,14 @@ public final class LootPoolManager436 {
         }
 
         if (placedStacks > 0) {
+            try {
+                long scatterSeed = (rnd.nextLong()
+                        ^ ((long) pos.getX() * 0x9E3779B97F4A7C15L)
+                        ^ ((long) pos.getZ() * 0xBF58476D1CE4E5B9L)
+                        ^ ((long) pos.getY() * 0x94D049BB133111EBL)) | 1L;
+                ChestDiegesisCompat436.markLootScatter(be, populatedSlots, scatterSeed);
+            } catch (Throwable ignored) {
+            }
             try {
                 be.setChanged();
             } catch (Throwable ex) {

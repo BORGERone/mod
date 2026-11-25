@@ -35,7 +35,8 @@ def collect(readme, mixin_sources):
                  ROOT / "build303-src" / "api416-src",
                  ROOT / "build303-src" / "stubs", ROOT / "build303-src" / "stubs396-src",
                  ROOT / "build303-src" / "stubs420-src", ROOT / "build303-src" / "stubs425-src",
-                 ROOT / "build303-src" / "stubs436-src", ROOT / "build303-src" / "stubs438-src"):
+                 ROOT / "build303-src" / "stubs436-src", ROOT / "build303-src" / "stubs438-src",
+                 ROOT / "build303-src" / "stubs439-src"):
         for path in sorted(base.rglob("*.java")):
             files.append((path.relative_to(ROOT).as_posix(), path))
     for data_dir in (ROOT / "build303-src" / "data416", ROOT / "build303-src" / "data425"):
