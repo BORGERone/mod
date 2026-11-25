@@ -1,26 +1,34 @@
 /* Bottom Gap — content script.
  *
- * Два независимых режима, оба включаются по сайту из попапа:
+ * Три независимых режима, каждый включается по сайту из попапа:
  *
- * 1) «документ» (storage: gaps) — padding-bottom на <html>.
- *    Добавляет место В КОНЦЕ документа. Помогает страницам с обычным
- *    потоком, но НЕ двигает position: fixed — фиксированные элементы
- *    считаются от вьюпорта, и отступ документа им безразличен.
+ * 1) «документ» (gaps) — padding-bottom на <html>.
+ *    Добавляет 20px В КОНЦЕ документа. Честное предупреждение: место
+ *    закрашивается фоном самой страницы, поэтому на однотонных сайтах
+ *    визуально это ничем не отличается от «страница просто кончилась».
+ *    Заметно там, где у подвала/фона есть граница или свой цвет.
  *
- * 2) «панели» (storage: lift) — ищет элементы с position: fixed,
- *    приклеенные к нижней кромке окна (плееры, док-бары, cookie-баннеры)
- *    и поднимает их: bottom += px. Это то, что нужно на сайтах вроде
- *    Newgrounds, где внизу висит фиксированный плеер.
+ * 2) «полоса» (strip) — вместо padding'а в конец <body> вставляется
+ *    распорный блок нужной высоты, закрашенный полупрозрачной плашкой.
+ *    Это тот же отступ, но его ВИДНО на любом сайте: страница явно
+ *    заканчивается на 20px выше. Включается отдельно, потому что это
+ *    уже вмешательство в вид страницы, а не в её высоту.
+ *
+ * 3) «панели» (lift) — ищет position: fixed у нижней кромки окна
+ *    (плееры, док-бары) и поднимает их: bottom += px. Единственный
+ *    режим, который двигает фиксированные элементы — padding документа
+ *    на них не действует, они считаются от вьюпорта.
  *
  * Хранилище:
- *   { gaps: { "site.com": 20 }, lift: { "site.com": true } }
- *
- * Инъекция — инлайновый стиль через CSSOM, а не <style>: CSP страницы
- * не мешает, и это самый сильный author-уровень.
+ *   { gaps: { "site.com": 20 }, strip: { "site.com": true }, lift: { "site.com": true } }
  */
 
 const KEY_GAPS = 'gaps';
+const KEY_STRIP = 'strip';
 const KEY_LIFT = 'lift';
+
+const STRIP_ID = 'zbg-gap-strip';
+const STRIP_COLOR = 'rgba(127, 127, 127, 0.18)';
 
 let appliedPx = 0;
 let liftEnabled = false;
@@ -58,7 +66,40 @@ function applyDocumentGap(el, px) {
   }
 }
 
-/* ---------- режим 2: подъём фиксированных панелей ---------- */
+/* ---------- режим 2: видимая плашка в конце страницы ---------- */
+
+function applyStrip(px, on) {
+  const existing = document.getElementById(STRIP_ID);
+
+  if (!on || px <= 0) {
+    if (existing) existing.remove();
+    return;
+  }
+
+  if (!document.body) {
+    // body ещё не создан — повторим после разбора документа
+    document.addEventListener('DOMContentLoaded', () => applyStrip(px, on), { once: true });
+    return;
+  }
+
+  let el = existing;
+  if (!el) {
+    el = document.createElement('div');
+    el.id = STRIP_ID;
+    el.style.setProperty('display', 'block', 'important');
+    el.style.setProperty('width', '100%', 'important');
+    el.style.setProperty('margin', '0', 'important');
+    el.style.setProperty('padding', '0', 'important');
+    el.style.setProperty('border', '0', 'important');
+    el.style.setProperty('flex', '0 0 auto', 'important');   // body бывает flex-контейнером
+    el.style.setProperty('background-color', STRIP_COLOR, 'important');
+    el.style.setProperty('pointer-events', 'none', 'important');
+    document.body.appendChild(el);
+  }
+  el.style.setProperty('height', `${px}px`, 'important');
+}
+
+/* ---------- режим 3: подъём фиксированных панелей ---------- */
 
 function liftBars(px) {
   const vh = window.innerHeight;
@@ -132,15 +173,20 @@ function scheduleScans(px) {
 /* ---------- состояние ---------- */
 
 function syncFromStorage() {
-  return browser.storage.local.get([KEY_GAPS, KEY_LIFT]).then((data) => {
+  return browser.storage.local.get([KEY_GAPS, KEY_STRIP, KEY_LIFT]).then((data) => {
     const gaps = data[KEY_GAPS] || {};
+    const strip = data[KEY_STRIP] || {};
     const lift = data[KEY_LIFT] || {};
     const host = location.hostname;
 
     appliedPx = Number(gaps[host]) || 0;
+    const useStrip = Boolean(strip[host]) && appliedPx > 0;
     liftEnabled = Boolean(lift[host]) && appliedPx > 0;
 
-    withRoot((el) => applyDocumentGap(el, appliedPx));
+    // Полоса сама создаёт место нужной высоты, поэтому padding в этом
+    // случае не нужен — иначе отступ был бы двойным.
+    withRoot((el) => applyDocumentGap(el, useStrip ? 0 : appliedPx));
+    applyStrip(appliedPx, useStrip);
 
     if (liftEnabled) {
       scheduleScans(appliedPx);
@@ -156,7 +202,7 @@ syncFromStorage();
 /* Тумблеры в попапе меняют storage — страница подхватывает это сама. */
 browser.storage.onChanged.addListener((changes, area) => {
   if (area !== 'local') return;
-  if (!changes[KEY_GAPS] && !changes[KEY_LIFT]) return;
+  if (!changes[KEY_GAPS] && !changes[KEY_STRIP] && !changes[KEY_LIFT]) return;
   syncFromStorage();
 });
 
@@ -165,7 +211,7 @@ window.addEventListener('resize', () => {
 });
 
 /* Попап спрашивает состояние: есть ли скрипт на вкладке и сколько
- * панелей реально поднято (полезно понять, что нашлось, а что нет). */
+ * панелей реально поднято. */
 browser.runtime.onMessage.addListener((msg) => {
   if (msg && msg.type === 'ping') {
     return Promise.resolve({ px: appliedPx, lift: liftEnabled, lifted: lifted.size });

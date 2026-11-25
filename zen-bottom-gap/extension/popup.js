@@ -5,6 +5,7 @@
  */
 
 const KEY_GAPS = 'gaps';
+const KEY_STRIP = 'strip';
 const KEY_LIFT = 'lift';
 const DEFAULT_PX = 20;
 
@@ -12,6 +13,8 @@ const hostEl = document.getElementById('host');
 const toggleEl = document.getElementById('toggle');
 const pxEl = document.getElementById('px');
 const rowEl = document.getElementById('row');
+const stripEl = document.getElementById('strip');
+const stripRowEl = document.getElementById('stripRow');
 const liftEl = document.getElementById('lift');
 const liftRowEl = document.getElementById('liftRow');
 const noticeEl = document.getElementById('notice');
@@ -35,8 +38,12 @@ function clampPx(value) {
 }
 
 async function loadAll() {
-  const data = await browser.storage.local.get([KEY_GAPS, KEY_LIFT]);
-  return { gaps: data[KEY_GAPS] || {}, lift: data[KEY_LIFT] || {} };
+  const data = await browser.storage.local.get([KEY_GAPS, KEY_STRIP, KEY_LIFT]);
+  return {
+    gaps: data[KEY_GAPS] || {},
+    strip: data[KEY_STRIP] || {},
+    lift: data[KEY_LIFT] || {},
+  };
 }
 
 async function save(key, map) {
@@ -46,6 +53,7 @@ async function save(key, map) {
 function setDocState(on) {
   rowEl.dataset.off = on ? '0' : '1';
   pxEl.disabled = !on;
+  stripRowEl.dataset.off = on ? '0' : '1';
   liftRowEl.dataset.off = on ? '0' : '1';
 }
 
@@ -67,12 +75,13 @@ async function init() {
 
   hostEl.textContent = host;
 
-  const { gaps, lift } = await loadAll();
+  const { gaps, strip, lift } = await loadAll();
   const current = gaps[host];
   const on = typeof current === 'number';
 
   toggleEl.checked = on;
   pxEl.value = on ? current : DEFAULT_PX;
+  stripEl.checked = on && Boolean(strip[host]);
   liftEl.checked = on && Boolean(lift[host]);
   setDocState(on);
 
@@ -102,18 +111,21 @@ async function refreshNotice() {
 toggleEl.addEventListener('change', async () => {
   if (!host) return;
   setDocState(toggleEl.checked);
-  const { gaps, lift } = await loadAll();
+  const { gaps, strip, lift } = await loadAll();
 
   if (toggleEl.checked) {
     gaps[host] = clampPx(pxEl.value);
     pxEl.value = gaps[host];
   } else {
     delete gaps[host];
-    delete lift[host];       // выключили сайт — «подъём панелей» тоже не нужен
+    delete strip[host];      // выключили сайт — остальные режимы тоже не нужны
+    delete lift[host];
+    stripEl.checked = false;
     liftEl.checked = false;
   }
 
   await save(KEY_GAPS, gaps);
+  await save(KEY_STRIP, strip);
   await save(KEY_LIFT, lift);
 });
 
@@ -138,6 +150,14 @@ pxEl.addEventListener('change', async () => {
   await save(KEY_GAPS, gaps);
   await new Promise((r) => setTimeout(r, 400));
   await refreshNotice();
+});
+
+stripEl.addEventListener('change', async () => {
+  if (!host || !toggleEl.checked) return;
+  const { strip } = await loadAll();
+  if (stripEl.checked) strip[host] = true;
+  else delete strip[host];
+  await save(KEY_STRIP, strip);
 });
 
 liftEl.addEventListener('change', async () => {
