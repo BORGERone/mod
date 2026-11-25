@@ -23,13 +23,14 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Build 440: full in-game editor window for {@code config/settledlands/loot_pools/*.txt}.
- * Lets builders create, edit, test-roll, and delete loot pools (items, min-max counts, rarity,
- * weights, live drop percentages) directly from the Loot Pool node inspector or pool dropdown.
+ * Build 440 + Build 441: full in-game editor window for {@code config/settledlands/loot_pools/*.txt}.
+ * Lets builders create, edit, test-roll, and delete loot pools (items, single-field {@code min-max}
+ * counts, CS:GO-style drop rarity chances, crate capacity weights, live drop percentages) across the
+ * full screen height right down to the bottom action bar.
  */
 public final class LootPoolEditorScreen440 extends Screen {
 
-    private static final int ROW_H = 26;
+    private static final int ROW_H = 24;
     private static final int MAX_VISIBLE_POPUP = 7;
     private static final int POPUP_ROW_H = 15;
 
@@ -72,8 +73,8 @@ public final class LootPoolEditorScreen440 extends Screen {
     private long closeWarnAt;
 
     private int rowScroll;
-    private int visibleRows;
-    private boolean previewEmptyWarning;
+    private int fullVisibleRows;
+    private int compactVisibleRows;
     private String statusText = "";
     private int statusColor = 0xFF9AA5B8;
 
@@ -83,14 +84,20 @@ public final class LootPoolEditorScreen440 extends Screen {
     private int panelH;
     private int rowX;
     private int itemColW;
-    private int minX;
-    private int maxX;
+    private int cntX;
+    private int cntW;
     private int rarX;
+    private int rarW;
     private int wgtX;
+    private int wgtW;
     private int pctX;
+    private int pctW;
     private int delX;
     private int listTop;
-    private int listBottom;
+    private int fullListBottom;
+    private int compactListBottom;
+    private int stripY;
+    private int btnY;
     private int scrollTrackX;
     private int fileBoxX;
     private int fileBoxY;
@@ -98,20 +105,16 @@ public final class LootPoolEditorScreen440 extends Screen {
 
     private static final class RowData {
         String itemId = "";
-        String minText = "1";
-        String maxText = "1";
-        String rarText = "10";
-        String wgtText = "50";
+        String countText = "1";
+        String rarText = "50";
+        String wgtText = "10";
         ItemStack cachedStack = ItemStack.EMPTY;
         String cachedId = "";
 
-        RowData(String itemId, int minCount, int maxCount, int rarity, double weight) {
+        RowData(String itemId, int minCount, int maxCount, double rarity, double weight) {
             this.itemId = itemId == null ? "" : itemId;
-            int min = Math.max(1, Math.min(64, minCount));
-            int max = Math.max(min, Math.min(64, maxCount));
-            this.minText = Integer.toString(min);
-            this.maxText = Integer.toString(max);
-            this.rarText = Integer.toString(Math.max(0, rarity));
+            this.countText = LootPool436.formatCountRange(minCount, maxCount);
+            this.rarText = LootPool436.formatRarity(rarity > 0.0D ? rarity : 50.0D);
             this.wgtText = LootPool436.formatWeight(weight > 0.0D ? weight : 10.0D);
         }
 
@@ -123,9 +126,14 @@ public final class LootPoolEditorScreen440 extends Screen {
             return cachedStack;
         }
 
-        int parsedRarity() {
-            Integer v = LootPool436.parseIntInput(rarText);
-            return v == null || v < 0 ? -1 : Math.min(LootPool436.MAX_CAP_LIMIT, v);
+        int[] parsedCountRange() {
+            return LootPool436.parseItemCountRange(countText);
+        }
+
+        double parsedRarity() {
+            Double v = LootPool436.parseRarityInput(rarText);
+            if (v == null || !Double.isFinite(v) || v < 0.0D) return -1.0D;
+            return Math.min((double) LootPool436.MAX_CAP_LIMIT, v);
         }
 
         double parsedWeight() {
@@ -133,42 +141,26 @@ public final class LootPoolEditorScreen440 extends Screen {
             return v == null || !Double.isFinite(v) || v <= 0.0D ? 0.0D : v;
         }
 
-        int parsedMin() {
-            Integer v = LootPool436.parseIntInput(minText);
-            return v == null ? -1 : Math.max(1, Math.min(64, v));
-        }
-
-        int parsedMax() {
-            Integer v = LootPool436.parseIntInput(maxText);
-            return v == null ? -1 : Math.max(1, Math.min(64, v));
-        }
-
         LootPool436.PoolEntry toPoolEntry() {
             String cleanId = LootPool436.cleanItemId(itemId);
             if (cleanId.isEmpty() || !cleanId.contains(":")) return null;
-            int rar = parsedRarity();
+            int[] cnt = parsedCountRange();
+            double rar = parsedRarity();
             double wgt = parsedWeight();
-            int min = parsedMin();
-            int max = parsedMax();
-            if (rar < 0 || wgt <= 0.0D || min <= 0 || max <= 0) return null;
-            if (max < min) max = min;
-            return new LootPool436.PoolEntry(cleanId, rar, wgt, min, max);
+            if (cnt == null || rar <= 0.0D || wgt <= 0.0D) return null;
+            return new LootPool436.PoolEntry(cleanId, rar, wgt, cnt[0], cnt[1]);
         }
     }
 
     private static final class RowSlot {
-        EditBox minBox;
-        EditBox maxBox;
+        EditBox countBox;
         EditBox rarBox;
         EditBox wgtBox;
         Button delBtn;
-        int y;
 
         void setVisible(boolean visible) {
-            minBox.visible = visible;
-            minBox.setEditable(visible);
-            maxBox.visible = visible;
-            maxBox.setEditable(visible);
+            countBox.visible = visible;
+            countBox.setEditable(visible);
             rarBox.visible = visible;
             rarBox.setEditable(visible);
             wgtBox.visible = visible;
@@ -178,8 +170,7 @@ public final class LootPoolEditorScreen440 extends Screen {
         }
 
         void clearFocus() {
-            minBox.setFocused(false);
-            maxBox.setFocused(false);
+            countBox.setFocused(false);
             rarBox.setFocused(false);
             wgtBox.setFocused(false);
         }
@@ -225,8 +216,8 @@ public final class LootPoolEditorScreen440 extends Screen {
         active = this;
         LootPoolCard436.ensureClientListenersRegistered();
 
-        panelW = Math.max(Math.min(width - 16, 620), Math.min(width - 8, 370));
-        panelH = Math.max(Math.min(height - 16, 390), Math.min(height - 8, 224));
+        panelW = Math.max(Math.min(width - 16, 700), Math.min(width - 8, 370));
+        panelH = Math.max(height - 16, Math.min(height - 8, 210));
         panelX = (width - panelW) / 2;
         panelY = (height - panelH) / 2;
 
@@ -236,12 +227,15 @@ public final class LootPoolEditorScreen440 extends Screen {
         scrollTrackX = rowRight + 6;
 
         delX = rowRight - 20;
-        pctX = delX - 4 - 42;
-        wgtX = pctX - 6 - 48;
-        rarX = wgtX - 6 - 44;
-        maxX = rarX - 8 - 28;
-        minX = maxX - 10 - 28;
-        itemColW = Math.max(70, minX - 6 - rowX);
+        pctW = 44;
+        pctX = delX - 4 - pctW;
+        wgtW = 46;
+        wgtX = pctX - 6 - wgtW;
+        rarW = 48;
+        rarX = wgtX - 6 - rarW;
+        cntW = 52;
+        cntX = rarX - 6 - cntW;
+        itemColW = Math.max(76, cntX - 6 - rowX);
 
         int headRight = panelX + panelW - 10;
         Component closeLbl = Component.translatable("gui.settledlands.loot_pool.editor.close");
@@ -261,7 +255,7 @@ public final class LootPoolEditorScreen440 extends Screen {
                 .build();
         addRenderableWidget(deletePoolBtn);
 
-        int fileRowY = panelY + 28;
+        int fileRowY = panelY + 26;
         Component newLbl = Component.translatable("gui.settledlands.loot_pool.editor.new_pool");
         int newBtnW = Math.max(58, font.width(newLbl.getString()) + 14);
         int dropBtnW = 18;
@@ -298,42 +292,40 @@ public final class LootPoolEditorScreen440 extends Screen {
                 .build();
         addRenderableWidget(newPoolBtn);
 
-        listTop = panelY + 76;
-        int footerH = 48;
-        int availTableH = Math.max(ROW_H * 2, (panelY + panelH - footerH) - listTop);
-        visibleRows = Math.max(2, availTableH / ROW_H);
-        listBottom = listTop + visibleRows * ROW_H;
+        listTop = panelY + 72;
+        btnY = panelY + panelH - 24;
+        stripY = btnY - 22;
+        fullListBottom = Math.max(listTop + ROW_H * 2, btnY - 6);
+        compactListBottom = Math.max(listTop + ROW_H, stripY - 4);
+        fullVisibleRows = Math.max(2, (fullListBottom - listTop) / ROW_H);
+        compactVisibleRows = Math.max(1, (compactListBottom - listTop) / ROW_H);
 
         slots.clear();
-        for (int s = 0; s < visibleRows; s++) {
+        for (int s = 0; s < fullVisibleRows; s++) {
             final int slotIdx = s;
             int ry = listTop + s * ROW_H;
-            int wy = ry + 4;
+            int wy = ry + 3;
             RowSlot slot = new RowSlot();
-            slot.y = ry;
 
-            slot.minBox = new EditBox(font, minX, wy, 28, 18, Component.empty());
-            slot.minBox.setMaxLength(3);
-            slot.minBox.setFilter(LootPoolEditorScreen440::isIntInput);
-            slot.minBox.setResponder(val -> onRowFieldChanged(slotIdx, 0, val));
-            addRenderableWidget(slot.minBox);
+            slot.countBox = new EditBox(font, cntX, wy, cntW, 18, Component.empty());
+            slot.countBox.setMaxLength(7);
+            slot.countBox.setHint(Component.literal("1-4"));
+            slot.countBox.setFilter(LootPoolEditorScreen440::isCountRangeInput);
+            slot.countBox.setResponder(val -> onRowFieldChanged(slotIdx, 0, val));
+            addRenderableWidget(slot.countBox);
 
-            slot.maxBox = new EditBox(font, maxX, wy, 28, 18, Component.empty());
-            slot.maxBox.setMaxLength(3);
-            slot.maxBox.setFilter(LootPoolEditorScreen440::isIntInput);
-            slot.maxBox.setResponder(val -> onRowFieldChanged(slotIdx, 1, val));
-            addRenderableWidget(slot.maxBox);
-
-            slot.rarBox = new EditBox(font, rarX, wy, 44, 18, Component.empty());
-            slot.rarBox.setMaxLength(7);
-            slot.rarBox.setFilter(LootPoolEditorScreen440::isIntInput);
-            slot.rarBox.setResponder(val -> onRowFieldChanged(slotIdx, 2, val));
+            slot.rarBox = new EditBox(font, rarX, wy, rarW, 18, Component.empty());
+            slot.rarBox.setMaxLength(9);
+            slot.rarBox.setHint(Component.literal("50"));
+            slot.rarBox.setFilter(LootPoolEditorScreen440::isDecimalInput);
+            slot.rarBox.setResponder(val -> onRowFieldChanged(slotIdx, 1, val));
             addRenderableWidget(slot.rarBox);
 
-            slot.wgtBox = new EditBox(font, wgtX, wy, 48, 18, Component.empty());
+            slot.wgtBox = new EditBox(font, wgtX, wy, wgtW, 18, Component.empty());
             slot.wgtBox.setMaxLength(9);
+            slot.wgtBox.setHint(Component.literal("10"));
             slot.wgtBox.setFilter(LootPoolEditorScreen440::isDecimalInput);
-            slot.wgtBox.setResponder(val -> onRowFieldChanged(slotIdx, 3, val));
+            slot.wgtBox.setResponder(val -> onRowFieldChanged(slotIdx, 2, val));
             addRenderableWidget(slot.wgtBox);
 
             slot.delBtn = Button.builder(Component.literal("x"), b -> deleteRowAtSlot(slotIdx))
@@ -345,7 +337,6 @@ public final class LootPoolEditorScreen440 extends Screen {
             slots.add(slot);
         }
 
-        int btnY = panelY + panelH - 24;
         int availBtnW = panelW - 20;
         Component addLbl = Component.translatable("gui.settledlands.loot_pool.editor.add_item");
         Component testLbl = Component.translatable("gui.settledlands.loot_pool.editor.test");
@@ -402,6 +393,19 @@ public final class LootPoolEditorScreen440 extends Screen {
         updateActionButtons();
     }
 
+    private boolean hasBottomStrip() {
+        return !statusText.isEmpty() || !previewDrops.isEmpty();
+    }
+
+    private int activeVisibleRows() {
+        if (fullVisibleRows <= 0) return 2;
+        return hasBottomStrip() ? compactVisibleRows : fullVisibleRows;
+    }
+
+    private int currentListBottom() {
+        return hasBottomStrip() ? compactListBottom : fullListBottom;
+    }
+
     private void applyServerData(String rawPayload) {
         String[] lines = rawPayload.split("\n", -1);
         String status = lines.length >= 1 ? lines[0].trim() : "";
@@ -419,6 +423,7 @@ public final class LootPoolEditorScreen440 extends Screen {
             } else {
                 statusText = Component.translatable("gui.settledlands.loot_pool.editor.err_io").getString();
             }
+            refreshRowWidgets(false);
             updateActionButtons();
             return;
         }
@@ -431,7 +436,6 @@ public final class LootPoolEditorScreen440 extends Screen {
             fileExistsOnServer = false;
             rowsData.clear();
             previewDrops.clear();
-            previewEmptyWarning = false;
             rowScroll = 0;
             String nextName = LootPool436.suggestNextPoolName(LootPool436.getServerPools());
             setFileNameInput(nextName);
@@ -460,6 +464,7 @@ public final class LootPoolEditorScreen440 extends Screen {
             }
             statusColor = 0xFF7BE088;
             statusText = Component.translatable("gui.settledlands.loot_pool.editor.saved", file).getString();
+            refreshRowWidgets(false);
             updateActionButtons();
             return;
         }
@@ -467,7 +472,6 @@ public final class LootPoolEditorScreen440 extends Screen {
         // "OK" or "NEW"
         rowsData.clear();
         previewDrops.clear();
-        previewEmptyWarning = false;
         rowScroll = 0;
         if ("OK".equals(status)) {
             List<LootPool436.PoolEntry> entries = LootPool436.decodeEntriesWire(lines, 2);
@@ -520,6 +524,12 @@ public final class LootPoolEditorScreen440 extends Screen {
         closeWarnAt = 0L;
         deleteArmAt = 0L;
         pendingSwitchPool = "";
+        boolean hadStrip = hasBottomStrip();
+        if (hadStrip) {
+            statusText = "";
+            previewDrops.clear();
+            refreshRowWidgets(false);
+        }
         updateActionButtons();
     }
 
@@ -538,6 +548,7 @@ public final class LootPoolEditorScreen440 extends Screen {
     }
 
     private void refreshRowWidgets(boolean resetFocus) {
+        int visRows = activeVisibleRows();
         int maxScr = maxRowScroll();
         if (rowScroll > maxScr) rowScroll = maxScr;
         if (rowScroll < 0) rowScroll = 0;
@@ -548,16 +559,14 @@ public final class LootPoolEditorScreen440 extends Screen {
                 RowSlot slot = slots.get(s);
                 if (resetFocus) slot.clearFocus();
                 int idx = rowScroll + s;
-                if (idx >= 0 && idx < rowsData.size()) {
+                if (s < visRows && idx >= 0 && idx < rowsData.size()) {
                     RowData data = rowsData.get(idx);
-                    slot.minBox.setValue(data.minText);
-                    slot.maxBox.setValue(data.maxText);
+                    slot.countBox.setValue(data.countText);
                     slot.rarBox.setValue(data.rarText);
                     slot.wgtBox.setValue(data.wgtText);
                     slot.setVisible(true);
                 } else {
-                    slot.minBox.setValue("");
-                    slot.maxBox.setValue("");
+                    slot.countBox.setValue("");
                     slot.rarBox.setValue("");
                     slot.wgtBox.setValue("");
                     slot.setVisible(false);
@@ -574,10 +583,9 @@ public final class LootPoolEditorScreen440 extends Screen {
         if (dataIdx < 0 || dataIdx >= rowsData.size()) return;
         RowData row = rowsData.get(dataIdx);
         String v = value == null ? "" : value;
-        if (fieldIdx == 0) row.minText = v;
-        else if (fieldIdx == 1) row.maxText = v;
-        else if (fieldIdx == 2) row.rarText = v;
-        else if (fieldIdx == 3) row.wgtText = v;
+        if (fieldIdx == 0) row.countText = v;
+        else if (fieldIdx == 1) row.rarText = v;
+        else if (fieldIdx == 2) row.wgtText = v;
         markDirty();
     }
 
@@ -586,7 +594,7 @@ public final class LootPoolEditorScreen440 extends Screen {
         if (idx < 0 || idx >= rowsData.size()) return;
         rowsData.remove(idx);
         previewDrops.clear();
-        previewEmptyWarning = false;
+        statusText = "";
         markDirty();
         refreshRowWidgets(true);
         updateActionButtons();
@@ -600,10 +608,10 @@ public final class LootPoolEditorScreen440 extends Screen {
         String clean = LootPool436.cleanItemId(itemId);
         if (clean.isEmpty()) return;
         int cnt = Math.max(1, Math.min(64, suggestedCount));
-        rowsData.add(new RowData(clean, cnt, cnt, 10, 50.0D));
-        rowScroll = Math.max(0, rowsData.size() - visibleRows);
+        rowsData.add(new RowData(clean, cnt, cnt, 50.0D, 10.0D));
+        rowScroll = Math.max(0, rowsData.size() - activeVisibleRows());
         previewDrops.clear();
-        previewEmptyWarning = false;
+        statusText = "";
         markDirty();
     }
 
@@ -614,7 +622,7 @@ public final class LootPoolEditorScreen440 extends Screen {
         row.itemId = clean;
         row.cachedId = "";
         previewDrops.clear();
-        previewEmptyWarning = false;
+        statusText = "";
         markDirty();
     }
 
@@ -631,7 +639,6 @@ public final class LootPoolEditorScreen440 extends Screen {
         poolPopupOpen = false;
         rowsData.clear();
         previewDrops.clear();
-        previewEmptyWarning = false;
         rowScroll = 0;
         loadedServerFile = "";
         fileExistsOnServer = false;
@@ -667,6 +674,7 @@ public final class LootPoolEditorScreen440 extends Screen {
             statusColor = 0xFFFFB048;
             statusText = Component.translatable("gui.settledlands.loot_pool.editor.delete_warn",
                     loadedServerFile).getString();
+            refreshRowWidgets(false);
             updateActionButtons();
             return;
         }
@@ -682,11 +690,13 @@ public final class LootPoolEditorScreen440 extends Screen {
         if (normName.isEmpty()) {
             statusColor = 0xFFFF7070;
             statusText = Component.translatable("gui.settledlands.loot_pool.editor.err_name").getString();
+            refreshRowWidgets(false);
             if (fileNameBox != null) setFocused(fileNameBox);
             return;
         }
 
         List<LootPool436.PoolEntry> validEntries = new ArrayList<>(rowsData.size());
+        int visRows = activeVisibleRows();
         for (int i = 0; i < rowsData.size(); i++) {
             RowData row = rowsData.get(i);
             LootPool436.PoolEntry entry = row.toPoolEntry();
@@ -694,15 +704,16 @@ public final class LootPoolEditorScreen440 extends Screen {
                 statusColor = 0xFFFF7070;
                 statusText = Component.translatable("gui.settledlands.loot_pool.editor.err_row",
                         Integer.valueOf(i + 1)).getString();
-                if (i < rowScroll || i >= rowScroll + visibleRows) {
+                if (i < rowScroll || i >= rowScroll + visRows) {
                     rowScroll = Math.max(0, Math.min(maxRowScroll(), i));
                     refreshRowWidgets(true);
+                } else {
+                    refreshRowWidgets(false);
                 }
                 return;
             }
-            // Normalize min/max in UI if user typed min > max
-            row.minText = Integer.toString(entry.minCount);
-            row.maxText = Integer.toString(entry.maxCount);
+            // Normalize reversed/1-1 range formatting cleanly on save.
+            row.countText = LootPool436.formatCountRange(entry.minCount, entry.maxCount);
             validEntries.add(entry);
         }
         refreshRowWidgets(false);
@@ -714,30 +725,30 @@ public final class LootPoolEditorScreen440 extends Screen {
             closeAfterSave = false;
             statusColor = 0xFFFF7070;
             statusText = Component.translatable("gui.settledlands.loot_pool.editor.err_too_big").getString();
+            refreshRowWidgets(false);
         }
         updateActionButtons();
     }
 
     private void runTestRoll() {
         previewDrops.clear();
-        previewEmptyWarning = false;
         List<LootPool436.PoolEntry> entries = new ArrayList<>(rowsData.size());
         for (RowData r : rowsData) {
             LootPool436.PoolEntry e = r.toPoolEntry();
             if (e != null) entries.add(e);
         }
         if (entries.isEmpty()) {
-            previewEmptyWarning = true;
             statusColor = 0xFFFFB048;
             statusText = Component.translatable("gui.settledlands.loot_pool.editor.preview_none").getString();
+            refreshRowWidgets(false);
             return;
         }
         LootPool436.Parsed spec = currentNodeSpec();
         List<LootPool436.Drop> rolled = LootPool436.rollDrops(entries, spec, previewRandom);
         if (rolled.isEmpty()) {
-            previewEmptyWarning = true;
             statusColor = 0xFFFFB048;
             statusText = Component.translatable("gui.settledlands.loot_pool.editor.preview_filtered").getString();
+            refreshRowWidgets(false);
             return;
         }
         for (LootPool436.Drop d : rolled) {
@@ -747,6 +758,7 @@ public final class LootPoolEditorScreen440 extends Screen {
             }
         }
         statusText = "";
+        refreshRowWidgets(false);
     }
 
     private LootPool436.Parsed currentNodeSpec() {
@@ -767,6 +779,7 @@ public final class LootPoolEditorScreen440 extends Screen {
                 statusColor = 0xFFFFB048;
                 statusText = Component.translatable("gui.settledlands.loot_pool.editor.unsaved_warn")
                         .getString();
+                refreshRowWidgets(false);
                 return;
             }
         }
@@ -779,7 +792,7 @@ public final class LootPoolEditorScreen440 extends Screen {
     }
 
     private int maxRowScroll() {
-        return Math.max(0, rowsData.size() - visibleRows);
+        return Math.max(0, rowsData.size() - activeVisibleRows());
     }
 
     @Override
@@ -805,7 +818,7 @@ public final class LootPoolEditorScreen440 extends Screen {
 
         // File row label
         graphics.drawString(font, Component.translatable("gui.settledlands.loot_pool.editor.file_lbl"),
-                panelX + 10, panelY + 33, 0xFFB0BACB, false);
+                panelX + 10, panelY + 31, 0xFFB0BACB, false);
 
         // Summary line
         renderSummaryLine(graphics);
@@ -815,7 +828,7 @@ public final class LootPoolEditorScreen440 extends Screen {
         graphics.drawString(font, Component.translatable("gui.settledlands.loot_pool.editor.col_item"),
                 rowX, hdrY, 0xFF9AA5B8, false);
         graphics.drawString(font, Component.translatable("gui.settledlands.loot_pool.editor.col_count"),
-                minX, hdrY, 0xFF9AA5B8, false);
+                cntX, hdrY, 0xFF9AA5B8, false);
         graphics.drawString(font, Component.translatable("gui.settledlands.loot_pool.editor.col_rarity"),
                 rarX, hdrY, 0xFF9AA5B8, false);
         graphics.drawString(font, Component.translatable("gui.settledlands.loot_pool.editor.col_weight"),
@@ -823,21 +836,37 @@ public final class LootPoolEditorScreen440 extends Screen {
         graphics.drawString(font, Component.translatable("gui.settledlands.loot_pool.editor.col_chance"),
                 pctX, hdrY, 0xFF9AA5B8, false);
 
-        // Table frame
+        int listBottom = currentListBottom();
+        int visRows = activeVisibleRows();
+
+        // Table frame reaching all the way to the bottom strip / action buttons
         int tableRight = rowX + (panelW - 28);
         graphics.fill(rowX - 2, listTop - 2, tableRight + 2, listBottom + 2, 0x990D1118);
         graphics.renderOutline(rowX - 2, listTop - 2, (tableRight - rowX) + 4, (listBottom - listTop) + 4,
                 0xFF272F40);
 
-        // Compute total weight for live chance column
-        double totalWeight = 0.0D;
+        // Compute total rarity for CS:GO-style live drop percentage
+        double totalRarity = 0.0D;
         for (RowData r : rowsData) {
-            totalWeight += r.parsedWeight();
+            double rr = r.parsedRarity();
+            if (rr > 0.0D) totalRarity += rr;
         }
         LootPool436.Parsed nodeSpec = currentNodeSpec();
 
         ItemStack hoveredRowStack = ItemStack.EMPTY;
         Component extraTooltip = null;
+
+        if (!poolPopupOpen && mouseY >= hdrY - 2 && mouseY < listTop - 2) {
+            if (mouseX >= cntX && mouseX < rarX) {
+                extraTooltip = Component.translatable("gui.settledlands.loot_pool.editor.tip_count");
+            } else if (mouseX >= rarX && mouseX < wgtX) {
+                extraTooltip = Component.translatable("gui.settledlands.loot_pool.editor.tip_rarity");
+            } else if (mouseX >= wgtX && mouseX < pctX) {
+                extraTooltip = Component.translatable("gui.settledlands.loot_pool.editor.tip_weight");
+            } else if (mouseX >= pctX && mouseX < delX) {
+                extraTooltip = Component.translatable("gui.settledlands.loot_pool.editor.tip_chance");
+            }
+        }
 
         if (rowsData.isEmpty()) {
             Component emptyKey = Component.translatable(loading
@@ -846,7 +875,7 @@ public final class LootPoolEditorScreen440 extends Screen {
             graphics.drawCenteredString(font, emptyKey, rowX + (tableRight - rowX) / 2,
                     (listTop + listBottom) / 2 - 4, 0xFF8390A6);
         } else {
-            for (int s = 0; s < visibleRows; s++) {
+            for (int s = 0; s < visRows; s++) {
                 int idx = rowScroll + s;
                 if (idx >= rowsData.size()) break;
                 RowData data = rowsData.get(idx);
@@ -856,7 +885,7 @@ public final class LootPoolEditorScreen440 extends Screen {
                 graphics.fill(rowX, ry, tableRight, ry + ROW_H - 1, rowBg);
 
                 // Item picker cell
-                int itemBtnY = ry + 3;
+                int itemBtnY = ry + 2;
                 int itemBtnH = 20;
                 boolean overItem = !poolPopupOpen
                         && mouseX >= rowX && mouseX < rowX + itemColW
@@ -888,33 +917,30 @@ public final class LootPoolEditorScreen440 extends Screen {
                     }
                 }
 
-                // Dash between min and max
-                graphics.drawString(font, "-", minX + 30, ry + 8, 0xFF9AA5B8, false);
-
                 // Invalid cell highlights
-                if (data.parsedMin() < 0) {
-                    graphics.renderOutline(minX - 1, ry + 3, 30, 20, 0xFFDD4444);
+                if (data.parsedCountRange() == null) {
+                    graphics.renderOutline(cntX - 1, ry + 2, cntW + 2, 20, 0xFFDD4444);
                 }
-                if (data.parsedMax() < 0) {
-                    graphics.renderOutline(maxX - 1, ry + 3, 30, 20, 0xFFDD4444);
-                }
-                if (data.parsedRarity() < 0) {
-                    graphics.renderOutline(rarX - 1, ry + 3, 46, 20, 0xFFDD4444);
+                if (data.parsedRarity() <= 0.0D) {
+                    graphics.renderOutline(rarX - 1, ry + 2, rarW + 2, 20, 0xFFDD4444);
                 }
                 if (data.parsedWeight() <= 0.0D) {
-                    graphics.renderOutline(wgtX - 1, ry + 3, 50, 20, 0xFFDD4444);
+                    graphics.renderOutline(wgtX - 1, ry + 2, wgtW + 2, 20, 0xFFDD4444);
                 }
 
-                // Live drop percentage + node filter badge
-                double w = data.parsedWeight();
+                // Live drop percentage determined by rarity (like CS:GO cases) + crate filter badge
+                double rarVal = data.parsedRarity();
                 String pctStr;
                 int pctColor;
                 boolean filteredOut = false;
-                if (w <= 0.0D || totalWeight <= 0.0D) {
+                if (rarVal < 0.0D) {
                     pctStr = "--";
                     pctColor = 0xFFDD6666;
+                } else if (rarVal == 0.0D || totalRarity <= 0.0D) {
+                    pctStr = "0%";
+                    pctColor = 0xFFDD6666;
                 } else {
-                    double pct = (w / totalWeight) * 100.0D;
+                    double pct = (rarVal / totalRarity) * 100.0D;
                     pctStr = pct >= 10.0D
                             ? String.format(Locale.ROOT, "%.1f%%", pct)
                             : String.format(Locale.ROOT, "%.2f%%", pct);
@@ -927,7 +953,7 @@ public final class LootPoolEditorScreen440 extends Screen {
                         pctColor = 0xFF93E2A2;
                     }
                 }
-                graphics.drawString(font, clip(font, pctStr, 42), pctX, ry + 8, pctColor, false);
+                graphics.drawString(font, clip(font, pctStr, pctW), pctX, ry + 8, pctColor, false);
                 if (filteredOut && !poolPopupOpen
                         && mouseX >= pctX && mouseX < delX - 2 && mouseY >= ry && mouseY < ry + ROW_H) {
                     extraTooltip = Component.translatable("gui.settledlands.loot_pool.editor.filtered_tip");
@@ -940,13 +966,15 @@ public final class LootPoolEditorScreen440 extends Screen {
         if (maxScr > 0) {
             int trackH = listBottom - listTop;
             graphics.fill(scrollTrackX, listTop, scrollTrackX + 5, listTop + trackH, 0xFF10141C);
-            int thumbH = Math.max(18, trackH * visibleRows / Math.max(1, rowsData.size()));
+            int thumbH = Math.max(18, trackH * visRows / Math.max(1, rowsData.size()));
             int thumbY = listTop + (trackH - thumbH) * rowScroll / Math.max(1, maxScr);
             graphics.fill(scrollTrackX, thumbY, scrollTrackX + 5, thumbY + thumbH, 0xFF62718C);
         }
 
-        // Status / Roll Preview strip
-        ItemStack previewHover = renderBottomStrip(graphics, mouseX, mouseY);
+        // Optional status / roll preview strip (hidden during normal editing so table goes to buttons)
+        ItemStack previewHover = hasBottomStrip()
+                ? renderBottomStrip(graphics, mouseX, mouseY)
+                : ItemStack.EMPTY;
 
         super.render(graphics, mouseX, mouseY, partialTick);
 
@@ -962,19 +990,27 @@ public final class LootPoolEditorScreen440 extends Screen {
     }
 
     private void renderSummaryLine(GuiGraphics graphics) {
-        int y = panelY + 51;
-        double totalW = 0.0D;
-        for (RowData r : rowsData) totalW += r.parsedWeight();
+        int y = panelY + 48;
+        double totalR = 0.0D;
+        for (RowData r : rowsData) {
+            double rr = r.parsedRarity();
+            if (rr > 0.0D) totalR += rr;
+        }
         String baseSummary = Component.translatable(
                 "gui.settledlands.loot_pool.editor.summary",
                 Integer.valueOf(rowsData.size()),
-                LootPool436.formatWeight(totalW)).getString();
+                LootPool436.formatRarity(totalR)).getString();
         if (sourceNode != null) {
             String any = Component.translatable("gui.settledlands.loot_pool.any").getString();
             String rar = LootPool436.summaryRange(LootPool436.rawRarity(sourceNode), any);
-            String wgt = LootPool436.summaryRange(LootPool436.rawWeight(sourceNode), any);
+            String rawW = LootPool436.rawWeight(sourceNode);
+            String wgt = LootPool436.summaryRange(rawW, any);
             String rls = LootPool436.rawRolls(sourceNode);
-            if (rls.isEmpty()) rls = LootPool436.DEFAULT_ROLLS;
+            if (rls.isEmpty()) {
+                rls = rawW.isEmpty()
+                        ? LootPool436.DEFAULT_ROLLS
+                        : Component.translatable("gui.settledlands.loot_pool.editor.by_weight").getString();
+            }
             baseSummary = baseSummary + "  |  " + Component.translatable(
                     "gui.settledlands.loot_pool.editor.node_caps", rar, wgt, rls).getString();
         }
@@ -982,19 +1018,19 @@ public final class LootPoolEditorScreen440 extends Screen {
     }
 
     private ItemStack renderBottomStrip(GuiGraphics graphics, int mouseX, int mouseY) {
-        int stripY = panelY + panelH - 44;
         ItemStack hovered = ItemStack.EMPTY;
         if (!previewDrops.isEmpty() && statusText.isEmpty()) {
             String prefix = Component.translatable("gui.settledlands.loot_pool.editor.preview_lbl").getString();
             graphics.drawString(font, prefix, panelX + 10, stripY + 4, 0xFFF5B841, false);
             int x = panelX + 14 + font.width(prefix);
-            int maxXLimit = panelX + panelW - 14;
+            int maxXLimit = panelX + panelW - 28;
             for (PreviewDrop d : previewDrops) {
                 if (x + 22 > maxXLimit) break;
                 boolean over = !poolPopupOpen && mouseX >= x && mouseX < x + 18
                         && mouseY >= stripY && mouseY < stripY + 18;
                 graphics.fill(x, stripY, x + 18, stripY + 18, over ? 0xFF2B3548 : 0xFF191F2A);
-                graphics.renderOutline(x, stripY, 18, 18, over ? (0xFF000000 | LootPool436.ACCENT_COLOR) : 0xFF333D50);
+                graphics.renderOutline(x, stripY, 18, 18,
+                        over ? (0xFF000000 | LootPool436.ACCENT_COLOR) : 0xFF333D50);
                 graphics.renderItem(d.stack, x + 1, stripY + 1);
                 if (d.count > 1) {
                     String cnt = Integer.toString(d.count);
@@ -1004,6 +1040,11 @@ public final class LootPoolEditorScreen440 extends Screen {
                 if (over) hovered = d.stack;
                 x += 22;
             }
+            int closeX = panelX + panelW - 24;
+            boolean overClose = !poolPopupOpen && mouseX >= closeX && mouseX <= closeX + 14
+                    && mouseY >= stripY + 2 && mouseY <= stripY + 16;
+            graphics.fill(closeX, stripY + 2, closeX + 14, stripY + 16, overClose ? 0xFF354055 : 0xFF1D2432);
+            graphics.drawString(font, "x", closeX + 4, stripY + 5, overClose ? 0xFFFFFFFF : 0xFF9AA5B8, false);
             return hovered;
         }
         if (!statusText.isEmpty()) {
@@ -1067,6 +1108,15 @@ public final class LootPoolEditorScreen440 extends Screen {
         }
 
         if (button == 0) {
+            if (hasBottomStrip() && mouseX >= panelX + 10 && mouseX <= panelX + panelW - 10
+                    && mouseY >= stripY && mouseY <= stripY + 18) {
+                previewDrops.clear();
+                statusText = "";
+                refreshRowWidgets(false);
+                return true;
+            }
+
+            int listBottom = currentListBottom();
             int maxScr = maxRowScroll();
             if (maxScr > 0) {
                 int trackH = listBottom - listTop;
@@ -1079,10 +1129,11 @@ public final class LootPoolEditorScreen440 extends Screen {
             }
 
             // Item picker cell click inside visible rows
-            for (int s = 0; s < visibleRows; s++) {
+            int visRows = activeVisibleRows();
+            for (int s = 0; s < visRows; s++) {
                 int idx = rowScroll + s;
                 if (idx >= rowsData.size()) break;
-                int ry = listTop + s * ROW_H + 3;
+                int ry = listTop + s * ROW_H + 2;
                 if (mouseX >= rowX && mouseX < rowX + itemColW && mouseY >= ry && mouseY < ry + 20) {
                     playClick();
                     openItemPicker(idx);
@@ -1122,6 +1173,7 @@ public final class LootPoolEditorScreen440 extends Screen {
             statusColor = 0xFFFFB048;
             statusText = Component.translatable("gui.settledlands.loot_pool.editor.switch_warn",
                     chosen).getString();
+            refreshRowWidgets(false);
             return true;
         }
         pendingSwitchPool = "";
@@ -1130,6 +1182,7 @@ public final class LootPoolEditorScreen440 extends Screen {
         statusColor = 0xFF9AA5B8;
         statusText = Component.translatable("gui.settledlands.loot_pool.editor.loading").getString();
         ChestLootNet436.sendPoolQuery(chosen);
+        refreshRowWidgets(false);
         updateActionButtons();
         return true;
     }
@@ -1158,6 +1211,7 @@ public final class LootPoolEditorScreen440 extends Screen {
                 poolPopupScroll = Math.max(0, Math.min(maxPScr, poolPopupScroll + step));
                 return true;
             }
+            int listBottom = currentListBottom();
             if (maxRowScroll() > 0 && mouseX >= panelX && mouseX <= panelX + panelW
                     && mouseY >= listTop && mouseY <= listBottom) {
                 rowScroll = Math.max(0, Math.min(maxRowScroll(), rowScroll + step));
@@ -1193,7 +1247,7 @@ public final class LootPoolEditorScreen440 extends Screen {
 
     private void updateRowScrollFromMouse(double mouseY) {
         int max = maxRowScroll();
-        int trackH = listBottom - listTop;
+        int trackH = currentListBottom() - listTop;
         if (max <= 0 || trackH <= 0) return;
         double frac = (mouseY - listTop) / (double) trackH;
         if (frac < 0.0) frac = 0.0;
@@ -1205,11 +1259,18 @@ public final class LootPoolEditorScreen440 extends Screen {
         }
     }
 
-    private static boolean isIntInput(String s) {
+    private static boolean isCountRangeInput(String s) {
         if (s == null || s.isEmpty()) return true;
+        if (s.length() > 7) return false;
+        boolean seenDash = false;
         for (int i = 0; i < s.length(); i++) {
             char c = s.charAt(i);
-            if (c < '0' || c > '9') return false;
+            if (c >= '0' && c <= '9') continue;
+            if (c == '-' && !seenDash) {
+                seenDash = true;
+                continue;
+            }
+            return false;
         }
         return true;
     }

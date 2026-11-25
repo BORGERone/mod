@@ -110,17 +110,21 @@ public final class LootPool436 {
 
     public static final class PoolEntry {
         public final String itemId;
-        public final int rarity;
+        public final double rarity;
         public final double weight;
         public final int minCount;
         public final int maxCount;
 
-        public PoolEntry(String itemId, int rarity, double weight, int minCount, int maxCount) {
+        public PoolEntry(String itemId, double rarity, double weight, int minCount, int maxCount) {
             this.itemId = itemId;
             this.rarity = rarity;
             this.weight = weight;
             this.minCount = minCount;
             this.maxCount = maxCount;
+        }
+
+        public PoolEntry(String itemId, int rarity, double weight, int minCount, int maxCount) {
+            this(itemId, (double) rarity, weight, minCount, maxCount);
         }
     }
 
@@ -334,7 +338,7 @@ public final class LootPool436 {
 
     /**
      * Parses lines from {@code config/settledlands/loot_pools/*.txt}.
-     * Format per line: {@code item_id | rarity | weight | [count_or_range]}.
+     * Format per line: {@code item_id | rarity_chance | weight | [count_or_range]}.
      */
     public static List<PoolEntry> parseLines(List<String> lines) {
         if (lines == null || lines.isEmpty()) return Collections.emptyList();
@@ -347,12 +351,16 @@ public final class LootPool436 {
             if (cols.length < 3) continue;
             String itemId = cols[0].trim();
             if (itemId.isEmpty() || !itemId.contains(":")) continue;
-            Integer rarityObj = tryParseInt(cols[1]);
+            Double rarityObj = tryParseDouble(cols[1]);
             Double weightObj = tryParseDouble(cols[2]);
             if (rarityObj == null || weightObj == null) continue;
-            int rarity = Math.max(0, rarityObj);
+            double rarity = rarityObj;
             double weight = weightObj;
-            if (weight <= 0.0D) continue;
+            if (!Double.isFinite(rarity) || rarity < 0.0D
+                    || !Double.isFinite(weight) || weight <= 0.0D) {
+                continue;
+            }
+            rarity = Math.min((double) MAX_CAP_LIMIT, rarity);
 
             int minCount = 1;
             int maxCount = 1;
@@ -383,45 +391,76 @@ public final class LootPool436 {
 
     // ---- rolling -----------------------------------------------------------
 
+    /**
+     * Build 441: CS:GO-style weighted case rolling by {@code entry.rarity}, bounded by the crate's
+     * total weight capacity ({@code spec.rawWeight}) and optional item/roll limit ({@code spec.rawRolls}).
+     */
     public static List<Drop> rollDrops(List<PoolEntry> entries, Parsed spec, Random rnd) {
         if (entries == null || entries.isEmpty() || spec == null || rnd == null) {
             return Collections.emptyList();
         }
         Range rarityCapRange = parseRange(spec.rawRarity, MAX_CAP_LIMIT);
-        Range weightCapRange = parseRange(spec.rawWeight, MAX_CAP_LIMIT);
+        Range weightBudgetRange = parseRange(spec.rawWeight, MAX_CAP_LIMIT);
         Range rollsRange = parseRange(spec.rawRolls, MAX_ROLLS_LIMIT);
-        int rolls = rollsRange.unbounded ? 3 : rollsRange.pick(rnd);
-        if (rolls <= 0) return Collections.emptyList();
 
-        List<Drop> out = new ArrayList<>(rolls);
+        // Crate total weight budget is picked once per container (e.g. 40 -> fits 2x weight 20 or 4x weight 10).
+        double remainingWeight = weightBudgetRange.unbounded
+                ? Double.POSITIVE_INFINITY
+                : (double) weightBudgetRange.pick(rnd);
+
+        int maxRolls;
+        if (!rollsRange.unbounded) {
+            maxRolls = rollsRange.pick(rnd);
+        } else if (!weightBudgetRange.unbounded) {
+            maxRolls = MAX_ROLLS_LIMIT;
+        } else {
+            maxRolls = 3;
+        }
+        if (maxRolls <= 0) return Collections.emptyList();
+
+        List<Drop> out = new ArrayList<>(Math.min(maxRolls, 16));
         List<PoolEntry> eligible = new ArrayList<>(entries.size());
 
-        for (int r = 0; r < rolls; r++) {
-            int maxRarity = rarityCapRange.pick(rnd);
-            double maxWeight = weightCapRange.unbounded
+        for (int r = 0; r < maxRolls; r++) {
+            if (Double.isFinite(remainingWeight) && remainingWeight <= 1e-6D) {
+                break;
+            }
+            double maxRarity = rarityCapRange.unbounded
                     ? Double.POSITIVE_INFINITY
-                    : (double) weightCapRange.pick(rnd);
+                    : (double) rarityCapRange.pick(rnd);
 
             eligible.clear();
-            double totalWeight = 0.0D;
+            double totalRarityChance = 0.0D;
             for (PoolEntry e : entries) {
-                if (e.rarity <= maxRarity && e.weight <= maxWeight && e.weight > 0.0D) {
+                if (e == null || !Double.isFinite(e.rarity) || e.rarity <= 0.0D) continue;
+                if (!Double.isFinite(e.weight) || e.weight <= 0.0D) continue;
+                if (e.rarity <= maxRarity && e.weight <= remainingWeight + 1e-6D) {
                     eligible.add(e);
-                    totalWeight += e.weight;
+                    totalRarityChance += e.rarity;
                 }
             }
-            if (eligible.isEmpty() || totalWeight <= 0.0D) continue;
+            if (eligible.isEmpty() || totalRarityChance <= 0.0D) {
+                if (rarityCapRange.unbounded) {
+                    break;
+                }
+                continue;
+            }
 
-            double pick = rnd.nextDouble() * totalWeight;
+            double pick = rnd.nextDouble() * totalRarityChance;
             double acc = 0.0D;
             PoolEntry chosen = eligible.get(eligible.size() - 1);
             for (PoolEntry e : eligible) {
-                acc += e.weight;
+                acc += e.rarity;
                 if (acc >= pick) {
                     chosen = e;
                     break;
                 }
             }
+
+            if (Double.isFinite(remainingWeight)) {
+                remainingWeight = Math.max(0.0D, remainingWeight - chosen.weight);
+            }
+
             int count = chosen.minCount >= chosen.maxCount
                     ? chosen.minCount
                     : chosen.minCount + rnd.nextInt(chosen.maxCount - chosen.minCount + 1);
@@ -493,11 +532,20 @@ public final class LootPool436 {
 
     public static String formatWeight(double weight) {
         if (!Double.isFinite(weight) || weight <= 0.0D) return "1";
-        double rounded = Math.rint(weight);
-        if (Math.abs(weight - rounded) < 1e-6D && rounded >= 1.0D && rounded <= 1_000_000_000.0D) {
+        return formatDecimal(weight);
+    }
+
+    public static String formatRarity(double rarity) {
+        if (!Double.isFinite(rarity) || rarity <= 0.0D) return "0";
+        return formatDecimal(rarity);
+    }
+
+    private static String formatDecimal(double val) {
+        double rounded = Math.rint(val);
+        if (Math.abs(val - rounded) < 1e-6D && rounded >= 0.0D && rounded <= 1_000_000_000.0D) {
             return Long.toString((long) rounded);
         }
-        String s = String.format(Locale.ROOT, "%.3f", weight);
+        String s = String.format(Locale.ROOT, "%.3f", val);
         int dot = s.indexOf('.');
         if (dot >= 0) {
             int end = s.length();
@@ -514,20 +562,61 @@ public final class LootPool436 {
         return min == max ? Integer.toString(min) : (min + "-" + max);
     }
 
+    /**
+     * Parses a single item count or {@code min-max} range in {@code [1..64]} from an editor field.
+     * Returns {@code null} when empty, incomplete (e.g. {@code "2-"}), or out of bounds.
+     */
+    public static int[] parseItemCountRange(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim();
+        if (s.isEmpty()) return null;
+        int dash = s.indexOf('-');
+        if (dash < 0) {
+            Integer single = tryParseIntStrict(s);
+            if (single == null || single < 1 || single > 64) return null;
+            return new int[] {single, single};
+        }
+        if (s.indexOf('-', dash + 1) >= 0) return null;
+        String left = s.substring(0, dash).trim();
+        String right = s.substring(dash + 1).trim();
+        if (left.isEmpty() || right.isEmpty()) return null;
+        Integer a = tryParseIntStrict(left);
+        Integer b = tryParseIntStrict(right);
+        if (a == null || b == null || a < 1 || b < 1 || a > 64 || b > 64) return null;
+        return a <= b ? new int[] {a, b} : new int[] {b, a};
+    }
+
+    private static Integer tryParseIntStrict(String s) {
+        if (s == null || s.isEmpty()) return null;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (c < '0' || c > '9') return null;
+        }
+        try {
+            return Integer.valueOf(Integer.parseInt(s));
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
     public static String formatPoolFile(String poolFileName, List<PoolEntry> entries) {
         String safe = normalizeSaveName(poolFileName);
         String headerName = safe.isEmpty() ? "pool.txt" : safe;
         StringBuilder sb = new StringBuilder(256);
         sb.append("# SettledLands Loot Pool: ").append(headerName).append('\n');
-        sb.append("# item_id | rarity | weight | count\n");
+        sb.append("# item_id | rarity_chance | weight | count\n");
         if (entries != null) {
             for (PoolEntry e : entries) {
                 if (e == null) continue;
                 String itemId = cleanItemId(e.itemId);
-                if (itemId.isEmpty() || !Double.isFinite(e.weight) || e.weight <= 0.0D) continue;
-                int rarity = Math.max(0, Math.min(MAX_CAP_LIMIT, e.rarity));
+                if (itemId.isEmpty()
+                        || !Double.isFinite(e.rarity) || e.rarity < 0.0D
+                        || !Double.isFinite(e.weight) || e.weight <= 0.0D) {
+                    continue;
+                }
+                double rarity = Math.max(0.0D, Math.min((double) MAX_CAP_LIMIT, e.rarity));
                 sb.append(itemId)
-                        .append(" | ").append(rarity)
+                        .append(" | ").append(formatRarity(rarity))
                         .append(" | ").append(formatWeight(e.weight))
                         .append(" | ").append(formatCountRange(e.minCount, e.maxCount))
                         .append('\n');
@@ -542,13 +631,17 @@ public final class LootPool436 {
         for (PoolEntry e : entries) {
             if (e == null) continue;
             String id = cleanItemId(e.itemId);
-            if (id.isEmpty() || !Double.isFinite(e.weight) || e.weight <= 0.0D) continue;
+            if (id.isEmpty()
+                    || !Double.isFinite(e.rarity) || e.rarity < 0.0D
+                    || !Double.isFinite(e.weight) || e.weight <= 0.0D) {
+                continue;
+            }
             int min = Math.max(1, Math.min(64, e.minCount));
             int max = Math.max(min, Math.min(64, e.maxCount));
-            int rar = Math.max(0, Math.min(MAX_CAP_LIMIT, e.rarity));
+            double rar = Math.max(0.0D, Math.min((double) MAX_CAP_LIMIT, e.rarity));
             if (sb.length() > 0) sb.append('\n');
             sb.append(id).append('|')
-                    .append(rar).append('|')
+                    .append(formatRarity(rar)).append('|')
                     .append(formatWeight(e.weight)).append('|')
                     .append(min).append('|')
                     .append(max);
@@ -567,10 +660,14 @@ public final class LootPool436 {
             if (!cols[0].contains(":")) continue;
             String id = cleanItemId(cols[0]);
             if (id.isEmpty() || !id.contains(":")) continue;
-            Integer rarObj = tryParseInt(cols[1]);
+            Double rarObj = tryParseDouble(cols[1]);
             Double wgtObj = tryParseDouble(cols[2]);
-            if (rarObj == null || wgtObj == null || !Double.isFinite(wgtObj) || wgtObj <= 0.0D) continue;
-            int rar = Math.max(0, Math.min(MAX_CAP_LIMIT, rarObj));
+            if (rarObj == null || wgtObj == null
+                    || !Double.isFinite(rarObj) || rarObj < 0.0D
+                    || !Double.isFinite(wgtObj) || wgtObj <= 0.0D) {
+                continue;
+            }
+            double rar = Math.max(0.0D, Math.min((double) MAX_CAP_LIMIT, rarObj));
             int min = 1;
             int max = 1;
             if (cols.length >= 4) {
@@ -595,13 +692,21 @@ public final class LootPool436 {
         return tryParseDouble(raw);
     }
 
-    /** Returns true when {@code entry} passes the node's rarity and weight ceiling filters. */
+    public static Double parseRarityInput(String raw) {
+        return tryParseDouble(raw);
+    }
+
+    /** Returns true when {@code entry} can drop and passes the node's rarity and crate-weight limits. */
     public static boolean passesSpec(PoolEntry entry, Parsed spec) {
-        if (entry == null || entry.weight <= 0.0D || !Double.isFinite(entry.weight)) return false;
+        if (entry == null
+                || !Double.isFinite(entry.rarity) || entry.rarity <= 0.0D
+                || !Double.isFinite(entry.weight) || entry.weight <= 0.0D) {
+            return false;
+        }
         if (spec == null) return true;
         Range rarityCap = parseRange(spec.rawRarity, MAX_CAP_LIMIT);
         Range weightCap = parseRange(spec.rawWeight, MAX_CAP_LIMIT);
-        if (!rarityCap.unbounded && entry.rarity > rarityCap.max) return false;
+        if (!rarityCap.unbounded && entry.rarity > (double) rarityCap.max) return false;
         if (!weightCap.unbounded && entry.weight > (double) weightCap.max) return false;
         return true;
     }

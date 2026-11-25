@@ -71,8 +71,8 @@ public final class LootPoolItemPickerScreen440 extends Screen {
 
     @Override
     protected void init() {
-        panelW = Math.max(Math.min(width - 16, 560), Math.min(width - 8, 340));
-        panelH = Math.max(Math.min(height - 16, 360), Math.min(height - 8, 210));
+        panelW = Math.max(Math.min(width - 16, 640), Math.min(width - 8, 340));
+        panelH = Math.max(height - 16, Math.min(height - 8, 210));
         panelX = (width - panelW) / 2;
         panelY = (height - panelH) / 2;
 

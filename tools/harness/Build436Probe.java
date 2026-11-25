@@ -166,37 +166,41 @@ public final class Build436Probe {
 
     private static void testWeightedAndCapDistribution() {
         List<LootPool436.PoolEntry> pool = Arrays.asList(
-                new LootPool436.PoolEntry("mod:common", 10, 90.0, 2, 4),
-                new LootPool436.PoolEntry("mod:uncommon", 30, 30.0, 1, 1),
+                new LootPool436.PoolEntry("mod:common", 25, 10.0, 2, 4),
+                new LootPool436.PoolEntry("mod:uncommon", 5, 15.0, 1, 1),
                 new LootPool436.PoolEntry("mod:rare", 80, 5.0, 1, 1),
                 new LootPool436.PoolEntry("mod:heavy_cheap", 15, 120.0, 1, 1)
         );
         Random rnd = new Random(436L);
 
-        // 1. Strict rarity<=30, weight<=90: excludes mod:rare (rarity 80) and mod:heavy_cheap (weight 120)
+        // 1. Strict rarity<=30, crate weight<=90: excludes mod:rare (rarity 80) and mod:heavy_cheap (weight 120)
+        //    Selection chance is weighted by rarity (25 vs 5 -> common ~5x more often than uncommon).
         LootPool436.Parsed strict = new LootPool436.Parsed("p.txt", "30", "90", "5");
         int commonCnt = 0;
         int uncommonCnt = 0;
         for (int trial = 0; trial < 400; trial++) {
             List<LootPool436.Drop> drops = LootPool436.rollDrops(pool, strict, rnd);
-            check(drops.size() == 5, "fixed 5 drops rolled");
+            check(drops.size() == 5, "fixed 5 drops fit within crate weight 90");
+            double usedWeight = 0.0D;
             for (LootPool436.Drop d : drops) {
                 check(!"mod:rare".equals(d.itemId), "rarity > cap never drops");
-                check(!"mod:heavy_cheap".equals(d.itemId), "weight > cap never drops");
+                check(!"mod:heavy_cheap".equals(d.itemId), "weight > crate capacity never drops");
                 if ("mod:common".equals(d.itemId)) {
                     commonCnt++;
+                    usedWeight += 10.0D;
                     check(d.count >= 2 && d.count <= 4, "common count in [2,4]");
                 } else if ("mod:uncommon".equals(d.itemId)) {
                     uncommonCnt++;
+                    usedWeight += 15.0D;
                     check(d.count == 1, "uncommon count == 1");
                 }
             }
+            check(usedWeight <= 90.0D + 1e-6D, "total crate weight never exceeds 90");
         }
-        // 90 vs 30 weight => common should be roughly 3x uncommon (safe wide margin 1.8x..5x)
-        check(commonCnt > uncommonCnt * 2, "weighted roll heavily favors weight 90 over 30 ("
+        check(commonCnt > uncommonCnt * 2, "rarity-weighted roll heavily favors rarity 25 over 5 ("
                 + commonCnt + " vs " + uncommonCnt + ")");
 
-        // 2. Range caps + range rolls (can return fewer than min rolls if a roll's random cap excludes all entries)
+        // 2. Range caps + range rolls
         LootPool436.Parsed ranged = new LootPool436.Parsed("p.txt", "20-90", "10-100", "2-4");
         for (int trial = 0; trial < 200; trial++) {
             List<LootPool436.Drop> drops = LootPool436.rollDrops(pool, ranged, rnd);
@@ -206,9 +210,9 @@ public final class Build436Probe {
             }
         }
 
-        // 3. Guaranteed range rolls when at least one entry fits every cap in range
+        // 3. Guaranteed range rolls when crate fits 4 lightweight items inside min weight 10
         List<LootPool436.PoolEntry> guaranteedPool = Arrays.asList(
-                new LootPool436.PoolEntry("mod:always_fits", 5, 5.0, 1, 1),
+                new LootPool436.PoolEntry("mod:always_fits", 5, 2.0, 1, 1),
                 new LootPool436.PoolEntry("mod:heavy", 15, 120.0, 1, 1)
         );
         for (int trial = 0; trial < 200; trial++) {

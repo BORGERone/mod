@@ -185,8 +185,12 @@ public final class LootPoolCard436 {
                 : poolFile;
         String any = tr("gui.settledlands.loot_pool.any");
         String rar = LootPool436.summaryRange(LootPool436.rawRarity(node), any);
-        String wgt = LootPool436.summaryRange(LootPool436.rawWeight(node), any);
-        String rls = LootPool436.summaryRange(LootPool436.rawRolls(node), LootPool436.DEFAULT_ROLLS);
+        String rawW = LootPool436.rawWeight(node);
+        String wgt = LootPool436.summaryRange(rawW, any);
+        String rawR = LootPool436.rawRolls(node);
+        String rls = rawR.isEmpty()
+                ? (rawW.isEmpty() ? LootPool436.DEFAULT_ROLLS : tr("gui.settledlands.loot_pool.editor.by_weight"))
+                : rawR;
 
         PoseStack pose = graphics.pose();
         pose.pushPose();

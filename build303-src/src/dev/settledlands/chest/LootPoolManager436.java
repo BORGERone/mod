@@ -39,16 +39,19 @@ public final class LootPoolManager436 {
     private static final Set<String> WARNED = Collections.synchronizedSet(new HashSet<>());
     private static final String GUIDE_FILE = "README_FORMAT.txt.disabled";
     private static final String GUIDE_TEXT =
-            "# SettledLands Build 436 - Loot Pools Guide / Справка по пулам предметов\n"
+            "# SettledLands Build 441 - Loot Pools Guide / Справка по пулам предметов\n"
             + "# Put your .txt pool files in this directory: config/settledlands/loot_pools/<name>.txt\n"
             + "# Format per line (columns separated by '|'):\n"
-            + "#   item_id | rarity | weight | [count or min-max]\n"
+            + "#   item_id | rarity_chance | weight | [count or min-max]\n"
+            + "#\n"
+            + "# rarity_chance: relative drop chance (like CS:GO cases; % = rarity / sum(rarity))\n"
+            + "# weight: crate capacity weight of this drop (e.g. crate weight 40 fits 2x weight 20 or 4x weight 10)\n"
             + "#\n"
             + "# Examples (create your own .txt file with lines like these):\n"
-            + "#   minecraft:cooked_beef | 5 | 80 | 2-6\n"
-            + "#   minecraft:iron_ingot  | 20 | 50 | 1-4\n"
-            + "#   minecraft:diamond     | 80 | 10 | 1\n"
-            + "#   minecraft:iron_sword  | 35 | 25\n";
+            + "#   minecraft:cooked_beef | 60 | 10 | 2-6\n"
+            + "#   minecraft:iron_ingot  | 30 | 15 | 1-4\n"
+            + "#   minecraft:diamond     | 10 | 20 | 1\n"
+            + "#   minecraft:iron_sword  | 15 | 20 | 1\n";
 
     private LootPoolManager436() {}
 
