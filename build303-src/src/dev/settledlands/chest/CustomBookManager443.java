@@ -47,7 +47,7 @@ public final class CustomBookManager443 {
             + "#\n"
             + "# Format:\n"
             + "#   title: &6&lDragon Chronicle\n"
-            + "#   author: Archmage\n"
+            + "#   author: Неизвестен\n"
             + "#   === PAGE ===\n"
             + "#   First page text with &4colors &rand lines...\n"
             + "#   === PAGE ===\n"
@@ -308,7 +308,8 @@ public final class CustomBookManager443 {
                     ? formattedCustomName
                     : (written.title() == null || written.title().raw() == null ? "" : written.title().raw());
             if (rawTitle.isEmpty()) rawTitle = stack.getHoverName().getString();
-            String author = written.author() == null ? "" : written.author();
+            String author = written.author() == null ? "" : written.author().trim();
+            if (author.isEmpty()) author = CustomBook443.DEFAULT_AUTHOR;
             List<String> pages = new ArrayList<>();
             if (written.pages() != null) {
                 for (Filterable<Component> fc : written.pages()) {
@@ -341,7 +342,7 @@ public final class CustomBookManager443 {
             String id = CustomBook443.normalizeBookId(suggestedId);
             if (id.isEmpty()) id = CustomBook443.normalizeBookId(rawTitle);
             if (id.isEmpty()) id = "imported_book";
-            return new CustomBook443.BookDef(id, rawTitle, "", pages);
+            return new CustomBook443.BookDef(id, rawTitle, CustomBook443.DEFAULT_AUTHOR, pages);
         }
         return null;
     }

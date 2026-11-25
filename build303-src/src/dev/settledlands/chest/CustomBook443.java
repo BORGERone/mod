@@ -13,6 +13,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Build 443: pure data model, color/formatting parser, file serializer, wire codec, and client
@@ -32,6 +33,7 @@ public final class CustomBook443 {
     public static final int MAX_AUTHOR_LEN = 64;
     public static final int MAX_PAGES = 100;
     public static final int MAX_PAGE_CHARS = 1024;
+    public static final String DEFAULT_AUTHOR = "Неизвестен";
     public static final String PAGE_MARKER = "=== PAGE ===";
     public static final String ALT_PAGE_MARKER = "--- PAGE ---";
 
@@ -538,9 +540,7 @@ public final class CustomBook443 {
         sb.append("# SettledLands Custom Book: ").append(book.id).append('\n');
         sb.append("# Formatting: &0-&f colors, &#RRGGBB hex, &l bold, &o italic, &n underline, &m strike, &r reset\n");
         sb.append("title: ").append(book.title).append('\n');
-        if (!book.author.isEmpty()) {
-            sb.append("author: ").append(book.author).append('\n');
-        }
+        sb.append("author: ").append(book.author).append('\n');
         for (String page : book.pages) {
             sb.append(PAGE_MARKER).append('\n');
             if (!page.isEmpty()) {
@@ -554,11 +554,12 @@ public final class CustomBook443 {
         String normId = normalizeBookId(bookId);
         if (normId.isEmpty()) return null;
         if (lines == null || lines.isEmpty()) {
-            return new BookDef(normId, normId, "", Collections.singletonList(""));
+            return new BookDef(normId, normId, DEFAULT_AUTHOR, Collections.singletonList(""));
         }
 
         String title = "";
         String author = "";
+        boolean sawAuthorLine = false;
         List<String> pages = new ArrayList<>();
         StringBuilder curPage = null;
         boolean curHasLine = false;
@@ -585,6 +586,7 @@ public final class CustomBook443 {
             }
             if (!sawPageMarker && trimmed.toLowerCase(Locale.ROOT).startsWith("author:")) {
                 author = trimmed.substring(7).trim();
+                sawAuthorLine = true;
                 continue;
             }
             if (!sawPageMarker && trimmed.isEmpty()) {
@@ -609,6 +611,9 @@ public final class CustomBook443 {
         }
         if (title.isEmpty()) {
             title = normId;
+        }
+        if (!sawAuthorLine) {
+            author = DEFAULT_AUTHOR;
         }
         return new BookDef(normId, title, author, pages);
     }
@@ -709,6 +714,140 @@ public final class CustomBook443 {
     private static String clipText(String s, int maxLen) {
         if (s == null) return "";
         return s.length() > maxLen ? s.substring(0, maxLen) : s;
+    }
+
+    // ---- Build 444: exact page-fit helper ----------------------------------
+
+    /**
+     * Ensures an edit to a book page never exceeds {@link #MAX_PAGE_CHARS} or the visual
+     * {@code fitsPredicate} (vanilla 114px width x 14 lines), while always allowing deletions
+     * and binary-searching multi-character pastes so as much text fits as possible without
+     * splitting formatting codes or surrogate pairs.
+     */
+    public static String fitPageText(String prevText, String candidateText,
+            Predicate<String> fitsPredicate) {
+        String prev = prevText == null ? "" : prevText;
+        String next = candidateText == null ? "" : candidateText;
+        if (next.equals(prev)) return next;
+        if (next.length() <= prev.length()) {
+            return next;
+        }
+        if (next.length() <= MAX_PAGE_CHARS
+                && (fitsPredicate == null || fitsPredicate.test(next))) {
+            return next;
+        }
+        if (prev.length() > MAX_PAGE_CHARS
+                || (fitsPredicate != null && !fitsPredicate.test(prev))) {
+            return prev;
+        }
+
+        int minLen = Math.min(prev.length(), next.length());
+        int prefixLen = 0;
+        while (prefixLen < minLen && prev.charAt(prefixLen) == next.charAt(prefixLen)) {
+            prefixLen++;
+        }
+        int suffixLen = 0;
+        while (suffixLen < (minLen - prefixLen)
+                && prev.charAt(prev.length() - 1 - suffixLen)
+                        == next.charAt(next.length() - 1 - suffixLen)) {
+            suffixLen++;
+        }
+
+        int insertedLen = next.length() - prefixLen - suffixLen;
+        if (insertedLen <= 1) {
+            return prev;
+        }
+
+        String after = suffixLen > 0 ? next.substring(next.length() - suffixLen) : "";
+        int maxAllowed = Math.max(0, MAX_PAGE_CHARS - prefixLen - suffixLen);
+        int lo = 0;
+        int hi = Math.min(insertedLen, maxAllowed);
+        int bestK = 0;
+        while (lo <= hi) {
+            int mid = (lo + hi) >>> 1;
+            String trial = next.substring(0, prefixLen + mid) + after;
+            if (fitsPredicate == null || fitsPredicate.test(trial)) {
+                bestK = mid;
+                lo = mid + 1;
+            } else {
+                hi = mid - 1;
+            }
+        }
+        if (bestK <= 0) {
+            return prev;
+        }
+
+        int cut = prefixLen + bestK;
+        if (cut > prefixLen && Character.isHighSurrogate(next.charAt(cut - 1))) {
+            cut--;
+        }
+        cut = rollbackIncompleteFormatting(next, cut, prefixLen);
+        if (cut <= prefixLen) {
+            return prev;
+        }
+        String res = next.substring(0, cut) + after;
+        if (res.length() <= MAX_PAGE_CHARS && (fitsPredicate == null || fitsPredicate.test(res))) {
+            return res;
+        }
+        return prev;
+    }
+
+    /**
+     * Walks {@code cut} backward if truncating at {@code cut} sliced inside {@code &}, {@code &#RRGGBB},
+     * or {@code {#RRGGBB}}. Never moves earlier than {@code minStart}.
+     */
+    public static int rollbackIncompleteFormatting(String s, int cut, int minStart) {
+        if (s == null || cut <= minStart) return Math.max(0, cut);
+        int floor = Math.max(0, minStart);
+        int len = Math.min(cut, s.length());
+        if (len <= floor) return len;
+
+        // Trailing single '&' or '§' (when not escaped by '\\')
+        char last = s.charAt(len - 1);
+        if ((last == '&' || last == '§') && !isEscapedBackslash(s, len - 1)) {
+            return len - 1;
+        }
+
+        // Look back up to 9 chars for &#RRGGBB / §#RRGGBB / {#RRGGBB
+        int searchFrom = Math.max(floor, len - 9);
+        for (int idx = len - 1; idx >= searchFrom; idx--) {
+            char ch = s.charAt(idx);
+            if ((ch == '&' || ch == '§') && idx + 1 < len && s.charAt(idx + 1) == '#'
+                    && !isEscapedBackslash(s, idx)) {
+                int hexLen = len - (idx + 2);
+                if (hexLen >= 0 && hexLen < 6 && areHexChars(s, idx + 2, len)) {
+                    return idx;
+                }
+                break;
+            }
+            if (ch == '{' && idx + 1 < len && s.charAt(idx + 1) == '#') {
+                int hexLen = len - (idx + 2);
+                if (hexLen >= 0 && hexLen <= 6 && areHexChars(s, idx + 2, len)) {
+                    return idx;
+                }
+                break;
+            }
+        }
+        return len;
+    }
+
+    private static boolean isEscapedBackslash(String s, int idx) {
+        int slashes = 0;
+        for (int i = idx - 1; i >= 0 && s.charAt(i) == '\\'; i--) {
+            slashes++;
+        }
+        return (slashes & 1) == 1;
+    }
+
+    private static boolean areHexChars(String s, int start, int end) {
+        for (int i = start; i < end; i++) {
+            char c = s.charAt(i);
+            boolean hex = (c >= '0' && c <= '9')
+                    || (c >= 'a' && c <= 'f')
+                    || (c >= 'A' && c <= 'F');
+            if (!hex) return false;
+        }
+        return true;
     }
 
     private static String trimTrailingNewline(String s) {

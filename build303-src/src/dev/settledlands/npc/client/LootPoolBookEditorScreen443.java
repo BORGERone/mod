@@ -61,7 +61,7 @@ public final class LootPoolBookEditorScreen443 extends Screen {
 
     private String idText = "";
     private String titleText = "";
-    private String authorText = "";
+    private String authorText = CustomBook443.DEFAULT_AUTHOR;
     private String hexText = "FFAA00";
     private String loadedServerId = "";
     private boolean fileExistsOnServer;
@@ -245,7 +245,7 @@ public final class LootPoolBookEditorScreen443 extends Screen {
         authorBox = new EditBox(font, authBoxX, row2Y, authBoxW, 18,
                 Component.translatable("gui.settledlands.book_editor.author_lbl"));
         authorBox.setMaxLength(CustomBook443.MAX_AUTHOR_LEN);
-        authorBox.setHint(Component.literal("SettledLands"));
+        authorBox.setHint(Component.literal(CustomBook443.DEFAULT_AUTHOR));
         suppressSync = true;
         authorBox.setValue(authorText);
         suppressSync = false;
@@ -334,9 +334,31 @@ public final class LootPoolBookEditorScreen443 extends Screen {
         suppressSync = false;
         pageBox.setValueListener(txt -> {
             if (suppressSync) return;
-            setCurrentPageText(txt == null ? "" : txt);
-            lastFocusedTitle = false;
-            markDirty();
+            String prev = currentPageText();
+            String raw = txt == null ? "" : txt;
+            String accepted = CustomBook443.fitPageText(prev, raw, cand -> fitsVanillaPage(font, cand));
+            boolean overflowed = !accepted.equals(raw);
+            if (overflowed) {
+                suppressSync = true;
+                pageBox.setValue(accepted);
+                suppressSync = false;
+            }
+            if (!accepted.equals(prev)) {
+                setCurrentPageText(accepted);
+                lastFocusedTitle = false;
+                markDirty();
+            } else {
+                lastFocusedTitle = false;
+            }
+            if (overflowed) {
+                statusColor = 0xFFFFB048;
+                statusText = Component.translatable("gui.settledlands.book_editor.page_full",
+                        Integer.valueOf(VANILLA_PAGE_LINES)).getString();
+            } else if (statusText.equals(Component.translatable(
+                    "gui.settledlands.book_editor.page_full",
+                    Integer.valueOf(VANILLA_PAGE_LINES)).getString())) {
+                statusText = "";
+            }
         });
         addRenderableWidget(pageBox);
 
@@ -442,7 +464,7 @@ public final class LootPoolBookEditorScreen443 extends Screen {
             fileExistsOnServer = false;
             idText = CustomBook443.suggestNextBookId(CustomBook443.getClientBookIds());
             titleText = "";
-            authorText = "";
+            authorText = CustomBook443.DEFAULT_AUTHOR;
             pages.clear();
             pages.add("");
             currentPage = 0;
@@ -465,7 +487,7 @@ public final class LootPoolBookEditorScreen443 extends Screen {
             fileExistsOnServer = false;
             idText = suggested;
             titleText = "&6" + suggested;
-            authorText = "";
+            authorText = CustomBook443.DEFAULT_AUTHOR;
             pages.clear();
             pages.add("");
             currentPage = 0;
@@ -543,6 +565,14 @@ public final class LootPoolBookEditorScreen443 extends Screen {
         if (bookDropBtn != null) bookDropBtn.active = !loading;
     }
 
+    private void clearPageFullStatus() {
+        String fullMsg = Component.translatable("gui.settledlands.book_editor.page_full",
+                Integer.valueOf(VANILLA_PAGE_LINES)).getString();
+        if (fullMsg.equals(statusText)) {
+            statusText = "";
+        }
+    }
+
     private void switchPage(int target) {
         int clamped = Math.max(0, Math.min(pages.size() - 1, target));
         if (clamped == currentPage) return;
@@ -550,6 +580,7 @@ public final class LootPoolBookEditorScreen443 extends Screen {
         suppressSync = true;
         if (pageBox != null) pageBox.setValue(currentPageText());
         suppressSync = false;
+        clearPageFullStatus();
         playPageTurnSound();
         updateActionButtons();
     }
@@ -561,6 +592,7 @@ public final class LootPoolBookEditorScreen443 extends Screen {
         suppressSync = true;
         if (pageBox != null) pageBox.setValue("");
         suppressSync = false;
+        clearPageFullStatus();
         playPageTurnSound();
         markDirty();
     }
@@ -572,6 +604,7 @@ public final class LootPoolBookEditorScreen443 extends Screen {
         suppressSync = true;
         if (pageBox != null) pageBox.setValue(currentPageText());
         suppressSync = false;
+        clearPageFullStatus();
         playPageTurnSound();
         markDirty();
     }
@@ -587,7 +620,7 @@ public final class LootPoolBookEditorScreen443 extends Screen {
         fileExistsOnServer = false;
         idText = CustomBook443.suggestNextBookId(CustomBook443.getClientBookIds());
         titleText = "&6" + idText;
-        authorText = "";
+        authorText = CustomBook443.DEFAULT_AUTHOR;
         pages.clear();
         pages.add("");
         currentPage = 0;
@@ -731,11 +764,19 @@ public final class LootPoolBookEditorScreen443 extends Screen {
         } else if (pageBox != null) {
             String cur = pageBox.getValue();
             if (cur == null) cur = "";
-            if (cur.length() + code.length() <= CustomBook443.MAX_PAGE_CHARS) {
-                String next = cur + code;
+            String next = cur + code;
+            if (fitsVanillaPage(font, next)) {
+                suppressSync = true;
                 pageBox.setValue(next);
+                suppressSync = false;
                 setCurrentPageText(next);
                 setFocused(pageBox);
+            } else {
+                statusColor = 0xFFFFB048;
+                statusText = Component.translatable("gui.settledlands.book_editor.page_full",
+                        Integer.valueOf(VANILLA_PAGE_LINES)).getString();
+                setFocused(pageBox);
+                return;
             }
         }
         markDirty();
@@ -835,11 +876,16 @@ public final class LootPoolBookEditorScreen443 extends Screen {
             graphics.drawString(font, clip(font, statusText, panelW - 20),
                     panelX + 10, statusY, statusColor, false);
         } else {
+            int lineCount = countVanillaPageLines(font, currentPageText());
             String charsInfo = Component.translatable("gui.settledlands.book_editor.chars_hint",
+                    Integer.valueOf(lineCount),
+                    Integer.valueOf(VANILLA_PAGE_LINES),
                     Integer.valueOf(currentPageText().length()),
                     Integer.valueOf(CustomBook443.MAX_PAGE_CHARS)).getString();
+            int hintCol = lineCount > VANILLA_PAGE_LINES ? 0xFFFF7070
+                    : (lineCount == VANILLA_PAGE_LINES ? 0xFFF5B841 : 0xFF7D899E);
             graphics.drawString(font, clip(font, charsInfo, panelW - 20),
-                    panelX + 10, statusY, 0xFF7D899E, false);
+                    panelX + 10, statusY, hintCol, false);
         }
 
         super.render(graphics, mouseX, mouseY, partialTick);
@@ -891,10 +937,33 @@ public final class LootPoolBookEditorScreen443 extends Screen {
             graphics.drawString(font, wrapped.get(i), textX, textY + i * 9, col, false);
         }
 
-        String lineInfo = wrapped.size() + " / " + VANILLA_PAGE_LINES;
-        int infoCol = wrapped.size() > VANILLA_PAGE_LINES ? 0xFFB03020 : 0xFF6B5B45;
+        int lineCount = Math.max(wrapped.size(), countVanillaPageLines(font, currentPageText()));
+        String lineInfo = lineCount + " / " + VANILLA_PAGE_LINES;
+        int infoCol = lineCount > VANILLA_PAGE_LINES ? 0xFFB03020
+                : (lineCount == VANILLA_PAGE_LINES ? 0xFF9A6820 : 0xFF6B5B45);
         int iw = font.width(lineInfo);
         graphics.drawString(font, lineInfo, sheetX + sheetW - iw - 6, sheetY + sheetH - 12, infoCol, false);
+    }
+
+    public static int countVanillaPageLines(Font font, String rawText) {
+        if (font == null || rawText == null || rawText.isEmpty()) return 0;
+        Component pageComp = CustomBookManager443.toFormattedComponent(rawText, false);
+        int lines = font.split(pageComp, VANILLA_PAGE_WIDTH).size();
+        if (rawText.endsWith("\n")) {
+            int cursorLines = font.split(
+                    CustomBookManager443.toFormattedComponent(rawText + " ", false),
+                    VANILLA_PAGE_WIDTH).size();
+            if (cursorLines > lines) {
+                lines = cursorLines;
+            }
+        }
+        return lines;
+    }
+
+    public static boolean fitsVanillaPage(Font font, String rawText) {
+        if (rawText == null || rawText.isEmpty()) return true;
+        if (rawText.length() > CustomBook443.MAX_PAGE_CHARS) return false;
+        return countVanillaPageLines(font, rawText) <= VANILLA_PAGE_LINES;
     }
 
     private void renderBookPopup(GuiGraphics graphics, int mouseX, int mouseY) {

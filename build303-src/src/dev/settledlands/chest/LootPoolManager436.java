@@ -283,14 +283,15 @@ public final class LootPoolManager436 {
         int placedStacks = 0;
         List<Integer> populatedSlots = new ArrayList<>();
         for (NpcDialogueGraph.Node node : poolNodes) {
+            if (freeSlots.isEmpty()) break;
             LootPool436.Parsed spec = LootPool436.parse(node.action);
             if (spec == null || spec.poolFile.isEmpty()) continue;
             List<LootPool436.PoolEntry> entries = loadPool(spec.poolFile);
-            if (isShelf) {
-                entries = filterBookshelfEntries(entries, true);
-            }
             if (entries.isEmpty()) continue;
-            List<LootPool436.Drop> drops = LootPool436.rollDrops(entries, spec, rnd);
+            List<LootPool436.Drop> drops = isShelf
+                    ? LootPool436.rollBookshelfDrops(entries, spec, freeSlots.size(),
+                            id -> CustomBookManager443.isValidForChiseledBookshelf(id, true), rnd)
+                    : LootPool436.rollDrops(entries, spec, rnd);
             for (LootPool436.Drop drop : drops) {
                 if (freeSlots.isEmpty()) break;
                 ItemStack probe = CustomBookManager443.resolveItemStack(drop.itemId, 1, true);
@@ -299,7 +300,7 @@ public final class LootPoolManager436 {
                             "loot_pool: unknown item id '" + drop.itemId + "' in pool " + spec.poolFile);
                     continue;
                 }
-                int remaining = drop.count;
+                int remaining = isShelf ? 1 : drop.count;
                 while (remaining > 0 && !freeSlots.isEmpty()) {
                     int perSlotMax = Math.max(1,
                             Math.min(probe.getMaxStackSize(), container.getMaxStackSize()));
@@ -348,9 +349,9 @@ public final class LootPoolManager436 {
     }
 
     /**
-     * Build 443: populates a lectern (non-{@link Container}) with a single compatible book
-     * (filtering mixed pools down to {@code ItemTags.LECTERN_BOOKS} + custom books) and updates
-     * {@link LecternBlock#HAS_BOOK}.
+     * Build 443/444: populates a lectern (non-{@link Container}) with at most 1 book rolled against
+     * the FULL loot pool (non-book drops result in an empty lectern rather than forcing books to 100%)
+     * and updates {@link LecternBlock#HAS_BOOK}.
      */
     private static int populateLectern(ServerLevel level, BlockPos pos, LecternBlockEntity lectern,
             List<NpcDialogueGraph.Node> poolNodes, Random rnd) {
@@ -358,9 +359,10 @@ public final class LootPoolManager436 {
         for (NpcDialogueGraph.Node node : poolNodes) {
             LootPool436.Parsed spec = LootPool436.parse(node.action);
             if (spec == null || spec.poolFile.isEmpty()) continue;
-            List<LootPool436.PoolEntry> filtered = filterLecternEntries(loadPool(spec.poolFile), true);
-            if (filtered.isEmpty()) continue;
-            List<LootPool436.Drop> drops = LootPool436.rollDrops(filtered, spec, rnd);
+            List<LootPool436.PoolEntry> entries = loadPool(spec.poolFile);
+            if (entries.isEmpty()) continue;
+            List<LootPool436.Drop> drops = LootPool436.rollLecternDrops(entries, spec,
+                    id -> CustomBookManager443.isValidForLectern(id, true), rnd);
             for (LootPool436.Drop drop : drops) {
                 ItemStack stack = CustomBookManager443.resolveItemStack(drop.itemId, 1, true);
                 if (stack.isEmpty()) continue;

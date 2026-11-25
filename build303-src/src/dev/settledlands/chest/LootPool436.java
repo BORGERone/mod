@@ -8,6 +8,7 @@ import java.util.Locale;
 import java.util.Random;
 import java.util.TreeSet;
 import java.util.function.Consumer;
+import java.util.function.Predicate;
 
 /**
  * Build 436: pure rule, parser, serialization and weighted loot-roll engine for the «Пул предметов»
@@ -484,6 +485,71 @@ public final class LootPool436 {
                     ? chosen.minCount
                     : chosen.minCount + rnd.nextInt(chosen.maxCount - chosen.minCount + 1);
             out.add(new Drop(chosen.itemId, Math.max(1, count)));
+        }
+        return out;
+    }
+
+    /**
+     * Build 444: single-slot lectern roll against the FULL loot pool (including non-book items).
+     *
+     * <p>A lectern holds at most 1 book. Rolling 1 attempt against the unfiltered pool ensures the
+     * book's true pool probability (and {@code Редк.<=} / {@code Вес ящ.} filters) determines
+     * whether a book spawns; if a non-book item wins the roll, the lectern stays empty rather than
+     * bumping books to 100%.</p>
+     */
+    public static List<Drop> rollLecternDrops(List<PoolEntry> entries, Parsed spec,
+            Predicate<String> allowedPredicate, Random rnd) {
+        if (entries == null || entries.isEmpty() || spec == null || rnd == null) {
+            return Collections.emptyList();
+        }
+        Range rollsRange = parseRange(spec.rawRolls, MAX_ROLLS_LIMIT);
+        if (!rollsRange.unbounded && rollsRange.pick(rnd) <= 0) {
+            return Collections.emptyList();
+        }
+        Parsed singleSpec = new Parsed(spec.poolFile, spec.rawRarity, spec.rawWeight, "1");
+        List<Drop> rolled = rollDrops(entries, singleSpec, rnd);
+        if (rolled.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Drop first = rolled.get(0);
+        if (first == null || (allowedPredicate != null && !allowedPredicate.test(first.itemId))) {
+            return Collections.emptyList();
+        }
+        return Collections.singletonList(new Drop(first.itemId, 1));
+    }
+
+    /**
+     * Build 444: chiseled-bookshelf roll against the FULL loot pool (including non-book items).
+     *
+     * <p>Non-book drops become empty missed rolls rather than being stripped before rolling, and
+     * each accepted book drop occupies strictly 1 slot ({@code count = 1}) capped at both
+     * {@code maxSlots} and the node's {@code Шт} ceiling so stacked entries never overflow a
+     * shelf beyond the configured item limit.</p>
+     */
+    public static List<Drop> rollBookshelfDrops(List<PoolEntry> entries, Parsed spec,
+            int maxSlots, Predicate<String> allowedPredicate, Random rnd) {
+        if (entries == null || entries.isEmpty() || spec == null || maxSlots <= 0 || rnd == null) {
+            return Collections.emptyList();
+        }
+        Range rollsRange = parseRange(spec.rawRolls, MAX_ROLLS_LIMIT);
+        int shelfCap = Math.min(maxSlots,
+                rollsRange.unbounded ? maxSlots : Math.max(0, rollsRange.max));
+        if (shelfCap <= 0) {
+            return Collections.emptyList();
+        }
+        List<Drop> rolled = rollDrops(entries, spec, rnd);
+        if (rolled.isEmpty()) {
+            return Collections.emptyList();
+        }
+        List<Drop> out = new ArrayList<>(Math.min(rolled.size(), shelfCap));
+        for (Drop d : rolled) {
+            if (out.size() >= shelfCap) {
+                break;
+            }
+            if (d == null || (allowedPredicate != null && !allowedPredicate.test(d.itemId))) {
+                continue;
+            }
+            out.add(new Drop(d.itemId, 1));
         }
         return out;
     }

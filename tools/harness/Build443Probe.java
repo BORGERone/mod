@@ -446,35 +446,37 @@ public final class Build443Probe {
 
         Path poolsDir = LootPoolManager436.ensureDirectory();
         Files.createDirectories(poolsDir);
+        Files.writeString(poolsDir.resolve("book_only_443.txt"),
+                "settledlands:book/my_lore | 100 | 1 | 1\n");
         Files.writeString(poolsDir.resolve("mixed_443.txt"),
                 "minecraft:diamond | 90 | 1 | 1\n"
                 + "settledlands:book/my_lore | 10 | 1 | 1\n");
 
-        NpcDialogueGraph g = ChestGraph396.defaultGraph();
-        NpcDialogueGraph.Node poolNode = g.add(NpcDialogueGraph.TRIGGER, 0, 0);
-        LootPool436.applyDefaults(poolNode);
-        LootPool436.setPoolFile(poolNode, "mixed_443.txt");
-        LootPool436.setRolls(poolNode, "4");
-        ChestGraph396.chestNode(g).next = poolNode.id;
+        NpcDialogueGraph gBookOnly = ChestGraph396.defaultGraph();
+        NpcDialogueGraph.Node pNode2 = gBookOnly.add(NpcDialogueGraph.TRIGGER, 0, 0);
+        LootPool436.applyDefaults(pNode2);
+        LootPool436.setPoolFile(pNode2, "book_only_443.txt");
+        LootPool436.setRolls(pNode2, "4");
+        ChestGraph396.chestNode(gBookOnly).next = pNode2.id;
 
         LecternBlock.RESET_CALLS = 0;
-        int placedLec = LootPoolManager436.populateContainer(level, lecPos, g);
+        int placedLec = LootPoolManager436.populateContainer(level, lecPos, gBookOnly);
         req(placedLec == 1 && lecBe.hasBook() && lecBe.getBook().is(Items.WRITTEN_BOOK),
-                "lectern populated with custom book even in diamond-heavy mixed pool");
+                "lectern populated with custom book");
         req(LecternBlock.RESET_CALLS == 1, "LecternBlock.resetBookState invoked");
-        req(LootPoolManager436.populateContainer(level, lecPos, g) == 0,
+        req(LootPoolManager436.populateContainer(level, lecPos, gBookOnly) == 0,
                 "occupied lectern skipped on second populateContainer");
 
         level.sendBlockUpdatedCalls = 0;
-        int placedShelf = LootPoolManager436.populateContainer(level, shelfPos, g);
-        req(placedShelf == 4, "chiseled bookshelf placed 4 books, got " + placedShelf);
+        int placedShelf = LootPoolManager436.populateContainer(level, shelfPos, gBookOnly);
+        req(placedShelf == 4, "chiseled bookshelf placed 4 books from book-only pool, got " + placedShelf);
         int occupiedCount = 0;
         BlockState afterShelf = level.getBlockState(shelfPos);
         for (int i = 0; i < 6; i++) {
             ItemStack slotItem = shelfBe.getItem(i);
             boolean hasItem = slotItem != null && !slotItem.isEmpty();
             if (hasItem) {
-                req(slotItem.is(Items.WRITTEN_BOOK), "bookshelf only got books, not diamonds");
+                req(slotItem.is(Items.WRITTEN_BOOK), "bookshelf only got books");
                 occupiedCount++;
             }
             Boolean propVal = afterShelf.getValue(ChiseledBookShelfBlock.SLOT_OCCUPIED_PROPERTIES.get(i));
@@ -483,14 +485,26 @@ public final class Build443Probe {
         req(occupiedCount == 4 && level.sendBlockUpdatedCalls >= 1,
                 "bookshelf visual properties + sendBlockUpdated synced");
 
-        NpcDialogueGraph gBookOnly = ChestGraph396.defaultGraph();
-        Files.writeString(poolsDir.resolve("book_only_443.txt"),
-                "settledlands:book/my_lore | 100 | 1 | 1\n");
-        NpcDialogueGraph.Node pNode2 = gBookOnly.add(NpcDialogueGraph.TRIGGER, 0, 0);
-        LootPool436.applyDefaults(pNode2);
-        LootPool436.setPoolFile(pNode2, "book_only_443.txt");
+        // Build 444 update: mixed pools roll honestly without pre-stripping non-books.
+        NpcDialogueGraph gMixed = ChestGraph396.defaultGraph();
+        NpcDialogueGraph.Node mixNode = gMixed.add(NpcDialogueGraph.TRIGGER, 0, 0);
+        LootPool436.applyDefaults(mixNode);
+        LootPool436.setPoolFile(mixNode, "mixed_443.txt");
+        LootPool436.setRolls(mixNode, "3");
+        ChestGraph396.chestNode(gMixed).next = mixNode.id;
+        BlockPos mixShelfPos = new BlockPos(16, 64, 10);
+        level.setBlock(mixShelfPos, new BlockState(shelfBlock, false), 3);
+        ChiseledBookShelfBlockEntity mixShelfBe = new ChiseledBookShelfBlockEntity();
+        level.putBlockEntity(mixShelfPos, mixShelfBe);
+        int mixPlaced = LootPoolManager436.populateContainer(level, mixShelfPos, gMixed);
+        req(mixPlaced >= 0 && mixPlaced <= 3, "mixed bookshelf respects Шт=3 ceiling");
+        for (int i = 0; i < 6; i++) {
+            ItemStack st = mixShelfBe.getItem(i);
+            req(st == null || st.isEmpty() || st.is(Items.WRITTEN_BOOK),
+                    "mixed bookshelf never stores non-book diamonds");
+        }
+
         LootPool436.setRolls(pNode2, "1");
-        ChestGraph396.chestNode(gBookOnly).next = pNode2.id;
         int placedChest = LootPoolManager436.populateContainer(level, chestPos, gBookOnly);
         req(placedChest == 1, "chest receives custom book");
         ItemStack inChest = ItemStack.EMPTY;
