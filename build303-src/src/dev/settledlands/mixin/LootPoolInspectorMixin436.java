@@ -136,13 +136,20 @@ public abstract class LootPoolInspectorMixin436 {
 
             String currentFile = LootPool436.poolFileOf(node);
             List<String> options = LootPoolCard436.poolOptions(currentFile);
+            int dropWidth = Math.max(60, width - 24);
             NpcUi.NpcDropdown dropdown = NpcUi.dropdown(
-                    x, y, width,
+                    x, y, dropWidth,
                     LootPoolCard436.poolDropdownEntries(options),
                     LootPoolCard436.poolDropdownIndex(options, currentFile),
                     LootPoolCard436.poolPicker(this::settledlands$lpCommit436, node, options));
+            LootPoolCard436.trackPoolDropdown(
+                    dropdown, options, screen, node, this::settledlands$lpCommit436);
             screen.addRenderableWidget(dropdown);
             inspectorWidgets.add(dropdown);
+
+            AbstractWidget gearBtn = LootPoolCard436.gearButton(x + width - 20, y, screen, node);
+            screen.addRenderableWidget(gearBtn);
+            inspectorWidgets.add(gearBtn);
             y += 24;
 
             label("gui.settledlands.loot_pool.limits_hint", x, y);

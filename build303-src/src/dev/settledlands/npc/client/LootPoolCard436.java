@@ -9,11 +9,15 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.WeakHashMap;
 import java.util.function.Consumer;
 import java.util.function.IntConsumer;
+import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -29,8 +33,139 @@ public final class LootPoolCard436 {
     private static final int LABEL = -3947581;
     private static final int MUTED = -7693400;
     private static final int PORT = -855310;
+    private static final int DROPDOWN_MAX_VISIBLE = 7;
+    private static final int DROPDOWN_ROW_H = 14;
+
+    private static final Map<NpcUi.NpcDropdown, TrackedDropdown> TRACKED_DROPDOWNS =
+            new WeakHashMap<>();
+    private static volatile boolean clientListenersRegistered;
+
+    private static final class TrackedDropdown {
+        final List<String> options;
+        final NpcDialogueGraphScreen screen;
+        final Node node;
+        final Consumer<Runnable> commit;
+
+        TrackedDropdown(List<String> options, NpcDialogueGraphScreen screen, Node node,
+                Consumer<Runnable> commit) {
+            this.options = options;
+            this.screen = screen;
+            this.node = node;
+            this.commit = commit;
+        }
+    }
 
     private LootPoolCard436() {}
+
+    public static void ensureClientListenersRegistered() {
+        if (!clientListenersRegistered) {
+            clientListenersRegistered = true;
+            LootPool436.setClientListeners(
+                    LootPoolEditorScreen440::onPoolsListUpdated,
+                    LootPoolEditorScreen440::handleServerData);
+        }
+    }
+
+    public static void trackPoolDropdown(NpcUi.NpcDropdown dropdown, List<String> options,
+            NpcDialogueGraphScreen screen, Node node, Consumer<Runnable> commit) {
+        if (dropdown == null || options == null) return;
+        TRACKED_DROPDOWNS.put(dropdown, new TrackedDropdown(options, screen, node, commit));
+    }
+
+    public static AbstractWidget gearButton(int x, int y, NpcDialogueGraphScreen screen, Node node) {
+        return new LootPoolGearButton440(
+                x, y, 20, 20,
+                Component.translatable("gui.settledlands.loot_pool.edit_btn_tip"),
+                () -> openPoolEditor(screen, node, LootPool436.poolFileOf(node)));
+    }
+
+    public static void openPoolEditor(NpcDialogueGraphScreen screen, Node node, String poolFile) {
+        ensureClientListenersRegistered();
+        Minecraft.getInstance().setScreen(new LootPoolEditorScreen440(screen, node, poolFile));
+    }
+
+    public static void renderDropdownRowGears(NpcUi.NpcDropdown dropdown, GuiGraphics graphics,
+            int mouseX, int mouseY, List<Component> entries, int scroll, int selectedIndex) {
+        TrackedDropdown tracked = TRACKED_DROPDOWNS.get(dropdown);
+        if (tracked == null || graphics == null || entries == null || entries.isEmpty()) return;
+
+        int visible = Math.min(DROPDOWN_MAX_VISIBLE, entries.size());
+        int px = dropdown.getX();
+        int py = dropdown.getY() + dropdown.getHeight();
+        int pw = Math.max(dropdown.getWidth(), 90);
+        boolean hasScroll = entries.size() > visible;
+        int gearX = px + pw - (hasScroll ? 18 : 14);
+        int bgPadX = gearX - 2;
+        int bgRight = px + pw - (hasScroll ? 4 : 1);
+
+        String hoveredTip = null;
+        for (int r = 0; r < visible; r++) {
+            int idx = scroll + r;
+            if (idx < 0 || idx >= entries.size()) continue;
+            int ry = py + r * DROPDOWN_ROW_H;
+            int gy = ry + 1;
+
+            boolean rowOver = mouseX >= px && mouseX <= px + pw
+                    && mouseY >= ry && mouseY < ry + DROPDOWN_ROW_H;
+            boolean gearOver = mouseX >= gearX - 1 && mouseX < gearX + 13
+                    && mouseY >= ry && mouseY < ry + DROPDOWN_ROW_H;
+
+            // Cover trailing text cleanly before drawing the inline gear frame.
+            graphics.fill(bgPadX, ry + 1, bgRight, ry + DROPDOWN_ROW_H - 1,
+                    rowOver ? 0xF05C5C5C : 0xF0181818);
+            LootPoolGearButton440.drawInlineGearFrame(graphics, gearX, gy, gearOver);
+
+            if (gearOver) {
+                String opt = idx < tracked.options.size() ? tracked.options.get(idx) : "";
+                hoveredTip = (opt == null || opt.isEmpty())
+                        ? tr("gui.settledlands.loot_pool.create_row_tip")
+                        : tr("gui.settledlands.loot_pool.edit_row_tip", opt);
+            }
+        }
+
+        if (hoveredTip != null) {
+            Font font = Minecraft.getInstance().font;
+            if (font != null) {
+                int tw = font.width(hoveredTip) + 8;
+                int tx = Math.max(4, Math.min(mouseX + 8, px + pw - tw + 40));
+                int ty = mouseY - 16;
+                if (ty < 4) ty = mouseY + 14;
+                graphics.fill(tx - 1, ty - 1, tx + tw + 1, ty + 13, 0xFF000000 | LootPool436.ACCENT_COLOR);
+                graphics.fill(tx, ty, tx + tw, ty + 12, 0xEE141821);
+                graphics.drawString(font, hoveredTip, tx + 4, ty + 2, 0xFFF2F5FA, false);
+            }
+        }
+    }
+
+    public static boolean handleDropdownRowGearClick(NpcUi.NpcDropdown dropdown,
+            double mouseX, double mouseY, int scroll, int entryCount) {
+        TrackedDropdown tracked = TRACKED_DROPDOWNS.get(dropdown);
+        if (tracked == null || entryCount <= 0) return false;
+
+        int visible = Math.min(DROPDOWN_MAX_VISIBLE, entryCount);
+        int px = dropdown.getX();
+        int py = dropdown.getY() + dropdown.getHeight();
+        int pw = Math.max(dropdown.getWidth(), 90);
+        if (mouseX < px || mouseX > px + pw || mouseY < py || mouseY >= py + visible * DROPDOWN_ROW_H) {
+            return false;
+        }
+        boolean hasScroll = entryCount > visible;
+        int gearX = px + pw - (hasScroll ? 18 : 14);
+        if (mouseX < gearX - 2 || mouseX > gearX + 14) {
+            return false;
+        }
+
+        int row = (int) ((mouseY - py) / DROPDOWN_ROW_H);
+        int idx = scroll + row;
+        if (idx < 0 || idx >= tracked.options.size()) return false;
+
+        String chosen = tracked.options.get(idx);
+        if (chosen != null && !chosen.isEmpty() && tracked.commit != null && tracked.node != null) {
+            tracked.commit.accept(() -> LootPool436.setPoolFile(tracked.node, chosen));
+        }
+        openPoolEditor(tracked.screen, tracked.node, chosen == null ? "" : chosen);
+        return true;
+    }
 
     public static void draw(NpcDialogueGraphScreen screen, GuiGraphics graphics, Node node) {
         if (screen == null || graphics == null || node == null) return;

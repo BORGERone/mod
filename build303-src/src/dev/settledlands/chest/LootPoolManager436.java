@@ -113,6 +113,76 @@ public final class LootPoolManager436 {
         }
     }
 
+    /** Returns true if {@code rawFileName} resolves to an existing {@code *.txt} pool file. */
+    public static boolean poolExists(String rawFileName) {
+        String safe = LootPool436.sanitizeFileName(rawFileName);
+        if (safe.isEmpty()) return false;
+        Path dir = ensureDirectory();
+        Path file = dir.resolve(safe).normalize();
+        return file.startsWith(dir.normalize()) && Files.isRegularFile(file);
+    }
+
+    /** Reads a pool file for the in-game editor without logging a missing-file warning. */
+    public static List<LootPool436.PoolEntry> loadPoolQuiet(String rawFileName) {
+        String safe = LootPool436.sanitizeFileName(rawFileName);
+        if (safe.isEmpty()) return Collections.emptyList();
+        Path dir = ensureDirectory();
+        Path file = dir.resolve(safe).normalize();
+        if (!file.startsWith(dir.normalize()) || !Files.isRegularFile(file)) {
+            return Collections.emptyList();
+        }
+        try {
+            List<String> lines = Files.readAllLines(file, StandardCharsets.UTF_8);
+            return LootPool436.parseLines(lines);
+        } catch (Throwable ex) {
+            LOG.warn("loot_pool: failed to read " + file + ": " + ex.getMessage());
+            return Collections.emptyList();
+        }
+    }
+
+    /**
+     * Writes {@code entries} to {@code config/settledlands/loot_pools/<safeName>.txt}.
+     * Returns the canonical filename on success, or {@code ""} if the name is invalid or I/O failed.
+     */
+    public static String savePool(String rawFileName, List<LootPool436.PoolEntry> entries) {
+        String safe = LootPool436.normalizeSaveName(rawFileName);
+        if (safe.isEmpty()) return "";
+        Path dir = ensureDirectory();
+        Path normDir = dir.normalize();
+        Path file = normDir.resolve(safe).normalize();
+        if (!file.startsWith(normDir)) return "";
+        try {
+            String text = LootPool436.formatPoolFile(safe, entries);
+            Files.writeString(file, text, StandardCharsets.UTF_8);
+            LOG.info("loot_pool: saved pool '" + safe + "' ("
+                    + (entries == null ? 0 : entries.size()) + " entries)");
+            return safe;
+        } catch (Throwable ex) {
+            LOG.warn("loot_pool: failed to save " + file + ": " + ex.getMessage());
+            return "";
+        }
+    }
+
+    /** Deletes {@code config/settledlands/loot_pools/<safeName>.txt} when present. */
+    public static boolean deletePool(String rawFileName) {
+        String safe = LootPool436.normalizeSaveName(rawFileName);
+        if (safe.isEmpty()) return false;
+        Path dir = ensureDirectory();
+        Path normDir = dir.normalize();
+        Path file = normDir.resolve(safe).normalize();
+        if (!file.startsWith(normDir)) return false;
+        try {
+            boolean removed = Files.deleteIfExists(file);
+            if (removed) {
+                LOG.info("loot_pool: deleted pool '" + safe + "'");
+            }
+            return removed;
+        } catch (Throwable ex) {
+            LOG.warn("loot_pool: failed to delete " + file + ": " + ex.getMessage());
+            return false;
+        }
+    }
+
     /**
      * Called by {@code DungeonTemplate425.placeBlockEntitiesAndEntities} once a dungeon room's
      * blocks, block entities and entities have been placed. Materialises carried anchor markers and
