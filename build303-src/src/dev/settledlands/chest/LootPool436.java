@@ -450,8 +450,7 @@ public final class LootPool436 {
         StringBuilder sb = new StringBuilder(t.length() + 4);
         for (int i = 0; i < t.length(); i++) {
             char c = t.charAt(i);
-            if ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z')
-                    || (c >= '0' && c <= '9') || c == '_' || c == '-' || c == '.') {
+            if (Character.isLetterOrDigit(c) || c == '_' || c == '-' || c == '.') {
                 sb.append(c);
             } else if (Character.isWhitespace(c)) {
                 sb.append('_');

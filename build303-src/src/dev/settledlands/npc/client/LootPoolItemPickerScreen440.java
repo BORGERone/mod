@@ -84,15 +84,18 @@ public final class LootPoolItemPickerScreen440 extends Screen {
         int topY = panelY + 26;
         int rightEdge = panelX + panelW - 10;
 
-        Button backBtn = Button.builder(
-                        Component.translatable("gui.settledlands.loot_pool.editor.back"),
-                        b -> onClose())
-                .bounds(rightEdge - 66, panelY + 6, 66, 16)
+        Component backLbl = Component.translatable("gui.settledlands.loot_pool.editor.back");
+        int backW = Math.max(54, font.width(backLbl.getString()) + 14);
+        Button backBtn = Button.builder(backLbl, b -> onClose())
+                .bounds(rightEdge - backW, panelY + 6, backW, 16)
                 .build();
         addRenderableWidget(backBtn);
 
-        int modeW = 104;
-        int idBtnW = 74;
+        int modeW = Math.max(82, Math.max(
+                font.width(Component.translatable("gui.settledlands.loot_pool.picker.mode_all").getString()),
+                font.width(Component.translatable("gui.settledlands.loot_pool.picker.mode_inv").getString())) + 14);
+        Component addIdLbl = Component.translatable("gui.settledlands.loot_pool.picker.add_id");
+        int idBtnW = Math.max(60, font.width(addIdLbl.getString()) + 14);
         int gap = 4;
         int searchW = Math.max(80, panelW - 20 - modeW - idBtnW - gap * 2);
 
@@ -125,9 +128,7 @@ public final class LootPoolItemPickerScreen440 extends Screen {
                 .build();
         addRenderableWidget(modeBtn);
 
-        addByIdBtn = Button.builder(
-                        Component.translatable("gui.settledlands.loot_pool.picker.add_id"),
-                        b -> addTypedId())
+        addByIdBtn = Button.builder(addIdLbl, b -> addTypedId())
                 .bounds(panelX + 10 + searchW + gap + modeW + gap, topY, idBtnW, 18)
                 .tooltip(Tooltip.create(Component.translatable("gui.settledlands.loot_pool.picker.add_id_tip")))
                 .build();
@@ -142,10 +143,10 @@ public final class LootPoolItemPickerScreen440 extends Screen {
         rows = Math.max(2, gridH / CELL);
 
         if (replaceRowIndex < 0) {
-            addAllInvBtn = Button.builder(
-                            Component.translatable("gui.settledlands.loot_pool.picker.add_inv_all"),
-                            b -> addAllFromInventory())
-                    .bounds(rightEdge - 140, panelY + panelH - 22, 140, 16)
+            Component addAllLbl = Component.translatable("gui.settledlands.loot_pool.picker.add_inv_all");
+            int addAllW = Math.max(110, font.width(addAllLbl.getString()) + 14);
+            addAllInvBtn = Button.builder(addAllLbl, b -> addAllFromInventory())
+                    .bounds(rightEdge - addAllW, panelY + panelH - 22, addAllW, 16)
                     .build();
             addAllInvBtn.visible = inventoryOnly;
             addAllInvBtn.active = !invItems.isEmpty();
@@ -206,8 +207,13 @@ public final class LootPoolItemPickerScreen440 extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // Omit vanilla Screen#renderBlurredBackground so item picker stays crisp without blur.
+    }
+
+    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics, mouseX, mouseY, partialTick);
+        graphics.fill(0, 0, width, height, 0x990A0D13);
 
         int accent = 0xFF000000 | LootPool436.ACCENT_COLOR;
         graphics.fill(panelX - 1, panelY - 1, panelX + panelW + 1, panelY + panelH + 1, 0xFF090B10);

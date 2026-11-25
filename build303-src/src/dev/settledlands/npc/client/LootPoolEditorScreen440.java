@@ -244,25 +244,29 @@ public final class LootPoolEditorScreen440 extends Screen {
         itemColW = Math.max(70, minX - 6 - rowX);
 
         int headRight = panelX + panelW - 10;
-        closeBtn = Button.builder(
-                        Component.translatable("gui.settledlands.loot_pool.editor.close"),
-                        b -> tryCloseScreen())
-                .bounds(headRight - 64, panelY + 6, 64, 16)
+        Component closeLbl = Component.translatable("gui.settledlands.loot_pool.editor.close");
+        int closeW = Math.max(54, font.width(closeLbl.getString()) + 14);
+        closeBtn = Button.builder(closeLbl, b -> tryCloseScreen())
+                .bounds(headRight - closeW, panelY + 6, closeW, 16)
                 .build();
         addRenderableWidget(closeBtn);
 
-        deletePoolBtn = Button.builder(
-                        Component.translatable("gui.settledlands.loot_pool.editor.delete"),
-                        b -> onDeletePressed())
-                .bounds(headRight - 64 - 84, panelY + 6, 80, 16)
+        Component delLbl = Component.translatable("gui.settledlands.loot_pool.editor.delete");
+        Component delConfLbl = Component.translatable("gui.settledlands.loot_pool.editor.delete_confirm");
+        int delW = Math.max(76, Math.max(font.width(delLbl.getString()),
+                font.width(delConfLbl.getString())) + 14);
+        deletePoolBtn = Button.builder(delLbl, b -> onDeletePressed())
+                .bounds(headRight - closeW - 4 - delW, panelY + 6, delW, 16)
                 .tooltip(Tooltip.create(Component.translatable("gui.settledlands.loot_pool.editor.delete_tip")))
                 .build();
         addRenderableWidget(deletePoolBtn);
 
         int fileRowY = panelY + 28;
-        int newBtnW = 76;
+        Component newLbl = Component.translatable("gui.settledlands.loot_pool.editor.new_pool");
+        int newBtnW = Math.max(58, font.width(newLbl.getString()) + 14);
         int dropBtnW = 18;
-        int fileLabelW = 42;
+        int fileLabelW = Math.max(36, font.width(
+                Component.translatable("gui.settledlands.loot_pool.editor.file_lbl").getString()) + 6);
         fileBoxX = panelX + 10 + fileLabelW;
         fileBoxY = fileRowY;
         fileBoxW = Math.max(90, headRight - newBtnW - 4 - dropBtnW - 2 - fileBoxX);
@@ -288,9 +292,7 @@ public final class LootPoolEditorScreen440 extends Screen {
                 .build();
         addRenderableWidget(poolDropBtn);
 
-        newPoolBtn = Button.builder(
-                        Component.translatable("gui.settledlands.loot_pool.editor.new_pool"),
-                        b -> startNewPool())
+        newPoolBtn = Button.builder(newLbl, b -> startNewPool())
                 .bounds(headRight - newBtnW, fileRowY, newBtnW, 18)
                 .tooltip(Tooltip.create(Component.translatable("gui.settledlands.loot_pool.editor.new_tip")))
                 .build();
@@ -298,8 +300,9 @@ public final class LootPoolEditorScreen440 extends Screen {
 
         listTop = panelY + 76;
         int footerH = 48;
-        listBottom = panelY + panelH - footerH;
-        visibleRows = Math.max(2, (listBottom - listTop) / ROW_H);
+        int availTableH = Math.max(ROW_H * 2, (panelY + panelH - footerH) - listTop);
+        visibleRows = Math.max(2, availTableH / ROW_H);
+        listBottom = listTop + visibleRows * ROW_H;
 
         slots.clear();
         for (int s = 0; s < visibleRows; s++) {
@@ -343,37 +346,46 @@ public final class LootPoolEditorScreen440 extends Screen {
         }
 
         int btnY = panelY + panelH - 24;
-        boolean compact = panelW < 470;
-        int addW = compact ? 92 : 118;
-        int testW = compact ? 54 : 84;
-        int saveCloseW = compact ? 96 : 124;
-        int saveW = compact ? 66 : 80;
+        int availBtnW = panelW - 20;
+        Component addLbl = Component.translatable("gui.settledlands.loot_pool.editor.add_item");
+        Component testLbl = Component.translatable("gui.settledlands.loot_pool.editor.test");
+        Component saveLbl = Component.translatable("gui.settledlands.loot_pool.editor.save");
+        Component saveCloseLbl = Component.translatable("gui.settledlands.loot_pool.editor.save_close");
 
-        addItemBtn = Button.builder(
-                        Component.translatable("gui.settledlands.loot_pool.editor.add_item"),
-                        b -> openItemPicker(-1))
+        int addW = Math.max(58, font.width(addLbl.getString()) + 12);
+        int testW = Math.max(46, font.width(testLbl.getString()) + 12);
+        int saveW = Math.max(54, font.width(saveLbl.getString()) + 12);
+        int saveCloseW = Math.max(70, font.width(saveCloseLbl.getString()) + 12);
+
+        if (addW + 4 + testW + 8 + saveW + 4 + saveCloseW > availBtnW) {
+            addLbl = Component.translatable("gui.settledlands.loot_pool.editor.add_item_short");
+            testLbl = Component.translatable("gui.settledlands.loot_pool.editor.test_short");
+            addW = Math.max(54, font.width(addLbl.getString()) + 12);
+            testW = Math.max(40, font.width(testLbl.getString()) + 12);
+        }
+        if (addW + 4 + testW + 6 + saveW + 4 + saveCloseW > availBtnW) {
+            saveCloseLbl = Component.translatable("gui.settledlands.loot_pool.editor.save_close_short");
+            saveCloseW = Math.max(66, font.width(saveCloseLbl.getString()) + 12);
+        }
+
+        addItemBtn = Button.builder(addLbl, b -> openItemPicker(-1))
                 .bounds(panelX + 10, btnY, addW, 18)
+                .tooltip(Tooltip.create(Component.translatable("gui.settledlands.loot_pool.editor.add_item_tip")))
                 .build();
         addRenderableWidget(addItemBtn);
 
-        testRollBtn = Button.builder(
-                        Component.translatable("gui.settledlands.loot_pool.editor.test"),
-                        b -> runTestRoll())
+        testRollBtn = Button.builder(testLbl, b -> runTestRoll())
                 .bounds(panelX + 14 + addW, btnY, testW, 18)
                 .tooltip(Tooltip.create(Component.translatable("gui.settledlands.loot_pool.editor.test_tip")))
                 .build();
         addRenderableWidget(testRollBtn);
 
-        saveCloseBtn = Button.builder(
-                        Component.translatable("gui.settledlands.loot_pool.editor.save_close"),
-                        b -> triggerSave(true))
+        saveCloseBtn = Button.builder(saveCloseLbl, b -> triggerSave(true))
                 .bounds(headRight - saveCloseW, btnY, saveCloseW, 18)
                 .build();
         addRenderableWidget(saveCloseBtn);
 
-        saveBtn = Button.builder(
-                        Component.translatable("gui.settledlands.loot_pool.editor.save"),
-                        b -> triggerSave(false))
+        saveBtn = Button.builder(saveLbl, b -> triggerSave(false))
                 .bounds(headRight - saveCloseW - 4 - saveW, btnY, saveW, 18)
                 .build();
         addRenderableWidget(saveBtn);
@@ -771,8 +783,13 @@ public final class LootPoolEditorScreen440 extends Screen {
     }
 
     @Override
+    public void renderBackground(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
+        // Omit vanilla Screen#renderBlurredBackground so the editor background stays crisp without blur.
+    }
+
+    @Override
     public void render(GuiGraphics graphics, int mouseX, int mouseY, float partialTick) {
-        renderBackground(graphics, mouseX, mouseY, partialTick);
+        graphics.fill(0, 0, width, height, 0x990A0D13);
 
         int accent = 0xFF000000 | LootPool436.ACCENT_COLOR;
         graphics.fill(panelX - 1, panelY - 1, panelX + panelW + 1, panelY + panelH + 1, 0xFF080A0F);

@@ -17,8 +17,10 @@
 
 ### 2. Внутриигровой редактор пулов (`LootPoolEditorScreen440`)
 - Полноценный экран редактирования `config/settledlands/loot_pools/<имя>.txt` поверх графа с плавным возвратом назад (с сохранением позиции камеры и графа через `settledlands$remember()` / `settledlands$changed()`).
+- **Чистый фон без размытия**: `renderBackground(...)` переопределён без вызова ванильного `Screen#renderBlurredBackground` — фон ровный, без мыльного blur-шейдера.
 - **Шапка**: поле имени файла (автоматическая нормализация и `.txt`), кнопка выбора/переключения между серверными пулами прямо из редактора, кнопка **`+ Новый`** (подсказывает свободное имя `loot_pool_N.txt`), кнопка **`Удалить пул`** с двухшаговым подтверждением от случайного удаления и **`Закрыть`**.
-- **Таблица записей** с прокруткой (ползунок + колесо мыши) и виртуальным окном `RowSlot` (`EditBox` для каждого столбца):
+- **Информационная строка**: сводка записей и суммарного веса, а также активные ограничения узла (`Узел: Редк.<=...  Вес<=...  Шт: ...` без наложения глифов).
+- **Таблица записей** с прокруткой (ползунок + колесо мыши) и виртуальным окном `RowSlot` (`EditBox` для каждого столбца), точно подогнанная по высоте видимых строк без пустого зазора снизу:
   - **Предмет**: кликабельная ячейка с 3D-иконкой предмета, локализованным названием и ID (`minecraft:diamond`), открывающая окно подбора предмета в режиме замены;
   - **Мин / Макс** количество предметов (`1..64`);
   - **Редкость** (`0..100000`);
@@ -26,9 +28,11 @@
   - **Живой столбец `%`** с расчётом реального шанса выпадения каждой позиции с учётом активных фильтров узла (`Редкость` и `Вес`), а также визуальной подсветкой строк, отсечённых фильтрами узла;
   - кнопка **`×`** для удаления строки.
 - **Пробный бросок (`Тест`)**: мгновенно прогоняет `LootPool436.rollDrops(...)` по текущему редактируемому списку и фильтрам узла, показывая выпадающие предметы в нижней ленте предпросмотра с иконками и количеством (наведение курсора показывает точный предмет и характеристики).
+- **Адаптивные кнопки снизу** и в шапке: ширина вычисляется по `font.width(...)`, а на компактных масштабах интерфейса автоматически применяются короткие подписи (`+ Предмет`, `Тест`) без обрезания и наложения текста.
 - **Кнопки сохранения**: **`Сохранить`** и **`Сохранить и закрыть`** — сохраняют файл на сервер и автоматически привязывают имя нового/переименованного пула к открытому узлу графа.
 
 ### 3. Окно подбора предметов (`LootPoolItemPickerScreen440`)
+- Отображается **без размытия заднего фона**, с динамической шириной кнопок по длине текста.
 - Переключение между полным каталогом предметов игры/модов (**Все предметы**, на базе `NpcItems.allStacks()`) и **Инвентарём игрока** (включая кнопку массового добавления всех предметов из инвентаря в пул одним нажатием).
 - Поиск по названию и `namespace:id` в реальном времени, ручной ввод произвольного `modid:item_id`, настройка количества **Мин / Макс**, клик по плитке добавляет предмет (сразу несколько предметов за один заход или мгновенная замена выбранной строки).
 
@@ -37,19 +41,19 @@
   - `PoolQuery` (C2S, `settledlands:chest_pool_query`) — запрос содержимого `.txt` пула или свободного имени для нового;
   - `PoolData` (S2C, `settledlands:chest_pool_data`) — ответ сервера (`OK`, `NEW`, `SAVED`, `DELETED`, `ERR:*`);
   - `PoolSave` (C2S, `settledlands:chest_pool_save`) — сохранение (`SAVE`) или удаление (`DELETE`) файла пула с последующей рассылкой обновлённого списка `Pools` всем операторам.
-- Все операции C2S требуют `player.hasPermissions(2)` (права OP/редактора) и жёсткой санитизации имени в `LootPool436.normalizeSaveName` (запрет `..`, слэшей, скрытых dotfiles, `README_FORMAT.txt`, `.disabled`, ограничение длины 64 символа и лимита `MAX_WIRE_CHARS = 30000`).
+- Все операции C2S требуют `player.hasPermissions(2)` (права OP/редактора) и жёсткой санитизации имени в `LootPool436.normalizeSaveName` (запрет `..`, слэшей, скрытых dotfiles, `README_FORMAT.txt`, `.disabled`, ограничение длины 64 символа и лимита `MAX_WIRE_CHARS = 30000`, с поддержкой буквенных символов включая кириллицу для существующих имён файлов).
 - Общие и серверные классы (`LootPool436`, `LootPoolManager436`, `ChestLootNet436`) не имеют ссылок на клиентские классы экранов `Screen` / `GuiGraphics` и безопасны для выделенного сервера.
-- Полная локализация интерфейса добавлена в `assets/settledlands/lang/ru_ru.json` и `assets/settledlands/lang/en_us.json` (+59 ключей в каждом).
+- Полная локализация интерфейса добавлена в `assets/settledlands/lang/ru_ru.json` и `en_us.json` (+63 ключа в каждом).
 
 ## Сборка и проверки
 
-- `ecj-3.46.100.jar` (`-21`) + `tools/patch_build440.py` -> `settledlands-0.8.0-build440-loot-pool-editor-gui.jar` (`3976225` байт, `710` записей, `655` классов, `sha256=7b620dc2af5b0db9ee811cf0491234788125d4a820f6e4fe0736d08f1347bb0a`)
+- `ecj-3.46.100.jar` (`-21`) + `tools/patch_build440.py` -> `settledlands-0.8.0-build440-loot-pool-editor-gui.jar` (`3976648` байт, `710` записей, `655` классов, `sha256=5a7175912191c26a9fd5c0094987001a3d5b995c2bb01562c3d3d3bcce55af06`)
 - `tools/verify_jar.py --expect-version 0.8.0-build440-loot-pool-editor-gui --base settledlands-0.8.0-build439-furniture-3d-loot-scatter.jar` — **PASS** (`validate_jar`: OK; `jvm_verify`: 655 классов valid for Java 21; `check_mixin_class`: 115 миксинов, 1450 внешних API-ссылок, **0** новых неподтверждённых относительно Build 439; `dangling_refs`: **0**)
-- `tools/invoke_kind_check.py --base settledlands-0.8.0-build439-furniture-3d-loot-scatter.jar` — **OK** (`6272` call target'ов сверено)
+- `tools/invoke_kind_check.py --base settledlands-0.8.0-build439-furniture-3d-loot-scatter.jar` — **OK** (`6271` call target'ов сверено)
 - `tools/build440_check.py settledlands-0.8.0-build440-loot-pool-editor-gui.jar` — **PASS**:
-  - структурные проверки: наличие всех новых классов и 59 локализационных ключей в `ru_ru.json`/`en_us.json`, порядок `NpcDropdownFirst333` на позиции `[0]` + регистрация `LootPoolDropdownMixin440` в `settledlands.mixins.json`, 0 синтетических `lambda$` в миксинах пула, отсутствие клиентских ссылок в common-классах;
+  - структурные проверки: наличие всех новых классов и 63 локализационных ключей в `ru_ru.json`/`en_us.json`, порядок `NpcDropdownFirst333` на позиции `[0]` + регистрация `LootPoolDropdownMixin440` в `settledlands.mixins.json`, 0 синтетических `lambda$` в миксинах пула, отсутствие клиентских ссылок в common-классах, проверка отключения `Screen#renderBackground` (anti-blur) в обоих экранах, проверка отсутствия символа `≤` в `node_caps`;
   - `mixin_clash_check`: **OK**; `door_graph_check`: **OK**; `anchor_check`: **OK** (`ANCHOR_CHECKS=62`);
   - `Build436Probe`: **`7305 checks passed`**; `Build437Probe`: **`22 checks passed`**; `Build438Probe`: **`32 checks passed`**;
   - `Build439Probe` / `Build439LegacyProbe` / `Build439NoDiegesisProbe`: **PASS**;
-  - `Build440Probe`: **`58 checks passed`** (нормализация имён и защита от traversal/dotfiles, форматирование и парсинг файлов пула, wire-кодек `PoolData`/`PoolSave`, фильтрация `passesSpec`, реальный CRUD `LootPoolManager436` на диске, полный сетевой round-trip `PoolQuery`/`PoolSave`/`Pools`/`PoolData` с проверкой отказа игрокам без `hasPermissions(2)`, выпадающие опции и клиентские слушатели).
+  - `Build440Probe`: **`59 checks passed`** (нормализация имён, кириллица и защита от traversal/dotfiles, форматирование и парсинг файлов пула, wire-кодек `PoolData`/`PoolSave`, фильтрация `passesSpec`, реальный CRUD `LootPoolManager436` на диске, полный сетевой round-trip `PoolQuery`/`PoolSave`/`Pools`/`PoolData` с проверкой отказа игрокам без `hasPermissions(2)`, выпадающие опции и клиентские слушатели).
 - Все регрессионные прогоны (`build436_check.py`, `build437_check.py`, `build438_check.py`, `build439_check.py`, `hell_dungeon_check.py`, `teleport_check.py`, `block_trigger_check.py`, `door_screen_check.py`, `punchy_bridge_check.py`) — **PASS**.

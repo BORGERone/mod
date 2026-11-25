@@ -37,9 +37,13 @@ LANG_KEYS = (
     "gui.settledlands.loot_pool.editor.col_weight",
     "gui.settledlands.loot_pool.editor.col_chance",
     "gui.settledlands.loot_pool.editor.add_item",
+    "gui.settledlands.loot_pool.editor.add_item_short",
+    "gui.settledlands.loot_pool.editor.add_item_tip",
     "gui.settledlands.loot_pool.editor.test",
+    "gui.settledlands.loot_pool.editor.test_short",
     "gui.settledlands.loot_pool.editor.save",
     "gui.settledlands.loot_pool.editor.save_close",
+    "gui.settledlands.loot_pool.editor.save_close_short",
     "gui.settledlands.loot_pool.editor.saved",
     "gui.settledlands.loot_pool.editor.deleted",
     "gui.settledlands.loot_pool.picker.title",
@@ -163,6 +167,23 @@ def check_structural(jar: pathlib.Path, base_jar: pathlib.Path | None = None):
             for key in LANG_KEYS:
                 if not table.get(key):
                     problems.append(f"{lp} missing or empty key: {key}")
+            if "\u2264" in str(table.get("gui.settledlands.loot_pool.editor.node_caps", "")):
+                problems.append(f"{lp} node_caps contains glyph-overlapping '<=' symbol")
+
+        # Anti-blur invariant: editor & item picker override renderBackground and never call Screen#renderBackground
+        for scr_cls in (
+            "dev/settledlands/npc/client/LootPoolEditorScreen440.class",
+            "dev/settledlands/npc/client/LootPoolItemPickerScreen440.class",
+        ):
+            blob = zf.read(scr_cls)
+            parsed = disasm.parse_class(blob)
+            cp = parsed["cp"]
+            has_bg = any((cp[ni][1].decode() if isinstance(cp[ni][1], bytes) else cp[ni][1]) == "renderBackground"
+                         for _a, ni, _d, _at in parsed["methods"])
+            if not has_bg:
+                problems.append(f"{scr_cls} must override renderBackground to disable vanilla blur")
+            if "net/minecraft/client/gui/screens/Screen.renderBackground" in build438_check.method_calls(blob, "renderBackground"):
+                problems.append(f"{scr_cls}#renderBackground calls super.renderBackground (would trigger blur)")
 
         # Dedicated server safety: common classes must never reference client GUI classes
         forbidden_client = (

@@ -52,6 +52,8 @@ public final class Build440Probe {
                 "uppercase .TXT normalized");
         check("my_dungeon_loot.txt".equals(LootPool436.normalizeSaveName("  my dungeon loot  ")),
                 "whitespace converted to underscores");
+        check("Текстовый_документ.txt".equals(LootPool436.normalizeSaveName("Текстовый документ.txt")),
+                "unicode letters preserved in save names");
         check("".equals(LootPool436.normalizeSaveName("../evil.txt")), "rejects parent traversal");
         check("".equals(LootPool436.normalizeSaveName(".hidden")), "rejects leading dot only");
         check("".equals(LootPool436.normalizeSaveName("")), "rejects empty name");
