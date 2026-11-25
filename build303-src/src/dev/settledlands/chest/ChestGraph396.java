@@ -22,6 +22,8 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.ChiseledBookShelfBlock;
+import net.minecraft.world.level.block.LecternBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -146,6 +148,8 @@ public final class ChestGraph396 {
         if (state == null) return false;
         return state.getBlock() instanceof ChestBlock
                 || state.getBlock() instanceof BarrelBlock
+                || state.getBlock() instanceof LecternBlock
+                || state.getBlock() instanceof ChiseledBookShelfBlock
                 || isFurnitureStorage(state);
     }
 
@@ -153,7 +157,10 @@ public final class ChestGraph396 {
         if (level == null || pos == null) return false;
         BlockState state = level.getBlockState(pos);
         if (!isChest(state)) return false;
-        if (state.getBlock() instanceof ChestBlock || state.getBlock() instanceof BarrelBlock) {
+        if (state.getBlock() instanceof ChestBlock
+                || state.getBlock() instanceof BarrelBlock
+                || state.getBlock() instanceof LecternBlock
+                || state.getBlock() instanceof ChiseledBookShelfBlock) {
             return true;
         }
         return level.getBlockEntity(pos) instanceof Container;
@@ -493,6 +500,7 @@ public final class ChestGraph396 {
             CompoundTag data = new CompoundTag();
             data.put("DialogueGraph", graph.save());
             ChestLootNet436.sendPools(player);
+            CustomBookNet443.sendBookSummaries(player);
             NpcNet.sendRaw(player, new NpcNet.CfgView(idFor(key), data));
             player.displayClientMessage(Component.translatable("message.settledlands.chest.graph_open",
                     Component.literal(coords(pos))), true);

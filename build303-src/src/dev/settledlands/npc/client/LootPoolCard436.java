@@ -1,6 +1,7 @@
 package dev.settledlands.npc.client;
 
 import com.mojang.blaze3d.vertex.PoseStack;
+import dev.settledlands.chest.CustomBook443;
 import dev.settledlands.chest.LootPool436;
 import dev.settledlands.chest.LootPoolManager436;
 import dev.settledlands.npc.NpcDialogueGraph;
@@ -63,6 +64,13 @@ public final class LootPoolCard436 {
             LootPool436.setClientListeners(
                     LootPoolEditorScreen440::onPoolsListUpdated,
                     LootPoolEditorScreen440::handleServerData);
+            CustomBook443.setClientListeners(
+                    () -> {
+                        LootPoolBookEditorScreen443.onBooksListUpdated();
+                        LootPoolEditorScreen440.onBooksListUpdated();
+                        LootPoolItemPickerScreen440.onBooksListUpdated();
+                    },
+                    LootPoolBookEditorScreen443::handleServerData);
         }
     }
 

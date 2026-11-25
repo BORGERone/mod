@@ -212,6 +212,7 @@ public final class ChestNet397 {
             return;
         }
         // Build 397: the chest's panel IS the door's panel. One screen, one keyboard rule, one way out.
+        dev.settledlands.chest.ChestOpen401.captureClientHit(pos);
         dev.settledlands.door.HackPanel377.openForChest(parts[0], pos, keys, seconds, difficulty);
     }
 

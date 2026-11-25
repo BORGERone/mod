@@ -1,10 +1,13 @@
 package dev.settledlands.npc.client;
 
+import dev.settledlands.chest.CustomBook443;
+import dev.settledlands.chest.CustomBookManager443;
 import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.NpcItems;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.client.Minecraft;
@@ -28,6 +31,11 @@ import net.minecraft.world.item.ItemStack;
 public final class LootPoolItemPickerScreen440 extends Screen {
 
     private static final int CELL = 22;
+    private static final int MODE_ALL = 0;
+    private static final int MODE_INV = 1;
+    private static final int MODE_BOOKS = 2;
+
+    static volatile LootPoolItemPickerScreen440 active;
 
     private final LootPoolEditorScreen440 parent;
     private final int replaceRowIndex;
@@ -36,16 +44,17 @@ public final class LootPoolItemPickerScreen440 extends Screen {
     private EditBox searchBox;
     private Button modeBtn;
     private Button addByIdBtn;
-    private Button addAllInvBtn;
+    private Button bottomActionBtn;
 
     private String query = "";
-    private boolean inventoryOnly;
+    private int pickerMode = MODE_ALL;
     private int scrollRow;
     private boolean draggingScroll;
 
     private List<ItemStack> allItems = new ArrayList<>();
     private List<ItemStack> invItems = new ArrayList<>();
     private List<ItemStack> shown = new ArrayList<>();
+    private List<String> shownIds = new ArrayList<>();
 
     private String statusText = "";
     private int statusColor = 0xFF7BE088;
@@ -69,8 +78,19 @@ public final class LootPoolItemPickerScreen440 extends Screen {
         this.existingIds = existingIds;
     }
 
+    public static void onBooksListUpdated() {
+        LootPoolItemPickerScreen440 p = active;
+        if (p == null) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc != null && mc.screen == p && p.pickerMode == MODE_BOOKS) {
+            p.refreshShown();
+        }
+    }
+
     @Override
     protected void init() {
+        active = this;
+        LootPoolCard436.ensureClientListenersRegistered();
         panelW = Math.max(Math.min(width - 16, 640), Math.min(width - 8, 340));
         panelH = Math.max(height - 16, Math.min(height - 8, 210));
         panelX = (width - panelW) / 2;
@@ -91,9 +111,12 @@ public final class LootPoolItemPickerScreen440 extends Screen {
                 .build();
         addRenderableWidget(backBtn);
 
-        int modeW = Math.max(82, Math.max(
+        int modeW = Math.max(88, Math.max(
                 font.width(Component.translatable("gui.settledlands.loot_pool.picker.mode_all").getString()),
-                font.width(Component.translatable("gui.settledlands.loot_pool.picker.mode_inv").getString())) + 14);
+                Math.max(
+                        font.width(Component.translatable("gui.settledlands.loot_pool.picker.mode_inv").getString()),
+                        font.width(Component.translatable("gui.settledlands.loot_pool.picker.mode_books").getString())))
+                + 14);
         Component addIdLbl = Component.translatable("gui.settledlands.loot_pool.picker.add_id");
         int idBtnW = Math.max(60, font.width(addIdLbl.getString()) + 14);
         int gap = 4;
@@ -113,14 +136,11 @@ public final class LootPoolItemPickerScreen440 extends Screen {
         setInitialFocus(searchBox);
 
         modeBtn = Button.builder(modeLabel(), b -> {
-                    inventoryOnly = !inventoryOnly;
+                    pickerMode = (pickerMode + 1) % 3;
                     scrollRow = 0;
-                    if (inventoryOnly) rebuildInventoryList();
+                    if (pickerMode == MODE_INV) rebuildInventoryList();
                     b.setMessage(modeLabel());
-                    if (addAllInvBtn != null) {
-                        addAllInvBtn.visible = inventoryOnly && replaceRowIndex < 0;
-                        addAllInvBtn.active = !invItems.isEmpty();
-                    }
+                    updateBottomActionBtn();
                     refreshShown();
                 })
                 .bounds(panelX + 10 + searchW + gap, topY, modeW, 18)
@@ -142,26 +162,56 @@ public final class LootPoolItemPickerScreen440 extends Screen {
         cols = Math.max(4, gridW / CELL);
         rows = Math.max(2, gridH / CELL);
 
-        if (replaceRowIndex < 0) {
-            Component addAllLbl = Component.translatable("gui.settledlands.loot_pool.picker.add_inv_all");
-            int addAllW = Math.max(110, font.width(addAllLbl.getString()) + 14);
-            addAllInvBtn = Button.builder(addAllLbl, b -> addAllFromInventory())
-                    .bounds(rightEdge - addAllW, panelY + panelH - 22, addAllW, 16)
-                    .build();
-            addAllInvBtn.visible = inventoryOnly;
-            addAllInvBtn.active = !invItems.isEmpty();
-            addRenderableWidget(addAllInvBtn);
-        } else {
-            addAllInvBtn = null;
-        }
+        Component bottomLbl = bottomActionLabel();
+        int bottomW = Math.max(116, Math.max(
+                font.width(Component.translatable("gui.settledlands.loot_pool.picker.add_inv_all").getString()),
+                font.width(Component.translatable("gui.settledlands.loot_pool.picker.new_book").getString())) + 14);
+        bottomActionBtn = Button.builder(bottomLbl, b -> onBottomActionPressed())
+                .bounds(rightEdge - bottomW, panelY + panelH - 22, bottomW, 16)
+                .build();
+        addRenderableWidget(bottomActionBtn);
+        updateBottomActionBtn();
 
         refreshShown();
     }
 
     private Component modeLabel() {
-        return Component.translatable(inventoryOnly
-                ? "gui.settledlands.loot_pool.picker.mode_inv"
-                : "gui.settledlands.loot_pool.picker.mode_all");
+        return Component.translatable(switch (pickerMode) {
+            case MODE_INV -> "gui.settledlands.loot_pool.picker.mode_inv";
+            case MODE_BOOKS -> "gui.settledlands.loot_pool.picker.mode_books";
+            default -> "gui.settledlands.loot_pool.picker.mode_all";
+        });
+    }
+
+    private Component bottomActionLabel() {
+        return Component.translatable(pickerMode == MODE_BOOKS
+                ? "gui.settledlands.loot_pool.picker.new_book"
+                : "gui.settledlands.loot_pool.picker.add_inv_all");
+    }
+
+    private void updateBottomActionBtn() {
+        if (bottomActionBtn == null) return;
+        bottomActionBtn.setMessage(bottomActionLabel());
+        if (pickerMode == MODE_BOOKS) {
+            bottomActionBtn.visible = true;
+            bottomActionBtn.active = true;
+        } else if (pickerMode == MODE_INV && replaceRowIndex < 0) {
+            bottomActionBtn.visible = true;
+            bottomActionBtn.active = !invItems.isEmpty();
+        } else {
+            bottomActionBtn.visible = false;
+            bottomActionBtn.active = false;
+        }
+    }
+
+    private void onBottomActionPressed() {
+        if (pickerMode == MODE_BOOKS) {
+            playClick();
+            Minecraft.getInstance().setScreen(
+                    new LootPoolBookEditorScreen443(this, parent, replaceRowIndex, "", null));
+            return;
+        }
+        addAllFromInventory();
     }
 
     private void rebuildInventoryList() {
@@ -186,8 +236,29 @@ public final class LootPoolItemPickerScreen440 extends Screen {
     }
 
     private void refreshShown() {
-        List<ItemStack> source = inventoryOnly ? invItems : allItems;
-        shown = NpcItems.filter(source, query);
+        shownIds.clear();
+        if (pickerMode == MODE_BOOKS) {
+            shown = new ArrayList<>();
+            String q = query == null ? "" : query.trim().toLowerCase(Locale.ROOT);
+            for (CustomBook443.BookDef b : CustomBook443.getClientBooks()) {
+                if (b == null || b.id.isEmpty()) continue;
+                if (!q.isEmpty()) {
+                    String haystack = (b.id + " " + b.plainTitle() + " " + b.author).toLowerCase(Locale.ROOT);
+                    if (!haystack.contains(q)) continue;
+                }
+                ItemStack stack = CustomBookManager443.buildBookStack(b, 1);
+                if (!stack.isEmpty()) {
+                    shown.add(stack);
+                    shownIds.add(b.itemId());
+                }
+            }
+        } else {
+            List<ItemStack> source = pickerMode == MODE_INV ? invItems : allItems;
+            shown = NpcItems.filter(source, query);
+            for (ItemStack st : shown) {
+                shownIds.add(NpcItems.idOf(st));
+            }
+        }
         int max = maxScrollRow();
         if (scrollRow > max) scrollRow = max;
         if (scrollRow < 0) scrollRow = 0;
@@ -195,6 +266,17 @@ public final class LootPoolItemPickerScreen440 extends Screen {
             String t = query == null ? "" : query.trim();
             addByIdBtn.active = !t.isEmpty() && !t.contains(" ");
         }
+    }
+
+    private String itemIdAt(int idx) {
+        if (idx >= 0 && idx < shownIds.size()) {
+            String id = shownIds.get(idx);
+            if (id != null && !id.isEmpty()) return id;
+        }
+        if (idx >= 0 && idx < shown.size()) {
+            return NpcItems.idOf(shown.get(idx));
+        }
+        return "";
     }
 
     private int totalRows() {
@@ -231,12 +313,15 @@ public final class LootPoolItemPickerScreen440 extends Screen {
         graphics.renderOutline(gridX - 2, gridY - 2, cols * CELL + 4, rows * CELL + 4, 0xFF262E3D);
 
         ItemStack hoveredStack = ItemStack.EMPTY;
+        int hoveredIdx = -1;
         int start = scrollRow * cols;
         int visibleLimit = rows * cols;
         if (shown.isEmpty()) {
-            Component emptyMsg = Component.translatable(inventoryOnly
-                    ? "gui.settledlands.loot_pool.picker.empty_inv"
-                    : "gui.settledlands.loot_pool.picker.empty");
+            Component emptyMsg = Component.translatable(switch (pickerMode) {
+                case MODE_INV -> "gui.settledlands.loot_pool.picker.empty_inv";
+                case MODE_BOOKS -> "gui.settledlands.loot_pool.picker.empty_books";
+                default -> "gui.settledlands.loot_pool.picker.empty";
+            });
             graphics.drawCenteredString(font, emptyMsg, gridX + (cols * CELL) / 2,
                     gridY + (rows * CELL) / 2 - 4, 0xFF8A95A8);
         } else {
@@ -250,7 +335,7 @@ public final class LootPoolItemPickerScreen440 extends Screen {
                 int cy = gridY + r * CELL;
 
                 boolean over = mouseX >= cx && mouseX < cx + 20 && mouseY >= cy && mouseY < cy + 20;
-                String id = NpcItems.idOf(stack);
+                String id = itemIdAt(idx);
                 boolean inPool = existingIds != null && existingIds.contains(id);
                 int cellBg = over ? 0xFF2D374B : (inPool ? 0xFF222018 : 0xFF191E28);
                 int cellFrame = over ? accent : (inPool ? 0xAA9E7828 : 0xFF2B3242);
@@ -258,13 +343,14 @@ public final class LootPoolItemPickerScreen440 extends Screen {
                 graphics.fill(cx, cy, cx + 20, cy + 20, cellBg);
                 graphics.renderOutline(cx, cy, 20, 20, cellFrame);
                 graphics.renderItem(stack, cx + 2, cy + 2);
-                if (inventoryOnly && stack.getCount() > 1) {
+                if (pickerMode == MODE_INV && stack.getCount() > 1) {
                     String cnt = Integer.toString(stack.getCount());
                     int cw = font.width(cnt);
                     graphics.drawString(font, cnt, cx + 19 - cw, cy + 11, 0xFFFFFFFF, true);
                 }
                 if (over) {
                     hoveredStack = stack;
+                    hoveredIdx = idx;
                 }
             }
         }
@@ -284,16 +370,21 @@ public final class LootPoolItemPickerScreen440 extends Screen {
 
         int infoY = panelY + panelH - 32;
         if (!hoveredStack.isEmpty()) {
-            String id = NpcItems.idOf(hoveredStack);
+            String id = itemIdAt(hoveredIdx);
             String label = hoveredStack.getHoverName().getString() + "  (" + id + ")";
             int maxW = panelW - 20;
             graphics.drawString(font, clip(font, label, maxW), panelX + 10, infoY, 0xFFEAEFF8, false);
         } else if (!statusText.isEmpty()) {
             graphics.drawString(font, clip(font, statusText, panelW - 20), panelX + 10, infoY, statusColor, false);
         } else {
-            Component hint = Component.translatable(replaceRowIndex >= 0
-                    ? "gui.settledlands.loot_pool.picker.hint_replace"
-                    : "gui.settledlands.loot_pool.picker.hint_multi");
+            Component hint = Component.translatable(
+                    pickerMode == MODE_BOOKS
+                            ? "gui.settledlands.loot_pool.picker.hint_books"
+                            : (pickerMode == MODE_INV
+                                    ? "gui.settledlands.loot_pool.picker.hint_inv"
+                                    : (replaceRowIndex >= 0
+                                            ? "gui.settledlands.loot_pool.picker.hint_replace"
+                                            : "gui.settledlands.loot_pool.picker.hint_multi")));
             graphics.drawString(font, clip(font, hint.getString(), panelW - 20), panelX + 10, infoY, 0xFF8C97AA, false);
         }
 
@@ -318,8 +409,32 @@ public final class LootPoolItemPickerScreen440 extends Screen {
             }
             int idx = indexAt(mouseX, mouseY);
             if (idx >= 0 && idx < shown.size()) {
-                pickStack(shown.get(idx));
+                pickAt(idx);
                 return true;
+            }
+        } else if (button == 1) {
+            int idx = indexAt(mouseX, mouseY);
+            if (idx >= 0 && idx < shown.size()) {
+                if (pickerMode == MODE_BOOKS) {
+                    String id = itemIdAt(idx);
+                    if (CustomBook443.isBookItemId(id)) {
+                        playClick();
+                        Minecraft.getInstance().setScreen(new LootPoolBookEditorScreen443(
+                                this, parent, replaceRowIndex, CustomBook443.bookIdFromItemId(id), null));
+                        return true;
+                    }
+                } else if (pickerMode == MODE_INV) {
+                    ItemStack st = shown.get(idx);
+                    if (CustomBookManager443.hasCustomBookData(st)) {
+                        CustomBook443.BookDef extracted = CustomBookManager443.extractBookFromStack(st, "");
+                        if (extracted != null) {
+                            playClick();
+                            Minecraft.getInstance().setScreen(new LootPoolBookEditorScreen443(
+                                    this, parent, replaceRowIndex, extracted.id, extracted));
+                            return true;
+                        }
+                    }
+                }
             }
         }
         return super.mouseClicked(mouseX, mouseY, button);
@@ -359,7 +474,7 @@ public final class LootPoolItemPickerScreen440 extends Screen {
             return true;
         }
         if ((keyCode == 257 || keyCode == 335) && shown.size() == 1) {
-            pickStack(shown.get(0));
+            pickAt(0);
             return true;
         }
         return super.keyPressed(keyCode, scanCode, modifiers);
@@ -367,6 +482,7 @@ public final class LootPoolItemPickerScreen440 extends Screen {
 
     @Override
     public void onClose() {
+        active = null;
         Minecraft.getInstance().setScreen(parent);
     }
 
@@ -396,11 +512,12 @@ public final class LootPoolItemPickerScreen440 extends Screen {
         return idx >= 0 && idx < shown.size() ? idx : -1;
     }
 
-    private void pickStack(ItemStack stack) {
-        if (stack == null || stack.isEmpty()) return;
-        String id = NpcItems.idOf(stack);
+    private void pickAt(int idx) {
+        if (idx < 0 || idx >= shown.size()) return;
+        ItemStack stack = shown.get(idx);
+        String id = itemIdAt(idx);
         if (id == null || id.isEmpty()) return;
-        int suggestedCount = inventoryOnly ? Math.max(1, Math.min(64, stack.getCount())) : 1;
+        int suggestedCount = pickerMode == MODE_INV ? Math.max(1, Math.min(64, stack.getCount())) : 1;
         applyPickedItemId(id, stack.getHoverName().getString(), suggestedCount);
     }
 
@@ -408,7 +525,7 @@ public final class LootPoolItemPickerScreen440 extends Screen {
         String raw = query == null ? "" : query.trim();
         String id = LootPool436.cleanItemId(raw);
         if (id.isEmpty() || id.contains(" ")) return;
-        ItemStack probe = NpcItems.stack(id, 1);
+        ItemStack probe = CustomBookManager443.resolveItemStack(id, 1, false);
         String name = probe.isEmpty() ? id : probe.getHoverName().getString();
         applyPickedItemId(id, name, 1);
     }

@@ -15,16 +15,19 @@ import java.util.Random;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.registries.BuiltInRegistries;
-import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.Container;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
-import net.minecraft.world.item.Items;
+import net.minecraft.world.level.Level;
+import net.minecraft.world.level.block.ChiseledBookShelfBlock;
+import net.minecraft.world.level.block.LecternBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.ChiseledBookShelfBlockEntity;
+import net.minecraft.world.level.block.entity.LecternBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.block.state.properties.BooleanProperty;
 import net.neoforged.fml.loading.FMLPaths;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -247,7 +250,7 @@ public final class LootPoolManager436 {
         if (!DungeonManager425.isInDungeon(level)) return 0;
         if (!ChestGraph396.isChestAt(level, pos)) return 0;
         BlockEntity be = level.getBlockEntity(pos);
-        if (!(be instanceof Container container)) return 0;
+        if (be == null) return 0;
 
         Random rnd = new Random(ThreadLocalRandom.current().nextLong()
                 ^ ((long) pos.getX() * 3129871L)
@@ -255,6 +258,13 @@ public final class LootPoolManager436 {
                 ^ (long) pos.getY());
         List<NpcDialogueGraph.Node> poolNodes = collectActiveLootPoolNodes(graph, rnd);
         if (poolNodes.isEmpty()) return 0;
+
+        if (be instanceof LecternBlockEntity lectern) {
+            return populateLectern(level, pos, lectern, poolNodes, rnd);
+        }
+
+        if (!(be instanceof Container container)) return 0;
+        boolean isShelf = be instanceof ChiseledBookShelfBlockEntity;
 
         int slotCap = Math.min(container.getContainerSize(),
                 ChestDiegesisCompat436.usableSlotCount(be, container));
@@ -276,23 +286,25 @@ public final class LootPoolManager436 {
             LootPool436.Parsed spec = LootPool436.parse(node.action);
             if (spec == null || spec.poolFile.isEmpty()) continue;
             List<LootPool436.PoolEntry> entries = loadPool(spec.poolFile);
+            if (isShelf) {
+                entries = filterBookshelfEntries(entries, true);
+            }
             if (entries.isEmpty()) continue;
             List<LootPool436.Drop> drops = LootPool436.rollDrops(entries, spec, rnd);
             for (LootPool436.Drop drop : drops) {
                 if (freeSlots.isEmpty()) break;
-                Item item = resolveItem(drop.itemId);
-                if (item == null) {
+                ItemStack probe = CustomBookManager443.resolveItemStack(drop.itemId, 1, true);
+                if (probe.isEmpty()) {
                     warnOnce("item:" + drop.itemId,
                             "loot_pool: unknown item id '" + drop.itemId + "' in pool " + spec.poolFile);
                     continue;
                 }
                 int remaining = drop.count;
                 while (remaining > 0 && !freeSlots.isEmpty()) {
-                    ItemStack probe = new ItemStack(item, 1);
                     int perSlotMax = Math.max(1,
                             Math.min(probe.getMaxStackSize(), container.getMaxStackSize()));
                     int put = Math.min(remaining, perSlotMax);
-                    ItemStack stack = new ItemStack(item, put);
+                    ItemStack stack = probe.copyWithCount(put);
 
                     int chosenIdx = -1;
                     for (int idx = 0; idx < freeSlots.size(); idx++) {
@@ -314,13 +326,17 @@ public final class LootPoolManager436 {
         }
 
         if (placedStacks > 0) {
-            try {
-                long scatterSeed = (rnd.nextLong()
-                        ^ ((long) pos.getX() * 0x9E3779B97F4A7C15L)
-                        ^ ((long) pos.getZ() * 0xBF58476D1CE4E5B9L)
-                        ^ ((long) pos.getY() * 0x94D049BB133111EBL)) | 1L;
-                ChestDiegesisCompat436.markLootScatter(be, populatedSlots, scatterSeed);
-            } catch (Throwable ignored) {
+            if (isShelf) {
+                syncChiseledShelfState(level, pos, container);
+            } else {
+                try {
+                    long scatterSeed = (rnd.nextLong()
+                            ^ ((long) pos.getX() * 0x9E3779B97F4A7C15L)
+                            ^ ((long) pos.getZ() * 0xBF58476D1CE4E5B9L)
+                            ^ ((long) pos.getY() * 0x94D049BB133111EBL)) | 1L;
+                    ChestDiegesisCompat436.markLootScatter(be, populatedSlots, scatterSeed);
+                } catch (Throwable ignored) {
+                }
             }
             try {
                 be.setChanged();
@@ -329,6 +345,91 @@ public final class LootPoolManager436 {
             }
         }
         return placedStacks;
+    }
+
+    /**
+     * Build 443: populates a lectern (non-{@link Container}) with a single compatible book
+     * (filtering mixed pools down to {@code ItemTags.LECTERN_BOOKS} + custom books) and updates
+     * {@link LecternBlock#HAS_BOOK}.
+     */
+    private static int populateLectern(ServerLevel level, BlockPos pos, LecternBlockEntity lectern,
+            List<NpcDialogueGraph.Node> poolNodes, Random rnd) {
+        if (lectern.hasBook()) return 0;
+        for (NpcDialogueGraph.Node node : poolNodes) {
+            LootPool436.Parsed spec = LootPool436.parse(node.action);
+            if (spec == null || spec.poolFile.isEmpty()) continue;
+            List<LootPool436.PoolEntry> filtered = filterLecternEntries(loadPool(spec.poolFile), true);
+            if (filtered.isEmpty()) continue;
+            List<LootPool436.Drop> drops = LootPool436.rollDrops(filtered, spec, rnd);
+            for (LootPool436.Drop drop : drops) {
+                ItemStack stack = CustomBookManager443.resolveItemStack(drop.itemId, 1, true);
+                if (stack.isEmpty()) continue;
+                lectern.setBook(stack.copyWithCount(1));
+                BlockState state = level.getBlockState(pos);
+                try {
+                    LecternBlock.resetBookState(null, (Level) level, pos, state, true);
+                } catch (Throwable ex) {
+                    warnOnce("lectern_state:" + pos,
+                            "loot_pool: LecternBlock.resetBookState failed at " + pos + ": " + ex.getMessage());
+                }
+                try {
+                    ((BlockEntity) lectern).setChanged();
+                } catch (Throwable ignored) {
+                }
+                return 1;
+            }
+        }
+        return 0;
+    }
+
+    public static List<LootPool436.PoolEntry> filterLecternEntries(
+            List<LootPool436.PoolEntry> entries, boolean preferServerDisk) {
+        if (entries == null || entries.isEmpty()) return Collections.emptyList();
+        List<LootPool436.PoolEntry> out = new ArrayList<>();
+        for (LootPool436.PoolEntry e : entries) {
+            if (e != null && CustomBookManager443.isValidForLectern(e.itemId, preferServerDisk)) {
+                out.add(e);
+            }
+        }
+        return out;
+    }
+
+    public static List<LootPool436.PoolEntry> filterBookshelfEntries(
+            List<LootPool436.PoolEntry> entries, boolean preferServerDisk) {
+        if (entries == null || entries.isEmpty()) return Collections.emptyList();
+        List<LootPool436.PoolEntry> out = new ArrayList<>();
+        for (LootPool436.PoolEntry e : entries) {
+            if (e != null && CustomBookManager443.isValidForChiseledBookshelf(e.itemId, preferServerDisk)) {
+                out.add(e);
+            }
+        }
+        return out;
+    }
+
+    private static void syncChiseledShelfState(ServerLevel level, BlockPos pos, Container container) {
+        try {
+            BlockState oldState = level.getBlockState(pos);
+            if (oldState == null || !(oldState.getBlock() instanceof ChiseledBookShelfBlock)) return;
+            BlockState cur = oldState;
+            List<BooleanProperty> props = ChiseledBookShelfBlock.SLOT_OCCUPIED_PROPERTIES;
+            int n = Math.min(props.size(), container.getContainerSize());
+            boolean changed = false;
+            for (int i = 0; i < n; i++) {
+                BooleanProperty prop = props.get(i);
+                boolean occupied = !container.getItem(i).isEmpty();
+                if (!Boolean.valueOf(occupied).equals(cur.getValue(prop))) {
+                    cur = (BlockState) cur.setValue(prop, Boolean.valueOf(occupied));
+                    changed = true;
+                }
+            }
+            if (changed) {
+                ((Level) level).setBlock(pos, cur, 3);
+            }
+            level.sendBlockUpdated(pos, oldState, cur, 3);
+        } catch (Throwable ex) {
+            warnOnce("shelf_sync:" + pos,
+                    "loot_pool: chiseled bookshelf state sync failed at " + pos + ": " + ex.getMessage());
+        }
     }
 
     /**
@@ -400,16 +501,6 @@ public final class LootPoolManager436 {
             out.add(cur);
             curId = cur.next;
         }
-    }
-
-    private static Item resolveItem(String rawId) {
-        if (rawId == null || rawId.isEmpty()) return null;
-        ResourceLocation rl = ResourceLocation.tryParse(rawId.trim());
-        if (rl == null || BuiltInRegistries.ITEM == null) return null;
-        Item item = BuiltInRegistries.ITEM.get(rl);
-        if (item == null || item == Items.AIR) return null;
-        ResourceLocation actual = BuiltInRegistries.ITEM.getKey(item);
-        return rl.equals(actual) ? item : null;
     }
 
     private static void warnOnce(String key, String msg) {

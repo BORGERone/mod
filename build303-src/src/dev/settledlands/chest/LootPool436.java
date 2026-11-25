@@ -546,7 +546,14 @@ public final class LootPool436 {
     public static String cleanItemId(String raw) {
         if (raw == null) return "";
         String s = raw.trim().replace("|", "").replace("\n", "").replace("\r", "");
-        return s.contains(":") ? s : (s.isEmpty() ? "" : "minecraft:" + s);
+        if (s.isEmpty()) return "";
+        String lower = s.toLowerCase(Locale.ROOT);
+        if (lower.startsWith(CustomBook443.BOOK_ITEM_PREFIX)
+                || lower.startsWith(CustomBook443.SHORT_BOOK_PREFIX)) {
+            String bookId = CustomBook443.bookIdFromItemId(s);
+            return bookId.isEmpty() ? "" : (CustomBook443.BOOK_ITEM_PREFIX + bookId);
+        }
+        return s.contains(":") ? s : ("minecraft:" + s);
     }
 
     public static String formatWeight(double weight) {

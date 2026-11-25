@@ -169,6 +169,65 @@ KNOWN_NEW = {
     # Build 438: NeoForge 1.21.1 IBlockEntityExtension (BlockEntity implements it via BlockEntity.java.patch).
     "net/neoforged/neoforge/common/extensions/IBlockEntityExtension.getPersistentData()Lnet/minecraft/nbt/CompoundTag;": {
         "invokeinterface"},               # public interface IBlockEntityExtension (verified in NeoForge 1.21.1)
+    # Build 443: Custom colored books & lectern / chiseled bookshelf chest-graph support (ForgeJavaDocs-NG 1.21.x).
+    "net/minecraft/client/gui/components/EditBox.insertText(Ljava/lang/String;)V": {
+        "invokevirtual"},                 # public class EditBox
+    "net/minecraft/client/gui/components/MultiLineEditBox.getValue()Ljava/lang/String;": {
+        "invokevirtual"},                 # public class MultiLineEditBox
+    "net/minecraft/client/gui/components/MultiLineEditBox.setCharacterLimit(I)V": {
+        "invokevirtual"},                 # public class MultiLineEditBox
+    "net/minecraft/client/resources/sounds/SimpleSoundInstance.forUI(Lnet/minecraft/sounds/SoundEvent;F)Lnet/minecraft/client/resources/sounds/SimpleSoundInstance;": {
+        "invokestatic"},                  # public class SimpleSoundInstance, public static forUI(SoundEvent, float)
+    "net/minecraft/network/chat/Component.visit(Lnet/minecraft/network/chat/FormattedText$StyledContentConsumer;Lnet/minecraft/network/chat/Style;)Ljava/util/Optional;": {
+        "invokeinterface"},               # public interface Component extends Message, FormattedText
+    "net/minecraft/network/chat/Style.getColor()Lnet/minecraft/network/chat/TextColor;": {
+        "invokevirtual"},                 # public class Style
+    "net/minecraft/network/chat/Style.isBold()Z": {
+        "invokevirtual"},                 # public class Style
+    "net/minecraft/network/chat/Style.isItalic()Z": {
+        "invokevirtual"},                 # public class Style
+    "net/minecraft/network/chat/Style.isObfuscated()Z": {
+        "invokevirtual"},                 # public class Style
+    "net/minecraft/network/chat/Style.isStrikethrough()Z": {
+        "invokevirtual"},                 # public class Style
+    "net/minecraft/network/chat/Style.isUnderlined()Z": {
+        "invokevirtual"},                 # public class Style
+    "net/minecraft/network/chat/Style.withBold(Ljava/lang/Boolean;)Lnet/minecraft/network/chat/Style;": {
+        "invokevirtual"},                 # public class Style
+    "net/minecraft/network/chat/Style.withItalic(Ljava/lang/Boolean;)Lnet/minecraft/network/chat/Style;": {
+        "invokevirtual"},                 # public class Style
+    "net/minecraft/network/chat/Style.withObfuscated(Ljava/lang/Boolean;)Lnet/minecraft/network/chat/Style;": {
+        "invokevirtual"},                 # public class Style
+    "net/minecraft/network/chat/Style.withStrikethrough(Ljava/lang/Boolean;)Lnet/minecraft/network/chat/Style;": {
+        "invokevirtual"},                 # public class Style
+    "net/minecraft/network/chat/Style.withUnderlined(Ljava/lang/Boolean;)Lnet/minecraft/network/chat/Style;": {
+        "invokevirtual"},                 # public class Style
+    "net/minecraft/network/chat/TextColor.getValue()I": {
+        "invokevirtual"},                 # public final class TextColor
+    "net/minecraft/server/network/Filterable.passThrough(Ljava/lang/Object;)Lnet/minecraft/server/network/Filterable;": {
+        "invokestatic"},                  # public record Filterable
+    "net/minecraft/server/network/Filterable.raw()Ljava/lang/Object;": {
+        "invokevirtual"},                 # public record Filterable
+    "net/minecraft/world/item/ItemStack.is(Lnet/minecraft/tags/TagKey;)Z": {
+        "invokevirtual"},                 # public final class ItemStack
+    "net/minecraft/world/item/component/WritableBookContent.pages()Ljava/util/List;": {
+        "invokevirtual"},                 # public record WritableBookContent
+    "net/minecraft/world/item/component/WrittenBookContent.<init>(Lnet/minecraft/server/network/Filterable;Ljava/lang/String;ILjava/util/List;Z)V": {
+        "invokespecial"},                 # public record WrittenBookContent
+    "net/minecraft/world/item/component/WrittenBookContent.author()Ljava/lang/String;": {
+        "invokevirtual"},                 # public record WrittenBookContent
+    "net/minecraft/world/item/component/WrittenBookContent.pages()Ljava/util/List;": {
+        "invokevirtual"},                 # public record WrittenBookContent
+    "net/minecraft/world/item/component/WrittenBookContent.title()Lnet/minecraft/server/network/Filterable;": {
+        "invokevirtual"},                 # public record WrittenBookContent
+    "net/minecraft/world/level/block/LecternBlock.resetBookState(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Z)V": {
+        "invokestatic"},                  # public class LecternBlock, public static void resetBookState
+    "net/minecraft/world/level/block/entity/LecternBlockEntity.hasBook()Z": {
+        "invokevirtual"},                 # public class LecternBlockEntity
+    "net/minecraft/world/level/block/entity/LecternBlockEntity.setBook(Lnet/minecraft/world/item/ItemStack;)V": {
+        "invokevirtual"},                 # public class LecternBlockEntity
+    "net/minecraft/world/phys/HitResult.getLocation()Lnet/minecraft/world/phys/Vec3;": {
+        "invokevirtual"},                 # public abstract class HitResult
 }
 
 

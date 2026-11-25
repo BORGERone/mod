@@ -1,6 +1,8 @@
 package dev.settledlands.npc.client;
 
 import dev.settledlands.chest.ChestLootNet436;
+import dev.settledlands.chest.CustomBook443;
+import dev.settledlands.chest.CustomBookManager443;
 import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcItems;
@@ -53,6 +55,7 @@ public final class LootPoolEditorScreen440 extends Screen {
     private Button newPoolBtn;
     private Button deletePoolBtn;
     private Button addItemBtn;
+    private Button addBookBtn;
     private Button testRollBtn;
     private Button saveBtn;
     private Button saveCloseBtn;
@@ -130,7 +133,7 @@ public final class LootPoolEditorScreen440 extends Screen {
         ItemStack stack() {
             if (!itemId.equals(cachedId)) {
                 cachedId = itemId;
-                cachedStack = NpcItems.stack(itemId, 1);
+                cachedStack = CustomBookManager443.resolveItemStack(itemId, 1, false);
             }
             return cachedStack;
         }
@@ -218,6 +221,17 @@ public final class LootPoolEditorScreen440 extends Screen {
         if (mc != null && mc.screen == ed) {
             ed.updateActionButtons();
         }
+    }
+
+    public static void onBooksListUpdated() {
+        LootPoolEditorScreen440 ed = active;
+        if (ed == null) return;
+        for (RowData r : ed.rowsData) {
+            if (CustomBook443.isBookItemId(r.itemId)) {
+                r.cachedId = "";
+            }
+        }
+        ed.previewDrops.clear();
     }
 
     @Override
@@ -402,24 +416,27 @@ public final class LootPoolEditorScreen440 extends Screen {
 
         int availBtnW = panelW - 20;
         Component addLbl = Component.translatable("gui.settledlands.loot_pool.editor.add_item");
+        Component bookLbl = Component.translatable("gui.settledlands.loot_pool.editor.add_book");
         Component testLbl = Component.translatable("gui.settledlands.loot_pool.editor.test");
         Component saveLbl = Component.translatable("gui.settledlands.loot_pool.editor.save");
         Component saveCloseLbl = Component.translatable("gui.settledlands.loot_pool.editor.save_close");
 
         int addW = Math.max(58, font.width(addLbl.getString()) + 12);
+        int bookW = Math.max(52, font.width(bookLbl.getString()) + 12);
         int testW = Math.max(46, font.width(testLbl.getString()) + 12);
         int saveW = Math.max(54, font.width(saveLbl.getString()) + 12);
         int saveCloseW = Math.max(70, font.width(saveCloseLbl.getString()) + 12);
 
-        if (addW + 4 + testW + 8 + saveW + 4 + saveCloseW > availBtnW) {
+        if (addW + 3 + bookW + 3 + testW + 6 + saveW + 4 + saveCloseW > availBtnW) {
             addLbl = Component.translatable("gui.settledlands.loot_pool.editor.add_item_short");
             testLbl = Component.translatable("gui.settledlands.loot_pool.editor.test_short");
-            addW = Math.max(54, font.width(addLbl.getString()) + 12);
-            testW = Math.max(40, font.width(testLbl.getString()) + 12);
+            addW = Math.max(52, font.width(addLbl.getString()) + 10);
+            bookW = Math.max(46, font.width(bookLbl.getString()) + 10);
+            testW = Math.max(38, font.width(testLbl.getString()) + 10);
         }
-        if (addW + 4 + testW + 6 + saveW + 4 + saveCloseW > availBtnW) {
+        if (addW + 3 + bookW + 3 + testW + 6 + saveW + 4 + saveCloseW > availBtnW) {
             saveCloseLbl = Component.translatable("gui.settledlands.loot_pool.editor.save_close_short");
-            saveCloseW = Math.max(66, font.width(saveCloseLbl.getString()) + 12);
+            saveCloseW = Math.max(64, font.width(saveCloseLbl.getString()) + 10);
         }
 
         addItemBtn = Button.builder(addLbl, b -> openItemPicker(-1))
@@ -428,8 +445,14 @@ public final class LootPoolEditorScreen440 extends Screen {
                 .build();
         addRenderableWidget(addItemBtn);
 
+        addBookBtn = Button.builder(bookLbl, b -> openBookEditor(-1, ""))
+                .bounds(panelX + 13 + addW, btnY, bookW, 18)
+                .tooltip(Tooltip.create(Component.translatable("gui.settledlands.loot_pool.editor.add_book_tip")))
+                .build();
+        addRenderableWidget(addBookBtn);
+
         testRollBtn = Button.builder(testLbl, b -> runTestRoll())
-                .bounds(panelX + 14 + addW, btnY, testW, 18)
+                .bounds(panelX + 16 + addW + bookW, btnY, testW, 18)
                 .tooltip(Tooltip.create(Component.translatable("gui.settledlands.loot_pool.editor.test_tip")))
                 .build();
         addRenderableWidget(testRollBtn);
@@ -628,6 +651,7 @@ public final class LootPoolEditorScreen440 extends Screen {
         if (saveBtn != null) saveBtn.active = !loading;
         if (saveCloseBtn != null) saveCloseBtn.active = !loading;
         if (addItemBtn != null) addItemBtn.active = !loading;
+        if (addBookBtn != null) addBookBtn.active = !loading;
         if (testRollBtn != null) testRollBtn.active = !loading && !rowsData.isEmpty();
     }
 
@@ -717,6 +741,12 @@ public final class LootPoolEditorScreen440 extends Screen {
         }
         poolPopupOpen = false;
         Minecraft.getInstance().setScreen(new LootPoolItemPickerScreen440(this, replaceRowIdx, present));
+    }
+
+    public void openBookEditor(int replaceRowIdx, String bookId) {
+        poolPopupOpen = false;
+        Minecraft.getInstance().setScreen(
+                new LootPoolBookEditorScreen443(this, this, replaceRowIdx, bookId, null));
     }
 
     private void startNewPool() {
@@ -839,7 +869,7 @@ public final class LootPoolEditorScreen440 extends Screen {
             return;
         }
         for (LootPool436.Drop d : rolled) {
-            ItemStack st = NpcItems.stack(d.itemId, 1);
+            ItemStack st = CustomBookManager443.resolveItemStack(d.itemId, 1, false);
             if (!st.isEmpty()) {
                 previewDrops.add(new PreviewDrop(st, d.count));
             }
@@ -989,11 +1019,17 @@ public final class LootPoolEditorScreen440 extends Screen {
                 int rowBg = (idx % 2 == 0) ? 0x5519202B : 0x33141923;
                 graphics.fill(rowX, ry, tableRight, ry + ROW_H - 1, rowBg);
 
-                // Item picker cell
+                // Item picker cell (plus inline book-edit button for settledlands:book/<id>)
                 int itemBtnY = ry + 2;
                 int itemBtnH = 20;
-                boolean overItem = !poolPopupOpen
-                        && mouseX >= rowX && mouseX < rowX + itemColW
+                boolean isCustomBook = CustomBook443.isBookItemId(data.itemId);
+                int editBtnW = isCustomBook && itemColW >= 60 ? 18 : 0;
+                int editBtnX = rowX + itemColW - editBtnW;
+                boolean overEditBtn = editBtnW > 0 && !poolPopupOpen
+                        && mouseX >= editBtnX && mouseX < rowX + itemColW
+                        && mouseY >= itemBtnY && mouseY < itemBtnY + itemBtnH;
+                boolean overItem = !poolPopupOpen && !overEditBtn
+                        && mouseX >= rowX && mouseX < rowX + itemColW - editBtnW
                         && mouseY >= itemBtnY && mouseY < itemBtnY + itemBtnH;
                 boolean validItem = !data.itemId.isEmpty();
                 int itemBg = overItem ? 0xFF283142 : 0xFF171C25;
@@ -1004,21 +1040,39 @@ public final class LootPoolEditorScreen440 extends Screen {
                 ItemStack stack = data.stack();
                 if (!stack.isEmpty()) {
                     graphics.renderItem(stack, rowX + 2, itemBtnY + 2);
-                    String displayName = stack.getHoverName().getString();
                     int textX = rowX + 21;
-                    int avail = itemColW - 24;
-                    graphics.drawString(font, clip(font, displayName, avail), textX, itemBtnY + 6,
-                            0xFFEAEFF8, false);
+                    int avail = itemColW - 24 - editBtnW;
+                    if (isCustomBook) {
+                        graphics.enableScissor(textX, itemBtnY, textX + avail, itemBtnY + itemBtnH);
+                        graphics.drawString(font, stack.getHoverName(), textX, itemBtnY + 6,
+                                0xFFEAEFF8, false);
+                        graphics.disableScissor();
+                    } else {
+                        String displayName = stack.getHoverName().getString();
+                        graphics.drawString(font, clip(font, displayName, avail), textX, itemBtnY + 6,
+                                0xFFEAEFF8, false);
+                    }
                     if (overItem) {
                         hoveredRowStack = stack;
                     }
                 } else {
                     String rawLabel = data.itemId.isEmpty() ? "<...>" : data.itemId;
-                    graphics.drawString(font, clip(font, rawLabel, itemColW - 8), rowX + 4, itemBtnY + 6,
+                    graphics.drawString(font, clip(font, rawLabel, itemColW - 8 - editBtnW), rowX + 4, itemBtnY + 6,
                             0xFFFF9888, false);
                     if (overItem) {
                         extraTooltip = Component.translatable(
                                 "gui.settledlands.loot_pool.editor.unknown_item", rawLabel);
+                    }
+                }
+                if (editBtnW > 0) {
+                    int eBg = overEditBtn ? 0xFF36455E : 0xFF212836;
+                    graphics.fill(editBtnX, itemBtnY + 1, rowX + itemColW - 1, itemBtnY + itemBtnH - 1, eBg);
+                    graphics.renderOutline(editBtnX, itemBtnY + 1, editBtnW - 1, itemBtnH - 2,
+                            overEditBtn ? accent : 0xFF42506A);
+                    graphics.drawCenteredString(font, "E", editBtnX + editBtnW / 2, itemBtnY + 6,
+                            overEditBtn ? 0xFFFFFFFF : 0xFFF5B841);
+                    if (overEditBtn) {
+                        extraTooltip = Component.translatable("gui.settledlands.loot_pool.editor.edit_book_tip");
                     }
                 }
 
@@ -1288,8 +1342,15 @@ public final class LootPoolEditorScreen440 extends Screen {
                 if (idx >= rowsData.size()) break;
                 int ry = listTop + s * ROW_H + 2;
                 if (mouseX >= rowX && mouseX < rowX + itemColW && mouseY >= ry && mouseY < ry + 20) {
+                    RowData row = rowsData.get(idx);
+                    boolean isBook = CustomBook443.isBookItemId(row.itemId);
+                    int editBtnW = isBook && itemColW >= 60 ? 18 : 0;
                     playClick();
-                    openItemPicker(idx);
+                    if (editBtnW > 0 && mouseX >= rowX + itemColW - editBtnW) {
+                        openBookEditor(idx, CustomBook443.bookIdFromItemId(row.itemId));
+                    } else {
+                        openItemPicker(idx);
+                    }
                     return true;
                 }
             }

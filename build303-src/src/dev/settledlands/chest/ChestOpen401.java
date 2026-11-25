@@ -4,6 +4,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.core.BlockPos;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.phys.BlockHitResult;
+import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.core.Direction;
 import org.slf4j.Logger;
@@ -55,8 +56,33 @@ public final class ChestOpen401 {
     private static boolean sawWindow;
     private static long armedAt;
     private static int quiet;
+    private static BlockPos capturedPos;
+    private static Vec3 capturedLoc;
+    private static Direction capturedFace;
 
     private ChestOpen401() {}
+
+    /**
+     * Build 443: snapshots the client's exact block hit (position, face, hit coordinates) at the moment a
+     * lock panel opens, so a subsequent re-click on a chiseled bookshelf targets the exact book slot.
+     */
+    public static void captureClientHit(BlockPos pos) {
+        if (pos == null) return;
+        try {
+            Minecraft mc = Minecraft.getInstance();
+            if (mc != null && mc.hitResult instanceof BlockHitResult hit
+                    && pos.equals(hit.getBlockPos())) {
+                capturedPos = pos.immutable();
+                capturedLoc = ((HitResult) hit).getLocation();
+                capturedFace = hit.getDirection();
+            } else {
+                capturedPos = null;
+                capturedLoc = null;
+                capturedFace = null;
+            }
+        } catch (Throwable ignored) {
+        }
+    }
 
     /**
      * The server says this chest may be clicked now, and whether a window of its chain is still in the way.
@@ -155,10 +181,20 @@ public final class ChestOpen401 {
             if (mc == null || mc.player == null || mc.gameMode == null || pos == null) return;
             if (mc.screen != null) return;                                   // something opened in the meantime
             if (mc.player.containerMenu != mc.player.inventoryMenu) return;  // the chest is already up
-            Direction face = openFace(mc, pos);
-            mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
-                    new BlockHitResult(new Vec3(pos.getX() + 0.5D, pos.getY() + 0.5D,
-                            pos.getZ() + 0.5D), face, pos, false));
+            BlockHitResult targetHit;
+            if (capturedPos != null && pos.equals(capturedPos)
+                    && capturedLoc != null && capturedFace != null) {
+                targetHit = new BlockHitResult(capturedLoc, capturedFace, pos, false);
+            } else {
+                Direction face = openFace(mc, pos);
+                targetHit = new BlockHitResult(
+                        new Vec3(pos.getX() + 0.5D, pos.getY() + 0.5D, pos.getZ() + 0.5D),
+                        face, pos, false);
+            }
+            capturedPos = null;
+            capturedLoc = null;
+            capturedFace = null;
+            mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND, targetHit);
             LOG.info("chest: the click of the cracked chest at " + pos + " (" + key + ") was delivered");
         } catch (Throwable failure) {
             LOG.warn("chest: the chest at " + pos + " could not be clicked - one more click by hand opens it",

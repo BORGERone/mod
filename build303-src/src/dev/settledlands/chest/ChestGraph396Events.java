@@ -13,6 +13,9 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.ChiseledBookShelfBlockEntity;
+import net.minecraft.world.level.block.entity.LecternBlockEntity;
 import net.neoforged.bus.api.EventPriority;
 import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.common.EventBusSubscriber;
@@ -89,16 +92,20 @@ public final class ChestGraph396Events {
          */
         final boolean cracked;
 
+        /** Build 443: chiseled bookshelves and empty lecterns do not open a container menu. */
+        final long noWindowTicks;
+
         Pending(ServerLevel level, BlockPos pos, String key, long at) {
-            this(level, pos, key, at, false);
+            this(level, pos, key, at, false, NO_WINDOW);
         }
 
-        Pending(ServerLevel level, BlockPos pos, String key, long at, boolean cracked) {
+        Pending(ServerLevel level, BlockPos pos, String key, long at, boolean cracked, long noWindowTicks) {
             this.level = level;
             this.pos = pos;
             this.key = key;
             this.at = at;
             this.cracked = cracked;
+            this.noWindowTicks = noWindowTicks;
         }
     }
 
@@ -204,11 +211,26 @@ public final class ChestGraph396Events {
         if (player == null || level == null || pos == null) return;
         try {
             ChestGraph396.noteOpened(player, level, pos, key);
+            long noWindowTicks = computeNoWindowTicks(level, pos);
             PENDING.put(player.getUUID(),
-                    new Pending(level, pos, key, now(level.getServer()), cracked));
+                    new Pending(level, pos, key, now(level.getServer()), cracked, noWindowTicks));
         } catch (Throwable failure) {
             ChestGraph396.fail(failure);
         }
+    }
+
+    private static long computeNoWindowTicks(ServerLevel level, BlockPos pos) {
+        try {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be instanceof ChiseledBookShelfBlockEntity) {
+                return OPEN_GRACE;
+            }
+            if (be instanceof LecternBlockEntity lectern && !lectern.hasBook()) {
+                return OPEN_GRACE;
+            }
+        } catch (Throwable ignored) {
+        }
+        return NO_WINDOW;
     }
 
     /**
@@ -272,7 +294,7 @@ public final class ChestGraph396Events {
                     continue;
                 }
                 if (age < OPEN_GRACE) continue;           // the same tick the click happened in
-                if (!pending.window && age < NO_WINDOW) continue;   // the window is still to come
+                if (!pending.window && age < pending.noWindowTicks) continue;   // the window is still to come
                 walk.remove();
                 // Build 402: the close is the «открытие» moment, and it is the same moment for every opening.
                 // The «взлом» socket is not a second way in - it is the thing that happens <b>before</b> the

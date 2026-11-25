@@ -153,6 +153,7 @@ public final class ChestLootNet436 {
         } catch (Throwable failure) {
             LOG.warn("loot_pool: failed to register settledlands:loot_pool_save: " + failure);
         }
+        CustomBookNet443.register(registrar);
     }
 
     public static void sendPools(ServerPlayer player) {
@@ -249,6 +250,7 @@ public final class ChestLootNet436 {
             return;
         }
         sendPools(player);
+        CustomBookNet443.sendBookSummaries(player);
         String requested = LootPool436.sanitizeFileName(payload.poolFile());
         if (!requested.isEmpty() && LootPoolManager436.poolExists(requested)) {
             List<LootPool436.PoolEntry> entries = LootPoolManager436.loadPoolQuiet(requested);

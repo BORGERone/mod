@@ -749,6 +749,28 @@ CONFIRMED_EXTERNAL_CLASSES = {
     "net/neoforged/neoforge/common/extensions/IBlockEntityExtension":
         "Build 438: NeoForge 1.21.1 IBlockEntityExtension (neoforged/NeoForge 1.21.1 "
         "IBlockEntityExtension.java + BlockEntity.java.patch; paired with NeoForgeData)",
+    # Build 443: custom colored books & lectern / chiseled bookshelf chest-graph support
+    # (all verified in nekoyue/ForgeJavaDocs-NG javadoc/1.21.x-neoforge).
+    "net/minecraft/network/chat/FormattedText$StyledContentConsumer":
+        "Build 443: MC 1.21.1 FormattedText.StyledContentConsumer<T> for Component#visit",
+    "net/minecraft/network/chat/TextColor":
+        "Build 443: MC 1.21.1 net.minecraft.network.chat.TextColor",
+    "net/minecraft/server/network/Filterable":
+        "Build 443: MC 1.21.1 record Filterable<T> in WrittenBookContent / WritableBookContent",
+    "net/minecraft/tags/ItemTags":
+        "Build 443: MC 1.21.1 net.minecraft.tags.ItemTags (LECTERN_BOOKS, BOOKSHELF_BOOKS)",
+    "net/minecraft/world/item/component/WritableBookContent":
+        "Build 443: MC 1.21.1 record WritableBookContent (DataComponents.WRITABLE_BOOK_CONTENT)",
+    "net/minecraft/world/item/component/WrittenBookContent":
+        "Build 443: MC 1.21.1 record WrittenBookContent (DataComponents.WRITTEN_BOOK_CONTENT)",
+    "net/minecraft/world/level/block/ChiseledBookShelfBlock":
+        "Build 443: MC 1.21.1 net.minecraft.world.level.block.ChiseledBookShelfBlock",
+    "net/minecraft/world/level/block/LecternBlock":
+        "Build 443: MC 1.21.1 net.minecraft.world.level.block.LecternBlock",
+    "net/minecraft/world/level/block/entity/ChiseledBookShelfBlockEntity":
+        "Build 443: MC 1.21.1 net.minecraft.world.level.block.entity.ChiseledBookShelfBlockEntity",
+    "net/minecraft/world/level/block/entity/LecternBlockEntity":
+        "Build 443: MC 1.21.1 net.minecraft.world.level.block.entity.LecternBlockEntity",
 }
 
 
@@ -1138,6 +1160,97 @@ CONFIRMED_EXTERNAL = {
     ("net/neoforged/neoforge/common/extensions/IBlockEntityExtension", "getPersistentData",
      "()Lnet/minecraft/nbt/CompoundTag;"):
         "Build 438: NeoForge 1.21.1 interface IBlockEntityExtension#getPersistentData() for chest graph BE persistence",
+    # ---------------------------------------------------------------------------------------
+    # Build 443: Custom colored books (DataComponents, WrittenBookContent, Style, Component#visit,
+    # MultiLineEditBox/EditBox/SimpleSoundInstance) + Lectern / ChiseledBookShelf support, all
+    # verified against nekoyue/ForgeJavaDocs-NG 1.21.x-neoforge javadocs.
+    ("net/minecraft/client/gui/components/EditBox", "insertText", "(Ljava/lang/String;)V"):
+        "Build 443: EditBox.insertText(String) inserts color/formatting code at cursor",
+    ("net/minecraft/client/gui/components/MultiLineEditBox", "setCharacterLimit", "(I)V"):
+        "Build 443: MultiLineEditBox.setCharacterLimit(int) enforces per-page character cap",
+    ("net/minecraft/client/resources/sounds/SimpleSoundInstance", "forUI",
+     "(Lnet/minecraft/sounds/SoundEvent;F)Lnet/minecraft/client/resources/sounds/SimpleSoundInstance;"):
+        "Build 443: SimpleSoundInstance.forUI(SoundEvent, float) plays SoundEvents.BOOK_PAGE_TURN",
+    ("net/minecraft/core/component/DataComponents", "WRITABLE_BOOK_CONTENT",
+     "Lnet/minecraft/core/component/DataComponentType;"):
+        "Build 443: DataComponents.WRITABLE_BOOK_CONTENT for Book and Quill import",
+    ("net/minecraft/core/component/DataComponents", "WRITTEN_BOOK_CONTENT",
+     "Lnet/minecraft/core/component/DataComponentType;"):
+        "Build 443: DataComponents.WRITTEN_BOOK_CONTENT for custom written book ItemStacks",
+    ("net/minecraft/network/chat/Component", "visit",
+     "(Lnet/minecraft/network/chat/FormattedText$StyledContentConsumer;Lnet/minecraft/network/chat/Style;)Ljava/util/Optional;"):
+        "Build 443: Component.visit(StyledContentConsumer, Style) extracts colors/styles on import",
+    ("net/minecraft/network/chat/Style", "EMPTY", "Lnet/minecraft/network/chat/Style;"):
+        "Build 443: Style.EMPTY root style passed to Component.visit",
+    ("net/minecraft/network/chat/Style", "getColor", "()Lnet/minecraft/network/chat/TextColor;"):
+        "Build 443: Style.getColor() reads RGB color on imported book spans",
+    ("net/minecraft/network/chat/Style", "isBold", "()Z"):
+        "Build 443: Style.isBold() reads bold style on imported book spans",
+    ("net/minecraft/network/chat/Style", "isItalic", "()Z"):
+        "Build 443: Style.isItalic() reads italic style on imported book spans",
+    ("net/minecraft/network/chat/Style", "isObfuscated", "()Z"):
+        "Build 443: Style.isObfuscated() reads obfuscated style on imported book spans",
+    ("net/minecraft/network/chat/Style", "isStrikethrough", "()Z"):
+        "Build 443: Style.isStrikethrough() reads strikethrough style on imported book spans",
+    ("net/minecraft/network/chat/Style", "isUnderlined", "()Z"):
+        "Build 443: Style.isUnderlined() reads underlined style on imported book spans",
+    ("net/minecraft/network/chat/Style", "withBold",
+     "(Ljava/lang/Boolean;)Lnet/minecraft/network/chat/Style;"):
+        "Build 443: Style.withBold(Boolean) applies &l formatting",
+    ("net/minecraft/network/chat/Style", "withItalic",
+     "(Ljava/lang/Boolean;)Lnet/minecraft/network/chat/Style;"):
+        "Build 443: Style.withItalic(Boolean) applies &o or removes default custom-name italic",
+    ("net/minecraft/network/chat/Style", "withObfuscated",
+     "(Ljava/lang/Boolean;)Lnet/minecraft/network/chat/Style;"):
+        "Build 443: Style.withObfuscated(Boolean) applies &k formatting",
+    ("net/minecraft/network/chat/Style", "withStrikethrough",
+     "(Ljava/lang/Boolean;)Lnet/minecraft/network/chat/Style;"):
+        "Build 443: Style.withStrikethrough(Boolean) applies &m formatting",
+    ("net/minecraft/network/chat/Style", "withUnderlined",
+     "(Ljava/lang/Boolean;)Lnet/minecraft/network/chat/Style;"):
+        "Build 443: Style.withUnderlined(Boolean) applies &n formatting",
+    ("net/minecraft/network/chat/TextColor", "getValue", "()I"):
+        "Build 443: TextColor.getValue() extracts RGB integer from Style color",
+    ("net/minecraft/server/network/Filterable", "passThrough",
+     "(Ljava/lang/Object;)Lnet/minecraft/server/network/Filterable;"):
+        "Build 443: Filterable.passThrough(T) wraps title and pages in WrittenBookContent",
+    ("net/minecraft/server/network/Filterable", "raw", "()Ljava/lang/Object;"):
+        "Build 443: Filterable.raw() unwraps title/page strings or Components on import",
+    ("net/minecraft/tags/ItemTags", "BOOKSHELF_BOOKS", "Lnet/minecraft/tags/TagKey;"):
+        "Build 443: ItemTags.BOOKSHELF_BOOKS filters loot for ChiseledBookShelfBlockEntity",
+    ("net/minecraft/tags/ItemTags", "LECTERN_BOOKS", "Lnet/minecraft/tags/TagKey;"):
+        "Build 443: ItemTags.LECTERN_BOOKS filters loot for LecternBlockEntity",
+    ("net/minecraft/world/item/Items", "WRITABLE_BOOK", "Lnet/minecraft/world/item/Item;"):
+        "Build 443: Items.WRITABLE_BOOK checks Book and Quill items during import",
+    ("net/minecraft/world/item/Items", "WRITTEN_BOOK", "Lnet/minecraft/world/item/Item;"):
+        "Build 443: Items.WRITTEN_BOOK base item for custom colored loot-pool books",
+    ("net/minecraft/world/item/ItemStack", "is", "(Lnet/minecraft/tags/TagKey;)Z"):
+        "Build 443: ItemStack.is(TagKey) checks ItemTags.LECTERN_BOOKS / BOOKSHELF_BOOKS",
+    ("net/minecraft/world/item/component/WritableBookContent", "pages", "()Ljava/util/List;"):
+        "Build 443: WritableBookContent.pages() extracts pages from Book and Quill",
+    ("net/minecraft/world/item/component/WrittenBookContent", "<init>",
+     "(Lnet/minecraft/server/network/Filterable;Ljava/lang/String;ILjava/util/List;Z)V"):
+        "Build 443: record WrittenBookContent(title, author, generation, pages, resolved)",
+    ("net/minecraft/world/item/component/WrittenBookContent", "author", "()Ljava/lang/String;"):
+        "Build 443: WrittenBookContent.author() extracts author on import",
+    ("net/minecraft/world/item/component/WrittenBookContent", "pages", "()Ljava/util/List;"):
+        "Build 443: WrittenBookContent.pages() extracts page Components on import",
+    ("net/minecraft/world/item/component/WrittenBookContent", "title",
+     "()Lnet/minecraft/server/network/Filterable;"):
+        "Build 443: WrittenBookContent.title() extracts book title on import",
+    ("net/minecraft/world/level/block/ChiseledBookShelfBlock", "SLOT_OCCUPIED_PROPERTIES",
+     "Ljava/util/List;"):
+        "Build 443: ChiseledBookShelfBlock.SLOT_OCCUPIED_PROPERTIES syncs slot occupancy visuals",
+    ("net/minecraft/world/level/block/LecternBlock", "resetBookState",
+     "(Lnet/minecraft/world/entity/Entity;Lnet/minecraft/world/level/Level;Lnet/minecraft/core/BlockPos;Lnet/minecraft/world/level/block/state/BlockState;Z)V"):
+        "Build 443: LecternBlock.resetBookState sets HAS_BOOK and syncs lectern visual/packet state",
+    ("net/minecraft/world/level/block/entity/LecternBlockEntity", "hasBook", "()Z"):
+        "Build 443: LecternBlockEntity.hasBook() checks occupied lectern status",
+    ("net/minecraft/world/level/block/entity/LecternBlockEntity", "setBook",
+     "(Lnet/minecraft/world/item/ItemStack;)V"):
+        "Build 443: LecternBlockEntity.setBook(ItemStack) places rolled dungeon book on lectern",
+    ("net/minecraft/world/phys/HitResult", "getLocation", "()Lnet/minecraft/world/phys/Vec3;"):
+        "Build 443: HitResult.getLocation() captures exact clicked bookshelf slot coords before lock panel",
 }
 
 
