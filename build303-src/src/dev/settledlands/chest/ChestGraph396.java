@@ -373,6 +373,9 @@ public final class ChestGraph396 {
                 // An empty graph is no graph: the chest is an ordinary chest again.
                 ChestGraph396Store store = ChestGraph396Store.get(player.getServer());
                 if (store != null) store.put(key, null);
+                if (player.level() instanceof ServerLevel level && pos != null) {
+                    dev.settledlands.npc.NpcGraphAnchor420.anchorForSave(level, pos, false);
+                }
                 player.displayClientMessage(Component.translatable(
                         "message.settledlands.chest.graph_cleared", Component.literal(coords(pos))), true);
                 return;
@@ -388,6 +391,9 @@ public final class ChestGraph396 {
                 player.displayClientMessage(Component.translatable("message.settledlands.chest.graph_full",
                         Component.literal(String.valueOf(ChestGraph396Store.MAX_CHESTS))), false);
                 return;
+            }
+            if (player.level() instanceof ServerLevel level && pos != null) {
+                dev.settledlands.npc.NpcGraphAnchor420.anchorForSave(level, pos, true);
             }
             player.displayClientMessage(Component.translatable("message.settledlands.chest.graph_saved",
                     Component.literal(coords(pos))), true);

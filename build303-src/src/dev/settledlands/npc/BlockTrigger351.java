@@ -221,6 +221,10 @@ public final class BlockTrigger351 {
                         false);
                 return;
             }
+            BlockPos savedPos = parsePos(key);
+            if (player.level() instanceof ServerLevel level && savedPos != null) {
+                NpcGraphAnchor420.anchorForSave(level, savedPos, graph != null);
+            }
             String where = key.substring(key.indexOf('@') + 1);
             if (graph == null) {
                 player.displayClientMessage(
@@ -236,6 +240,20 @@ public final class BlockTrigger351 {
                     true);
         } catch (Throwable failure) {
             fail(failure);
+        }
+    }
+
+    private static BlockPos parsePos(String key) {
+        if (key == null) return null;
+        int at = key.indexOf('@');
+        if (at < 0) return null;
+        String[] parts = key.substring(at + 1).split(",");
+        if (parts.length != 3) return null;
+        try {
+            return new BlockPos(Integer.parseInt(parts[0].trim()),
+                    Integer.parseInt(parts[1].trim()), Integer.parseInt(parts[2].trim()));
+        } catch (NumberFormatException ignored) {
+            return null;
         }
     }
 

@@ -737,6 +737,9 @@ public final class DoorGraph382 {
                 DoorGraph382Store store = DoorGraph382Store.get(player.getServer());
                 if (store != null) store.put(key, null);
                 applySeal(level, pos, false);
+                if (level != null && pos != null) {
+                    dev.settledlands.npc.NpcGraphAnchor420.anchorForSave(level, pos, false);
+                }
                 DoorSync375.sendClearParam(level, key);
                 DoorSync375.sendParams(level);
                 player.displayClientMessage(Component.translatable(
@@ -769,6 +772,9 @@ public final class DoorGraph382 {
             // another dimension in the meantime the position is not a door here, and the flag waits
             // for the next save instead of locking a wall.
             if (isDoorAt(level, pos)) applySeal(level, pos, sealed);
+            if (level != null && pos != null) {
+                dev.settledlands.npc.NpcGraphAnchor420.anchorForSave(level, pos, true);
+            }
             // The panel is opened locally, so the two numbers it shows have to be told to the clients
             // that may walk up to this door.
             DoorSync375.sendParams(level);

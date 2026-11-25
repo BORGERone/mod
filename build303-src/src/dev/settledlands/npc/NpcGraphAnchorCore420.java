@@ -412,6 +412,66 @@ public final class NpcGraphAnchorCore420 {
     }
 
     /**
+     * Build 437: best cell shift for a known room rotation ({@code fixedTurn}), used as a fallback
+     * when a dungeon room's blocks near the marker changed enough to miss {@link Placement#found()}.
+     */
+    public static Placement placeWithTurn(List<int[]> offsets, List<String> blocks, BlockLookup lookup,
+            int fixedTurn, int spanXZ, int spanY) {
+        int turn = fixedTurn & 7;
+        if (offsets == null || blocks == null || lookup == null || spanXZ < 0 || spanY < 0) {
+            return new Placement(0, 0, 0, turn, 0, 0);
+        }
+        Placement best = new Placement(0, 0, 0, turn, 0, 0);
+        double bestShare = -1.0D;
+        int bestDistance = Integer.MAX_VALUE;
+        int stride = 1;
+        int size = Math.min(offsets.size(), blocks.size());
+        if (size > SEARCH_SAMPLE && SEARCH_SAMPLE > 0) stride = (size + SEARCH_SAMPLE - 1) / SEARCH_SAMPLE;
+        for (int cy = -spanY; cy <= spanY; cy++) {
+            for (int cx = -spanXZ; cx <= spanXZ; cx++) {
+                for (int cz = -spanXZ; cz <= spanXZ; cz++) {
+                    int found = 0;
+                    int asked = 0;
+                    for (int i = 0; i < size; i += stride) {
+                        int[] offset = offsets.get(i);
+                        String block = blocks.get(i);
+                        if (offset == null || block == null || block.isEmpty()) continue;
+                        asked++;
+                        int[] turned = turn(offset, turn);
+                        String there = lookup.blockAt(turned[0] + cx, turned[1] + cy, turned[2] + cz);
+                        if (block.equals(there)) found++;
+                    }
+                    if (asked == 0) continue;
+                    double share = (double) found / (double) asked;
+                    int distance = Math.abs(cx) + Math.abs(cy) + Math.abs(cz);
+                    boolean better = share > bestShare + 1.0E-9D
+                            || (Math.abs(share - bestShare) <= 1.0E-9D && distance < bestDistance);
+                    if (better) {
+                        bestShare = share;
+                        bestDistance = distance;
+                        best = new Placement(cx, cy, cz, turn, found, asked);
+                    }
+                }
+            }
+        }
+        if (stride > 1 && best.asked > 0) {
+            int found = 0;
+            int asked = 0;
+            for (int i = 0; i < size; i++) {
+                int[] offset = offsets.get(i);
+                String block = blocks.get(i);
+                if (offset == null || block == null || block.isEmpty()) continue;
+                asked++;
+                int[] turned = turn(offset, turn);
+                String there = lookup.blockAt(turned[0] + best.dx, turned[1] + best.dy, turned[2] + best.dz);
+                if (block.equals(there)) found++;
+            }
+            best = new Placement(best.dx, best.dy, best.dz, turn, found, asked);
+        }
+        return best;
+    }
+
+    /**
      * The cell the pasted build really stands on, as an offset from the cell the marker's own feet are in.
      *
      * <p>Build 422. The place of a paste cannot be read off an entity's position: a marker is a mob, its

@@ -40,6 +40,8 @@ public final class Anchor420Probe {
         placeComesFromTheFingerprint();
         turnsAndCellTogether();
         emptyAnchorWritesNothing();
+        placeWithTurnFallback();
+        gatherCoverage();
 
         System.out.println("ANCHOR_CHECKS=" + checks);
         System.out.println(failed == 0 ? "ANCHOR_OK=true" : "ANCHOR_OK=false failed=" + failed);
@@ -432,6 +434,46 @@ public final class Anchor420Probe {
                 NpcGraphAnchorCore420.entries(empty).isEmpty());
         expect("a random compound tag is not an anchor",
                 !NpcGraphAnchorCore420.hasGraphs(new CompoundTag()));
+    }
+
+    // ---- 6. Build 437: placeWithTurn fallback & gather radius coverage -------
+
+    private static void placeWithTurnFallback() {
+        List<int[]> offsets = new ArrayList<>();
+        List<String> blocks = new ArrayList<>();
+        // 10 fingerprint blocks; 6 will be replaced (e.g. edited room / lapis->nether_bricks)
+        for (int i = 1; i <= 10; i++) {
+            offsets.add(new int[] {i, 0, 0});
+            blocks.add("minecraft:nether_bricks");
+        }
+        // Rotated by turns=1 ((x,z) -> (-z,x) => +i on Z), and feet drifted by dy=-1
+        Map<String, String> world = new HashMap<>();
+        for (int i = 1; i <= 4; i++) {
+            world.put(key(0, 1, i), "minecraft:nether_bricks");
+        }
+        NpcGraphAnchorCore420.BlockLookup look = (dx, dy, dz) -> world.getOrDefault(key(dx, dy, dz), "minecraft:air");
+        NpcGraphAnchorCore420.Placement strict = NpcGraphAnchorCore420.place(offsets, blocks, look, 5, 3);
+        expect("4/10 agreement misses strict 60% place()", !strict.found());
+
+        NpcGraphAnchorCore420.Placement fb =
+                NpcGraphAnchorCore420.placeWithTurn(offsets, blocks, look, 1, 5, 3);
+        expect("placeWithTurn recovers exact turn=1 and dy=1 shift on 4/10 match",
+                fb.turn == 1 && fb.dx == 0 && fb.dy == 1 && fb.dz == 0 && fb.found == 4);
+
+        NpcGraphAnchorCore420.Placement emptyFp = NpcGraphAnchorCore420.placeWithTurn(
+                new ArrayList<>(), new ArrayList<>(), look, 3, 5, 3);
+        expect("placeWithTurn with empty fingerprint stays at (0,0,0) with known turn=3",
+                emptyFp.turn == 3 && emptyFp.dx == 0 && emptyFp.dy == 0 && emptyFp.dz == 0);
+    }
+
+    private static void gatherCoverage() {
+        BlockPos anchor = new BlockPos(0, 0, 0);
+        expect("distance 30 is inside radius 32 (no 24..32 dead zone)",
+                NpcGraphAnchorCore420.inside(30, 0, -28, anchor, 32));
+        expect("distance 32 is inside radius 32",
+                NpcGraphAnchorCore420.inside(-32, 32, 0, anchor, 32));
+        expect("distance 33 is outside radius 32",
+                !NpcGraphAnchorCore420.inside(33, 0, 0, anchor, 32));
     }
 
     // ---- bookkeeping --------------------------------------------------------

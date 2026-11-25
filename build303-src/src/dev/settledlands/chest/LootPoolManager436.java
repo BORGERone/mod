@@ -119,6 +119,14 @@ public final class LootPoolManager436 {
      * populates every chest/furniture node that contains «Пул предметов».
      */
     public static int onDungeonRoomPlaced(ServerLevel level, List<Entity> spawnedAnchors) {
+        return onDungeonRoomPlaced(level, spawnedAnchors, -1);
+    }
+
+    /**
+     * Build 437: overload accepting the dungeon room's exact {@code knownTurns} so anchor graph
+     * materialisation can fall back cleanly when blocks near the marker differ from the fingerprint.
+     */
+    public static int onDungeonRoomPlaced(ServerLevel level, List<Entity> spawnedAnchors, int knownTurns) {
         if (level == null || spawnedAnchors == null || spawnedAnchors.isEmpty()) return 0;
         if (!DungeonManager425.isInDungeon(level)) return 0;
         MinecraftServer server = level.getServer();
@@ -131,7 +139,7 @@ public final class LootPoolManager436 {
         Set<BlockPos> seen = new HashSet<>();
         for (Entity marker : spawnedAnchors) {
             if (marker == null) continue;
-            List<BlockPos> chestPositions = NpcGraphAnchor420.materialiseForDungeon(level, marker);
+            List<BlockPos> chestPositions = NpcGraphAnchor420.materialiseForDungeon(level, marker, knownTurns);
             for (BlockPos pos : chestPositions) {
                 if (pos == null || !seen.add(pos)) continue;
                 String key = ChestGraph396Store.key(level, pos);

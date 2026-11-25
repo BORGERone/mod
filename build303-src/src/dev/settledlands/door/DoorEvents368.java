@@ -226,6 +226,8 @@ public final class DoorEvents368 {
             // Build 376: every client that can see this door learns about it now, so from here on a
             // locked door is refused locally and an unlocked one is predicted locally.
             DoorSync375.sendDelta(server, pos, nowLocked);
+            dev.settledlands.npc.NpcGraphAnchor420.anchorForSave(
+                    server, DoorGraph382.lower(server, pos), nowLocked);
             note("door: the door at " + pos + (nowLocked ? " is locked" : " is unlocked")
                     + " by the key, " + (store.size()) + " place(s) locked in this world");
             tell(event.getEntity(), Component.translatable(nowLocked ? ON : OFF).getString());

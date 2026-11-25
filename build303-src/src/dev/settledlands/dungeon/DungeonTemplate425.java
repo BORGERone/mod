@@ -646,6 +646,10 @@ public final class DungeonTemplate425 {
                 boolean ticking = level.isPositionEntityTicking(ePos);
                 if (!added || entity.isRemoved()) {
                     if (stats != null) stats.entitiesSkipped++;
+                    if ("settledlands:guide_trigger".equals(eSpec.id)
+                            && NpcGraphAnchorCore420.hasGraphs(NpcGraphAnchor420.data(entity))) {
+                        spawnedAnchors.add(entity);
+                    }
                     LOG.warn("settledlands: entity " + eSpec.id + " at " + ePos
                             + " was rejected/removed on spawn (added=" + added
                             + ", removed=" + entity.isRemoved()
@@ -672,7 +676,7 @@ public final class DungeonTemplate425 {
             CreateCompat431.activateCreateRoom(level, createPositions);
         }
         if (!spawnedAnchors.isEmpty() && DungeonManager425.isInDungeon(level)) {
-            LootPoolManager436.onDungeonRoomPlaced(level, spawnedAnchors);
+            LootPoolManager436.onDungeonRoomPlaced(level, spawnedAnchors, turns);
         }
     }
 
