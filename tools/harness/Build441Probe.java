@@ -82,6 +82,7 @@ public final class Build441Probe {
                 new LootPool436.PoolEntry("minecraft:book", 50.0D, 10.0D, 1, 1),
                 new LootPool436.PoolEntry("minecraft:netherite_block", 25.0D, 45.0D, 1, 1) // too heavy for 40
         );
+        int hitFull40 = 0;
         for (int trial = 0; trial < 300; trial++) {
             List<LootPool436.Drop> drops = LootPool436.rollDrops(mixed, crate40UnlimitedRolls, rnd);
             double sumW = 0.0D;
@@ -90,10 +91,11 @@ public final class Build441Probe {
                         "weight 45 never fits inside crate capacity 40");
                 sumW += "minecraft:iron_sword".equals(d.itemId) ? 20.0D : 10.0D;
             }
-            // Since minimum weight is 10 and 40 is divisible by 10/20, crate fills cleanly to 40
-            check(Math.abs(sumW - 40.0D) < 1e-6D,
-                    "crate fills up to remaining weight 40 without exceeding (got " + sumW + ")");
+            check(sumW > 0.0D && sumW <= 40.0D + 1e-6D,
+                    "mixed crate never exceeds capacity 40 (got " + sumW + ")");
+            if (Math.abs(sumW - 40.0D) < 1e-6D) hitFull40++;
         }
+        check(hitFull40 > 50, "mixed crate cleanly reaches full capacity 40 in many trials (" + hitFull40 + ")");
 
         // Crate weight 40 + explicit rolls cap 3 -> stops at 3 drops or weight 40 (whichever hits first)
         LootPool436.Parsed crate40Cap3 = new LootPool436.Parsed("p.txt", "", "40", "3");

@@ -1,0 +1,1 @@
+52084862ef3cc39d2963cf7cbebfc198e3696dbb4a717a77c3e6ff66839309bb  settledlands-0.8.0-build442-rarity-chance-crate-fix.jar

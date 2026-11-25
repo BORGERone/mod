@@ -159,7 +159,7 @@ public abstract class LootPoolInspectorMixin436 {
             y += 10;
             EditBox rarityBox = textBox(LootPool436.rawRarity(node), LootPool436.MAX_FIELD_LEN,
                     x, y, width, 20, LootPoolCard436.raritySetter(node));
-            rarityBox.setHint(Component.literal("0-100"));
+            rarityBox.setHint(Component.translatable("gui.settledlands.loot_pool.any"));
             rarityBox.setFilter(LootPool436::isRangeInput);
             y += 23;
 
@@ -167,7 +167,7 @@ public abstract class LootPoolInspectorMixin436 {
             y += 10;
             EditBox weightBox = textBox(LootPool436.rawWeight(node), LootPool436.MAX_FIELD_LEN,
                     x, y, width, 20, LootPoolCard436.weightSetter(node));
-            weightBox.setHint(Component.literal("40"));
+            weightBox.setHint(Component.translatable("gui.settledlands.loot_pool.any"));
             weightBox.setFilter(LootPool436::isRangeInput);
             y += 23;
 

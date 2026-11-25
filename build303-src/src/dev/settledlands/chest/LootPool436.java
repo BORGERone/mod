@@ -6,6 +6,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Random;
+import java.util.TreeSet;
 import java.util.function.Consumer;
 
 /**
@@ -392,8 +393,13 @@ public final class LootPool436 {
     // ---- rolling -----------------------------------------------------------
 
     /**
-     * Build 441: CS:GO-style weighted case rolling by {@code entry.rarity}, bounded by the crate's
+     * Build 442: CS:GO-style weighted case rolling by {@code entry.rarity}, bounded by the crate's
      * total weight capacity ({@code spec.rawWeight}) and optional item/roll limit ({@code spec.rawRolls}).
+     *
+     * <p>The roulette always draws against all entries that fit inside the crate's <em>initial</em>
+     * capacity ({@code initialWeight}) rather than shrinking the candidate set to {@code remainingWeight};
+     * otherwise a tiny filler item (e.g. rarity 1, weight 1) would artificially jump to 100% chance on
+     * later rolls whenever a heavier item leaves a small weight remainder.</p>
      */
     public static List<Drop> rollDrops(List<PoolEntry> entries, Parsed spec, Random rnd) {
         if (entries == null || entries.isEmpty() || spec == null || rnd == null) {
@@ -404,9 +410,10 @@ public final class LootPool436 {
         Range rollsRange = parseRange(spec.rawRolls, MAX_ROLLS_LIMIT);
 
         // Crate total weight budget is picked once per container (e.g. 40 -> fits 2x weight 20 or 4x weight 10).
-        double remainingWeight = weightBudgetRange.unbounded
+        double initialWeight = weightBudgetRange.unbounded
                 ? Double.POSITIVE_INFINITY
                 : (double) weightBudgetRange.pick(rnd);
+        double remainingWeight = initialWeight;
 
         int maxRolls;
         if (!rollsRange.unbounded) {
@@ -417,6 +424,9 @@ public final class LootPool436 {
             maxRolls = 3;
         }
         if (maxRolls <= 0) return Collections.emptyList();
+        if (Double.isFinite(initialWeight) && initialWeight <= 1e-6D) {
+            return Collections.emptyList();
+        }
 
         List<Drop> out = new ArrayList<>(Math.min(maxRolls, 16));
         List<PoolEntry> eligible = new ArrayList<>(entries.size());
@@ -434,7 +444,7 @@ public final class LootPool436 {
             for (PoolEntry e : entries) {
                 if (e == null || !Double.isFinite(e.rarity) || e.rarity <= 0.0D) continue;
                 if (!Double.isFinite(e.weight) || e.weight <= 0.0D) continue;
-                if (e.rarity <= maxRarity && e.weight <= remainingWeight + 1e-6D) {
+                if (e.rarity <= maxRarity + 1e-6D && e.weight <= initialWeight + 1e-6D) {
                     eligible.add(e);
                     totalRarityChance += e.rarity;
                 }
@@ -455,6 +465,15 @@ public final class LootPool436 {
                     chosen = e;
                     break;
                 }
+            }
+
+            if (Double.isFinite(remainingWeight) && chosen.weight > remainingWeight + 1e-6D) {
+                // Item exceeded the remaining crate budget: stop in by-weight mode or skip this slot
+                // without distorting the drop ratios of tiny low-rarity filler items.
+                if (rollsRange.unbounded) {
+                    break;
+                }
+                continue;
             }
 
             if (Double.isFinite(remainingWeight)) {
@@ -698,16 +717,156 @@ public final class LootPool436 {
 
     /** Returns true when {@code entry} can drop and passes the node's rarity and crate-weight limits. */
     public static boolean passesSpec(PoolEntry entry, Parsed spec) {
+        return blockedReason(entry, spec) == 0;
+    }
+
+    /**
+     * Returns why {@code entry} cannot drop under {@code spec}:
+     * {@code 0 = passes}, {@code 1 = exceeds rarity cap}, {@code 2 = exceeds crate weight limit},
+     * {@code 3 = invalid rarity/weight}.
+     */
+    public static int blockedReason(PoolEntry entry, Parsed spec) {
         if (entry == null
                 || !Double.isFinite(entry.rarity) || entry.rarity <= 0.0D
                 || !Double.isFinite(entry.weight) || entry.weight <= 0.0D) {
-            return false;
+            return 3;
         }
-        if (spec == null) return true;
+        if (spec == null) return 0;
         Range rarityCap = parseRange(spec.rawRarity, MAX_CAP_LIMIT);
         Range weightCap = parseRange(spec.rawWeight, MAX_CAP_LIMIT);
-        if (!rarityCap.unbounded && entry.rarity > (double) rarityCap.max) return false;
-        if (!weightCap.unbounded && entry.weight > (double) weightCap.max) return false;
-        return true;
+        if (!rarityCap.unbounded && entry.rarity > (double) rarityCap.max + 1e-6D) return 1;
+        if (!weightCap.unbounded && entry.weight > (double) weightCap.max + 1e-6D) return 2;
+        return 0;
+    }
+
+    /** Counts how many non-null entries are blocked by {@code spec}'s rarity or crate-weight caps. */
+    public static int countBlockedBySpec(List<PoolEntry> entries, Parsed spec) {
+        if (entries == null || entries.isEmpty() || spec == null) return 0;
+        int blocked = 0;
+        for (PoolEntry e : entries) {
+            if (e != null && blockedReason(e, spec) != 0) {
+                blocked++;
+            }
+        }
+        return blocked;
+    }
+
+    /**
+     * Build 442: computes the exact expected first-roll drop percentage {@code [0..100]} for each
+     * entry in {@code entries} under {@code spec}'s rarity cap and crate weight budget ranges.
+     */
+    public static double[] computeEffectiveChancesPct(List<PoolEntry> entries, Parsed spec) {
+        if (entries == null || entries.isEmpty()) return new double[0];
+        int n = entries.size();
+        double[] pct = new double[n];
+
+        Range rRange = spec == null ? Range.unbounded() : parseRange(spec.rawRarity, MAX_CAP_LIMIT);
+        Range wRange = spec == null ? Range.unbounded() : parseRange(spec.rawWeight, MAX_CAP_LIMIT);
+
+        if (rRange.unbounded && wRange.unbounded) {
+            double totalR = 0.0D;
+            for (PoolEntry e : entries) {
+                if (e != null && Double.isFinite(e.rarity) && e.rarity > 0.0D
+                        && Double.isFinite(e.weight) && e.weight > 0.0D) {
+                    totalR += e.rarity;
+                }
+            }
+            if (totalR > 0.0D) {
+                for (int i = 0; i < n; i++) {
+                    PoolEntry e = entries.get(i);
+                    if (e != null && Double.isFinite(e.rarity) && e.rarity > 0.0D
+                            && Double.isFinite(e.weight) && e.weight > 0.0D) {
+                        pct[i] = (e.rarity / totalR) * 100.0D;
+                    }
+                }
+            }
+            return pct;
+        }
+
+        int[] wBounds;
+        long wSpan;
+        if (wRange.unbounded) {
+            wBounds = new int[] {Integer.MAX_VALUE};
+            wSpan = 1L;
+        } else {
+            TreeSet<Integer> wCuts = new TreeSet<>();
+            wCuts.add(Integer.valueOf(wRange.min));
+            for (PoolEntry e : entries) {
+                if (e != null && Double.isFinite(e.weight) && e.weight > 0.0D) {
+                    int need = Math.max(0, (int) Math.ceil(e.weight - 1e-6D));
+                    if (need > wRange.min && need <= wRange.max) {
+                        wCuts.add(Integer.valueOf(need));
+                    }
+                }
+            }
+            wBounds = new int[wCuts.size() + 1];
+            int idx = 0;
+            for (Integer c : wCuts) wBounds[idx++] = c.intValue();
+            wBounds[idx] = wRange.max + 1;
+            wSpan = Math.max(1L, (long) wRange.max - (long) wRange.min + 1L);
+        }
+
+        int[] rBounds;
+        long rSpan;
+        if (rRange.unbounded) {
+            rBounds = new int[] {Integer.MAX_VALUE};
+            rSpan = 1L;
+        } else {
+            TreeSet<Integer> rCuts = new TreeSet<>();
+            rCuts.add(Integer.valueOf(rRange.min));
+            for (PoolEntry e : entries) {
+                if (e != null && Double.isFinite(e.rarity) && e.rarity > 0.0D) {
+                    int need = Math.max(0, (int) Math.ceil(e.rarity - 1e-6D));
+                    if (need > rRange.min && need <= rRange.max) {
+                        rCuts.add(Integer.valueOf(need));
+                    }
+                }
+            }
+            rBounds = new int[rCuts.size() + 1];
+            int idx = 0;
+            for (Integer c : rCuts) rBounds[idx++] = c.intValue();
+            rBounds[idx] = rRange.max + 1;
+            rSpan = Math.max(1L, (long) rRange.max - (long) rRange.min + 1L);
+        }
+
+        int wIntervalCount = wRange.unbounded ? 1 : (wBounds.length - 1);
+        int rIntervalCount = rRange.unbounded ? 1 : (rBounds.length - 1);
+
+        for (int wi = 0; wi < wIntervalCount; wi++) {
+            double wCap = wRange.unbounded ? Double.POSITIVE_INFINITY : (double) wBounds[wi];
+            double wProb = wRange.unbounded
+                    ? 1.0D
+                    : ((double) (wBounds[wi + 1] - wBounds[wi])) / (double) wSpan;
+            if (wProb <= 0.0D) continue;
+
+            for (int ri = 0; ri < rIntervalCount; ri++) {
+                double rCap = rRange.unbounded ? Double.POSITIVE_INFINITY : (double) rBounds[ri];
+                double rProb = rRange.unbounded
+                        ? 1.0D
+                        : ((double) (rBounds[ri + 1] - rBounds[ri])) / (double) rSpan;
+                if (rProb <= 0.0D) continue;
+
+                double pairProb = wProb * rProb;
+                double totalR = 0.0D;
+                for (int i = 0; i < n; i++) {
+                    PoolEntry e = entries.get(i);
+                    if (e != null && Double.isFinite(e.rarity) && e.rarity > 0.0D
+                            && Double.isFinite(e.weight) && e.weight > 0.0D
+                            && e.rarity <= rCap + 1e-6D && e.weight <= wCap + 1e-6D) {
+                        totalR += e.rarity;
+                    }
+                }
+                if (totalR <= 0.0D) continue;
+                for (int i = 0; i < n; i++) {
+                    PoolEntry e = entries.get(i);
+                    if (e != null && Double.isFinite(e.rarity) && e.rarity > 0.0D
+                            && Double.isFinite(e.weight) && e.weight > 0.0D
+                            && e.rarity <= rCap + 1e-6D && e.weight <= wCap + 1e-6D) {
+                        pct[i] += pairProb * (e.rarity / totalR) * 100.0D;
+                    }
+                }
+            }
+        }
+        return pct;
     }
 }
