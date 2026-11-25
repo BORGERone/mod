@@ -331,6 +331,7 @@ def main(argv):
             ROOT / "build303-src" / "api5-src",
             ROOT / "build303-src" / "api416-src",
             ROOT / "build303-src" / "stubs425-src",
+            ROOT / "build303-src" / "stubs438-src",
         )
         for layer in layers:
             for src in layer.rglob("*.java"):

@@ -28,6 +28,7 @@ LAYERS = (
     ROOT / "build303-src" / "api416-src",
     ROOT / "build303-src" / "stubs425-src",
     ROOT / "build303-src" / "stubs436-src",
+    ROOT / "build303-src" / "stubs438-src",
 )
 
 EXPECTED_SUFFIXES = (

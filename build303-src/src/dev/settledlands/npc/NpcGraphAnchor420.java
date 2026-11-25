@@ -1,9 +1,11 @@
 package dev.settledlands.npc;
 
+import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.chest.ChestGraph396Store;
 import dev.settledlands.door.DoorGraph382Store;
 import dev.settledlands.door.DoorStore368;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -116,8 +118,31 @@ public final class NpcGraphAnchor420 {
         return work;
     }
 
+    /**
+     * Build 438: runs the anchor pass immediately around one player (e.g. right after teleporting into
+     * {@code settledlands:hell_dungeon}) so start-room anchors never wait up to 40 ticks.
+     */
+    public static int ensureForPlayer(ServerPlayer player) {
+        if (player == null) return 0;
+        try {
+            ServerLevel level = player.serverLevel();
+            if (level == null) return 0;
+            return passLevel(level, Collections.singletonList(player));
+        } catch (Throwable failure) {
+            warn("anchor: player entry pass skipped: " + failure);
+            return 0;
+        }
+    }
+
     private static int passLevel(ServerLevel level, List<? extends ServerPlayer> players) {
         int work = 0;
+        // Build 438: import chest/furniture graphs carried inside BlockEntity NeoForgeData
+        // (e.g. from Axiom pastes with copyWithEntities=false) before ensuring anchors.
+        try {
+            work += ChestGraph396.syncEmbeddedGraphsNear(level, players);
+        } catch (Throwable failure) {
+            warn("anchor: embedded chest sync skipped: " + failure);
+        }
         List<Entity> markers = markersNear(level, players);
         for (Entity marker : markers) {
             try {
@@ -171,7 +196,7 @@ public final class NpcGraphAnchor420 {
         if (graphPlaces.isEmpty()) return 0;
         int made = 0;
         for (BlockPos place : graphPlaces) {
-            if (made >= 4) break;
+            if (made >= 8) break;
             if (coveringMarker(level, markers, place) != null) continue;
             BlockPos spot = freeSpot(level, place);
             if (spot == null) {
@@ -276,39 +301,41 @@ public final class NpcGraphAnchor420 {
     }
 
     /**
-     * A free cell for the marker: prefer a cell inside the room adjacent to the block (front/side/floor
-     * with a nearby floor or ceiling) before climbing above the roof or outside walls.
+     * A free cell for the marker: scores adjacent cells by indoor enclosure (ceiling overhead, solid
+     * floor beneath, and enclosing walls) so markers always spawn inside the room in front of
+     * wall-mounted shelves rather than outside exterior walls where Axiom selections omit them.
      */
     public static BlockPos freeSpot(ServerLevel level, BlockPos place) {
         if (level == null || place == null) return null;
         if (empty(level, place)) return place;
-        List<BlockPos> candidates = new ArrayList<BlockPos>();
-        int[][] primary = {
-                {1, 0, 0}, {-1, 0, 0}, {0, 0, 1}, {0, 0, -1},
-                {0, 1, 0},
-                {0, -1, 0}, {1, -1, 0}, {-1, -1, 0}, {0, -1, 1}, {0, -1, -1},
-                {1, 0, 1}, {1, 0, -1}, {-1, 0, 1}, {-1, 0, -1},
-                {1, 1, 0}, {-1, 1, 0}, {0, 1, 1}, {0, 1, -1}
-        };
-        for (int[] d : primary) {
-            BlockPos at = place.offset(d[0], d[1], d[2]);
-            if (empty(level, at)) candidates.add(at);
-        }
-        for (BlockPos at : candidates) {
-            if (hasFloorOrCeiling(level, at)) return at;
-        }
-        if (!candidates.isEmpty()) return candidates.get(0);
 
+        BlockPos best = null;
+        int bestScore = Integer.MIN_VALUE;
+
+        // Radius 1..2 search around the target block (y from -1 to +2 relative to block).
         for (int r = 1; r <= 2; r++) {
-            for (int dy = -1; dy <= 1; dy++) {
+            for (int dy = -1; dy <= 2; dy++) {
                 for (int dx = -r; dx <= r; dx++) {
                     for (int dz = -r; dz <= r; dz++) {
+                        if (Math.max(Math.abs(dx), Math.abs(dz)) != r && r > 1) continue;
+                        if (dx == 0 && dy == 0 && dz == 0) continue;
                         BlockPos at = place.offset(dx, dy, dz);
-                        if (empty(level, at)) return at;
+                        if (!empty(level, at)) continue;
+                        int score = interiorScore(level, at, dx, dy, dz);
+                        if (score > bestScore) {
+                            bestScore = score;
+                            best = at;
+                        }
                     }
                 }
             }
+            // If radius 1 already yielded a solid indoor spot (ceiling + floor + walls), stop here.
+            if (best != null && bestScore >= 280) {
+                return best;
+            }
         }
+        if (best != null) return best;
+
         for (int dy = 2; dy <= 3; dy++) {
             BlockPos up = place.offset(0, dy, 0);
             if (empty(level, up)) return up;
@@ -316,13 +343,44 @@ public final class NpcGraphAnchor420 {
         return null;
     }
 
-    private static boolean hasFloorOrCeiling(ServerLevel level, BlockPos at) {
+    /**
+     * Scores a free cell for indoor room enclosure: ceiling overhead (+200), floor support (+80),
+     * enclosed cardinal walls up to 6 blocks out (+15 each), adjacent solid neighbours (+3 each),
+     * same-elevation preference, minus distance penalty.
+     */
+    private static int interiorScore(ServerLevel level, BlockPos at, int dx, int dy, int dz) {
         boolean floor = !empty(level, at.offset(0, -1, 0)) || !empty(level, at.offset(0, -2, 0));
-        if (!floor) return false;
-        for (int dy = 1; dy <= 6; dy++) {
-            if (!empty(level, at.offset(0, dy, 0))) return true;
+        boolean ceiling = false;
+        for (int cy = 1; cy <= 8; cy++) {
+            if (!empty(level, at.offset(0, cy, 0))) {
+                ceiling = true;
+                break;
+            }
         }
-        return true;
+        int wallHits = 0;
+        int[][] dirs = {{1, 0}, {-1, 0}, {0, 1}, {0, -1}};
+        for (int[] dir : dirs) {
+            for (int step = 1; step <= 6; step++) {
+                if (!empty(level, at.offset(dir[0] * step, 0, dir[1] * step))
+                        || !empty(level, at.offset(dir[0] * step, 1, dir[1] * step))) {
+                    wallHits++;
+                    break;
+                }
+            }
+        }
+        int adj = 0;
+        int[][] adjDirs = {{1, 0, 0}, {-1, 0, 0}, {0, 1, 0}, {0, -1, 0}, {0, 0, 1}, {0, 0, -1}};
+        for (int[] d : adjDirs) {
+            if (!empty(level, at.offset(d[0], d[1], d[2]))) adj++;
+        }
+        int distSq = dx * dx + dy * dy + dz * dz;
+        int elevBonus = dy == 0 ? 8 : (dy == -1 ? 4 : 0);
+        return (ceiling ? 200 : 0)
+                + (floor ? 80 : 0)
+                + wallHits * 15
+                + adj * 3
+                + elevBonus
+                - distSq * 2;
     }
 
     private static boolean empty(ServerLevel level, BlockPos pos) {

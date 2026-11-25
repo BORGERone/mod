@@ -7,6 +7,7 @@ import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcNet;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
@@ -14,12 +15,17 @@ import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerChunkCache;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.Container;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.neoforged.neoforge.common.extensions.IBlockEntityExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -67,6 +73,13 @@ public final class ChestGraph396 {
 
     /** The title of the card, in the language the client runs in. */
     public static final String TITLE_KEY = "gui.settledlands.chest.node";
+
+    /**
+     * Build 438: NBT key stored inside container {@code BlockEntity#getPersistentData()}
+     * ({@code NeoForgeData.SettledLandsChestGraph}) so Axiom blueprints carry shelf/chest graphs
+     * even when {@code copyWithEntities} is off or magic selection omits air cells.
+     */
+    public static final String BE_GRAPH_TAG = "SettledLandsChestGraph";
 
     private static final int MAX_IDS = 8192;
     private static final Map<String, Integer> BY_KEY = new HashMap<>();
@@ -324,6 +337,130 @@ public final class ChestGraph396 {
         return dropped;
     }
 
+    // ---- BlockEntity NBT persistence (Build 438) ----------------------------
+
+    /**
+     * Writes (or clears when {@code graph} is null/empty) {@link #BE_GRAPH_TAG} inside the
+     * container's NeoForge persistent data ({@code NeoForgeData}) so Axiom blueprints retain
+     * shelf/chest graphs even without entities.
+     */
+    public static boolean writeBlockEntityGraph(ServerLevel level, BlockPos pos, NpcDialogueGraph graph) {
+        if (level == null || pos == null) return false;
+        try {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be == null) return false;
+            CompoundTag pd = ((IBlockEntityExtension) be).getPersistentData();
+            if (pd == null) return false;
+            if (graph == null || graph.nodes == null || graph.nodes.isEmpty()) {
+                if (pd.contains(BE_GRAPH_TAG)) {
+                    pd.remove(BE_GRAPH_TAG);
+                    be.setChanged();
+                }
+                return false;
+            }
+            pd.put(BE_GRAPH_TAG, graph.save());
+            be.setChanged();
+            return true;
+        } catch (Throwable failure) {
+            fail(failure);
+            return false;
+        }
+    }
+
+    /** Writes {@link #BE_GRAPH_TAG} only if missing on {@code be}, avoiding repeated dirty-chunk saves. */
+    public static boolean ensureBlockEntityGraph(ServerLevel level, BlockPos pos, NpcDialogueGraph graph) {
+        if (level == null || pos == null || graph == null || graph.nodes == null || graph.nodes.isEmpty()) {
+            return false;
+        }
+        try {
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be == null) return false;
+            CompoundTag pd = ((IBlockEntityExtension) be).getPersistentData();
+            if (pd == null) return false;
+            if (pd.contains(BE_GRAPH_TAG, 10) && !pd.getCompound(BE_GRAPH_TAG).isEmpty()) {
+                return false;
+            }
+            pd.put(BE_GRAPH_TAG, graph.save());
+            be.setChanged();
+            return true;
+        } catch (Throwable failure) {
+            fail(failure);
+            return false;
+        }
+    }
+
+    /** Reads and normalizes a chest/furniture graph stored inside {@code BlockEntity#getPersistentData()}. */
+    public static NpcDialogueGraph readBlockEntityGraph(BlockEntity be) {
+        if (be == null) return null;
+        try {
+            CompoundTag pd = ((IBlockEntityExtension) be).getPersistentData();
+            if (pd == null || !pd.contains(BE_GRAPH_TAG, 10)) return null;
+            CompoundTag tag = pd.getCompound(BE_GRAPH_TAG);
+            if (tag == null || tag.isEmpty()) return null;
+            NpcDialogueGraph loaded = NpcDialogueGraph.load(tag);
+            if (loaded == null || loaded.nodes == null || loaded.nodes.isEmpty()) return null;
+            loaded = withChestNode(loaded);
+            stripCards(loaded);
+            ChestLock397.applyDefaults(chestNode(loaded));
+            return loaded;
+        } catch (Throwable failure) {
+            fail(failure);
+            return null;
+        }
+    }
+
+    /**
+     * Build 438: scans already-loaded chunks near online players for shelves/chests carrying
+     * {@link #BE_GRAPH_TAG} inside their {@code BlockEntity} persistent data, restoring missing
+     * entries into {@link ChestGraph396Store} so pasted Axiom builds get anchors and highlights
+     * immediately even when entities were omitted.
+     */
+    public static int syncEmbeddedGraphsNear(ServerLevel level,
+            List<? extends ServerPlayer> players) {
+        if (level == null || players == null || players.isEmpty()) return 0;
+        MinecraftServer server = level.getServer();
+        if (server == null) return 0;
+        ChestGraph396Store store = ChestGraph396Store.get(server);
+        if (store == null) return 0;
+        ServerChunkCache cache = level.getChunkSource();
+        if (cache == null) return 0;
+
+        Set<Long> visitedChunks = new HashSet<Long>();
+        int imported = 0;
+        for (int p = 0; p < players.size(); p++) {
+            ServerPlayer player = players.get(p);
+            if (player == null || player.level() != level) continue;
+            int pcx = ((int) Math.floor(player.getX())) >> 4;
+            int pcz = ((int) Math.floor(player.getZ())) >> 4;
+            for (int dcx = -2; dcx <= 2; dcx++) {
+                for (int dcz = -2; dcz <= 2; dcz++) {
+                    int cx = pcx + dcx;
+                    int cz = pcz + dcz;
+                    long chunkKey = (((long) cx) << 32) ^ (cz & 0xFFFFFFFFL);
+                    if (!visitedChunks.add(chunkKey)) continue;
+                    LevelChunk chunk = cache.getChunkNow(cx, cz);
+                    if (chunk == null) continue;
+                    Map<BlockPos, BlockEntity> blockEntities = chunk.getBlockEntities();
+                    if (blockEntities == null || blockEntities.isEmpty()) continue;
+                    for (Map.Entry<BlockPos, BlockEntity> entry : blockEntities.entrySet()) {
+                        BlockPos pos = entry.getKey();
+                        BlockEntity be = entry.getValue();
+                        if (pos == null || be == null) continue;
+                        NpcDialogueGraph embedded = readBlockEntityGraph(be);
+                        if (embedded == null) continue;
+                        if (!isChestAt(level, pos)) continue;
+                        String key = ChestGraph396Store.key(level, pos);
+                        if (key.isEmpty()) continue;
+                        if (store.graph(key) == null && store.put(key, embedded)) {
+                            imported++;
+                        }
+                    }
+                }
+            }
+        }
+        return imported;
+    }
+
     // ---- opening the editor -------------------------------------------------
 
     /** Hand the chest's graph to the stock graph editor. Runs on the server, once per wand click. */
@@ -338,12 +475,20 @@ public final class ChestGraph396 {
             String key = ChestGraph396Store.key(level, pos);
             ChestGraph396Store store = ChestGraph396Store.get(level.getServer());
             NpcDialogueGraph graph = store == null ? null : store.graph(key);
+            boolean created = false;
             if (graph == null) {
                 graph = defaultGraph();
                 if (store != null) store.put(key, graph);
+                created = true;
             } else {
                 graph = withChestNode(graph);
                 stripCards(graph);
+            }
+            if (created) {
+                writeBlockEntityGraph(level, pos, graph);
+                dev.settledlands.npc.NpcGraphAnchor420.anchorForSave(level, pos, true);
+            } else {
+                ensureBlockEntityGraph(level, pos, graph);
             }
             CompoundTag data = new CompoundTag();
             data.put("DialogueGraph", graph.save());
@@ -374,6 +519,7 @@ public final class ChestGraph396 {
                 ChestGraph396Store store = ChestGraph396Store.get(player.getServer());
                 if (store != null) store.put(key, null);
                 if (player.level() instanceof ServerLevel level && pos != null) {
+                    writeBlockEntityGraph(level, pos, null);
                     dev.settledlands.npc.NpcGraphAnchor420.anchorForSave(level, pos, false);
                 }
                 player.displayClientMessage(Component.translatable(
@@ -393,6 +539,7 @@ public final class ChestGraph396 {
                 return;
             }
             if (player.level() instanceof ServerLevel level && pos != null) {
+                writeBlockEntityGraph(level, pos, graph);
                 dev.settledlands.npc.NpcGraphAnchor420.anchorForSave(level, pos, true);
             }
             player.displayClientMessage(Component.translatable("message.settledlands.chest.graph_saved",

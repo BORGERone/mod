@@ -1,5 +1,6 @@
 package dev.settledlands.dungeon;
 
+import dev.settledlands.npc.NpcGraphAnchor420;
 import dev.settledlands.npc.TeleportNode424;
 import java.util.Collections;
 import java.util.List;
@@ -274,8 +275,9 @@ public final class DungeonManager425 {
     }
 
     private static boolean hasEntities(AxiomBlueprint427.PieceTemplate pt) {
-        return pt != null && pt.content != null
-                && pt.content.entities != null && !pt.content.entities.isEmpty();
+        if (pt == null || pt.content == null) return false;
+        if (pt.content.entities != null && !pt.content.entities.isEmpty()) return true;
+        return DungeonTemplate425.hasEmbeddedChestGraphs(pt.content);
     }
 
     private static boolean isPieceEntityAreaReady(
@@ -406,6 +408,9 @@ public final class DungeonManager425 {
         float pitch = useDefaultEntrance ? inst.spawnPitch : player.getXRot();
 
         boolean ok = teleportSafely(player, dungeon, destX, destY, destZ, yaw, pitch);
+        if (ok) {
+            NpcGraphAnchor420.ensureForPlayer(player);
+        }
         if (ok && lib != null && !lib.hasExternalPieces()) {
             player.displayClientMessage(
                     Component.translatable("message.settledlands.dungeon.no_blueprints"), false);
@@ -452,6 +457,7 @@ public final class DungeonManager425 {
                 inst.spawnYaw,
                 inst.spawnPitch);
         if (!ok) return null;
+        NpcGraphAnchor420.ensureForPlayer(player);
         if (lib != null && !lib.hasExternalPieces()) {
             player.displayClientMessage(
                     Component.translatable("message.settledlands.dungeon.no_blueprints"), false);

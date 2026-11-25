@@ -127,6 +127,16 @@ public final class LootPoolManager436 {
      * materialisation can fall back cleanly when blocks near the marker differ from the fingerprint.
      */
     public static int onDungeonRoomPlaced(ServerLevel level, List<Entity> spawnedAnchors, int knownTurns) {
+        return onDungeonRoomPlaced(level, spawnedAnchors, knownTurns, null);
+    }
+
+    /**
+     * Build 438: overload recording every container position handled by materialised anchor markers
+     * into {@code populatedOut} so callers that also restore embedded {@code BlockEntity} chest graphs
+     * never roll loot twice for the same container.
+     */
+    public static int onDungeonRoomPlaced(ServerLevel level, List<Entity> spawnedAnchors,
+            int knownTurns, Set<BlockPos> populatedOut) {
         if (level == null || spawnedAnchors == null || spawnedAnchors.isEmpty()) return 0;
         if (!DungeonManager425.isInDungeon(level)) return 0;
         MinecraftServer server = level.getServer();
@@ -136,7 +146,7 @@ public final class LootPoolManager436 {
 
         int filledContainers = 0;
         int placedStacks = 0;
-        Set<BlockPos> seen = new HashSet<>();
+        Set<BlockPos> seen = populatedOut != null ? populatedOut : new HashSet<>();
         for (Entity marker : spawnedAnchors) {
             if (marker == null) continue;
             List<BlockPos> chestPositions = NpcGraphAnchor420.materialiseForDungeon(level, marker, knownTurns);

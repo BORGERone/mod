@@ -746,6 +746,9 @@ CONFIRMED_EXTERNAL_CLASSES = {
         "Build 425: MC 1.21.1 net.minecraft.nbt.NbtAccounter (paired with NbtIo.readCompressed)",
     "net/minecraft/world/level/block/state/StateDefinition":
         "Build 425: MC 1.21.1 net.minecraft.world.level.block.state.StateDefinition",
+    "net/neoforged/neoforge/common/extensions/IBlockEntityExtension":
+        "Build 438: NeoForge 1.21.1 IBlockEntityExtension (neoforged/NeoForge 1.21.1 "
+        "IBlockEntityExtension.java + BlockEntity.java.patch; paired with NeoForgeData)",
 }
 
 
@@ -1130,6 +1133,11 @@ CONFIRMED_EXTERNAL = {
         "Build 436: MC 1.21.1 enum Direction.getOpposite() front-face resolution for furniture",
     ("net/minecraft/world/phys/BlockHitResult", "getDirection", "()Lnet/minecraft/core/Direction;"):
         "Build 436: MC 1.21.1 BlockHitResult.getDirection() hit-face reuse on cracked chests",
+    # Build 438: NeoForge 1.21.1 IBlockEntityExtension#getPersistentData() verified directly in
+    # neoforged/NeoForge@1.21.1 (IBlockEntityExtension.java + BlockEntity.java.patch -> "NeoForgeData").
+    ("net/neoforged/neoforge/common/extensions/IBlockEntityExtension", "getPersistentData",
+     "()Lnet/minecraft/nbt/CompoundTag;"):
+        "Build 438: NeoForge 1.21.1 interface IBlockEntityExtension#getPersistentData() for chest graph BE persistence",
 }
 
 

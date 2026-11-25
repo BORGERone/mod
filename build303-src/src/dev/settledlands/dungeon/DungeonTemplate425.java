@@ -1,17 +1,23 @@
 package dev.settledlands.dungeon;
 
+import dev.settledlands.chest.ChestGraph396;
+import dev.settledlands.chest.ChestGraph396Store;
+import dev.settledlands.chest.ChestLock397;
 import dev.settledlands.chest.LootPoolManager436;
+import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcGraphAnchor420;
 import dev.settledlands.npc.NpcGraphAnchorCore420;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
@@ -28,6 +34,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.StateDefinition;
 import net.minecraft.world.level.block.state.properties.Property;
+import net.neoforged.neoforge.common.extensions.IBlockEntityExtension;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -556,6 +563,81 @@ public final class DungeonTemplate425 {
         return end;
     }
 
+    /**
+     * Build 438: returns true when any {@code BlockEntitySpec} in {@code tpl} carries an embedded
+     * {@link ChestGraph396#BE_GRAPH_TAG} tag inside {@code NeoForgeData} or {@code ForgeData}.
+     */
+    public static boolean hasEmbeddedChestGraphs(StartTemplate tpl) {
+        if (tpl == null || tpl.blockEntities == null || tpl.blockEntities.isEmpty()) return false;
+        for (BlockEntitySpec beSpec : tpl.blockEntities) {
+            if (beSpec == null) continue;
+            if (beSpec.rawNbt != null) {
+                DungeonNbt431.NbtCompound nf = beSpec.rawNbt.getCompound("NeoForgeData");
+                if (nf != null && nf.contains(ChestGraph396.BE_GRAPH_TAG)) {
+                    DungeonNbt431.NbtCompound g = nf.getCompound(ChestGraph396.BE_GRAPH_TAG);
+                    if (g != null && g.values != null && !g.values.isEmpty()) return true;
+                }
+                DungeonNbt431.NbtCompound fd = beSpec.rawNbt.getCompound("ForgeData");
+                if (fd != null && fd.contains(ChestGraph396.BE_GRAPH_TAG)) {
+                    DungeonNbt431.NbtCompound g = fd.getCompound(ChestGraph396.BE_GRAPH_TAG);
+                    if (g != null && g.values != null && !g.values.isEmpty()) return true;
+                }
+            }
+            if (beSpec.nbt != null) {
+                CompoundTag nf = beSpec.nbt.getCompound("NeoForgeData");
+                if (nf != null && nf.contains(ChestGraph396.BE_GRAPH_TAG, 10)
+                        && !nf.getCompound(ChestGraph396.BE_GRAPH_TAG).isEmpty()) {
+                    return true;
+                }
+                CompoundTag fd = beSpec.nbt.getCompound("ForgeData");
+                if (fd != null && fd.contains(ChestGraph396.BE_GRAPH_TAG, 10)
+                        && !fd.getCompound(ChestGraph396.BE_GRAPH_TAG).isEmpty()) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    private static CompoundTag extractEmbeddedChestGraph(CompoundTag nbt, BlockEntity be) {
+        if (be != null) {
+            try {
+                CompoundTag pd = ((IBlockEntityExtension) be).getPersistentData();
+                if (pd != null && pd.contains(ChestGraph396.BE_GRAPH_TAG, 10)) {
+                    CompoundTag inner = pd.getCompound(ChestGraph396.BE_GRAPH_TAG);
+                    if (inner != null && !inner.isEmpty()) return inner;
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+        if (nbt != null) {
+            CompoundTag nf = nbt.getCompound("NeoForgeData");
+            if (nf != null && nf.contains(ChestGraph396.BE_GRAPH_TAG, 10)) {
+                CompoundTag inner = nf.getCompound(ChestGraph396.BE_GRAPH_TAG);
+                if (inner != null && !inner.isEmpty()) return inner;
+            }
+            CompoundTag fd = nbt.getCompound("ForgeData");
+            if (fd != null && fd.contains(ChestGraph396.BE_GRAPH_TAG, 10)) {
+                CompoundTag inner = fd.getCompound(ChestGraph396.BE_GRAPH_TAG);
+                if (inner != null && !inner.isEmpty()) return inner;
+            }
+        }
+        return null;
+    }
+
+    private static boolean isCoveredByAnyAnchor(ServerLevel level, List<Entity> liveAnchors, BlockPos pos) {
+        if (liveAnchors == null || liveAnchors.isEmpty() || pos == null) return false;
+        for (Entity marker : liveAnchors) {
+            if (marker == null || marker.isRemoved()) continue;
+            BlockPos anchorPos = NpcGraphAnchor420.home(level, marker);
+            if (NpcGraphAnchorCore420.inside(pos.getX(), pos.getY(), pos.getZ(),
+                    anchorPos, NpcGraphAnchor420.GATHER_BLOCKS)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     private static void placeBlockEntitiesAndEntities(
             ServerLevel level,
             StartTemplate tpl,
@@ -564,8 +646,12 @@ public final class DungeonTemplate425 {
             int originZ,
             int turns,
             PlacementStats stats) {
+        boolean inDungeon = DungeonManager425.isInDungeon(level);
         List<BlockPos> createPositions = new ArrayList<>();
+        List<BlockPos> beChestPositions = new ArrayList<>();
         List<Entity> spawnedAnchors = new ArrayList<>();
+        List<Entity> liveAnchors = new ArrayList<>();
+        Entity emptyGuideTrigger = null;
         for (BlockEntitySpec beSpec : tpl.blockEntities) {
             int rx = DungeonGenerator427.rotX(beSpec.x, beSpec.z, turns);
             int rz = DungeonGenerator427.rotZ(beSpec.x, beSpec.z, turns);
@@ -593,6 +679,27 @@ public final class DungeonTemplate425 {
                 }
                 be.loadWithComponents(nbt, ((Level) level).registryAccess());
                 be.setChanged();
+                if (inDungeon) {
+                    CompoundTag chestGraphTag = extractEmbeddedChestGraph(nbt, be);
+                    if (chestGraphTag != null && !chestGraphTag.isEmpty()
+                            && ChestGraph396.isChestAt(level, pos)) {
+                        NpcDialogueGraph restored = NpcDialogueGraph.load(chestGraphTag);
+                        if (restored != null && restored.nodes != null && !restored.nodes.isEmpty()) {
+                            restored = ChestGraph396.withChestNode(restored);
+                            ChestGraph396.stripCards(restored);
+                            ChestLock397.applyDefaults(ChestGraph396.chestNode(restored));
+                            ChestGraph396Store store = ChestGraph396Store.get(level.getServer());
+                            if (store != null) {
+                                String key = ChestGraph396Store.key(level, pos);
+                                if (!key.isEmpty()) {
+                                    store.put(key, restored);
+                                }
+                            }
+                            ChestGraph396.writeBlockEntityGraph(level, pos, restored);
+                            beChestPositions.add(pos);
+                        }
+                    }
+                }
                 if (CreateCompat431.isCreateBlockEntity(be, beSpec.id)) {
                     createPositions.add(pos);
                 }
@@ -644,10 +751,11 @@ public final class DungeonTemplate425 {
                 CreateCompat431.attachContraption(level, entity);
                 BlockPos ePos = new BlockPos((int) Math.floor(te.wx), (int) Math.floor(te.wy), (int) Math.floor(te.wz));
                 boolean ticking = level.isPositionEntityTicking(ePos);
+                boolean isAnchor = "settledlands:guide_trigger".equals(eSpec.id);
+                boolean hasGraphs = NpcGraphAnchorCore420.hasGraphs(NpcGraphAnchor420.data(entity));
                 if (!added || entity.isRemoved()) {
                     if (stats != null) stats.entitiesSkipped++;
-                    if ("settledlands:guide_trigger".equals(eSpec.id)
-                            && NpcGraphAnchorCore420.hasGraphs(NpcGraphAnchor420.data(entity))) {
+                    if (isAnchor && hasGraphs) {
                         spawnedAnchors.add(entity);
                     }
                     LOG.warn("settledlands: entity " + eSpec.id + " at " + ePos
@@ -656,8 +764,11 @@ public final class DungeonTemplate425 {
                             + ", ticking=" + ticking + ")");
                 } else {
                     if (stats != null) stats.entitiesSpawned++;
-                    if (NpcGraphAnchorCore420.hasGraphs(NpcGraphAnchor420.data(entity))) {
+                    if (hasGraphs) {
                         spawnedAnchors.add(entity);
+                        liveAnchors.add(entity);
+                    } else if (isAnchor && emptyGuideTrigger == null) {
+                        emptyGuideTrigger = entity;
                     }
                     if (eSpec.id != null && eSpec.id.contains("contraption")) {
                         LOG.info("settledlands: spawned " + eSpec.id + " at " + ePos
@@ -675,8 +786,57 @@ public final class DungeonTemplate425 {
         if (!createPositions.isEmpty()) {
             CreateCompat431.activateCreateRoom(level, createPositions);
         }
-        if (!spawnedAnchors.isEmpty() && DungeonManager425.isInDungeon(level)) {
-            LootPoolManager436.onDungeonRoomPlaced(level, spawnedAnchors, turns);
+        if (inDungeon) {
+            Set<BlockPos> populated = new HashSet<>();
+            if (!spawnedAnchors.isEmpty()) {
+                LootPoolManager436.onDungeonRoomPlaced(level, spawnedAnchors, turns, populated);
+            }
+            if (!beChestPositions.isEmpty()) {
+                ChestGraph396Store store = ChestGraph396Store.get(level.getServer());
+                for (BlockPos cp : beChestPositions) {
+                    if (!populated.add(cp) || store == null) continue;
+                    NpcDialogueGraph g = store.graph(ChestGraph396Store.key(level, cp));
+                    if (g != null) {
+                        LootPoolManager436.populateContainer(level, cp, g);
+                    }
+                }
+                int anchorsCreated = 0;
+                for (BlockPos cp : beChestPositions) {
+                    if (isCoveredByAnyAnchor(level, liveAnchors, cp)) continue;
+                    Entity nearby = NpcGraphAnchor420.markerNear(level, cp);
+                    if (nearby != null && !nearby.isRemoved()
+                            && NpcGraphAnchorCore420.inside(cp.getX(), cp.getY(), cp.getZ(),
+                                    NpcGraphAnchor420.home(level, nearby), NpcGraphAnchor420.GATHER_BLOCKS)) {
+                        NpcGraphAnchor420.refresh(level, nearby);
+                        liveAnchors.add(nearby);
+                        continue;
+                    }
+                    if (emptyGuideTrigger != null && !emptyGuideTrigger.isRemoved()) {
+                        Entity marker = emptyGuideTrigger;
+                        emptyGuideTrigger = null;
+                        BlockPos mPos = NpcGraphAnchor420.cell(marker);
+                        if (NpcGraphAnchor420.seal(level, marker, mPos)) {
+                            liveAnchors.add(marker);
+                            anchorsCreated++;
+                            continue;
+                        }
+                    }
+                    BlockPos spot = NpcGraphAnchor420.freeSpot(level, cp);
+                    if (spot == null) spot = cp;
+                    Entity marker = NpcGraphAnchor420.spawn(level, spot);
+                    if (marker != null && !marker.isRemoved()
+                            && NpcGraphAnchor420.seal(level, marker, NpcGraphAnchor420.cell(marker))) {
+                        liveAnchors.add(marker);
+                        anchorsCreated++;
+                    }
+                }
+                if (anchorsCreated > 0 || !beChestPositions.isEmpty()) {
+                    LOG.info("settledlands: restored " + beChestPositions.size()
+                            + " embedded chest graph(s) at (" + originX + ", " + originY + ", " + originZ
+                            + "), ensured " + liveAnchors.size() + " live anchor(s) (created="
+                            + anchorsCreated + ")");
+                }
+            }
         }
     }
 

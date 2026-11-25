@@ -1,5 +1,6 @@
 package dev.settledlands.npc;
 
+import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.chest.ChestGraph396Store;
 import dev.settledlands.door.DoorGraph382Store;
 import dev.settledlands.door.DoorStore368;
@@ -73,6 +74,7 @@ public final class NpcGraphAnchorFiles420 {
                 BlockPos at = ChestGraph396Store.positionOf(key);
                 if (graph == null || at == null) continue;
                 if (!NpcGraphAnchorCore420.inside(at.getX(), at.getY(), at.getZ(), anchor, radius)) continue;
+                ChestGraph396.ensureBlockEntityGraph(level, at, graph);
                 out.add(new NpcGraphAnchorCore420.Entry(NpcGraphAnchorCore420.CHEST_KIND,
                         at.getX() - anchor.getX(), at.getY() - anchor.getY(), at.getZ() - anchor.getZ(),
                         graph.save(), null));
@@ -128,7 +130,12 @@ public final class NpcGraphAnchorFiles420 {
                     public boolean chest(int x, int y, int z, CompoundTag graph) {
                         if (chests == null || graph == null || graph.isEmpty()) return false;
                         String key = dimension + "@" + x + "," + y + "," + z;
-                        return chests.put(key, NpcDialogueGraph.load(graph));
+                        NpcDialogueGraph loaded = NpcDialogueGraph.load(graph);
+                        boolean stored = chests.put(key, loaded);
+                        if (stored) {
+                            ChestGraph396.writeBlockEntityGraph(target, new BlockPos(x, y, z), loaded);
+                        }
+                        return stored;
                     }
 
                     @Override

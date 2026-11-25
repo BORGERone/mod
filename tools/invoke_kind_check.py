@@ -166,6 +166,9 @@ KNOWN_NEW = {
         "invokevirtual"},                 # public enum Direction
     "net/minecraft/world/phys/BlockHitResult.getDirection()Lnet/minecraft/core/Direction;": {
         "invokevirtual"},                 # public class BlockHitResult
+    # Build 438: NeoForge 1.21.1 IBlockEntityExtension (BlockEntity implements it via BlockEntity.java.patch).
+    "net/neoforged/neoforge/common/extensions/IBlockEntityExtension.getPersistentData()Lnet/minecraft/nbt/CompoundTag;": {
+        "invokeinterface"},               # public interface IBlockEntityExtension (verified in NeoForge 1.21.1)
 }
 
 

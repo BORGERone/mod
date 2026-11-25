@@ -81,8 +81,8 @@ public final class RadiusPass354 {
     /** How far a ring is worth sending. */
     private static final double RING_RANGE = 48.0D;
 
-    /** Highlighted blocks per pass - a wall of spark is not a hint. */
-    private static final int MAX_HIGHLIGHT = 24;
+    /** Highlighted places per pass (blocks and shelves/chests), sorted nearest-first. */
+    private static final int MAX_HIGHLIGHT = 64;
 
     /** Points on the ring: thirty degrees apart, enough to read as a circle. */
     private static final int RING_POINTS = 12;
@@ -515,25 +515,40 @@ public final class RadiusPass354 {
         if (check) resumeCutscenes(here);
         int lit = 0;
 
-        // Build 354's highlight is the wand's answer to "which blocks have a graph", and that is still
-        // a question about blocks: eight sparks around a door would point at its editor, which a wand
-        // click already opens (DoorGraph382Events, build 382).
+        // Build 354 / Build 438: highlight both blocks (BlockTriggerStore351) AND shelves/cabinets/
+        // chests (ChestSpot from ChestGraph396Store) while a player holds the NPC wand, sorted closest
+        // first. Doors stay unhighlighted (Build 382 rule: a wand click opens their graph directly).
         if (visual) {
-            for (int i = 0; i < blocks.size(); i++) {
-                BlockTriggerStore351.Entry block = blocks.get(i);
-                if (lit >= MAX_HIGHLIGHT) break;
-                boolean wand = false;
-                for (int p = 0; p < here.size(); p++) {
-                    ServerPlayer player = here.get(p);
-                    double distance = block.distanceSqr(player.getX(), player.getY(), player.getZ());
-                    if (distance <= HIGHLIGHT_RANGE * HIGHLIGHT_RANGE && holdingWand(player)) {
-                        wand = true;
-                        break;
+            List<ServerPlayer> wandHolders = new ArrayList<>();
+            for (int p = 0; p < here.size(); p++) {
+                ServerPlayer player = here.get(p);
+                if (holdingWand(player)) wandHolders.add(player);
+            }
+            if (!wandHolders.isEmpty()) {
+                double rangeSq = HIGHLIGHT_RANGE * HIGHLIGHT_RANGE;
+                List<HighlightCandidate> candidates = new ArrayList<>();
+                for (int i = 0; i < spots.size(); i++) {
+                    Spot spot = spots.get(i);
+                    if (spot == null || spot.door()) continue;
+                    double bestDist = Double.MAX_VALUE;
+                    for (int p = 0; p < wandHolders.size(); p++) {
+                        ServerPlayer player = wandHolders.get(p);
+                        double d2 = spot.distanceSqr(player.getX(), player.getY(), player.getZ());
+                        if (d2 <= rangeSq && d2 < bestDist) {
+                            bestDist = d2;
+                        }
+                    }
+                    if (bestDist <= rangeSq) {
+                        candidates.add(new HighlightCandidate(spot, bestDist));
                     }
                 }
-                if (wand) {
-                    highlight(level, block);
-                    lit++;
+                if (candidates.size() > 1) {
+                    candidates.sort((a, b) -> Double.compare(a.distSq, b.distSq));
+                }
+                int limit = Math.min(candidates.size(), MAX_HIGHLIGHT);
+                for (int i = 0; i < limit; i++) {
+                    Spot spot = candidates.get(i).spot;
+                    highlight(level, spot.x(), spot.y(), spot.z());
                 }
             }
         }
@@ -574,10 +589,24 @@ public final class RadiusPass354 {
 
     // ---- the highlight ------------------------------------------------------
 
+    private static final class HighlightCandidate {
+        final Spot spot;
+        final double distSq;
+
+        HighlightCandidate(Spot spot, double distSq) {
+            this.spot = spot;
+            this.distSq = distSq;
+        }
+    }
+
     private static void highlight(ServerLevel level, BlockTriggerStore351.Entry block) {
-        double x = block.x;
-        double y = block.y;
-        double z = block.z;
+        if (block != null) highlight(level, block.x, block.y, block.z);
+    }
+
+    private static void highlight(ServerLevel level, int bx, int by, int bz) {
+        double x = bx;
+        double y = by;
+        double z = bz;
         // Four bottom and four top corners, one spark each: reads as an outline, costs eight points.
         spark(level, x, y + 0.05D, z);
         spark(level, x + 1.0D, y + 0.05D, z);
