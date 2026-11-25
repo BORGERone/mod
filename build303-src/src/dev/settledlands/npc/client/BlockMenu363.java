@@ -1,5 +1,6 @@
 package dev.settledlands.npc.client;
 
+import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.TeleportNode424;
 import net.minecraft.client.gui.Font;
@@ -116,6 +117,7 @@ public final class BlockMenu363 {
      * it no longer changes a row, a label or a colour.</p>
      */
     private static boolean door;
+    private static boolean chest;
 
     /** Where the open panel is, measured when it appeared. */
     private static int left;
@@ -147,15 +149,21 @@ public final class BlockMenu363 {
 
     /**
      * How many rows this menu has. Build 424 appends the Teleport row directly after the stock rows
-     * ({@code compact == rows().length}) so {@link #rows()} and {@link #stockRow(int)} stay untouched.
+     * ({@code compact == rows().length}); Build 436 additionally appends «Пул предметов» when in
+     * chest editor mode ({@code compact == rows().length + 1}).
      */
     public static int count() {
-        return rows().length + 1;
+        return rows().length + (chest ? 2 : 1);
     }
 
     /** True when {@code compact} is the Teleport row appended after the stock block rows. */
     public static boolean isTeleportRow(int compact) {
         return compact == rows().length;
+    }
+
+    /** True when {@code compact} is the Build 436 Loot Pool row shown in chest editors. */
+    public static boolean isLootPoolRow(int compact) {
+        return chest && compact == rows().length + 1;
     }
 
     /**
@@ -179,6 +187,9 @@ public final class BlockMenu363 {
         if (isTeleportRow(compact)) {
             return Component.translatable(TeleportNode424.MENU_LABEL_KEY).getString();
         }
+        if (isLootPoolRow(compact)) {
+            return Component.translatable(LootPool436.MENU_LABEL_KEY).getString();
+        }
         int stock = stockRow(compact);
         return stock < 0 ? "" : Component.translatable(LABEL_KEYS[stock]).getString();
     }
@@ -187,6 +198,9 @@ public final class BlockMenu363 {
     public static int colour(int compact) {
         if (isTeleportRow(compact)) {
             return TeleportNode424.ACCENT_COLOR;
+        }
+        if (isLootPoolRow(compact)) {
+            return LootPool436.ACCENT_COLOR;
         }
         int stock = stockRow(compact);
         if (stock < 0) return LABEL;
@@ -221,7 +235,13 @@ public final class BlockMenu363 {
      * row, a label or a colour.
      */
     public static void fit(NpcGraphContextMenu menu, NpcGraphCanvas canvas, boolean doorMode) {
+        fit(menu, canvas, doorMode, false);
+    }
+
+    public static void fit(NpcGraphContextMenu menu, NpcGraphCanvas canvas, boolean doorMode,
+            boolean chestMode) {
         door = doorMode;
+        chest = chestMode;
         if (menu == null || canvas == null || !menu.open || menu.targetNodeId >= 0) {
             reset();
             return;

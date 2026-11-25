@@ -155,13 +155,41 @@ public final class ChestOpen401 {
             if (mc == null || mc.player == null || mc.gameMode == null || pos == null) return;
             if (mc.screen != null) return;                                   // something opened in the meantime
             if (mc.player.containerMenu != mc.player.inventoryMenu) return;  // the chest is already up
+            Direction face = openFace(mc, pos);
             mc.gameMode.useItemOn(mc.player, InteractionHand.MAIN_HAND,
                     new BlockHitResult(new Vec3(pos.getX() + 0.5D, pos.getY() + 0.5D,
-                            pos.getZ() + 0.5D), Direction.UP, pos, false));
+                            pos.getZ() + 0.5D), face, pos, false));
             LOG.info("chest: the click of the cracked chest at " + pos + " (" + key + ") was delivered");
         } catch (Throwable failure) {
             LOG.warn("chest: the chest at " + pos + " could not be clicked - one more click by hand opens it",
                     failure);
         }
+    }
+
+    private static Direction openFace(Minecraft mc, BlockPos pos) {
+        try {
+            net.minecraft.world.level.Level lvl = mc == null ? null : mc.level;
+            if (lvl != null) {
+                net.minecraft.world.level.block.state.BlockState state = lvl.getBlockState(pos);
+                if (state != null && state.getBlock() != null) {
+                    net.minecraft.world.level.block.state.properties.Property<?> prop =
+                            state.getBlock().getStateDefinition().getProperty("direction");
+                    if (prop != null) {
+                        Object val = state.getValue(
+                                (net.minecraft.world.level.block.state.properties.Property) prop);
+                        if (val instanceof Direction dir) {
+                            return dir.getOpposite();
+                        }
+                    }
+                }
+            }
+            if (mc != null && mc.hitResult instanceof BlockHitResult hit
+                    && pos.equals(hit.getBlockPos())) {
+                Direction d = hit.getDirection();
+                if (d != null) return d;
+            }
+        } catch (Throwable ignored) {
+        }
+        return Direction.UP;
     }
 }

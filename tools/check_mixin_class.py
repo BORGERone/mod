@@ -1117,6 +1117,19 @@ CONFIRMED_EXTERNAL = {
         "Build 425: ServerLevel.getSeed() persisted per dungeon grid instance",
     ("net/minecraft/world/level/Level", "getSharedSpawnPos", "()Lnet/minecraft/core/BlockPos;"):
         "Build 425: Level.getSharedSpawnPos() fallback return position when leaving the dungeon",
+    # Build 436: Refurbished Furniture & Loot Pool container/direction helpers verified in MC 1.21.1.
+    ("net/minecraft/world/Container", "setItem", "(ILnet/minecraft/world/item/ItemStack;)V"):
+        "Build 436: MC 1.21.1 interface Container.setItem(int, ItemStack) placing dungeon loot",
+    ("net/minecraft/world/Container", "getMaxStackSize", "()I"):
+        "Build 436: MC 1.21.1 interface Container.getMaxStackSize() (e.g. StorageJar == 1)",
+    ("net/minecraft/world/Container", "canPlaceItem", "(ILnet/minecraft/world/item/ItemStack;)Z"):
+        "Build 436: MC 1.21.1 interface Container.canPlaceItem(int, ItemStack) slot validation",
+    ("net/minecraft/world/item/ItemStack", "getMaxStackSize", "()I"):
+        "Build 436: MC 1.21.1 final ItemStack.getMaxStackSize() stack limit",
+    ("net/minecraft/core/Direction", "getOpposite", "()Lnet/minecraft/core/Direction;"):
+        "Build 436: MC 1.21.1 enum Direction.getOpposite() front-face resolution for furniture",
+    ("net/minecraft/world/phys/BlockHitResult", "getDirection", "()Lnet/minecraft/core/Direction;"):
+        "Build 436: MC 1.21.1 BlockHitResult.getDirection() hit-face reuse on cracked chests",
 }
 
 

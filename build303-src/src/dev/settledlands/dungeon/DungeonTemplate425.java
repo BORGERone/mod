@@ -1,5 +1,8 @@
 package dev.settledlands.dungeon;
 
+import dev.settledlands.chest.LootPoolManager436;
+import dev.settledlands.npc.NpcGraphAnchor420;
+import dev.settledlands.npc.NpcGraphAnchorCore420;
 import java.io.IOException;
 import java.io.InputStream;
 import java.util.ArrayList;
@@ -260,7 +263,7 @@ public final class DungeonTemplate425 {
         for (Map.Entry<String, String> e : props.entrySet()) {
             String k = e.getKey();
             String v = e.getValue();
-            if ("facing".equals(k) || "target".equals(k)) {
+            if ("facing".equals(k) || "target".equals(k) || "direction".equals(k)) {
                 out.put(k, rotateFacing(v, t));
             } else if ("axis".equals(k)) {
                 out.put(k, rotateAxis(v, t));
@@ -562,6 +565,7 @@ public final class DungeonTemplate425 {
             int turns,
             PlacementStats stats) {
         List<BlockPos> createPositions = new ArrayList<>();
+        List<Entity> spawnedAnchors = new ArrayList<>();
         for (BlockEntitySpec beSpec : tpl.blockEntities) {
             int rx = DungeonGenerator427.rotX(beSpec.x, beSpec.z, turns);
             int rz = DungeonGenerator427.rotZ(beSpec.x, beSpec.z, turns);
@@ -648,6 +652,9 @@ public final class DungeonTemplate425 {
                             + ", ticking=" + ticking + ")");
                 } else {
                     if (stats != null) stats.entitiesSpawned++;
+                    if (NpcGraphAnchorCore420.hasGraphs(NpcGraphAnchor420.data(entity))) {
+                        spawnedAnchors.add(entity);
+                    }
                     if (eSpec.id != null && eSpec.id.contains("contraption")) {
                         LOG.info("settledlands: spawned " + eSpec.id + " at " + ePos
                                 + " (exact=" + te.wx + "," + te.wy + "," + te.wz
@@ -663,6 +670,9 @@ public final class DungeonTemplate425 {
 
         if (!createPositions.isEmpty()) {
             CreateCompat431.activateCreateRoom(level, createPositions);
+        }
+        if (!spawnedAnchors.isEmpty() && DungeonManager425.isInDungeon(level)) {
+            LootPoolManager436.onDungeonRoomPlaced(level, spawnedAnchors);
         }
     }
 

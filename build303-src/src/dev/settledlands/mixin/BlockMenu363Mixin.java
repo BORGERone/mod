@@ -52,10 +52,11 @@ public abstract class BlockMenu363Mixin {
         // Build 382: a door's panel is measured too - one row instead of fifteen. Build 396: a chest's
         // panel is the block's panel as well, so it is measured the same way.
         boolean door = settledlands$doorEditor();
-        if (!door && !settledlands$blockEditor() && !settledlands$isChest()) return;
+        boolean chest = settledlands$isChest();
+        if (!door && !settledlands$blockEditor() && !chest) return;
         if (this.contextMenu == null) return;
         BlockMenu363.fit(this.contextMenu,
-                ((NpcDialogueGraphScreen) (Object) this).settledlands$canvas(), door);
+                ((NpcDialogueGraphScreen) (Object) this).settledlands$canvas(), door, chest);
     }
 
     /** Paint the cut-down panel in place of the stock one. A node's copy/delete menu stays stock. */

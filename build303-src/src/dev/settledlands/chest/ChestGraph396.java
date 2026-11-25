@@ -10,10 +10,13 @@ import java.util.HashSet;
 import java.util.Map;
 import java.util.Set;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Container;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.state.BlockState;
@@ -111,13 +114,36 @@ public final class ChestGraph396 {
      * blocks and therefore two graphs - the one the author clicked is the one he edits, and the card says
      * where it is. A container from another mod is not covered, and the README says so.</p>
      */
+    public static boolean isFurnitureStorage(BlockState state) {
+        if (state == null || state.getBlock() == null) return false;
+        ResourceLocation id = BuiltInRegistries.BLOCK.getKey(state.getBlock());
+        if (id == null || !"refurbished_furniture".equals(id.getNamespace())) return false;
+        String path = id.getPath();
+        if (path == null) return false;
+        return path.endsWith("_crate")
+                || path.endsWith("_drawer")
+                || path.endsWith("_cooler")
+                || path.endsWith("_storage_cabinet")
+                || path.endsWith("_fridge")
+                || path.endsWith("_mail_box")
+                || path.endsWith("_storage_jar");
+    }
+
     public static boolean isChest(BlockState state) {
         if (state == null) return false;
-        return state.getBlock() instanceof ChestBlock || state.getBlock() instanceof BarrelBlock;
+        return state.getBlock() instanceof ChestBlock
+                || state.getBlock() instanceof BarrelBlock
+                || isFurnitureStorage(state);
     }
 
     public static boolean isChestAt(ServerLevel level, BlockPos pos) {
-        return level != null && pos != null && isChest(level.getBlockState(pos));
+        if (level == null || pos == null) return false;
+        BlockState state = level.getBlockState(pos);
+        if (!isChest(state)) return false;
+        if (state.getBlock() instanceof ChestBlock || state.getBlock() instanceof BarrelBlock) {
+            return true;
+        }
+        return level.getBlockEntity(pos) instanceof Container;
     }
 
     // ---- the card -----------------------------------------------------------
@@ -321,6 +347,7 @@ public final class ChestGraph396 {
             }
             CompoundTag data = new CompoundTag();
             data.put("DialogueGraph", graph.save());
+            ChestLootNet436.sendPools(player);
             NpcNet.sendRaw(player, new NpcNet.CfgView(idFor(key), data));
             player.displayClientMessage(Component.translatable("message.settledlands.chest.graph_open",
                     Component.literal(coords(pos))), true);

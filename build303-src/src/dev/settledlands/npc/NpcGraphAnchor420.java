@@ -364,6 +364,46 @@ public final class NpcGraphAnchor420 {
         return result.total() > 0 || !entries.isEmpty();
     }
 
+    /**
+     * Build 436: immediately materialises a freshly spawned dungeon anchor marker and returns the
+     * absolute world positions of every chest/furniture graph materialized by it.
+     */
+    public static List<BlockPos> materialiseForDungeon(ServerLevel level, Entity marker) {
+        List<BlockPos> chests = new ArrayList<>();
+        if (level == null || marker == null) return chests;
+        CompoundTag data = data(marker);
+        if (!NpcGraphAnchorCore420.hasGraphs(data)) return chests;
+        BlockPos feet = cell(marker);
+        NpcGraphAnchorCore420.Fingerprint print = NpcGraphAnchorCore420.fingerprint(data);
+        NpcGraphAnchorCore420.Placement place = NpcGraphAnchorCore420.place(print.offsets, print.blocks,
+                (dx, dy, dz) -> NpcGraphAnchorFiles420.blockAt(level, feet, dx, dy, dz),
+                PLACE_SEARCH_BLOCKS, PLACE_SEARCH_UP);
+        if (!place.found()) {
+            warn("anchor: dungeon marker at " + feet + " did not match fingerprint ("
+                    + place.found + "/" + place.asked + ")");
+            return chests;
+        }
+        BlockPos here = feet.offset(place.dx, place.dy, place.dz);
+        int[] were = data.getIntArray(STAMP);
+        boolean moved = were == null || were.length < 3
+                || were[0] != here.getX() || were[1] != here.getY() || were[2] != here.getZ();
+        if (!moved) return chests;
+        int turn = place.turn;
+        List<NpcGraphAnchorCore420.Entry> entries = NpcGraphAnchorCore420.entries(data);
+        NpcGraphAnchorCore420.Result result = NpcGraphAnchorFiles420.materialize(level, level.getServer(),
+                entries, turn, here);
+        stamp(marker, here, turn);
+        for (NpcGraphAnchorCore420.Entry entry : entries) {
+            if (entry != null && NpcGraphAnchorCore420.CHEST_KIND.equals(entry.kind)) {
+                int[] turned = NpcGraphAnchorCore420.turn(new int[] {entry.dx, entry.dy, entry.dz}, turn);
+                chests.add(here.offset(turned[0], turned[1], turned[2]));
+            }
+        }
+        LOG.info("anchor: dungeon room materialised at " + here + " (turn " + turn + ") - "
+                + result.line() + " (" + chests.size() + " chest graph(s))");
+        return chests;
+    }
+
     // ---- the entity ---------------------------------------------------------
 
     /** The marker's own NBT - {@code IEntityExtension#getPersistentData}, the call the base jar makes. */

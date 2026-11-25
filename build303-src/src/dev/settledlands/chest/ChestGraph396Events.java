@@ -265,7 +265,8 @@ public final class ChestGraph396Events {
                 // compares ({@code NpcEscort}: {@code containerMenu == inventoryMenu}), read on
                 // ServerPlayer, exactly as that jar reads them - the descriptors are that jar's own
                 // (AbstractContainerMenu and InventoryMenu), not a guess of this build's stub.
-                boolean open = player.containerMenu != player.inventoryMenu;
+                boolean open = player.containerMenu != player.inventoryMenu
+                        || ChestDiegesisCompat436.isStationOpen(pending.level, pending.pos, player);
                 if (open) {
                     pending.window = true;
                     continue;

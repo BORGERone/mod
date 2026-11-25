@@ -1,9 +1,11 @@
 package dev.settledlands.mixin;
 
 import dev.settledlands.chest.ChestGraph396;
+import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.TeleportNode424;
 import dev.settledlands.npc.client.BlockMenu363;
+import dev.settledlands.npc.client.LootPoolCard436;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphContextMenu;
 import net.minecraft.network.chat.Component;
@@ -79,6 +81,26 @@ public abstract class NpcChestPalette396Mixin {
         this.contextMenu.close();
         cir.setReturnValue(Boolean.TRUE);
         if (button != 0 || row < 0) return;
+
+        if (BlockMenu363.isLootPoolRow(row)) {
+            NpcDialogueGraph.Node created = this.addAt(NpcDialogueGraph.TRIGGER, worldX, worldY);
+            if (created != null) {
+                LootPool436.applyDefaults(created);
+                String firstPool = LootPoolCard436.firstAvailablePool();
+                if (!firstPool.isEmpty()) {
+                    LootPool436.setPoolFile(created, firstPool);
+                }
+                if (wireFrom >= 0 && this.graph != null
+                        && this.graph.connect(wireFrom, created.id, wirePort)) {
+                    this.status = Component.translatable("gui.settledlands.graph.connected").getString();
+                } else {
+                    this.status = Component.translatable("gui.settledlands.loot_pool.added").getString();
+                }
+                this.widgets();
+                this.changed();
+            }
+            return;
+        }
 
         if (BlockMenu363.isTeleportRow(row)) {
             NpcDialogueGraph.Node created = this.addAt(NpcDialogueGraph.TRIGGER, worldX, worldY);

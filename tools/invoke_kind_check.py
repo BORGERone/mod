@@ -149,6 +149,23 @@ KNOWN_NEW = {
         "invokevirtual"},                 # public class ServerLevel, public long getSeed()
     "net/minecraft/world/level/Level.getSharedSpawnPos()Lnet/minecraft/core/BlockPos;": {
         "invokevirtual"},                 # public abstract class Level, public BlockPos getSharedSpawnPos()
+    # Build 436: verified MC 1.21.1 calls for Refurbished furniture & Dungeon Loot Pool filling.
+    "net/minecraft/world/Container.getContainerSize()I": {
+        "invokeinterface"},               # public interface Container (base jar invokes via SimpleContainer)
+    "net/minecraft/world/Container.getItem(I)Lnet/minecraft/world/item/ItemStack;": {
+        "invokeinterface"},               # public interface Container (base jar invokes via SimpleContainer)
+    "net/minecraft/world/Container.setItem(ILnet/minecraft/world/item/ItemStack;)V": {
+        "invokeinterface"},               # public interface Container
+    "net/minecraft/world/Container.getMaxStackSize()I": {
+        "invokeinterface"},               # public interface Container (overridden by StorageJar -> 1)
+    "net/minecraft/world/Container.canPlaceItem(ILnet/minecraft/world/item/ItemStack;)Z": {
+        "invokeinterface"},               # public interface Container
+    "net/minecraft/world/item/ItemStack.getMaxStackSize()I": {
+        "invokevirtual"},                 # public final class ItemStack
+    "net/minecraft/core/Direction.getOpposite()Lnet/minecraft/core/Direction;": {
+        "invokevirtual"},                 # public enum Direction
+    "net/minecraft/world/phys/BlockHitResult.getDirection()Lnet/minecraft/core/Direction;": {
+        "invokevirtual"},                 # public class BlockHitResult
 }
 
 
