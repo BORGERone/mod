@@ -49,6 +49,7 @@ public final class TrialControlConfigScreen446 extends Screen {
     private final TrialConfig446 cfg;
 
     private final List<GuiEventListener> dynamicWidgets = new ArrayList<>();
+    private final List<GraphTooltips448.ConfigArea> tipAreas448 = new ArrayList<>();
 
     private int activeTab = TAB_GENERAL;
     private int viewMode = VIEW_MAIN;
@@ -169,6 +170,12 @@ public final class TrialControlConfigScreen446 extends Screen {
             removeWidget(dynamicWidgets.get(i));
         }
         dynamicWidgets.clear();
+        tipAreas448.clear();
+    }
+
+    private void addTip(String slotId, Object widget, int x, int y, int w, int h,
+            String tag, String arg) {
+        tipAreas448.add(new GraphTooltips448.ConfigArea(slotId, widget, x, y, w, h, tag, arg));
     }
 
     private <T extends GuiEventListener> T addDyn(T w) {
@@ -212,6 +219,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             }).bounds(tabX + i * (tabW + 4), tabY, tabW, 18).build();
             tabBtn.active = i != activeTab;
             addDyn(tabBtn);
+            addTip("cfg:tab_" + i, tabBtn, tabX + i * (tabW + 4), tabY, tabW, 18, "tab", keys[i]);
         }
 
         int btnY = panelY + panelH - 28;
@@ -240,6 +248,9 @@ public final class TrialControlConfigScreen446 extends Screen {
         addDyn(resetBtn);
         addDyn(applyClose);
         addDyn(cancelBtn);
+        addTip("cfg:reset", resetBtn, panelX + 10, btnY, 96, 20, "reset", "");
+        addTip("cfg:save", applyClose, right - btnW * 2 - 6, btnY, btnW, 20, "save_close", "");
+        addTip("cfg:cancel", cancelBtn, right - btnW, btnY, btnW, 20, "cancel", "");
     }
 
     private void buildGeneralTab() {
@@ -253,6 +264,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             b.setMessage(modeLabel());
         }).bounds(leftX, y, colW, 18).build();
         addDyn(modeBtn);
+        addTip("cfg:mode", modeBtn, leftX, y, colW, 18, "mode", "");
 
         Button noBreakBtn = Button.builder(toggleLabel("gui.settledlands.trial.cfg.prevent_break",
                 cfg.noBreakEnabled), b -> {
@@ -260,6 +272,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             b.setMessage(toggleLabel("gui.settledlands.trial.cfg.prevent_break", cfg.noBreakEnabled));
         }).bounds(rightX, y, colW, 18).build();
         addDyn(noBreakBtn);
+        addTip("cfg:nobreak", noBreakBtn, rightX, y, colW, 18, "prevent_break", "");
         y += 24;
 
         int fieldW = 54;
@@ -293,6 +306,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             b.setMessage(toggleLabel("gui.settledlands.trial.cfg.scale_players", cfg.scaleWithPlayers));
         }).bounds(leftX, y, colW, 18).build();
         addDyn(scaleBtn);
+        addTip("cfg:scale", scaleBtn, leftX, y, colW, 18, "scale_players", "");
 
         Button destructBtn = Button.builder(toggleLabel("gui.settledlands.trial.cfg.self_destruct",
                 cfg.selfDestruct), b -> {
@@ -300,6 +314,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             b.setMessage(toggleLabel("gui.settledlands.trial.cfg.self_destruct", cfg.selfDestruct));
         }).bounds(rightX, y, colW, 18).build();
         addDyn(destructBtn);
+        addTip("cfg:destruct", destructBtn, rightX, y, colW, 18, "self_destruct", "");
         y += 22;
 
         addLabeledBox(leftX, y, colW, fieldW, "gui.settledlands.trial.cfg.per_player_total",
@@ -331,6 +346,7 @@ public final class TrialControlConfigScreen446 extends Screen {
                     cfg.ominousKeyConversion));
         }).bounds(leftX, y, colW, 20).build();
         addDyn(keyBtn);
+        addTip("cfg:om_keys", keyBtn, leftX, y, colW, 20, "ominous_keys", "");
         y += 26;
 
         Button hazBtn = Button.builder(toggleLabel("gui.settledlands.trial.cfg.ominous_hazards",
@@ -340,6 +356,7 @@ public final class TrialControlConfigScreen446 extends Screen {
                     cfg.ominousHazards));
         }).bounds(leftX, y, colW, 20).build();
         addDyn(hazBtn);
+        addTip("cfg:om_haz", hazBtn, leftX, y, colW, 20, "ominous_hazards", "");
         y += 26;
 
         addLabeledBox(leftX, y, colW, fieldW, "gui.settledlands.trial.cfg.ominous_interval",
@@ -359,6 +376,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             rebuildView();
         }).bounds(x, topBtnY, 130, 18).build();
         addDyn(addBtn);
+        addTip("cfg:add_mob", addBtn, x, topBtnY, 130, 18, "add_mob", "");
 
         int listTop = bodyTop + 26;
         int vis = visibleMobRows();
@@ -380,6 +398,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             idBox.setValue(entry.entityId);
             idBox.setResponder(val -> entry.entityId = val == null ? "" : val.trim());
             addDyn(idBox);
+            addTip("cfg:m_id_" + s, idBox, x, ry, idW, 18, "mob_id", "");
 
             Button pickBtn = Button.builder(
                     Component.translatable("gui.settledlands.trial.cfg.pick"), b -> {
@@ -390,12 +409,14 @@ public final class TrialControlConfigScreen446 extends Screen {
                 rebuildView();
             }).bounds(x + idW + 4, ry, pickW, 18).build();
             addDyn(pickBtn);
+            addTip("cfg:m_pk_" + s, pickBtn, x + idW + 4, ry, pickW, 18, "mob_pick", "");
 
             EditBox wgtBox = new EditBox(font, x + idW + pickW + 8, ry, weightW, 18, Component.empty());
             wgtBox.setMaxLength(8);
             wgtBox.setValue(Integer.toString(entry.weight));
             wgtBox.setResponder(val -> entry.weight = parseInt(val, entry.weight, 1, 10000));
             addDyn(wgtBox);
+            addTip("cfg:m_wg_" + s, wgtBox, x + idW + pickW + 8, ry, weightW, 18, "mob_weight", "");
 
             Button delBtn = Button.builder(Component.literal("-"), b -> {
                 if (cfg.mobs.size() > 1) {
@@ -407,6 +428,7 @@ public final class TrialControlConfigScreen446 extends Screen {
                 }
             }).bounds(x + idW + pickW + weightW + 12, ry, delW, 18).build();
             addDyn(delBtn);
+            addTip("cfg:m_dl_" + s, delBtn, x + idW + pickW + weightW + 12, ry, delW, 18, "mob_del", "");
         }
     }
 
@@ -423,6 +445,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             rebuildView();
         }).bounds(x, topBtnY, 140, 18).build();
         addDyn(addBtn);
+        addTip("cfg:add_rew", addBtn, x, topBtnY, 140, 18, "add_reward", "");
 
         int listTop = bodyTop + 26;
         int vis = visibleRewardRows();
@@ -448,6 +471,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             idBox.setValue(entry.itemId);
             idBox.setResponder(val -> entry.itemId = val == null ? "" : val.trim());
             addDyn(idBox);
+            addTip("cfg:r_id_" + s, idBox, cx, ry, idW, 18, "rew_id", "");
             cx += idW + 4;
 
             Button pickBtn = Button.builder(
@@ -459,6 +483,7 @@ public final class TrialControlConfigScreen446 extends Screen {
                 rebuildView();
             }).bounds(cx, ry, pickW, 18).build();
             addDyn(pickBtn);
+            addTip("cfg:r_pk_" + s, pickBtn, cx, ry, pickW, 18, "rew_pick", "");
             cx += pickW + 4;
 
             EditBox minBox = new EditBox(font, cx, ry, minW, 18, Component.empty());
@@ -466,6 +491,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             minBox.setValue(Integer.toString(entry.minCount));
             minBox.setResponder(val -> entry.minCount = parseInt(val, entry.minCount, 1, 64));
             addDyn(minBox);
+            addTip("cfg:r_mn_" + s, minBox, cx, ry, minW, 18, "rew_min", "");
             cx += minW + 4;
 
             EditBox maxBox = new EditBox(font, cx, ry, maxW, 18, Component.empty());
@@ -473,6 +499,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             maxBox.setValue(Integer.toString(entry.maxCount));
             maxBox.setResponder(val -> entry.maxCount = parseInt(val, entry.maxCount, 1, 64));
             addDyn(maxBox);
+            addTip("cfg:r_mx_" + s, maxBox, cx, ry, maxW, 18, "rew_max", "");
             cx += maxW + 4;
 
             EditBox wgtBox = new EditBox(font, cx, ry, wgtW, 18, Component.empty());
@@ -480,6 +507,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             wgtBox.setValue(Integer.toString(entry.weight));
             wgtBox.setResponder(val -> entry.weight = parseInt(val, entry.weight, 1, 10000));
             addDyn(wgtBox);
+            addTip("cfg:r_wg_" + s, wgtBox, cx, ry, wgtW, 18, "rew_weight", "");
             cx += wgtW + 4;
 
             EditBox pctBox = new EditBox(font, cx, ry, pctW, 18, Component.empty());
@@ -487,6 +515,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             pctBox.setValue(Integer.toString(entry.chancePercent));
             pctBox.setResponder(val -> entry.chancePercent = parseInt(val, entry.chancePercent, 1, 100));
             addDyn(pctBox);
+            addTip("cfg:r_ch_" + s, pctBox, cx, ry, pctW, 18, "rew_chance", "");
             cx += pctW + 4;
 
             Button delBtn = Button.builder(Component.literal("-"), b -> {
@@ -494,6 +523,7 @@ public final class TrialControlConfigScreen446 extends Screen {
                 rebuildView();
             }).bounds(cx, ry, delW, 18).build();
             addDyn(delBtn);
+            addTip("cfg:r_dl_" + s, delBtn, cx, ry, delW, 18, "rew_del", "");
         }
     }
 
@@ -506,6 +536,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             rebuildView();
         }).bounds(panelX + panelW - 86, panelY + 6, 76, 18).build();
         addDyn(backBtn);
+        addTip("cfg:pk_back", backBtn, panelX + panelW - 86, panelY + 6, 76, 18, "picker_back", "");
 
         EditBox searchBox = new EditBox(font, x, panelY + 28, w, 18,
                 Component.translatable("gui.settledlands.trial.cfg.search"));
@@ -518,6 +549,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             refreshPickerData();
         });
         addDyn(searchBox);
+        addTip("cfg:pk_srch", searchBox, x, panelY + 28, w, 18, "picker_search", "");
         setInitialFocus(searchBox);
 
         pickerGridX = x;
@@ -600,6 +632,7 @@ public final class TrialControlConfigScreen446 extends Screen {
         box.setValue(initialValue == null ? "" : initialValue);
         box.setResponder(val -> setter.accept(val == null ? "" : val));
         addDyn(box);
+        addTip("cfg:fld_" + labelKey, box, x, y, colW, 18, "field", labelKey);
     }
 
     private int visibleMobRows() {
@@ -643,6 +676,9 @@ public final class TrialControlConfigScreen446 extends Screen {
         } else if (viewMode == VIEW_ITEM_PICKER) {
             renderItemPicker(graphics, mouseX, mouseY);
         }
+
+        GraphTooltips448.renderConfigTooltip(this, graphics, this.font, this.width, this.height,
+                mouseX, mouseY, this.tipAreas448, this.cfg, "");
     }
 
     private void renderMainLabels(GuiGraphics graphics) {
@@ -732,6 +768,7 @@ public final class TrialControlConfigScreen446 extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        GraphTooltips448.onMouseClick();
         if (button == 0 && viewMode == VIEW_MOB_PICKER) {
             int colW = (pickerGridW - 6) / 2;
             int start = pickerScroll * 2;

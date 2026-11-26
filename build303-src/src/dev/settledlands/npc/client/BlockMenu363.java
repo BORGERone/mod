@@ -4,7 +4,6 @@ import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.TeleportNode424;
 import dev.settledlands.trial.TrialControlNode446;
-import dev.settledlands.trial.TrialModule447;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -154,10 +153,13 @@ public final class BlockMenu363 {
      * How many rows this menu has. Build 424 appends Teleport after the stock rows
      * ({@code rows().length}), Build 446 appends Trial Spawner control ({@code rows().length + 1}),
      * and Build 436 appends «Пул предметов» when in chest editor mode ({@code rows().length + 2}).
+     *
+     * <p>Build 448: Trial Spawner modules are no longer listed in this right-click palette because
+     * the Trial hub's «Восстановить модули» button already creates and attaches any missing module
+     * slots cleanly.</p>
      */
     public static int count() {
-        int base = rows().length + (chest ? 3 : 2);
-        return trial ? base + TrialModule447.MODULE_COUNT : base;
+        return rows().length + (chest ? 3 : 2);
     }
 
     /** True when {@code compact} is the Teleport row appended after the stock block rows. */
@@ -175,12 +177,9 @@ public final class BlockMenu363 {
         return chest && compact == rows().length + 2;
     }
 
-    /** Build 447: module slot (0..7) when in trial spawner editor mode, or -1. */
+    /** Build 448: modules were removed from the RMB create menu (use «Восстановить модули»). */
     public static int trialModuleSlot(int compact) {
-        if (!trial) return -1;
-        int start = rows().length + 2;
-        int idx = compact - start;
-        return idx >= 0 && idx < TrialModule447.MODULE_COUNT ? idx : -1;
+        return -1;
     }
 
     /**
@@ -210,10 +209,6 @@ public final class BlockMenu363 {
         if (isLootPoolRow(compact)) {
             return Component.translatable(LootPool436.MENU_LABEL_KEY).getString();
         }
-        int modSlot = trialModuleSlot(compact);
-        if (modSlot >= 0) {
-            return Component.translatable(TrialModule447.menuKey(modSlot)).getString();
-        }
         int stock = stockRow(compact);
         return stock < 0 ? "" : Component.translatable(LABEL_KEYS[stock]).getString();
     }
@@ -228,10 +223,6 @@ public final class BlockMenu363 {
         }
         if (isLootPoolRow(compact)) {
             return LootPool436.ACCENT_COLOR;
-        }
-        int modSlot = trialModuleSlot(compact);
-        if (modSlot >= 0) {
-            return TrialModule447.color(modSlot);
         }
         int stock = stockRow(compact);
         if (stock < 0) return LABEL;

@@ -1,0 +1,1 @@
+6fbd8a83cfde7384783e1010d56528dad37d3fa8a2c04e9df585e99d9165ff68  settledlands-0.8.0-build448-card-descriptions-and-hover-tooltips.jar

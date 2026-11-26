@@ -81,10 +81,12 @@ public final class LootPoolCard436 {
     }
 
     public static AbstractWidget gearButton(int x, int y, NpcDialogueGraphScreen screen, Node node) {
-        return new LootPoolGearButton440(
+        AbstractWidget btn = new LootPoolGearButton440(
                 x, y, 20, 20,
                 Component.translatable("gui.settledlands.loot_pool.edit_btn_tip"),
                 () -> openPoolEditor(screen, node, LootPool436.poolFileOf(node)));
+        GraphTooltips448.recordGearButton(btn, x, y, 20, 20);
+        return btn;
     }
 
     public static void openPoolEditor(NpcDialogueGraphScreen screen, Node node, String poolFile) {

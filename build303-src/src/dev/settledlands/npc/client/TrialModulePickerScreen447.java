@@ -82,6 +82,7 @@ public final class TrialModulePickerScreen447 extends Screen {
     private int bodyBottom;
 
     private final List<AbstractWidget> dynamicWidgets = new ArrayList<>();
+    private final List<GraphTooltips448.ConfigArea> tipAreas448 = new ArrayList<>();
     private List<MobOption> allMobs;
     private final List<MobOption> filteredMobs = new ArrayList<>();
     private final List<ItemStack> filteredItems = new ArrayList<>();
@@ -152,6 +153,7 @@ public final class TrialModulePickerScreen447 extends Screen {
             removeWidget(dynamicWidgets.get(i));
         }
         dynamicWidgets.clear();
+        tipAreas448.clear();
         statusText = "";
 
         if (viewMode == VIEW_MOB_PICKER || viewMode == VIEW_ITEM_PICKER) {
@@ -163,10 +165,17 @@ public final class TrialModulePickerScreen447 extends Screen {
         } else {
             buildRewardPoolView();
         }
-        addDyn(Button.builder(Component.translatable("gui.settledlands.trial.mod.done"), b -> {
+        AbstractWidget doneBtn = Button.builder(Component.translatable("gui.settledlands.trial.mod.done"), b -> {
             commitToNode();
             returnToParent();
-        }).bounds(panelX + panelW - 96, panelY + panelH - 26, 84, 18).build());
+        }).bounds(panelX + panelW - 96, panelY + panelH - 26, 84, 18).build();
+        addDyn(doneBtn);
+        addTip("mp:done", doneBtn, panelX + panelW - 96, panelY + panelH - 26, 84, 18, "done", "");
+    }
+
+    private void addTip(String slotId, Object w, int x, int y, int width, int height,
+            String tag, String arg) {
+        tipAreas448.add(new GraphTooltips448.ConfigArea(slotId, w, x, y, width, height, tag, arg));
     }
 
     private void addDyn(AbstractWidget w) {
@@ -179,22 +188,26 @@ public final class TrialModulePickerScreen447 extends Screen {
         int w = panelW - 24;
         int topBtnY = bodyTop + 2;
 
-        addDyn(Button.builder(Component.translatable("gui.settledlands.trial.cfg.add_mob"), b -> {
+        AbstractWidget addM = Button.builder(Component.translatable("gui.settledlands.trial.cfg.add_mob"), b -> {
             mobs.add(new TrialConfig446.SpawnEntry("minecraft:zombie", 1));
             int vis = visibleRows();
             listScroll = Math.max(0, mobs.size() - vis);
             commitToNode();
             rebuildView();
-        }).bounds(x, topBtnY, 136, 18).build());
+        }).bounds(x, topBtnY, 136, 18).build();
+        addDyn(addM);
+        addTip("mp:add_mob", addM, x, topBtnY, 136, 18, "add_mob", "");
 
-        addDyn(Button.builder(Component.translatable("gui.settledlands.trial.mod.pick_catalog"), b -> {
+        AbstractWidget catM = Button.builder(Component.translatable("gui.settledlands.trial.mod.pick_catalog"), b -> {
             pickerRow = -1;
             pickerQuery = "";
             pickerScroll = 0;
             returnToList = true;
             viewMode = VIEW_MOB_PICKER;
             rebuildView();
-        }).bounds(x + 142, topBtnY, 150, 18).build());
+        }).bounds(x + 142, topBtnY, 150, 18).build();
+        addDyn(catM);
+        addTip("mp:cat_mob", catM, x + 142, topBtnY, 150, 18, "mob_pick", "");
 
         int listTop = bodyTop + 26;
         int vis = visibleRows();
@@ -219,15 +232,18 @@ public final class TrialModulePickerScreen447 extends Screen {
                 commitToNode();
             });
             addDyn(idBox);
+            addTip("mp:mid_" + s, idBox, x, ry, idW, 18, "mob_id", "");
 
-            addDyn(Button.builder(Component.translatable("gui.settledlands.trial.cfg.pick"), b -> {
+            AbstractWidget pkM = Button.builder(Component.translatable("gui.settledlands.trial.cfg.pick"), b -> {
                 pickerRow = idx;
                 pickerQuery = "";
                 pickerScroll = 0;
                 returnToList = true;
                 viewMode = VIEW_MOB_PICKER;
                 rebuildView();
-            }).bounds(x + idW + 4, ry, pickW, 18).build());
+            }).bounds(x + idW + 4, ry, pickW, 18).build();
+            addDyn(pkM);
+            addTip("mp:mpk_" + s, pkM, x + idW + 4, ry, pickW, 18, "mob_pick", "");
 
             EditBox wgtBox = new EditBox(font, x + idW + pickW + 8, ry, weightW, 18, Component.empty());
             wgtBox.setMaxLength(8);
@@ -237,8 +253,9 @@ public final class TrialModulePickerScreen447 extends Screen {
                 commitToNode();
             });
             addDyn(wgtBox);
+            addTip("mp:mwg_" + s, wgtBox, x + idW + pickW + 8, ry, weightW, 18, "mob_weight", "");
 
-            addDyn(Button.builder(Component.literal("-"), b -> {
+            AbstractWidget dlM = Button.builder(Component.literal("-"), b -> {
                 if (mobs.size() > 1) {
                     mobs.remove(idx);
                     commitToNode();
@@ -247,7 +264,9 @@ public final class TrialModulePickerScreen447 extends Screen {
                     statusText = Component.translatable("gui.settledlands.trial.cfg.keep_one_mob").getString();
                     statusColor = 0xFFFFB048;
                 }
-            }).bounds(x + idW + pickW + weightW + 12, ry, delW, 18).build());
+            }).bounds(x + idW + pickW + weightW + 12, ry, delW, 18).build();
+            addDyn(dlM);
+            addTip("mp:mdl_" + s, dlM, x + idW + pickW + weightW + 12, ry, delW, 18, "mob_del", "");
         }
     }
 
@@ -256,22 +275,26 @@ public final class TrialModulePickerScreen447 extends Screen {
         int w = panelW - 24;
         int topBtnY = bodyTop + 2;
 
-        addDyn(Button.builder(Component.translatable("gui.settledlands.trial.cfg.add_reward"), b -> {
+        AbstractWidget addR = Button.builder(Component.translatable("gui.settledlands.trial.cfg.add_reward"), b -> {
             rewards.add(new TrialConfig446.RewardEntry("minecraft:emerald", 1, 1, 3, 100));
             int vis = visibleRows();
             listScroll = Math.max(0, rewards.size() - vis);
             commitToNode();
             rebuildView();
-        }).bounds(x, topBtnY, 136, 18).build());
+        }).bounds(x, topBtnY, 136, 18).build();
+        addDyn(addR);
+        addTip("mp:add_rew", addR, x, topBtnY, 136, 18, "add_reward", "");
 
-        addDyn(Button.builder(Component.translatable("gui.settledlands.trial.mod.pick_catalog"), b -> {
+        AbstractWidget catR = Button.builder(Component.translatable("gui.settledlands.trial.mod.pick_catalog"), b -> {
             pickerRow = -1;
             pickerQuery = "";
             pickerScroll = 0;
             returnToList = true;
             viewMode = VIEW_ITEM_PICKER;
             rebuildView();
-        }).bounds(x + 142, topBtnY, 150, 18).build());
+        }).bounds(x + 142, topBtnY, 150, 18).build();
+        addDyn(catR);
+        addTip("mp:cat_rew", catR, x + 142, topBtnY, 150, 18, "rew_pick", "");
 
         int listTop = bodyTop + 26;
         int vis = visibleRows();
@@ -301,16 +324,19 @@ public final class TrialModulePickerScreen447 extends Screen {
                 commitToNode();
             });
             addDyn(idBox);
+            addTip("mp:rid_" + s, idBox, cx, ry, idW, 18, "rew_id", "");
             cx += idW + 4;
 
-            addDyn(Button.builder(Component.translatable("gui.settledlands.trial.cfg.pick"), b -> {
+            AbstractWidget pkR = Button.builder(Component.translatable("gui.settledlands.trial.cfg.pick"), b -> {
                 pickerRow = idx;
                 pickerQuery = "";
                 pickerScroll = 0;
                 returnToList = true;
                 viewMode = VIEW_ITEM_PICKER;
                 rebuildView();
-            }).bounds(cx, ry, pickW, 18).build());
+            }).bounds(cx, ry, pickW, 18).build();
+            addDyn(pkR);
+            addTip("mp:rpk_" + s, pkR, cx, ry, pickW, 18, "rew_pick", "");
             cx += pickW + 4;
 
             EditBox minBox = new EditBox(font, cx, ry, minW, 18, Component.empty());
@@ -321,6 +347,7 @@ public final class TrialModulePickerScreen447 extends Screen {
                 commitToNode();
             });
             addDyn(minBox);
+            addTip("mp:rmn_" + s, minBox, cx, ry, minW, 18, "rew_min", "");
             cx += minW + 4;
 
             EditBox maxBox = new EditBox(font, cx, ry, maxW, 18, Component.empty());
@@ -331,6 +358,7 @@ public final class TrialModulePickerScreen447 extends Screen {
                 commitToNode();
             });
             addDyn(maxBox);
+            addTip("mp:rmx_" + s, maxBox, cx, ry, maxW, 18, "rew_max", "");
             cx += maxW + 4;
 
             EditBox wgtBox = new EditBox(font, cx, ry, wgtW, 18, Component.empty());
@@ -341,6 +369,7 @@ public final class TrialModulePickerScreen447 extends Screen {
                 commitToNode();
             });
             addDyn(wgtBox);
+            addTip("mp:rwg_" + s, wgtBox, cx, ry, wgtW, 18, "rew_weight", "");
             cx += wgtW + 4;
 
             EditBox pctBox = new EditBox(font, cx, ry, pctW, 18, Component.empty());
@@ -351,27 +380,32 @@ public final class TrialModulePickerScreen447 extends Screen {
                 commitToNode();
             });
             addDyn(pctBox);
+            addTip("mp:rch_" + s, pctBox, cx, ry, pctW, 18, "rew_chance", "");
             cx += pctW + 4;
 
-            addDyn(Button.builder(Component.literal("-"), b -> {
+            AbstractWidget dlR = Button.builder(Component.literal("-"), b -> {
                 rewards.remove(idx);
                 commitToNode();
                 rebuildView();
-            }).bounds(cx, ry, delW, 18).build());
+            }).bounds(cx, ry, delW, 18).build();
+            addDyn(dlR);
+            addTip("mp:rdl_" + s, dlR, cx, ry, delW, 18, "rew_del", "");
         }
     }
 
     private void buildPickerView() {
         int x = panelX + 10;
         int w = panelW - 20;
-        addDyn(Button.builder(Component.translatable("gui.settledlands.trial.cfg.back"), b -> {
+        AbstractWidget backBtn = Button.builder(Component.translatable("gui.settledlands.trial.cfg.back"), b -> {
             if (directPickerOnly || !returnToList) {
                 returnToParent();
             } else {
                 viewMode = slot == TrialModule447.SLOT_REWARDS ? VIEW_REWARD_POOL : VIEW_MOB_POOL;
                 rebuildView();
             }
-        }).bounds(panelX + panelW - 86, panelY + 6, 76, 18).build());
+        }).bounds(panelX + panelW - 86, panelY + 6, 76, 18).build();
+        addDyn(backBtn);
+        addTip("mp:pk_back", backBtn, panelX + panelW - 86, panelY + 6, 76, 18, "picker_back", "");
 
         EditBox searchBox = new EditBox(font, x, panelY + 28, w, 18,
                 Component.translatable("gui.settledlands.trial.cfg.search"));
@@ -384,6 +418,7 @@ public final class TrialModulePickerScreen447 extends Screen {
             refreshPickerData();
         });
         addDyn(searchBox);
+        addTip("mp:pk_srch", searchBox, x, panelY + 28, w, 18, "picker_search", "");
         setInitialFocus(searchBox);
 
         pickerGridX = x;
@@ -523,6 +558,9 @@ public final class TrialModulePickerScreen447 extends Screen {
         } else if (viewMode == VIEW_ITEM_PICKER) {
             renderItemPicker(graphics, mouseX, mouseY);
         }
+
+        GraphTooltips448.renderConfigTooltip(this, graphics, this.font, this.width, this.height,
+                mouseX, mouseY, this.tipAreas448, null, "");
     }
 
     private void renderMobPicker(GuiGraphics graphics, int mouseX, int mouseY) {
@@ -573,6 +611,7 @@ public final class TrialModulePickerScreen447 extends Screen {
 
     @Override
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
+        GraphTooltips448.onMouseClick();
         if (button == 0 && viewMode == VIEW_MOB_PICKER) {
             int colW = (pickerGridW - 6) / 2;
             int start = pickerScroll * 2;
