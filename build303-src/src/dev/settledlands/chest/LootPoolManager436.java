@@ -42,19 +42,19 @@ public final class LootPoolManager436 {
     private static final Set<String> WARNED = Collections.synchronizedSet(new HashSet<>());
     private static final String GUIDE_FILE = "README_FORMAT.txt.disabled";
     private static final String GUIDE_TEXT =
-            "# SettledLands Build 441 - Loot Pools Guide / Справка по пулам предметов\n"
+            "# SettledLands Build 445 - Loot Pools Guide / Справка по пулам предметов\n"
             + "# Put your .txt pool files in this directory: config/settledlands/loot_pools/<name>.txt\n"
             + "# Format per line (columns separated by '|'):\n"
-            + "#   item_id | rarity_chance | weight | [count or min-max]\n"
+            + "#   item_id | chance_pct | weight | [count or min-max]\n"
             + "#\n"
-            + "# rarity_chance: relative drop chance (like CS:GO cases; % = rarity / sum(rarity))\n"
+            + "# chance_pct: direct 0-100% chance per container (each row tested once, no duplicates beyond count)\n"
             + "# weight: crate capacity weight of this drop (e.g. crate weight 40 fits 2x weight 20 or 4x weight 10)\n"
             + "#\n"
             + "# Examples (create your own .txt file with lines like these):\n"
             + "#   minecraft:cooked_beef | 60 | 10 | 2-6\n"
             + "#   minecraft:iron_ingot  | 30 | 15 | 1-4\n"
             + "#   minecraft:diamond     | 10 | 20 | 1\n"
-            + "#   minecraft:iron_sword  | 15 | 20 | 1\n";
+            + "#   settledlands:book/my_book | 50 | 10 | 1\n";
 
     private LootPoolManager436() {}
 
@@ -349,9 +349,9 @@ public final class LootPoolManager436 {
     }
 
     /**
-     * Build 443/444: populates a lectern (non-{@link Container}) with at most 1 book rolled against
-     * the FULL loot pool (non-book drops result in an empty lectern rather than forcing books to 100%)
-     * and updates {@link LecternBlock#HAS_BOOK}.
+     * Build 443/445: populates a lectern (non-{@link Container}) with at most 1 book rolled by
+     * direct {@code 0..100%} per-entry chances on lectern-compatible entries (when no book wins its
+     * percentage roll, the lectern stays empty) and updates {@link LecternBlock#HAS_BOOK}.
      */
     private static int populateLectern(ServerLevel level, BlockPos pos, LecternBlockEntity lectern,
             List<NpcDialogueGraph.Node> poolNodes, Random rnd) {

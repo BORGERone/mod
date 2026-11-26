@@ -174,13 +174,13 @@ public final class Build436Probe {
         Random rnd = new Random(436L);
 
         // 1. Strict rarity<=30, crate weight<=90: excludes mod:rare (rarity 80) and mod:heavy_cheap (weight 120)
-        //    Selection chance is weighted by rarity (25 vs 5 -> common ~5x more often than uncommon).
+        //    Build 445 direct % without duplicate draws per entry: common (25%) drops ~5x more often than uncommon (5%).
         LootPool436.Parsed strict = new LootPool436.Parsed("p.txt", "30", "90", "5");
         int commonCnt = 0;
         int uncommonCnt = 0;
         for (int trial = 0; trial < 400; trial++) {
             List<LootPool436.Drop> drops = LootPool436.rollDrops(pool, strict, rnd);
-            check(drops.size() == 5, "fixed 5 drops fit within crate weight 90");
+            check(drops.size() <= 2, "no duplicate draws beyond 2 eligible entries");
             double usedWeight = 0.0D;
             for (LootPool436.Drop d : drops) {
                 check(!"mod:rare".equals(d.itemId), "rarity > cap never drops");
@@ -197,8 +197,8 @@ public final class Build436Probe {
             }
             check(usedWeight <= 90.0D + 1e-6D, "total crate weight never exceeds 90");
         }
-        check(commonCnt > uncommonCnt * 2, "rarity-weighted roll heavily favors rarity 25 over 5 ("
-                + commonCnt + " vs " + uncommonCnt + ")");
+        check(commonCnt > uncommonCnt * 2 && commonCnt >= 70 && uncommonCnt >= 8,
+                "direct % roll favors rarity 25 over 5 (" + commonCnt + " vs " + uncommonCnt + ")");
 
         // 2. Range caps + range rolls
         LootPool436.Parsed ranged = new LootPool436.Parsed("p.txt", "20-90", "10-100", "2-4");
@@ -210,13 +210,17 @@ public final class Build436Probe {
             }
         }
 
-        // 3. Guaranteed range rolls when crate fits 4 lightweight items inside min weight 10
+        // 3. Guaranteed range rolls when crate holds 4 distinct 100%-chance lightweight entries inside min weight 10
         List<LootPool436.PoolEntry> guaranteedPool = Arrays.asList(
-                new LootPool436.PoolEntry("mod:always_fits", 5, 2.0, 1, 1),
+                new LootPool436.PoolEntry("mod:always_fits_1", 100, 2.0, 1, 1),
+                new LootPool436.PoolEntry("mod:always_fits_2", 100, 2.0, 1, 1),
+                new LootPool436.PoolEntry("mod:always_fits_3", 100, 2.0, 1, 1),
+                new LootPool436.PoolEntry("mod:always_fits_4", 100, 2.0, 1, 1),
                 new LootPool436.PoolEntry("mod:heavy", 15, 120.0, 1, 1)
         );
+        LootPool436.Parsed guaranteedSpec = new LootPool436.Parsed("p.txt", "100", "10-100", "2-4");
         for (int trial = 0; trial < 200; trial++) {
-            List<LootPool436.Drop> drops = LootPool436.rollDrops(guaranteedPool, ranged, rnd);
+            List<LootPool436.Drop> drops = LootPool436.rollDrops(guaranteedPool, guaranteedSpec, rnd);
             check(drops.size() >= 2 && drops.size() <= 4, "guaranteed ranged rolls stay inside [2,4]");
         }
     }

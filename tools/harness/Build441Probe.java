@@ -58,28 +58,43 @@ public final class Build441Probe {
 
     private static void testCrateWeightCapacityLimits() {
         Random rnd = new Random(44101L);
+        LootPool436.Parsed crate40UnlimitedRolls = new LootPool436.Parsed("p.txt", "", "40", "");
 
-        // User's exact example 1: crate weight 40, swords weight 20 -> exactly 2 swords fit.
-        List<LootPool436.PoolEntry> swordsOnly = Collections.singletonList(
+        // Single row with count=1 never duplicates itself; 4 distinct sword rows with weight=20 fit 2 inside crate 40.
+        List<LootPool436.PoolEntry> singleSword = Collections.singletonList(
                 new LootPool436.PoolEntry("minecraft:iron_sword", 100.0D, 20.0D, 1, 1)
         );
-        LootPool436.Parsed crate40UnlimitedRolls = new LootPool436.Parsed("p.txt", "", "40", "");
-        List<LootPool436.Drop> swordDrops = LootPool436.rollDrops(swordsOnly, crate40UnlimitedRolls, rnd);
+        check(LootPool436.rollDrops(singleSword, crate40UnlimitedRolls, rnd).size() == 1,
+                "single sword entry (count=1) drops at most once without duplicating");
+
+        List<LootPool436.PoolEntry> fourSwords = Arrays.asList(
+                new LootPool436.PoolEntry("minecraft:iron_sword", 100.0D, 20.0D, 1, 1),
+                new LootPool436.PoolEntry("minecraft:golden_sword", 100.0D, 20.0D, 1, 1),
+                new LootPool436.PoolEntry("minecraft:diamond_sword", 100.0D, 20.0D, 1, 1),
+                new LootPool436.PoolEntry("minecraft:stone_sword", 100.0D, 20.0D, 1, 1)
+        );
+        List<LootPool436.Drop> swordDrops = LootPool436.rollDrops(fourSwords, crate40UnlimitedRolls, rnd);
         check(swordDrops.size() == 2, "crate weight 40 fits exactly 2 swords of weight 20 (got "
                 + swordDrops.size() + ")");
 
-        // User's exact example 2: crate weight 40, books weight 10 -> exactly 4 books fit.
-        List<LootPool436.PoolEntry> booksOnly = Collections.singletonList(
-                new LootPool436.PoolEntry("minecraft:book", 100.0D, 10.0D, 1, 1)
+        // 5 distinct books of weight 10 inside crate weight 40 -> exactly 4 books fit.
+        List<LootPool436.PoolEntry> fiveBooks = Arrays.asList(
+                new LootPool436.PoolEntry("settledlands:book/b1", 100.0D, 10.0D, 1, 1),
+                new LootPool436.PoolEntry("settledlands:book/b2", 100.0D, 10.0D, 1, 1),
+                new LootPool436.PoolEntry("settledlands:book/b3", 100.0D, 10.0D, 1, 1),
+                new LootPool436.PoolEntry("settledlands:book/b4", 100.0D, 10.0D, 1, 1),
+                new LootPool436.PoolEntry("settledlands:book/b5", 100.0D, 10.0D, 1, 1)
         );
-        List<LootPool436.Drop> bookDrops = LootPool436.rollDrops(booksOnly, crate40UnlimitedRolls, rnd);
+        List<LootPool436.Drop> bookDrops = LootPool436.rollDrops(fiveBooks, crate40UnlimitedRolls, rnd);
         check(bookDrops.size() == 4, "crate weight 40 fits exactly 4 books of weight 10 (got "
                 + bookDrops.size() + ")");
 
-        // Mixed pool with crate weight 40: heavy items cannot overflow 40; remainder fills with light items.
+        // Mixed pool with crate weight 40: heavy items cannot overflow 40; light items stay within 40.
         List<LootPool436.PoolEntry> mixed = Arrays.asList(
                 new LootPool436.PoolEntry("minecraft:iron_sword", 50.0D, 20.0D, 1, 1),
-                new LootPool436.PoolEntry("minecraft:book", 50.0D, 10.0D, 1, 1),
+                new LootPool436.PoolEntry("minecraft:golden_sword", 50.0D, 20.0D, 1, 1),
+                new LootPool436.PoolEntry("minecraft:book", 80.0D, 10.0D, 1, 1),
+                new LootPool436.PoolEntry("minecraft:paper", 80.0D, 10.0D, 1, 1),
                 new LootPool436.PoolEntry("minecraft:netherite_block", 25.0D, 45.0D, 1, 1) // too heavy for 40
         );
         int hitFull40 = 0;
@@ -89,9 +104,9 @@ public final class Build441Probe {
             for (LootPool436.Drop d : drops) {
                 check(!"minecraft:netherite_block".equals(d.itemId),
                         "weight 45 never fits inside crate capacity 40");
-                sumW += "minecraft:iron_sword".equals(d.itemId) ? 20.0D : 10.0D;
+                sumW += (d.itemId.endsWith("_sword")) ? 20.0D : 10.0D;
             }
-            check(sumW > 0.0D && sumW <= 40.0D + 1e-6D,
+            check(sumW <= 40.0D + 1e-6D,
                     "mixed crate never exceeds capacity 40 (got " + sumW + ")");
             if (Math.abs(sumW - 40.0D) < 1e-6D) hitFull40++;
         }
@@ -99,15 +114,14 @@ public final class Build441Probe {
 
         // Crate weight 40 + explicit rolls cap 3 -> stops at 3 drops or weight 40 (whichever hits first)
         LootPool436.Parsed crate40Cap3 = new LootPool436.Parsed("p.txt", "", "40", "3");
-        List<LootPool436.Drop> cappedBooks = LootPool436.rollDrops(booksOnly, crate40Cap3, rnd);
+        List<LootPool436.Drop> cappedBooks = LootPool436.rollDrops(fiveBooks, crate40Cap3, rnd);
         check(cappedBooks.size() == 3, "explicit rolls=3 stops at 3 books even when crate holds 40");
-        List<LootPool436.Drop> cappedSwords = LootPool436.rollDrops(swordsOnly, crate40Cap3, rnd);
+        List<LootPool436.Drop> cappedSwords = LootPool436.rollDrops(fourSwords, crate40Cap3, rnd);
         check(cappedSwords.size() == 2, "crate weight=40 stops at 2 swords even when rolls=3");
     }
 
     private static void testRarityDrivenCaseProbabilities() {
-        // CS:GO-style case weights in rarity column; weight column intentionally equal/irrelevant to chance
-        // because crate capacity is blank (unbounded).
+        // Direct percentage per entry: each tier drops independently at its exact % rate.
         List<LootPool436.PoolEntry> csCase = Arrays.asList(
                 new LootPool436.PoolEntry("case:blue", 79.92D, 10.0D, 1, 1),
                 new LootPool436.PoolEntry("case:purple", 15.98D, 50.0D, 1, 1),
@@ -116,14 +130,16 @@ public final class Build441Probe {
                 new LootPool436.PoolEntry("case:gold", 0.26D, 1.0D, 1, 1)
         );
         Random rnd = new Random(44102L);
-        LootPool436.Parsed spec = new LootPool436.Parsed("case.txt", "", "", "1");
+        LootPool436.Parsed spec = new LootPool436.Parsed("case.txt", "", "", "5");
 
         Map<String, Integer> counts = new HashMap<>();
         int trials = 20_000;
         for (int i = 0; i < trials; i++) {
             List<LootPool436.Drop> d = LootPool436.rollDrops(csCase, spec, rnd);
-            check(d.size() == 1, "1 drop per case opening");
-            counts.merge(d.get(0).itemId, 1, Integer::sum);
+            check(d.size() <= 5, "no more than 5 distinct drops");
+            for (LootPool436.Drop drop : d) {
+                counts.merge(drop.itemId, 1, Integer::sum);
+            }
         }
         int blue = counts.getOrDefault("case:blue", 0);
         int purple = counts.getOrDefault("case:purple", 0);
@@ -131,30 +147,32 @@ public final class Build441Probe {
         int red = counts.getOrDefault("case:red", 0);
         int gold = counts.getOrDefault("case:gold", 0);
 
-        check(blue > 15_000 && blue < 17_000, "blue (~79.92%) count in expected range: " + blue);
-        check(purple > 2_800 && purple < 3_600, "purple (~15.98%) count in expected range: " + purple);
-        check(pink > 500 && pink < 820, "pink (~3.2%) count in expected range: " + pink);
+        check(blue > 15_500 && blue < 16_500, "blue (~79.92%) count in expected range: " + blue);
+        check(purple > 2_900 && purple < 3_500, "purple (~15.98%) count in expected range: " + purple);
+        check(pink > 520 && pink < 780, "pink (~3.2%) count in expected range: " + pink);
         check(red > 70 && red < 200, "red (~0.64%) count in expected range: " + red);
         check(gold > 15 && gold < 100 && gold < red, "gold (~0.26%) rarest drop: " + gold);
         check(blue > purple && purple > pink && pink > red && red > gold,
-                "strict probability ordering driven by rarity (" + blue + " > " + purple + " > "
+                "strict direct-% ordering (" + blue + " > " + purple + " > "
                         + pink + " > " + red + " > " + gold + ")");
 
-        // When crate capacity is unbounded and book rarity=80 vs sword rarity=20 (even if book weight=30
-        // and sword weight=1), rarity strictly decides 80% vs 20%.
+        // Book rarity=80 vs sword rarity=20 regardless of weight (when crate capacity unbounded)
         List<LootPool436.PoolEntry> bookVsSword = Arrays.asList(
                 new LootPool436.PoolEntry("minecraft:book", 80.0D, 30.0D, 1, 1),
                 new LootPool436.PoolEntry("minecraft:iron_sword", 20.0D, 1.0D, 1, 1)
         );
+        LootPool436.Parsed spec2 = new LootPool436.Parsed("case.txt", "", "", "2");
         int books = 0;
         int swords = 0;
         for (int i = 0; i < 4000; i++) {
-            List<LootPool436.Drop> d = LootPool436.rollDrops(bookVsSword, spec, rnd);
-            if ("minecraft:book".equals(d.get(0).itemId)) books++;
-            else swords++;
+            List<LootPool436.Drop> d = LootPool436.rollDrops(bookVsSword, spec2, rnd);
+            for (LootPool436.Drop drop : d) {
+                if ("minecraft:book".equals(drop.itemId)) books++;
+                else swords++;
+            }
         }
-        check(books > 3000 && swords > 650 && books > swords * 3,
-                "rarity 80 beats rarity 20 regardless of item weight (" + books + " vs " + swords + ")");
+        check(books > 3000 && books < 3400 && swords > 650 && swords < 950 && books > swords * 3,
+                "direct 80% beats 20% regardless of item weight (" + books + " vs " + swords + ")");
     }
 
     private static void testFractionalRarityPersistenceAndWire() throws Exception {

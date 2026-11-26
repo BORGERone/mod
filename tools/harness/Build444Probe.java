@@ -395,9 +395,9 @@ public final class Build444Probe {
             }
         }
         double lecRate = lecternHits / (double) trials;
-        // Expected: 50 / 75 = 66.67%
-        req(lecRate >= 0.635D && lecRate <= 0.698D,
-                "lectern rate matches 66.7% pool chance (not 100%!), got " + lecRate);
+        // Direct %: necronomicon has rarity 50 -> exact 50% chance on lectern
+        req(lecRate >= 0.475D && lecRate <= 0.525D,
+                "lectern rate matches direct 50% pool chance, got " + lecRate);
 
         int shelfTotal = 0;
         int shelfMaxSeen = 0;
@@ -406,7 +406,7 @@ public final class Build444Probe {
             List<LootPool436.Drop> d = LootPool436.rollBookshelfDrops(
                     screenshotPool, nodeRolls3, 6,
                     id -> CustomBookManager443.isValidForChiseledBookshelf(id, true), rnd);
-            req(d.size() <= 3, "bookshelf with Шт=3 NEVER exceeds 3 books, got " + d.size());
+            req(d.size() <= 1, "single book entry with count=1 NEVER duplicates on shelf, got " + d.size());
             for (LootPool436.Drop drop : d) {
                 req("settledlands:book/necronomicon".equals(drop.itemId) && drop.count == 1,
                         "bookshelf drop is strictly 1 book");
@@ -416,11 +416,10 @@ public final class Build444Probe {
             if (d.isEmpty()) shelfZeroSeen++;
         }
         double shelfAvg = shelfTotal / (double) trials;
-        // Expected: 3 * (50/75) = 2.00
-        req(shelfMaxSeen == 3 && shelfZeroSeen > 200 && shelfAvg >= 1.90D && shelfAvg <= 2.10D,
-                "bookshelf avg ~2.0, zero-misses > 0, never > 3 (avg=" + shelfAvg + ")");
+        req(shelfMaxSeen == 1 && shelfZeroSeen > 4500 && shelfAvg >= 0.475D && shelfAvg <= 0.525D,
+                "bookshelf spawns 1 book ~50% of the time and 0 otherwise (avg=" + shelfAvg + ")");
 
-        // 2) 50/50 mixed pool on lectern -> ~50% (NOT 87.5%, NOT 100%)
+        // 2) 50/50 mixed pool on lectern -> ~50% direct book chance
         List<LootPool436.PoolEntry> fiftyFifty = Arrays.asList(
                 new LootPool436.PoolEntry("minecraft:iron_block", 50.0D, 10.0D, 1, 1),
                 new LootPool436.PoolEntry("settledlands:book/necronomicon", 50.0D, 10.0D, 1, 1));
@@ -434,7 +433,7 @@ public final class Build444Probe {
         req(ffRate >= 0.475D && ffRate <= 0.525D,
                 "50/50 pool on lectern with default Шт=3 spawns ~50%, got " + ffRate);
 
-        // 3) Single-book pool with node Редк.<= 0-100 on lectern -> ~50%
+        // 3) Single-book pool (50%) with node Редк.<= 0-100 on lectern -> (51/101)*50% ~= 25.25%
         List<LootPool436.PoolEntry> soloBook50 = Collections.singletonList(
                 new LootPool436.PoolEntry("settledlands:book/necronomicon", 50.0D, 10.0D, 1, 1));
         LootPool436.Parsed rarity0to100 = new LootPool436.Parsed("solo.txt", "0-100", "", "3");
@@ -446,8 +445,8 @@ public final class Build444Probe {
             }
         }
         double rarRate = rarHits / (double) trials;
-        req(rarRate >= 0.475D && rarRate <= 0.525D,
-                "Редк.<= 0-100 with R=50 book on lectern gives ~50%, got " + rarRate);
+        req(rarRate >= 0.23D && rarRate <= 0.275D,
+                "Редк.<= 0-100 with 50% book on lectern gives ~25.25%, got " + rarRate);
 
         // 4) Edge roll ranges: Шт=0, Шт=0-1
         LootPool436.Parsed zeroRolls = new LootPool436.Parsed("solo.txt", "", "", "0");
@@ -462,9 +461,9 @@ public final class Build444Probe {
             if (!LootPool436.rollLecternDrops(soloBook50, zeroOneRolls, id -> true, rnd).isEmpty()) z1Hits++;
         }
         double z1Rate = z1Hits / 4000.0D;
-        req(z1Rate >= 0.45D && z1Rate <= 0.55D, "Шт=0-1 gives ~50% on lectern, got " + z1Rate);
+        req(z1Rate >= 0.22D && z1Rate <= 0.28D, "Шт=0-1 gives ~25% on 50% lectern book, got " + z1Rate);
 
-        // 5) Full world/BE integration: stacked book count 2-6 with Шт=3 NEVER fills all 6 slots!
+        // 5) Full world/BE integration: stacked book count 2-6 with Шт=3 NEVER exceeds 3 slots!
         MockServer server = new MockServer();
         MockLevel level = new MockLevel(server, DungeonManager425.HELL_DUNGEON_LEVEL);
         server.overworld = level;
@@ -472,6 +471,8 @@ public final class Build444Probe {
         Files.createDirectories(poolsDir);
         Files.writeString(poolsDir.resolve("stacked_books_444.txt"),
                 "settledlands:book/necronomicon | 100 | 10 | 2-6\n");
+        Files.writeString(poolsDir.resolve("full6_books_444.txt"),
+                "settledlands:book/necronomicon | 100 | 10 | 6\n");
         Files.writeString(poolsDir.resolve("screenshot_444.txt"),
                 "minecraft:glass | 5 | 80 | 2-6\n"
                 + "minecraft:iron_block | 20 | 50 | 1-4\n"
@@ -494,7 +495,7 @@ public final class Build444Probe {
             ChiseledBookShelfBlockEntity be = new ChiseledBookShelfBlockEntity();
             level.putBlockEntity(pos, be);
             int placed = LootPoolManager436.populateContainer(level, pos, gStackedShelf);
-            req(placed == 3, "stacked count 2-6 with Шт=3 places strictly 3 books (never 6!), got " + placed);
+            req(placed >= 2 && placed <= 3, "stacked count 2-6 with Шт=3 places 2..3 books (never >3!), got " + placed);
             int nonEmpty = 0;
             BlockState st = level.getBlockState(pos);
             for (int s = 0; s < 6; s++) {
@@ -504,19 +505,20 @@ public final class Build444Probe {
                         st.getValue(ChiseledBookShelfBlock.SLOT_OCCUPIED_PROPERTIES.get(s))),
                         "shelf slot property synced");
             }
-            req(nonEmpty == 3, "only 3 slots occupied on shelf");
+            req(nonEmpty == placed, "occupied slots match placed count (" + nonEmpty + ")");
         }
 
-        // Шт=6 on shelf allows all 6 slots
+        // Шт=6 on shelf with count=6 allows all 6 slots
+        LootPool436.setPoolFile(stackedNode, "full6_books_444.txt");
         LootPool436.setRolls(stackedNode, "6");
         BlockPos fullShelfPos = new BlockPos(999, 64, 0);
         level.setBlock(fullShelfPos, new BlockState(shelfBlock, false), 3);
         ChiseledBookShelfBlockEntity fullShelf = new ChiseledBookShelfBlockEntity();
         level.putBlockEntity(fullShelfPos, fullShelf);
         int placed6 = LootPoolManager436.populateContainer(level, fullShelfPos, gStackedShelf);
-        req(placed6 == 6, "Шт=6 allows all 6 bookshelf slots, got " + placed6);
+        req(placed6 == 6, "Шт=6 with count=6 fills all 6 bookshelf slots, got " + placed6);
 
-        // Mixed screenshot pool on Lectern (300 containers): has both populated AND empty lecterns!
+        // Mixed screenshot pool on Lectern (300 containers): has both populated (~50%) AND empty (~50%) lecterns!
         NpcDialogueGraph gLecMix = ChestGraph396.defaultGraph();
         NpcDialogueGraph.Node mixNode = gLecMix.add(NpcDialogueGraph.TRIGGER, 0, 0);
         LootPool436.applyDefaults(mixNode);
@@ -540,8 +542,8 @@ public final class Build444Probe {
                 emptyLecs++;
             }
         }
-        req(filledLecs > 150 && emptyLecs > 60,
-                "mixed pool on lecterns produces both filled (" + filledLecs + ") and empty (" + emptyLecs + ")");
+        req(filledLecs >= 115 && filledLecs <= 185 && emptyLecs >= 115 && emptyLecs <= 185,
+                "mixed pool on lecterns produces ~50% filled (" + filledLecs + ") and ~50% empty (" + emptyLecs + ")");
 
         // Regular chest with screenshot pool still gets non-books (Glass & Iron Block) as normal
         boolean sawGlassOrIron = false;

@@ -1,0 +1,1 @@
+14163e1c0ce0a08b790f2e015af0caa4e21e47f78fbce0b90043801a0635c649  settledlands-0.8.0-build445-direct-percent-loot-no-duplicates.jar

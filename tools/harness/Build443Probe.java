@@ -447,7 +447,7 @@ public final class Build443Probe {
         Path poolsDir = LootPoolManager436.ensureDirectory();
         Files.createDirectories(poolsDir);
         Files.writeString(poolsDir.resolve("book_only_443.txt"),
-                "settledlands:book/my_lore | 100 | 1 | 1\n");
+                "settledlands:book/my_lore | 100 | 1 | 4\n");
         Files.writeString(poolsDir.resolve("mixed_443.txt"),
                 "minecraft:diamond | 90 | 1 | 1\n"
                 + "settledlands:book/my_lore | 10 | 1 | 1\n");

@@ -344,16 +344,17 @@ public final class Build439Probe {
 
         Map<ResourceLocation, Item> itemMap = new HashMap<>();
         List<Item> lootItems = new ArrayList<>();
-        String[] itemIds = {
+        String[] baseIds = {
                 "minecraft:iron_sword", "minecraft:bread", "minecraft:book",
                 "minecraft:potion", "minecraft:emerald", "minecraft:lantern"
         };
         StringBuilder poolText = new StringBuilder();
-        for (int i = 0; i < itemIds.length; i++) {
+        for (int i = 0; i < 18; i++) {
+            String id = i < baseIds.length ? baseIds[i] : ("minecraft:item_" + i);
             Item it = new Item();
             lootItems.add(it);
-            itemMap.put(ResourceLocation.tryParse(itemIds[i]), it);
-            poolText.append(itemIds[i]).append(" | 10 | 10 | 1-2\n");
+            itemMap.put(ResourceLocation.tryParse(id), it);
+            poolText.append(id).append(" | 100 | 10 | 1-2\n");
         }
         BuiltInRegistries.ITEM = mapRegistry(itemMap);
 

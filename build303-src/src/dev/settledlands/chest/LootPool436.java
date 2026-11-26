@@ -34,6 +34,7 @@ public final class LootPool436 {
     public static final int MAX_FIELD_LEN = 24;
     public static final int MAX_CAP_LIMIT = 1_000_000;
     public static final int MAX_ROLLS_LIMIT = 54;
+    public static final double MAX_CHANCE_PCT = 100.0D;
 
     private static volatile List<String> serverPools = Collections.emptyList();
     private static volatile Runnable clientPoolsListener;
@@ -362,7 +363,7 @@ public final class LootPool436 {
                     || !Double.isFinite(weight) || weight <= 0.0D) {
                 continue;
             }
-            rarity = Math.min((double) MAX_CAP_LIMIT, rarity);
+            rarity = Math.min(MAX_CHANCE_PCT, rarity);
 
             int minCount = 1;
             int maxCount = 1;
@@ -394,13 +395,13 @@ public final class LootPool436 {
     // ---- rolling -----------------------------------------------------------
 
     /**
-     * Build 442: CS:GO-style weighted case rolling by {@code entry.rarity}, bounded by the crate's
-     * total weight capacity ({@code spec.rawWeight}) and optional item/roll limit ({@code spec.rawRolls}).
+     * Build 445: direct per-entry percentage rolling without duplicate wins beyond each row's
+     * configured {@code count} ({@code minCount..maxCount}).
      *
-     * <p>The roulette always draws against all entries that fit inside the crate's <em>initial</em>
-     * capacity ({@code initialWeight}) rather than shrinking the candidate set to {@code remainingWeight};
-     * otherwise a tiny filler item (e.g. rarity 1, weight 1) would artificially jump to 100% chance on
-     * later rolls whenever a heavier item leaves a small weight remainder.</p>
+     * <p>Every valid entry in {@code entries} is shuffled once per container and evaluated at most
+     * once against its direct {@code 0..100%} probability ({@code clamp(entry.rarity, 0, 100) / 100}),
+     * subject to the node's rarity ceiling ({@code spec.rawRarity}), crate weight budget
+     * ({@code spec.rawWeight}), and max dropped entry limit ({@code spec.rawRolls}).</p>
      */
     public static List<Drop> rollDrops(List<PoolEntry> entries, Parsed spec, Random rnd) {
         if (entries == null || entries.isEmpty() || spec == null || rnd == null) {
@@ -410,92 +411,75 @@ public final class LootPool436 {
         Range weightBudgetRange = parseRange(spec.rawWeight, MAX_CAP_LIMIT);
         Range rollsRange = parseRange(spec.rawRolls, MAX_ROLLS_LIMIT);
 
-        // Crate total weight budget is picked once per container (e.g. 40 -> fits 2x weight 20 or 4x weight 10).
         double initialWeight = weightBudgetRange.unbounded
                 ? Double.POSITIVE_INFINITY
                 : (double) weightBudgetRange.pick(rnd);
         double remainingWeight = initialWeight;
 
-        int maxRolls;
+        double maxRarity = rarityCapRange.unbounded
+                ? Double.POSITIVE_INFINITY
+                : (double) rarityCapRange.pick(rnd);
+
+        int maxDrops;
         if (!rollsRange.unbounded) {
-            maxRolls = rollsRange.pick(rnd);
+            maxDrops = rollsRange.pick(rnd);
         } else if (!weightBudgetRange.unbounded) {
-            maxRolls = MAX_ROLLS_LIMIT;
+            maxDrops = MAX_ROLLS_LIMIT;
         } else {
-            maxRolls = 3;
+            maxDrops = 3;
         }
-        if (maxRolls <= 0) return Collections.emptyList();
+        if (maxDrops <= 0) return Collections.emptyList();
         if (Double.isFinite(initialWeight) && initialWeight <= 1e-6D) {
             return Collections.emptyList();
         }
 
-        List<Drop> out = new ArrayList<>(Math.min(maxRolls, 16));
-        List<PoolEntry> eligible = new ArrayList<>(entries.size());
+        List<PoolEntry> shuffled = new ArrayList<>(entries.size());
+        for (PoolEntry e : entries) {
+            if (e == null || !Double.isFinite(e.rarity) || e.rarity <= 0.0D) continue;
+            if (!Double.isFinite(e.weight) || e.weight <= 0.0D) continue;
+            if (e.rarity <= maxRarity + 1e-6D && e.weight <= initialWeight + 1e-6D) {
+                shuffled.add(e);
+            }
+        }
+        if (shuffled.isEmpty()) {
+            return Collections.emptyList();
+        }
+        Collections.shuffle(shuffled, rnd);
 
-        for (int r = 0; r < maxRolls; r++) {
+        List<Drop> out = new ArrayList<>(Math.min(maxDrops, shuffled.size()));
+        for (PoolEntry e : shuffled) {
+            if (out.size() >= maxDrops) {
+                break;
+            }
             if (Double.isFinite(remainingWeight) && remainingWeight <= 1e-6D) {
                 break;
             }
-            double maxRarity = rarityCapRange.unbounded
-                    ? Double.POSITIVE_INFINITY
-                    : (double) rarityCapRange.pick(rnd);
-
-            eligible.clear();
-            double totalRarityChance = 0.0D;
-            for (PoolEntry e : entries) {
-                if (e == null || !Double.isFinite(e.rarity) || e.rarity <= 0.0D) continue;
-                if (!Double.isFinite(e.weight) || e.weight <= 0.0D) continue;
-                if (e.rarity <= maxRarity + 1e-6D && e.weight <= initialWeight + 1e-6D) {
-                    eligible.add(e);
-                    totalRarityChance += e.rarity;
-                }
-            }
-            if (eligible.isEmpty() || totalRarityChance <= 0.0D) {
-                if (rarityCapRange.unbounded) {
-                    break;
-                }
+            if (Double.isFinite(remainingWeight) && e.weight > remainingWeight + 1e-6D) {
                 continue;
             }
-
-            double pick = rnd.nextDouble() * totalRarityChance;
-            double acc = 0.0D;
-            PoolEntry chosen = eligible.get(eligible.size() - 1);
-            for (PoolEntry e : eligible) {
-                acc += e.rarity;
-                if (acc >= pick) {
-                    chosen = e;
-                    break;
-                }
+            double pct = Math.max(0.0D, Math.min(MAX_CHANCE_PCT, e.rarity)) / 100.0D;
+            if (pct <= 0.0D) {
+                continue;
             }
-
-            if (Double.isFinite(remainingWeight) && chosen.weight > remainingWeight + 1e-6D) {
-                // Item exceeded the remaining crate budget: stop in by-weight mode or skip this slot
-                // without distorting the drop ratios of tiny low-rarity filler items.
-                if (rollsRange.unbounded) {
-                    break;
-                }
+            if (pct < 1.0D && rnd.nextDouble() >= pct) {
                 continue;
             }
 
             if (Double.isFinite(remainingWeight)) {
-                remainingWeight = Math.max(0.0D, remainingWeight - chosen.weight);
+                remainingWeight = Math.max(0.0D, remainingWeight - e.weight);
             }
-
-            int count = chosen.minCount >= chosen.maxCount
-                    ? chosen.minCount
-                    : chosen.minCount + rnd.nextInt(chosen.maxCount - chosen.minCount + 1);
-            out.add(new Drop(chosen.itemId, Math.max(1, count)));
+            int count = e.minCount >= e.maxCount
+                    ? e.minCount
+                    : e.minCount + rnd.nextInt(e.maxCount - e.minCount + 1);
+            out.add(new Drop(e.itemId, Math.max(1, count)));
         }
         return out;
     }
 
     /**
-     * Build 444: single-slot lectern roll against the FULL loot pool (including non-book items).
-     *
-     * <p>A lectern holds at most 1 book. Rolling 1 attempt against the unfiltered pool ensures the
-     * book's true pool probability (and {@code Редк.<=} / {@code Вес ящ.} filters) determines
-     * whether a book spawns; if a non-book item wins the roll, the lectern stays empty rather than
-     * bumping books to 100%.</p>
+     * Build 445: single-slot lectern roll using direct {@code 0..100%} per-entry chances on
+     * lectern-compatible entries (non-book rows cannot steal the roll or inflate book odds; when
+     * no compatible book passes its direct {@code %} check, the lectern remains empty).
      */
     public static List<Drop> rollLecternDrops(List<PoolEntry> entries, Parsed spec,
             Predicate<String> allowedPredicate, Random rnd) {
@@ -506,50 +490,81 @@ public final class LootPool436 {
         if (!rollsRange.unbounded && rollsRange.pick(rnd) <= 0) {
             return Collections.emptyList();
         }
+        List<PoolEntry> compatible = new ArrayList<>(entries.size());
+        for (PoolEntry e : entries) {
+            if (e != null && (allowedPredicate == null || allowedPredicate.test(e.itemId))) {
+                compatible.add(e);
+            }
+        }
+        if (compatible.isEmpty()) {
+            return Collections.emptyList();
+        }
         Parsed singleSpec = new Parsed(spec.poolFile, spec.rawRarity, spec.rawWeight, "1");
-        List<Drop> rolled = rollDrops(entries, singleSpec, rnd);
+        List<Drop> rolled = rollDrops(compatible, singleSpec, rnd);
         if (rolled.isEmpty()) {
             return Collections.emptyList();
         }
-        Drop first = rolled.get(0);
-        if (first == null || (allowedPredicate != null && !allowedPredicate.test(first.itemId))) {
-            return Collections.emptyList();
-        }
-        return Collections.singletonList(new Drop(first.itemId, 1));
+        return Collections.singletonList(new Drop(rolled.get(0).itemId, 1));
     }
 
     /**
-     * Build 444: chiseled-bookshelf roll against the FULL loot pool (including non-book items).
-     *
-     * <p>Non-book drops become empty missed rolls rather than being stripped before rolling, and
-     * each accepted book drop occupies strictly 1 slot ({@code count = 1}) capped at both
-     * {@code maxSlots} and the node's {@code Шт} ceiling so stacked entries never overflow a
-     * shelf beyond the configured item limit.</p>
+     * Build 445: chiseled-bookshelf roll using direct {@code 0..100%} per-entry chances without
+     * duplicating an entry beyond its {@code Кол-во}. Compatible book entries are shuffled and
+     * each tested once at its direct {@code %} chance; each accepted drop contributes up to
+     * {@code drop.count} single-book shelf entries, strictly capped at {@code min(maxSlots, Шт)}.
      */
     public static List<Drop> rollBookshelfDrops(List<PoolEntry> entries, Parsed spec,
             int maxSlots, Predicate<String> allowedPredicate, Random rnd) {
         if (entries == null || entries.isEmpty() || spec == null || maxSlots <= 0 || rnd == null) {
             return Collections.emptyList();
         }
+        List<PoolEntry> compatible = new ArrayList<>(entries.size());
+        for (PoolEntry e : entries) {
+            if (e != null && (allowedPredicate == null || allowedPredicate.test(e.itemId))) {
+                compatible.add(e);
+            }
+        }
+        if (compatible.isEmpty()) {
+            return Collections.emptyList();
+        }
+
         Range rollsRange = parseRange(spec.rawRolls, MAX_ROLLS_LIMIT);
-        int shelfCap = Math.min(maxSlots,
-                rollsRange.unbounded ? maxSlots : Math.max(0, rollsRange.max));
+        Range weightRange = parseRange(spec.rawWeight, MAX_CAP_LIMIT);
+        int pickedRolls;
+        String subRolls;
+        if (!rollsRange.unbounded) {
+            pickedRolls = rollsRange.pick(rnd);
+            if (pickedRolls <= 0) {
+                return Collections.emptyList();
+            }
+            subRolls = Integer.toString(pickedRolls);
+        } else if (!weightRange.unbounded) {
+            pickedRolls = MAX_ROLLS_LIMIT;
+            subRolls = "";
+        } else {
+            pickedRolls = 3;
+            subRolls = DEFAULT_ROLLS;
+        }
+        int shelfCap = Math.min(maxSlots, pickedRolls);
         if (shelfCap <= 0) {
             return Collections.emptyList();
         }
-        List<Drop> rolled = rollDrops(entries, spec, rnd);
+
+        Parsed shelfSpec = new Parsed(spec.poolFile, spec.rawRarity, spec.rawWeight, subRolls);
+        List<Drop> rolled = rollDrops(compatible, shelfSpec, rnd);
         if (rolled.isEmpty()) {
             return Collections.emptyList();
         }
-        List<Drop> out = new ArrayList<>(Math.min(rolled.size(), shelfCap));
+        List<Drop> out = new ArrayList<>(Math.min(shelfCap, rolled.size()));
         for (Drop d : rolled) {
+            if (d == null) continue;
+            int copies = Math.max(1, d.count);
+            for (int k = 0; k < copies && out.size() < shelfCap; k++) {
+                out.add(new Drop(d.itemId, 1));
+            }
             if (out.size() >= shelfCap) {
                 break;
             }
-            if (d == null || (allowedPredicate != null && !allowedPredicate.test(d.itemId))) {
-                continue;
-            }
-            out.add(new Drop(d.itemId, 1));
         }
         return out;
     }
@@ -696,7 +711,7 @@ public final class LootPool436 {
         String headerName = safe.isEmpty() ? "pool.txt" : safe;
         StringBuilder sb = new StringBuilder(256);
         sb.append("# SettledLands Loot Pool: ").append(headerName).append('\n');
-        sb.append("# item_id | rarity_chance | weight | count\n");
+        sb.append("# item_id | chance_pct (0-100) | weight | count\n");
         if (entries != null) {
             for (PoolEntry e : entries) {
                 if (e == null) continue;
@@ -706,7 +721,7 @@ public final class LootPool436 {
                         || !Double.isFinite(e.weight) || e.weight <= 0.0D) {
                     continue;
                 }
-                double rarity = Math.max(0.0D, Math.min((double) MAX_CAP_LIMIT, e.rarity));
+                double rarity = Math.max(0.0D, Math.min(MAX_CHANCE_PCT, e.rarity));
                 sb.append(itemId)
                         .append(" | ").append(formatRarity(rarity))
                         .append(" | ").append(formatWeight(e.weight))
@@ -730,7 +745,7 @@ public final class LootPool436 {
             }
             int min = Math.max(1, Math.min(64, e.minCount));
             int max = Math.max(min, Math.min(64, e.maxCount));
-            double rar = Math.max(0.0D, Math.min((double) MAX_CAP_LIMIT, e.rarity));
+            double rar = Math.max(0.0D, Math.min(MAX_CHANCE_PCT, e.rarity));
             if (sb.length() > 0) sb.append('\n');
             sb.append(id).append('|')
                     .append(formatRarity(rar)).append('|')
@@ -759,7 +774,7 @@ public final class LootPool436 {
                     || !Double.isFinite(wgtObj) || wgtObj <= 0.0D) {
                 continue;
             }
-            double rar = Math.max(0.0D, Math.min((double) MAX_CAP_LIMIT, rarObj));
+            double rar = Math.max(0.0D, Math.min(MAX_CHANCE_PCT, rarObj));
             int min = 1;
             int max = 1;
             if (cols.length >= 4) {
@@ -825,35 +840,32 @@ public final class LootPool436 {
     }
 
     /**
-     * Build 442: computes the exact expected first-roll drop percentage {@code [0..100]} for each
-     * entry in {@code entries} under {@code spec}'s rarity cap and crate weight budget ranges.
+     * Build 445: computes each entry's effective drop percentage {@code [0..100]} per container
+     * from its direct {@code 0..100%} rarity chance, accounting for node {@code Редк.<=},
+     * {@code Вес ящ.}, and {@code Шт} limits.
      */
     public static double[] computeEffectiveChancesPct(List<PoolEntry> entries, Parsed spec) {
         if (entries == null || entries.isEmpty()) return new double[0];
         int n = entries.size();
         double[] pct = new double[n];
 
-        Range rRange = spec == null ? Range.unbounded() : parseRange(spec.rawRarity, MAX_CAP_LIMIT);
-        Range wRange = spec == null ? Range.unbounded() : parseRange(spec.rawWeight, MAX_CAP_LIMIT);
-
-        if (rRange.unbounded && wRange.unbounded) {
-            double totalR = 0.0D;
-            for (PoolEntry e : entries) {
+        if (spec == null) {
+            for (int i = 0; i < n; i++) {
+                PoolEntry e = entries.get(i);
                 if (e != null && Double.isFinite(e.rarity) && e.rarity > 0.0D
                         && Double.isFinite(e.weight) && e.weight > 0.0D) {
-                    totalR += e.rarity;
-                }
-            }
-            if (totalR > 0.0D) {
-                for (int i = 0; i < n; i++) {
-                    PoolEntry e = entries.get(i);
-                    if (e != null && Double.isFinite(e.rarity) && e.rarity > 0.0D
-                            && Double.isFinite(e.weight) && e.weight > 0.0D) {
-                        pct[i] = (e.rarity / totalR) * 100.0D;
-                    }
+                    pct[i] = Math.max(0.0D, Math.min(MAX_CHANCE_PCT, e.rarity));
                 }
             }
             return pct;
+        }
+
+        Range rRange = parseRange(spec.rawRarity, MAX_CAP_LIMIT);
+        Range wRange = parseRange(spec.rawWeight, MAX_CAP_LIMIT);
+        Range rollsRange = parseRange(spec.rawRolls, MAX_ROLLS_LIMIT);
+
+        if (rRange.unbounded && wRange.unbounded && rollsRange.unbounded) {
+            return computeEffectiveChancesPct(entries, null);
         }
 
         int[] wBounds;
@@ -904,6 +916,9 @@ public final class LootPool436 {
 
         int wIntervalCount = wRange.unbounded ? 1 : (wBounds.length - 1);
         int rIntervalCount = rRange.unbounded ? 1 : (rBounds.length - 1);
+        int rollsMin = rollsRange.unbounded ? (wRange.unbounded ? 3 : MAX_ROLLS_LIMIT) : rollsRange.min;
+        int rollsMax = rollsRange.unbounded ? (wRange.unbounded ? 3 : MAX_ROLLS_LIMIT) : rollsRange.max;
+        int rollsSpan = Math.max(1, rollsMax - rollsMin + 1);
 
         for (int wi = 0; wi < wIntervalCount; wi++) {
             double wCap = wRange.unbounded ? Double.POSITIVE_INFINITY : (double) wBounds[wi];
@@ -920,22 +935,43 @@ public final class LootPool436 {
                 if (rProb <= 0.0D) continue;
 
                 double pairProb = wProb * rProb;
-                double totalR = 0.0D;
+                int eligibleCount = 0;
+                double sumDirectProb = 0.0D;
+                double expectedWeight = 0.0D;
                 for (int i = 0; i < n; i++) {
                     PoolEntry e = entries.get(i);
                     if (e != null && Double.isFinite(e.rarity) && e.rarity > 0.0D
                             && Double.isFinite(e.weight) && e.weight > 0.0D
                             && e.rarity <= rCap + 1e-6D && e.weight <= wCap + 1e-6D) {
-                        totalR += e.rarity;
+                        double p = Math.min(MAX_CHANCE_PCT, e.rarity) / 100.0D;
+                        eligibleCount++;
+                        sumDirectProb += p;
+                        expectedWeight += p * e.weight;
                     }
                 }
-                if (totalR <= 0.0D) continue;
+                if (eligibleCount == 0 || sumDirectProb <= 0.0D) continue;
+
+                double weightFactor = (!Double.isFinite(wCap) || expectedWeight <= wCap + 1e-6D)
+                        ? 1.0D
+                        : Math.max(0.0D, wCap / expectedWeight);
+                double avgScale = 0.0D;
+                for (int rc = rollsMin; rc <= rollsMax; rc++) {
+                    if (rc <= 0) continue;
+                    double rollFactor = rc >= eligibleCount
+                            ? 1.0D
+                            : Math.min(1.0D, ((double) rc) / sumDirectProb);
+                    avgScale += Math.min(rollFactor, weightFactor);
+                }
+                avgScale /= (double) rollsSpan;
+                if (avgScale <= 0.0D) continue;
+
                 for (int i = 0; i < n; i++) {
                     PoolEntry e = entries.get(i);
                     if (e != null && Double.isFinite(e.rarity) && e.rarity > 0.0D
                             && Double.isFinite(e.weight) && e.weight > 0.0D
                             && e.rarity <= rCap + 1e-6D && e.weight <= wCap + 1e-6D) {
-                        pct[i] += pairProb * (e.rarity / totalR) * 100.0D;
+                        double basePct = Math.min(MAX_CHANCE_PCT, e.rarity);
+                        pct[i] += pairProb * avgScale * basePct;
                     }
                 }
             }

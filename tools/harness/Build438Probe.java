@@ -312,7 +312,7 @@ public final class Build438Probe {
     public static void main(String[] args) throws Exception {
         Path poolDir = LootPoolManager436.ensureDirectory();
         Files.writeString(poolDir.resolve("build438_pool.txt"),
-                "minecraft:diamond | 10 | 100 | 4\n", StandardCharsets.UTF_8);
+                "minecraft:diamond | 100 | 100 | 4\n", StandardCharsets.UTF_8);
 
         SimpleReg<Block> blockReg = new SimpleReg<>();
         SimpleReg<EntityType> entityReg = new SimpleReg<>();
@@ -385,7 +385,7 @@ public final class Build438Probe {
             ChestLock397.setDifficulty(chest, 2);
         }
         NpcDialogueGraph.Node pool = g.add(NpcDialogueGraph.TRIGGER, 260, 120);
-        pool.action = "trigger:loot_pool:" + poolFile + "|50|100|1";
+        pool.action = "trigger:loot_pool:" + poolFile + "|100|100|1";
         chest.next = pool.id;
         return g;
     }

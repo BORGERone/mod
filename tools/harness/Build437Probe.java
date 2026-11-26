@@ -232,7 +232,7 @@ public final class Build437Probe {
         // Initialize LootPoolManager436 pool file inside the isolated probe workdir
         Path poolDir = LootPoolManager436.ensureDirectory();
         Files.writeString(poolDir.resolve("shelf_pool.txt"),
-                "minecraft:diamond | 10 | 100 | 3\n", StandardCharsets.UTF_8);
+                "minecraft:diamond | 100 | 100 | 3\n", StandardCharsets.UTF_8);
 
         SimpleReg<Block> blockReg = new SimpleReg<>();
         SimpleReg<EntityType> entityReg = new SimpleReg<>();
@@ -285,7 +285,7 @@ public final class Build437Probe {
         NpcDialogueGraph g = ChestGraph396.defaultGraph();
         NpcDialogueGraph.Node chest = ChestGraph396.chestNode(g);
         NpcDialogueGraph.Node pool = g.add(NpcDialogueGraph.TRIGGER, 260, 120);
-        pool.action = "trigger:loot_pool:" + poolFile + "|50|100|1";
+        pool.action = "trigger:loot_pool:" + poolFile + "|100|100|1";
         chest.next = pool.id;
         return g;
     }

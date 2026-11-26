@@ -25,10 +25,10 @@ import net.minecraft.sounds.SoundEvents;
 import net.minecraft.world.item.ItemStack;
 
 /**
- * Build 440 + Build 441: full in-game editor window for {@code config/settledlands/loot_pools/*.txt}.
+ * Build 440–445: full in-game editor window for {@code config/settledlands/loot_pools/*.txt}.
  * Lets builders create, edit, test-roll, and delete loot pools (items, single-field {@code min-max}
- * counts, CS:GO-style drop rarity chances, crate capacity weights, live drop percentages) across the
- * full screen height right down to the bottom action bar.
+ * counts, direct {@code 0..100%} per-entry drop chances, crate capacity weights, live effective drop
+ * percentages) across the full screen height right down to the bottom action bar.
  */
 public final class LootPoolEditorScreen440 extends Screen {
 
@@ -144,8 +144,10 @@ public final class LootPoolEditorScreen440 extends Screen {
 
         double parsedRarity() {
             Double v = LootPool436.parseRarityInput(rarText);
-            if (v == null || !Double.isFinite(v) || v < 0.0D) return -1.0D;
-            return Math.min((double) LootPool436.MAX_CAP_LIMIT, v);
+            if (v == null || !Double.isFinite(v) || v < 0.0D || v > LootPool436.MAX_CHANCE_PCT) {
+                return -1.0D;
+            }
+            return v;
         }
 
         double parsedWeight() {
@@ -159,7 +161,9 @@ public final class LootPoolEditorScreen440 extends Screen {
             int[] cnt = parsedCountRange();
             double rar = parsedRarity();
             double wgt = parsedWeight();
-            if (cnt == null || rar <= 0.0D || wgt <= 0.0D) return null;
+            if (cnt == null || rar <= 0.0D || rar > LootPool436.MAX_CHANCE_PCT || wgt <= 0.0D) {
+                return null;
+            }
             return new LootPool436.PoolEntry(cleanId, rar, wgt, cnt[0], cnt[1]);
         }
     }
@@ -863,8 +867,16 @@ public final class LootPoolEditorScreen440 extends Screen {
         LootPool436.Parsed spec = currentNodeSpec();
         List<LootPool436.Drop> rolled = LootPool436.rollDrops(entries, spec, previewRandom);
         if (rolled.isEmpty()) {
-            statusColor = 0xFFFFB048;
-            statusText = Component.translatable("gui.settledlands.loot_pool.editor.preview_filtered").getString();
+            int blocked = LootPool436.countBlockedBySpec(entries, spec);
+            if (blocked >= entries.size()) {
+                statusColor = 0xFFFFB048;
+                statusText = Component.translatable("gui.settledlands.loot_pool.editor.preview_filtered")
+                        .getString();
+            } else {
+                statusColor = 0xFF9AA5B8;
+                statusText = Component.translatable("gui.settledlands.loot_pool.editor.preview_miss")
+                        .getString();
+            }
             refreshRowWidgets(false);
             return;
         }
@@ -1180,15 +1192,15 @@ public final class LootPoolEditorScreen440 extends Screen {
 
     private void renderSummaryLine(GuiGraphics graphics, int blockedCount, int totalCount) {
         int y = panelY + 47;
-        double totalR = 0.0D;
+        double totalW = 0.0D;
         for (RowData r : rowsData) {
-            double rr = r.parsedRarity();
-            if (rr > 0.0D) totalR += rr;
+            double ww = r.parsedWeight();
+            if (ww > 0.0D) totalW += ww;
         }
         String baseSummary = Component.translatable(
                 "gui.settledlands.loot_pool.editor.summary",
                 Integer.valueOf(totalCount),
-                LootPool436.formatRarity(totalR)).getString();
+                LootPool436.formatWeight(totalW)).getString();
         if (blockedCount > 0) {
             String warn = Component.translatable(
                     "gui.settledlands.loot_pool.editor.blocked_banner",

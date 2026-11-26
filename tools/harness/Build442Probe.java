@@ -66,22 +66,22 @@ public final class Build442Probe {
         check(diamond > sword && sword > ingot && ingot > steak * 3,
                 "strict drop ordering diamond > sword > ingot >> steak even in weight-limited crate 100 ("
                         + diamond + " > " + sword + " > " + ingot + " >> " + steak + ")");
-        check(steak < 500, "rarity-1 steak stays genuinely rare (~220 out of 30000 rolls), got " + steak);
+        check(steak < 200, "1% steak stays genuinely rare (~100 out of 10000 containers), got " + steak);
 
-        // Case 2: unbounded crate weight (blank) & rolls = 3 -> exact 1:20:80:35 ratios
+        // Case 2: unbounded crate weight (blank) & rolls = 4 -> exact direct % rates (~1%, 20%, 80%, 35%)
         counts.clear();
-        LootPool436.Parsed unbounded = new LootPool436.Parsed("p.txt", "", "", "3");
+        LootPool436.Parsed unbounded = new LootPool436.Parsed("p.txt", "", "", "4");
         for (int i = 0; i < trials; i++) {
             List<LootPool436.Drop> drops = LootPool436.rollDrops(pool, unbounded, rnd);
-            check(drops.size() == 3, "unbounded rolls=3 always drops 3 items");
+            check(drops.size() <= 4, "unbounded rolls=4 never exceeds 4 entries");
             for (LootPool436.Drop d : drops) {
                 counts.merge(d.itemId, 1, Integer::sum);
             }
         }
         int uSteak = counts.getOrDefault("minecraft:cooked_beef", 0);
         int uDiamond = counts.getOrDefault("minecraft:diamond", 0);
-        check(uSteak > 120 && uSteak < 340, "unbounded steak ~0.74% of 30000 (~221), got " + uSteak);
-        check(uDiamond > 17000 && uDiamond < 18300, "unbounded diamond ~58.8% of 30000 (~17647), got " + uDiamond);
+        check(uSteak >= 60 && uSteak <= 150, "unbounded 1% steak ~100/10000, got " + uSteak);
+        check(uDiamond >= 7800 && uDiamond <= 8200, "unbounded 80% diamond ~8000/10000, got " + uDiamond);
     }
 
     private static void testExactEffectiveChancesWithAndWithoutNodeLimits() {
@@ -92,25 +92,25 @@ public final class Build442Probe {
                 new LootPool436.PoolEntry("minecraft:iron_sword", 35.0D, 25.0D, 1, 1)
         );
 
-        // Unbounded spec: 1/136, 20/136, 80/136, 35/136
+        // Unbounded spec: direct 1%, 20%, 80%, 35%
         double[] base = LootPool436.computeEffectiveChancesPct(pool, null);
-        check(Math.abs(base[0] - (100.0D / 136.0D)) < 1e-4D, "base steak 0.735%");
-        check(Math.abs(base[1] - (2000.0D / 136.0D)) < 1e-4D, "base ingot 14.706%");
-        check(Math.abs(base[2] - (8000.0D / 136.0D)) < 1e-4D, "base diamond 58.824%");
-        check(Math.abs(base[3] - (3500.0D / 136.0D)) < 1e-4D, "base sword 25.735%");
+        check(Math.abs(base[0] - 1.0D) < 1e-4D, "base steak 1.0%");
+        check(Math.abs(base[1] - 20.0D) < 1e-4D, "base ingot 20.0%");
+        check(Math.abs(base[2] - 80.0D) < 1e-4D, "base diamond 80.0%");
+        check(Math.abs(base[3] - 35.0D) < 1e-4D, "base sword 35.0%");
 
-        // User's node spec (weight 0-30):
+        // User's node spec (weight 0-30, rolls 3):
         // w=0 (1/31): nothing fits (0%)
-        // w=1..24 (24/31): only steak fits -> steak 100%
-        // w=25..30 (6/31): steak (1/36) + sword (35/36) fit; ingot(50) and diamond(90) = 0%
+        // w=1..24 (24/31): only steak fits -> steak 1%
+        // w=25..30 (6/31): steak (1%) + sword (35%) fit (expectedWeight ~8.76 <= 25, eligible 2 <= 3); ingot(50) and diamond(90) = 0%
         LootPool436.Parsed node0to30 = new LootPool436.Parsed("p.txt", "", "0-30", "3");
         double[] eff = LootPool436.computeEffectiveChancesPct(pool, node0to30);
-        double expectedSteak = (24.0D / 31.0D + (6.0D / 31.0D) * (1.0D / 36.0D)) * 100.0D;
-        double expectedSword = ((6.0D / 31.0D) * (35.0D / 36.0D)) * 100.0D;
-        check(Math.abs(eff[0] - expectedSteak) < 1e-4D, "effective steak ~77.96%, got " + eff[0]);
+        double expectedSteak = (30.0D / 31.0D) * 1.0D;
+        double expectedSword = (6.0D / 31.0D) * 35.0D;
+        check(Math.abs(eff[0] - expectedSteak) < 1e-4D, "effective steak ~0.968%, got " + eff[0]);
         check(Math.abs(eff[1]) < 1e-9D, "blocked ingot effective chance == 0%");
         check(Math.abs(eff[2]) < 1e-9D, "blocked diamond effective chance == 0%");
-        check(Math.abs(eff[3] - expectedSword) < 1e-4D, "effective sword ~18.82%, got " + eff[3]);
+        check(Math.abs(eff[3] - expectedSword) < 1e-4D, "effective sword ~6.774%, got " + eff[3]);
 
         // Rarity cap + null slots inside rowEntries handled safely
         List<LootPool436.PoolEntry> withNull = Arrays.asList(
@@ -123,7 +123,8 @@ public final class Build442Probe {
         double[] effCap = LootPool436.computeEffectiveChancesPct(withNull, capRar);
         check(effCap.length == 4 && effCap[1] == 0.0D, "null placeholder entry gets 0%");
         check(Math.abs(effCap[2]) < 1e-9D, "diamond rarity 80 > max 50 gives 0%");
-        check(effCap[3] > base[3], "sword effective chance rises when diamond is capped out");
+        check(Math.abs(effCap[0] - (50.0D / 51.0D) * 1.0D) < 1e-4D, "steak capped at 0-50 gives ~0.98%");
+        check(Math.abs(effCap[3] - (16.0D / 51.0D) * 35.0D) < 1e-4D, "sword capped at 0-50 gives ~10.98%");
     }
 
     private static void testBlockedReasonAndCounts() {
