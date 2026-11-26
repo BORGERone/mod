@@ -4,6 +4,7 @@ import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.trial.TrialGraph446;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -831,7 +832,12 @@ public final class PursuitGraphNode272 {
     /** True for a node with a blue output: it hands out a body. */
     public static boolean isValueSourceNode(Node node) {
         return isCheckValueNode(node) || isDamageValueNode(node) || isDoorValueNode(node)
-                || isChestValueNode(node);
+                || isChestValueNode(node) || isTrialValueNode(node);
+    }
+
+    /** Build 446: the blue socket of a trial spawner's card hands out the last participant player. */
+    public static boolean isTrialValueNode(Node node) {
+        return TrialGraph446.isTrialNode(node);
     }
 
     /**
@@ -1119,6 +1125,15 @@ public final class PursuitGraphNode272 {
         }
         if (isDamageValueNode(from)) {
             return Component.translatable("gui.settledlands.graph.damage").getString() + " #" + from.id;
+        }
+        if (isTrialValueNode(from)) {
+            return Component.translatable(TrialGraph446.TITLE_KEY).getString() + " #" + from.id;
+        }
+        if (isChestValueNode(from)) {
+            return Component.translatable(ChestGraph396.TITLE_KEY).getString() + " #" + from.id;
+        }
+        if (isDoorValueNode(from)) {
+            return Component.translatable(DoorGraph382.TITLE_KEY).getString() + " #" + from.id;
         }
         return null;
     }

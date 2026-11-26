@@ -1,6 +1,8 @@
 package dev.settledlands.npc;
 
+import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.door.DoorGraph382;
+import dev.settledlands.trial.TrialGraph446;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -113,7 +115,11 @@ public final class BlockTalk358 {
         if (text == null || text.isEmpty() || player == null || graph == null || node == null) return text;
         if (node.varInputNode < 0) return text;
         NpcDialogueGraph.Node source = graph.get(node.varInputNode);
-        if (!DoorGraph382.isDoorNode(source)) return text;
+        if (!DoorGraph382.isDoorNode(source)
+                && !ChestGraph396.isChestNode(source)
+                && !TrialGraph446.isTrialNode(source)) {
+            return text;
+        }
         String out = text;
         if (out.contains("%target_uuid%")) {
             out = out.replace("%target_uuid%", player.getUUID().toString());

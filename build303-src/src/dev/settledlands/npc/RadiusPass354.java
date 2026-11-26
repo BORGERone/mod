@@ -10,6 +10,9 @@ import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.chest.ChestGraph396Store;
 import dev.settledlands.door.DoorGraph382Store;
 import dev.settledlands.door.DoorStore368;
+import dev.settledlands.trial.TrialGraph446;
+import dev.settledlands.trial.TrialGraph446Store;
+import dev.settledlands.trial.TrialSpawnerBridge446;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.particles.ParticleTypes;
 import net.minecraft.server.MinecraftServer;
@@ -363,6 +366,51 @@ public final class RadiusPass354 {
         }
     }
 
+    /**
+     * Build 446: clears per-block event cooldowns, day markers, timers, and pending cutscene tails
+     * when a graph is deleted by block destruction.
+     */
+    public static void clearCooldowns(String key) {
+        if (key == null || key.isEmpty()) return;
+        COOLDOWNS.remove(key);
+        String prefix = key + "#";
+        TIME_DAY.keySet().removeIf(k -> k != null && k.startsWith(prefix));
+        TIMER_AT.keySet().removeIf(k -> k != null && k.startsWith(prefix));
+        synchronized (AFTER) {
+            AFTER.removeIf(a -> a != null && a.where != null && key.equals(a.where.key()));
+        }
+    }
+
+    /** Build 446: the graph of one trial spawner, seen by this pass as one more place. */
+    static final class TrialSpot implements Spot {
+        private final String key;
+        private final int x;
+        private final int y;
+        private final int z;
+        private final NpcDialogueGraph graph;
+        private final boolean check;
+        private final boolean ring;
+
+        TrialSpot(String key, int x, int y, int z, NpcDialogueGraph graph) {
+            this.key = key;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.graph = graph;
+            this.check = hasFiringEvent(graph);
+            this.ring = hasVisibleRadius(graph);
+        }
+
+        @Override public String key() { return key; }
+        @Override public int x() { return x; }
+        @Override public int y() { return y; }
+        @Override public int z() { return z; }
+        @Override public NpcDialogueGraph graph() { return graph; }
+        @Override public boolean check() { return check; }
+        @Override public boolean ring() { return ring; }
+        @Override public String place() { return "trial"; }
+    }
+
     /** True when a graph holds an event node that has somewhere to go (block and door alike). */
     public static boolean hasFiringEvent(NpcDialogueGraph graph) {
         if (graph == null || graph.nodes == null) return false;
@@ -412,36 +460,59 @@ public final class RadiusPass354 {
             } catch (Throwable chestFailure) {
                 chestFailureSeen(chestFailure);
             }
+            TrialGraph446Store trials = null;
+            try {
+                trials = TrialGraph446Store.get(server);
+            } catch (Throwable ignored) {
+            }
+            DoorStore368 locks = null;
+            try {
+                locks = DoorStore368.get(server);
+            } catch (Throwable ignored) {
+            }
             boolean anyBlocks = store != null && store.size() > 0;
             boolean anyDoor = doors != null && doors.size() > 0;
             boolean anyChest = chests != null && chests.size() > 0;
-            // Build 394: a world with doors and no block graphs is a world this pass still has work in.
-            // Build 396: and a world with chest graphs only is a third such world.
-            if (!anyBlocks && !anyDoor && !anyChest) return;
+            boolean anyTrial = trials != null && trials.size() > 0;
+            boolean anyLock = locks != null && locks.size() > 0;
+            // Build 394/396/446: tick whenever any block, door, chest, trial spawner, or lock exists.
+            if (!anyBlocks && !anyDoor && !anyChest && !anyTrial && !anyLock) return;
             List<ServerPlayer> players = server.getPlayerList().getPlayers();
             if (players.isEmpty()) return;
             for (ServerLevel level : server.getAllLevels()) {
+                if (check) {
+                    try {
+                        GraphBlockCleanup446.reconcileLoaded(level);
+                    } catch (Throwable cleanupFailure) {
+                        LOG.warn("block graph cleanup skipped: {}", String.valueOf(cleanupFailure));
+                    }
+                    try {
+                        TrialGraph446.syncEmbeddedGraphsNear(level, players);
+                    } catch (Throwable ignored) {
+                    }
+                }
                 String dimension = BlockTriggerStore351.dimensionOf(level);
-                List<BlockTriggerStore351.Entry> blocks = anyBlocks
+                List<BlockTriggerStore351.Entry> blocks = (store != null && store.size() > 0)
                         ? store.ofDimension(dimension) : new ArrayList<BlockTriggerStore351.Entry>();
                 List<Spot> spots = new ArrayList<Spot>(blocks);
-                if (anyDoor) {
-                    // Build 394: a door that cannot be read costs the doors of that pass, never the
-                    // blocks - a block's radius node has worked for twenty builds and a door's file is
-                    // the new thing here.
+                if (doors != null && doors.size() > 0) {
                     try {
                         addDoors(level, dimension, doors, spots);
                     } catch (Throwable doorFailure) {
                         doorFailureSeen(doorFailure);
                     }
                 }
-                if (anyChest) {
-                    // Build 396: and a chest that cannot be read costs the chests, never the blocks or
-                    // the doors.
+                if (chests != null && chests.size() > 0) {
                     try {
                         addChests(level, dimension, chests, spots);
                     } catch (Throwable chestFailure) {
                         chestFailureSeen(chestFailure);
+                    }
+                }
+                if (trials != null && trials.size() > 0) {
+                    try {
+                        addTrials(level, dimension, trials, spots);
+                    } catch (Throwable ignored) {
                     }
                 }
                 if (spots.isEmpty()) continue;
@@ -499,6 +570,22 @@ public final class RadiusPass354 {
             NpcDialogueGraph graph = chests.graph(key);
             if (graph == null || graph.nodes == null || graph.nodes.isEmpty()) continue;
             spots.add(new ChestSpot(key, pos.getX(), pos.getY(), pos.getZ(), graph));
+        }
+    }
+
+    /** Build 446: trial spawner graphs as places this pass highlights and ticks. */
+    private static void addTrials(ServerLevel level, String dimension, TrialGraph446Store trials,
+            List<Spot> spots) {
+        List<String> keys = trials.keysOfDimension(dimension);
+        for (int i = 0; i < keys.size(); i++) {
+            String key = keys.get(i);
+            if (key == null || key.isEmpty()) continue;
+            BlockPos pos = TrialGraph446Store.positionOf(key);
+            if (pos == null) continue;
+            if (!level.hasChunkAt(pos) || !TrialSpawnerBridge446.isSpawnerAt(level, pos)) continue;
+            NpcDialogueGraph graph = trials.graph(key);
+            if (graph == null || graph.nodes == null || graph.nodes.isEmpty()) continue;
+            spots.add(new TrialSpot(key, pos.getX(), pos.getY(), pos.getZ(), graph));
         }
     }
 

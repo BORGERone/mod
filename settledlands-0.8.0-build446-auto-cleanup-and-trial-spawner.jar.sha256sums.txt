@@ -1,0 +1,1 @@
+eb72b1df06fc9cc42801fe19194db7027e54a1bd4fb7eb2c43fc5979a506792d  settledlands-0.8.0-build446-auto-cleanup-and-trial-spawner.jar

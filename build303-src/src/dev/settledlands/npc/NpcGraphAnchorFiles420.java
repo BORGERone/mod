@@ -4,6 +4,8 @@ import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.chest.ChestGraph396Store;
 import dev.settledlands.door.DoorGraph382Store;
 import dev.settledlands.door.DoorStore368;
+import dev.settledlands.trial.TrialGraph446;
+import dev.settledlands.trial.TrialGraph446Store;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -80,6 +82,21 @@ public final class NpcGraphAnchorFiles420 {
                         graph.save(), null));
             }
         }
+
+        TrialGraph446Store trials = trialStore(server);
+        if (trials != null) {
+            for (String key : trials.keysOfDimension(dimension)) {
+                if (out.size() >= NpcGraphAnchorCore420.MAX_ENTRIES) break;
+                NpcDialogueGraph graph = trials.graph(key);
+                BlockPos at = TrialGraph446Store.positionOf(key);
+                if (graph == null || at == null) continue;
+                if (!NpcGraphAnchorCore420.inside(at.getX(), at.getY(), at.getZ(), anchor, radius)) continue;
+                TrialGraph446.ensureBlockEntityGraph(level, at, graph);
+                out.add(new NpcGraphAnchorCore420.Entry(NpcGraphAnchorCore420.TRIAL_KIND,
+                        at.getX() - anchor.getX(), at.getY() - anchor.getY(), at.getZ() - anchor.getZ(),
+                        graph.save(), null));
+            }
+        }
         return out;
     }
 
@@ -116,7 +133,13 @@ public final class NpcGraphAnchorFiles420 {
                     public boolean block(int x, int y, int z, CompoundTag graph) {
                         if (blocks == null || graph == null || graph.isEmpty()) return false;
                         String key = dimension + "@" + x + "," + y + "," + z;
-                        return blocks.put(key, NpcDialogueGraph.load(graph));
+                        boolean stored = blocks.put(key, NpcDialogueGraph.load(graph));
+                        if (stored) {
+                            String bid = GraphBlockCleanup446.blockIdOf(
+                                    target.getBlockState(new BlockPos(x, y, z)));
+                            if (!bid.isEmpty()) blocks.rememberBlockId(key, bid);
+                        }
+                        return stored;
                     }
 
                     @Override
@@ -147,6 +170,11 @@ public final class NpcGraphAnchorFiles420 {
                         boolean low = locks.lock(target, new BlockPos(x, y, z));
                         locks.lock(target, new BlockPos(x, y + 1, z));
                         return low;
+                    }
+
+                    @Override
+                    public boolean trial(int x, int y, int z, CompoundTag graph) {
+                        return TrialGraph446.materializeAt(target, x, y, z, graph);
                     }
                 });
     }
@@ -202,6 +230,15 @@ public final class NpcGraphAnchorFiles420 {
     private static DoorStore368 lockStore(MinecraftServer server) {
         try {
             return DoorStore368.get(server);
+        } catch (Throwable failure) {
+            BlockTrigger351.fail(failure);
+            return null;
+        }
+    }
+
+    private static TrialGraph446Store trialStore(MinecraftServer server) {
+        try {
+            return TrialGraph446Store.get(server);
         } catch (Throwable failure) {
             BlockTrigger351.fail(failure);
             return null;

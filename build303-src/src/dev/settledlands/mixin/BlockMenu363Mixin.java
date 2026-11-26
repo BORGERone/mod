@@ -6,6 +6,7 @@ import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.client.BlockMenu363;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphContextMenu;
+import dev.settledlands.trial.TrialGraph446;
 import net.minecraft.client.gui.GuiGraphics;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -53,7 +54,8 @@ public abstract class BlockMenu363Mixin {
         // panel is the block's panel as well, so it is measured the same way.
         boolean door = settledlands$doorEditor();
         boolean chest = settledlands$isChest();
-        if (!door && !settledlands$blockEditor() && !chest) return;
+        boolean trial = settledlands$isTrial();
+        if (!door && !settledlands$blockEditor() && !chest && !trial) return;
         if (this.contextMenu == null) return;
         BlockMenu363.fit(this.contextMenu,
                 ((NpcDialogueGraphScreen) (Object) this).settledlands$canvas(), door, chest);
@@ -101,8 +103,14 @@ public abstract class BlockMenu363Mixin {
         return ChestGraph396.isChestEditorId(((NpcDialogueGraphScreen) (Object) this).entityId());
     }
 
+    /** Build 446: the trial spawner editor borrows the same block palette panel. */
+    private boolean settledlands$isTrial() {
+        return TrialGraph446.isTrialEditorId(((NpcDialogueGraphScreen) (Object) this).entityId());
+    }
+
     /** True for every graph that borrows this panel. */
     private boolean settledlands$editor() {
-        return settledlands$blockEditor() || settledlands$doorEditor() || settledlands$isChest();
+        return settledlands$blockEditor() || settledlands$doorEditor()
+                || settledlands$isChest() || settledlands$isTrial();
     }
 }

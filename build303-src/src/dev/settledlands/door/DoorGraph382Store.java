@@ -166,7 +166,10 @@ public final class DoorGraph382Store extends SavedData {
     public boolean put(String key, NpcDialogueGraph graph) {
         if (key == null || key.isEmpty()) return false;
         if (graph == null) {
-            if (byKey.remove(key) != null) setDirty();
+            boolean changed = byKey.remove(key) != null;
+            byDimension.remove(key);
+            if (starter.remove(key)) changed = true;
+            if (changed) setDirty();
             return true;
         }
         if (!byKey.containsKey(key) && full()) return false;

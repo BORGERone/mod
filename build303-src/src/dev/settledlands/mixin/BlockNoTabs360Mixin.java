@@ -132,7 +132,8 @@ public abstract class BlockNoTabs360Mixin {
         if (screen == null) return false;
         int id = screen.entityId();
         return BlockTrigger351.isBlockEditorId(id) || DoorGraph382.isDoorEditorId(id)
-                || dev.settledlands.chest.ChestGraph396.isChestEditorId(id);
+                || dev.settledlands.chest.ChestGraph396.isChestEditorId(id)
+                || dev.settledlands.trial.TrialGraph446.isTrialEditorId(id);
     }
 
     private static String settledlands$tabLabel(int index) {

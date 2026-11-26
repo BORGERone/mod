@@ -67,10 +67,11 @@ public final class NpcGraphAnchorCore420 {
     /** One fingerprint entry. */
     public static final String BLOCK = "B";
 
-    /** The three kinds of graph a build can carry. The strings are in the file, so they never change. */
+    /** The four kinds of graph a build can carry. The strings are in the file, so they never change. */
     public static final String BLOCK_KIND = "block";
     public static final String DOOR_KIND = "door";
     public static final String CHEST_KIND = "chest";
+    public static final String TRIAL_KIND = "trial";
 
     /** How many graph entries one anchor may carry. */
     public static final int MAX_ENTRIES = 1024;
@@ -522,23 +523,25 @@ public final class NpcGraphAnchorCore420 {
         public int blocks;
         public int doors;
         public int chests;
+        public int trials;
         public int locks;
         public int skipped;
         public int turn;
 
         public int total() {
-            return blocks + doors + chests;
+            return blocks + doors + chests + trials;
         }
 
         public String line() {
             return "якорь: графов " + total() + " (блоков " + blocks + ", дверей " + doors
-                    + ", сундуков " + chests + "), замков " + locks
+                    + ", сундуков " + chests + (trials > 0 ? ", спавнеров " + trials : "")
+                    + "), замков " + locks
                     + (skipped > 0 ? ", пропущено " + skipped : "")
                     + (turn != IDENTITY ? ", поворот " + turnName(turn) : "");
         }
     }
 
-    /** The four writes an anchor makes into the world, as the rule sees them. */
+    /** The writes an anchor makes into the world, as the rule sees them. */
     public interface StoreSink {
         boolean block(int x, int y, int z, CompoundTag graph);
 
@@ -547,6 +550,10 @@ public final class NpcGraphAnchorCore420 {
         boolean chest(int x, int y, int z, CompoundTag graph);
 
         boolean lock(int x, int y, int z);
+
+        default boolean trial(int x, int y, int z, CompoundTag graph) {
+            return false;
+        }
     }
 
     /**
@@ -577,6 +584,10 @@ public final class NpcGraphAnchorCore420 {
                 written = sink.chest(anchor.getX() + turned[0], anchor.getY() + turned[1],
                         anchor.getZ() + turned[2], entry.graph);
                 if (written) result.chests++;
+            } else if (TRIAL_KIND.equals(entry.kind)) {
+                written = sink.trial(anchor.getX() + turned[0], anchor.getY() + turned[1],
+                        anchor.getZ() + turned[2], entry.graph);
+                if (written) result.trials++;
             }
             for (int[] lock : entry.locks) {
                 // A lock is stored relative to its own entry (both halves of one door), so it travels

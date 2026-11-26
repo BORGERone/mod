@@ -3,6 +3,7 @@ package dev.settledlands.npc.client;
 import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.TeleportNode424;
+import dev.settledlands.trial.TrialControlNode446;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -148,12 +149,12 @@ public final class BlockMenu363 {
     }
 
     /**
-     * How many rows this menu has. Build 424 appends the Teleport row directly after the stock rows
-     * ({@code compact == rows().length}); Build 436 additionally appends «Пул предметов» when in
-     * chest editor mode ({@code compact == rows().length + 1}).
+     * How many rows this menu has. Build 424 appends Teleport after the stock rows
+     * ({@code rows().length}), Build 446 appends Trial Spawner control ({@code rows().length + 1}),
+     * and Build 436 appends «Пул предметов» when in chest editor mode ({@code rows().length + 2}).
      */
     public static int count() {
-        return rows().length + (chest ? 2 : 1);
+        return rows().length + (chest ? 3 : 2);
     }
 
     /** True when {@code compact} is the Teleport row appended after the stock block rows. */
@@ -161,9 +162,14 @@ public final class BlockMenu363 {
         return compact == rows().length;
     }
 
+    /** True when {@code compact} is the Build 446 Trial Spawner control row. */
+    public static boolean isTrialControlRow(int compact) {
+        return compact == rows().length + 1;
+    }
+
     /** True when {@code compact} is the Build 436 Loot Pool row shown in chest editors. */
     public static boolean isLootPoolRow(int compact) {
-        return chest && compact == rows().length + 1;
+        return chest && compact == rows().length + 2;
     }
 
     /**
@@ -187,6 +193,9 @@ public final class BlockMenu363 {
         if (isTeleportRow(compact)) {
             return Component.translatable(TeleportNode424.MENU_LABEL_KEY).getString();
         }
+        if (isTrialControlRow(compact)) {
+            return Component.translatable(TrialControlNode446.MENU_LABEL_KEY).getString();
+        }
         if (isLootPoolRow(compact)) {
             return Component.translatable(LootPool436.MENU_LABEL_KEY).getString();
         }
@@ -198,6 +207,9 @@ public final class BlockMenu363 {
     public static int colour(int compact) {
         if (isTeleportRow(compact)) {
             return TeleportNode424.ACCENT_COLOR;
+        }
+        if (isTrialControlRow(compact)) {
+            return TrialControlNode446.ACCENT_COLOR;
         }
         if (isLootPoolRow(compact)) {
             return LootPool436.ACCENT_COLOR;

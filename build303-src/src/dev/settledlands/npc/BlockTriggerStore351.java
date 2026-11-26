@@ -44,6 +44,7 @@ public final class BlockTriggerStore351 extends SavedData {
     private static final String BLOCKS = "Blocks";
     private static final String KEY = "K";
     private static final String GRAPH = "G";
+    private static final String BLOCK_ID = "B";
 
     /** One block: where it is, its graph, and the two flags the tick pass asks about. */
     public static final class Entry implements RadiusPass354.Spot {
@@ -52,16 +53,23 @@ public final class BlockTriggerStore351 extends SavedData {
         public final int x;
         public final int y;
         public final int z;
+        public String blockId;
         public NpcDialogueGraph graph;
         public boolean check;
         public boolean ring;
 
         Entry(String key, String dimension, int x, int y, int z, NpcDialogueGraph graph) {
+            this(key, dimension, x, y, z, "", graph);
+        }
+
+        Entry(String key, String dimension, int x, int y, int z, String blockId,
+                NpcDialogueGraph graph) {
             this.key = key;
             this.dimension = dimension;
             this.x = x;
             this.y = y;
             this.z = z;
+            this.blockId = blockId == null ? "" : blockId;
             this.graph = graph;
             // Build 394: the two questions are the pass's own now, so a door and a block answer them
             // the same way.
@@ -149,7 +157,8 @@ public final class BlockTriggerStore351 extends SavedData {
             CompoundTag one = list.getCompound(i);
             String key = one.getString(KEY);
             if (key.isEmpty() || !one.contains(GRAPH, 10)) continue;
-            data.remember(key, NpcDialogueGraph.load(one.getCompound(GRAPH)));
+            String blockId = one.contains(BLOCK_ID, 8) ? one.getString(BLOCK_ID) : "";
+            data.remember(key, blockId, NpcDialogueGraph.load(one.getCompound(GRAPH)));
         }
         return data;
     }
@@ -162,6 +171,9 @@ public final class BlockTriggerStore351 extends SavedData {
             CompoundTag one = new CompoundTag();
             one.putString(KEY, entry.key);
             one.put(GRAPH, entry.graph.save());
+            if (entry.blockId != null && !entry.blockId.isEmpty()) {
+                one.putString(BLOCK_ID, entry.blockId);
+            }
             list.add(one);
         }
         tag.put(BLOCKS, list);
@@ -220,20 +232,43 @@ public final class BlockTriggerStore351 extends SavedData {
     public boolean put(String key, NpcDialogueGraph graph) {
         if (key == null || key.isEmpty()) return false;
         if (graph == null) {
-            Entry removed = byKey.remove(key);
-            if (removed != null) forget(removed);
-            if (removed != null) setDirty();
-            return true;
+            return remove(key);
         }
         if (!byKey.containsKey(key) && full()) return false;
         Entry previous = byKey.get(key);
+        String prevBlockId = previous == null ? "" : previous.blockId;
         if (previous != null) forget(previous);
-        remember(key, graph);
+        remember(key, prevBlockId, graph);
+        setDirty();
+        return true;
+    }
+
+    /** Build 446: stores the block registry ID for safe automatic graph deletion on replacement. */
+    public boolean rememberBlockId(String key, String blockId) {
+        if (key == null || key.isEmpty() || blockId == null || blockId.isEmpty()) return false;
+        Entry entry = byKey.get(key);
+        if (entry == null) return false;
+        if (blockId.equals(entry.blockId)) return false;
+        entry.blockId = blockId;
+        setDirty();
+        return true;
+    }
+
+    /** Build 446: removes a block graph entry and returns true if one existed. */
+    public boolean remove(String key) {
+        if (key == null || key.isEmpty()) return false;
+        Entry removed = byKey.remove(key);
+        if (removed == null) return false;
+        forget(removed);
         setDirty();
         return true;
     }
 
     private void remember(String key, NpcDialogueGraph graph) {
+        remember(key, "", graph);
+    }
+
+    private void remember(String key, String blockId, NpcDialogueGraph graph) {
         int at = key.lastIndexOf('@');
         String dimension = at < 0 ? "?" : key.substring(0, at);
         int x = 0;
@@ -251,7 +286,7 @@ public final class BlockTriggerStore351 extends SavedData {
                 BlockTrigger351.fail(failure);
             }
         }
-        Entry entry = new Entry(key, dimension, x, y, z, graph);
+        Entry entry = new Entry(key, dimension, x, y, z, blockId, graph);
         byKey.put(key, entry);
         List<Entry> list = byDimension.get(dimension);
         if (list == null) {

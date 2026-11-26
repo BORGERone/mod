@@ -127,6 +127,14 @@ public final class DoorStore368 extends SavedData {
         return changed;
     }
 
+    /** Build 446: unlocks a stored coordinate key directly even after the DoorBlock is gone. */
+    public boolean unlockExact(String key) {
+        if (key == null || key.isEmpty()) return false;
+        if (!locked.remove(key)) return false;
+        setDirty();
+        return true;
+    }
+
     /** How many places are locked - a probe and a log line, not a game rule. */
     public int size() {
         return locked.size();

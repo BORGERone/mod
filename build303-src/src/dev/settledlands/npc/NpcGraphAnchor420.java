@@ -4,6 +4,8 @@ import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.chest.ChestGraph396Store;
 import dev.settledlands.door.DoorGraph382Store;
 import dev.settledlands.door.DoorStore368;
+import dev.settledlands.trial.TrialGraph446;
+import dev.settledlands.trial.TrialGraph446Store;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashSet;
@@ -143,6 +145,11 @@ public final class NpcGraphAnchor420 {
         } catch (Throwable failure) {
             warn("anchor: embedded chest sync skipped: " + failure);
         }
+        try {
+            work += TrialGraph446.syncEmbeddedGraphsNear(level, players);
+        } catch (Throwable failure) {
+            warn("anchor: embedded trial sync skipped: " + failure);
+        }
         List<Entity> markers = markersNear(level, players);
         for (Entity marker : markers) {
             try {
@@ -259,6 +266,15 @@ public final class NpcGraphAnchor420 {
                 if (place == null) continue;
                 if (locks.isLocked(level, place.offset(0, -1, 0))) continue;
                 if (near(level, place, players) && seen.add(place)) out.add(place);
+            }
+        }
+
+        TrialGraph446Store trials = trialStore(server);
+        if (trials != null) {
+            for (String key : trials.keysOfDimension(dimension)) {
+                if (trials.graph(key) == null) continue;
+                BlockPos place = TrialGraph446Store.positionOf(key);
+                if (place != null && near(level, place, players) && seen.add(place)) out.add(place);
             }
         }
         return out;
@@ -783,6 +799,15 @@ public final class NpcGraphAnchor420 {
             return DoorStore368.get(server);
         } catch (Throwable failure) {
             warn("anchor: the door locks could not be read: " + failure);
+            return null;
+        }
+    }
+
+    private static TrialGraph446Store trialStore(MinecraftServer server) {
+        try {
+            return TrialGraph446Store.get(server);
+        } catch (Throwable failure) {
+            warn("anchor: the trial graphs could not be read: " + failure);
             return null;
         }
     }

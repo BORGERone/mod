@@ -50,7 +50,7 @@ public final class BlockTriggerEvents351 {
 
     @SubscribeEvent
     public static void onRightClickBlock(PlayerInteractEvent.RightClickBlock event) {
-        if (event == null || event.getLevel() == null || event.getLevel().isClientSide) return;
+        if (event == null || event.isCanceled() || event.getLevel() == null || event.getLevel().isClientSide) return;
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         BlockPos pos = event.getPos();
@@ -59,6 +59,7 @@ public final class BlockTriggerEvents351 {
         // graph (DoorGraph382Events, which runs first), and a door that is not a door for the block
         // editor must never grow a block graph it would never run.
         if (dev.settledlands.door.Doors368.isDoor(level.getBlockState(pos))) return;
+        if (dev.settledlands.trial.TrialSpawnerBridge446.isSpawner(level.getBlockState(pos))) return;
         if (alreadyHandled(player, level, pos)) return;
 
         ItemStack stack = event.getItemStack();

@@ -4,6 +4,7 @@ import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.trial.TrialGraph446;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -48,9 +49,10 @@ public final class CardEventPin398 {
 
     private CardEventPin398() {}
 
-    /** True for the two cards of this mod - the only nodes with a second execution socket. */
+    /** True for the card nodes of this mod with a second execution socket (door, chest, trial spawner). */
     public static boolean isCard(Node node) {
-        return DoorGraph382.isDoorNode(node) || ChestGraph396.isChestNode(node);
+        return DoorGraph382.isDoorNode(node) || ChestGraph396.isChestNode(node)
+                || TrialGraph446.isTrialNode(node);
     }
 
     /** The node this card's second socket points at, or -1. */
@@ -78,6 +80,7 @@ public final class CardEventPin398 {
      * so the label is read from the card's own kind and never assumed.</p>
      */
     public static String labelKey(Node card) {
+        if (TrialGraph446.isTrialNode(card)) return "gui.settledlands.trial.pin_destroy";
         return ChestGraph396.isChestNode(card)
                 ? "gui.settledlands.chest.pin_hack" : "gui.settledlands.door.pin_open";
     }

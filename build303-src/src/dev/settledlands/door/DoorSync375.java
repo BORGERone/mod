@@ -393,6 +393,20 @@ public record DoorSync375(String data) implements CustomPacketPayload {
         }
     }
 
+    /** Build 446, server side: unlock a destroyed door key directly without needing live DoorBlock state. */
+    public static void sendUnlockExact(ServerLevel level, String key) {
+        if (level == null || key == null || key.isEmpty()) return;
+        try {
+            MinecraftServer server = level.getServer();
+            List<ServerPlayer> players = server == null ? level.players()
+                    : server.getPlayerList().getPlayers();
+            if (players == null || players.isEmpty()) return;
+            broadcast(players, "U|" + key);
+        } catch (Throwable failure) {
+            LOG.warn("door: exact unlock could not be sent: " + failure);
+        }
+    }
+
     private static void send(ServerPlayer player, String text) {
         try {
             PacketDistributor.sendToPlayer(player, new DoorSync375(text));

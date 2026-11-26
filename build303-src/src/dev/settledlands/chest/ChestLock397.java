@@ -303,6 +303,13 @@ public final class ChestLock397 {
         return CRACKED.size();
     }
 
+    /** Build 446: drops any pending crack token tied to a destroyed chest key. */
+    public static void clearCracksForKey(String key) {
+        if (key == null || key.isEmpty() || CRACKED.isEmpty()) return;
+        String suffix = "@" + key;
+        CRACKED.keySet().removeIf(k -> k != null && k.endsWith(suffix));
+    }
+
     /** Is the player still standing at the chest they solved the panel for? The door's own reach. */
     public static boolean near(net.minecraft.server.level.ServerPlayer player, BlockPos pos) {
         if (player == null || pos == null) return false;

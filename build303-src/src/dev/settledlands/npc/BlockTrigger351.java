@@ -223,7 +223,12 @@ public final class BlockTrigger351 {
             }
             BlockPos savedPos = parsePos(key);
             if (player.level() instanceof ServerLevel level && savedPos != null) {
-                NpcGraphAnchor420.anchorForSave(level, savedPos, graph != null);
+                ServerLevel targetLevel = serverLevelForKey(player.getServer(), key, level);
+                if (graph != null) {
+                    store.rememberBlockId(key,
+                            GraphBlockCleanup446.blockIdOf(targetLevel.getBlockState(savedPos)));
+                }
+                NpcGraphAnchor420.anchorForSave(targetLevel, savedPos, graph != null);
             }
             String where = key.substring(key.indexOf('@') + 1);
             if (graph == null) {
@@ -241,6 +246,24 @@ public final class BlockTrigger351 {
         } catch (Throwable failure) {
             fail(failure);
         }
+    }
+
+    private static ServerLevel serverLevelForKey(net.minecraft.server.MinecraftServer server,
+            String key, ServerLevel fallback) {
+        if (server != null && key != null) {
+            int at = key.lastIndexOf('@');
+            if (at > 0) {
+                String dim = key.substring(0, at);
+                net.minecraft.resources.ResourceLocation rl =
+                        net.minecraft.resources.ResourceLocation.tryParse(dim);
+                if (rl != null) {
+                    ServerLevel resolved = server.getLevel(net.minecraft.resources.ResourceKey.create(
+                            net.minecraft.core.registries.Registries.DIMENSION, rl));
+                    if (resolved != null) return resolved;
+                }
+            }
+        }
+        return fallback;
     }
 
     private static BlockPos parsePos(String key) {
@@ -320,11 +343,142 @@ public final class BlockTrigger351 {
     public static int start(ServerPlayer player, NpcDialogueGraph graph, int startId,
             BlockTalk358.Where where) {
         if (graph == null || startId < 0) return 0;
+        if (player == null && where != null && where.level() != null) {
+            return startServerOnly(where.level(), graph, startId, where);
+        }
         try {
             return walk(player, graph, startId, new HashSet<>(), where, null);
         } catch (Throwable failure) {
             fail(failure);
             return 0;
+        }
+    }
+
+    /**
+     * Build 446: executes server-side steps (triggers/commands, shared variables, conditions,
+     * random branches) when an event fires without any online/participating player (e.g., spawner
+     * destroyed via {@code /setblock} or {@code Axiom}).
+     */
+    public static int startServerOnly(ServerLevel level, NpcDialogueGraph graph, int startId,
+            BlockTalk358.Where where) {
+        if (level == null || graph == null || startId < 0) return 0;
+        try {
+            Set<Integer> visited = new HashSet<>();
+            int curId = startId;
+            int steps = 0;
+            net.minecraft.server.MinecraftServer server = level.getServer();
+            while (curId >= 0 && visited.size() < MAX_STEPS && visited.add(curId)) {
+                NpcDialogueGraph.Node cur = graph.get(curId);
+                if (cur == null) return steps;
+                steps++;
+
+                if (cur.type == NpcDialogueGraph.TRIGGER) {
+                    actServerOnly(server, cur);
+                    fireTriggersServerOnly(server, graph, cur, visited);
+                    curId = cur.next;
+                    continue;
+                }
+                if (cur.type == NpcDialogueGraph.VARIABLE) {
+                    if (cur.pointsShared && !cur.pointsName.isBlank() && cur.varValue != 0
+                            && server != null) {
+                        NpcPoints.get(server).add(new java.util.UUID(0L, 0L),
+                                cur.pointsName, true, cur.varValue);
+                    }
+                    actServerOnly(server, cur);
+                    fireTriggersServerOnly(server, graph, cur, visited);
+                    curId = cur.next;
+                    continue;
+                }
+                if (cur.type == NpcDialogueGraph.IF) {
+                    int val = valueServerOnly(server, graph, cur);
+                    boolean pass = GuideDialogue.evalCondition(val, cur.varOp, cur.varCompare);
+                    actServerOnly(server, cur);
+                    fireTriggersServerOnly(server, graph, cur, visited);
+                    curId = pass ? cur.next : cur.falseNext;
+                    continue;
+                }
+                if (cur.type == NpcDialogueGraph.RANDOM) {
+                    int min = Math.max(1, cur.randomMin);
+                    int max = Math.max(min, cur.randomMax);
+                    int port = min + java.util.concurrent.ThreadLocalRandom.current()
+                            .nextInt(max - min + 1) - 1;
+                    actServerOnly(server, cur);
+                    fireTriggersServerOnly(server, graph, cur, visited);
+                    curId = port >= 0 && port < cur.randomBranches.size()
+                            ? cur.randomBranches.get(port) : -1;
+                    continue;
+                }
+                if (cur.type == NpcDialogueGraph.LINE || cur.type == NpcDialogueGraph.BUTTON
+                        || cur.type == NpcDialogueGraph.CUTSCENE) {
+                    actServerOnly(server, cur);
+                    fireTriggersServerOnly(server, graph, cur, visited);
+                    curId = cur.next;
+                    continue;
+                }
+                curId = cur.next;
+            }
+            return steps;
+        } catch (Throwable failure) {
+            fail(failure);
+            return 0;
+        }
+    }
+
+    private static int valueServerOnly(net.minecraft.server.MinecraftServer server,
+            NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+        if (server == null || node == null) return 0;
+        String name = node.pointsName;
+        boolean shared = node.pointsShared;
+        if (node.varInputNode >= 0) {
+            NpcDialogueGraph.Node source = graph.get(node.varInputNode);
+            if (source != null && source.type == NpcDialogueGraph.VARIABLE
+                    && !source.pointsName.isBlank()) {
+                name = source.pointsName;
+                shared = source.pointsShared;
+            }
+        }
+        if (!shared || name == null || name.isBlank()) return 0;
+        return NpcPoints.get(server).get(new java.util.UUID(0L, 0L), name, true);
+    }
+
+    private static void actServerOnly(net.minecraft.server.MinecraftServer server,
+            NpcDialogueGraph.Node node) {
+        if (node == null || node.action == null || node.action.isBlank()) return;
+        try {
+            String raw = node.action.trim();
+            String[] lines = raw.split("\\r?\\n");
+            for (int i = 0; i < lines.length; i++) {
+                String line = lines[i].trim();
+                if (line.isEmpty()) continue;
+                if (dev.settledlands.trial.TrialControlNode446.isControlAction(line)) {
+                    dev.settledlands.trial.TrialControlActions446.execute(null, null, line);
+                    continue;
+                }
+                String lower = line.toLowerCase(java.util.Locale.ROOT);
+                if (lower.startsWith("trigger:") || lower.startsWith("trigger ")) continue;
+                if (lower.startsWith("cmd:")) line = line.substring(4).trim();
+                while (line.startsWith("/")) line = line.substring(1).trim();
+                if (line.isEmpty() || server == null) continue;
+                net.minecraft.commands.CommandSourceStack src =
+                        server.createCommandSourceStack().withPermission(2);
+                server.getCommands().performPrefixedCommand(src, line);
+            }
+        } catch (Throwable failure) {
+            fail(failure);
+        }
+    }
+
+    private static void fireTriggersServerOnly(net.minecraft.server.MinecraftServer server,
+            NpcDialogueGraph graph, NpcDialogueGraph.Node node, Set<Integer> visited) {
+        List<Integer> ids = node.triggers;
+        if (ids == null) return;
+        for (int i = 0; i < ids.size() && visited.size() < MAX_STEPS; i++) {
+            int triggerId = ids.get(i);
+            if (!visited.add(triggerId)) continue;
+            NpcDialogueGraph.Node trigger = graph.get(triggerId);
+            if (trigger == null || trigger.type != NpcDialogueGraph.TRIGGER) continue;
+            actServerOnly(server, trigger);
+            fireTriggersServerOnly(server, graph, trigger, visited);
         }
     }
 

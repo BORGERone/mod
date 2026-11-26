@@ -2,6 +2,7 @@ package dev.settledlands.mixin;
 
 import dev.settledlands.npc.TeleportNode424;
 import dev.settledlands.npc.client.NpcGraphContextMenu;
+import dev.settledlands.trial.TrialControlNode446;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
 import org.spongepowered.asm.mixin.injection.At;
@@ -51,8 +52,11 @@ public abstract class TeleportContextMenuMixin424 {
         if (!contains(mouseX, mouseY) || isScrollbar(mouseX, mouseY)) return;
         int local = (int) ((mouseY - top - 20.0D) / 22.0D);
         if (local < 0 || local >= TeleportNode424.NPC_VISIBLE_ROWS) return;
-        if (scrollRow + local == TeleportNode424.TELEPORT_ROW) {
+        int row = scrollRow + local;
+        if (row == TeleportNode424.TELEPORT_ROW) {
             cir.setReturnValue(TeleportNode424.TELEPORT_ROW);
+        } else if (row == TrialControlNode446.SPAWNER_ROW) {
+            cir.setReturnValue(TrialControlNode446.SPAWNER_ROW);
         }
     }
 

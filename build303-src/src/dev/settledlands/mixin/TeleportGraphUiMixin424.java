@@ -8,6 +8,7 @@ import dev.settledlands.npc.TeleportNode424;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphContextMenu;
 import dev.settledlands.npc.client.TeleportCard424;
+import dev.settledlands.trial.TrialGraph446;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
@@ -57,7 +58,8 @@ public abstract class TeleportGraphUiMixin424 {
         int id = screen.entityId();
         if (BlockTrigger351.isBlockEditorId(id)
                 || DoorGraph382.isDoorEditorId(id)
-                || ChestGraph396.isChestEditorId(id)) {
+                || ChestGraph396.isChestEditorId(id)
+                || TrialGraph446.isTrialEditorId(id)) {
             return;
         }
         TeleportCard424.drawMenuRow(contextMenu, graphics, screen.settledlands$font(), mouseX, mouseY);
@@ -82,7 +84,8 @@ public abstract class TeleportGraphUiMixin424 {
         int id = screen.entityId();
         if (BlockTrigger351.isBlockEditorId(id)
                 || DoorGraph382.isDoorEditorId(id)
-                || ChestGraph396.isChestEditorId(id)) {
+                || ChestGraph396.isChestEditorId(id)
+                || TrialGraph446.isTrialEditorId(id)) {
             return;
         }
         if (contextMenu.isScrollbar(mouseX, mouseY)) return;

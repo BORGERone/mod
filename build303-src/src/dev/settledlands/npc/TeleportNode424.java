@@ -29,8 +29,8 @@ public final class TeleportNode424 {
     /** Row index in the NPC/common context menu (stock 0..15, Pursuit 16, Teleport 17). */
     public static final int TELEPORT_ROW = 17;
 
-    /** Total rows in the NPC/common context menu once Teleport joins. */
-    public static final int NPC_MENU_ITEMS = 18;
+    /** Total rows in the NPC/common context menu once Teleport (17) and Trial Control (18) join. */
+    public static final int NPC_MENU_ITEMS = 19;
 
     /** Visible rows in the NPC/common context menu window. */
     public static final int NPC_VISIBLE_ROWS = 5;
