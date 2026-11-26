@@ -4,7 +4,9 @@ import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.trial.TrialControlNode446;
 import dev.settledlands.trial.TrialGraph446;
+import dev.settledlands.trial.TrialModule447;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -871,6 +873,7 @@ public final class PursuitGraphNode272 {
      */
     public static boolean isValueInputNode(Node node) {
         if (node == null || isPursuitNode(node)) return false;
+        if (TrialModule447.isModuleNode(node) || TrialControlNode446.isControlNode(node)) return false;
         return node.type == NpcDialogueGraph.LINE
                 || node.type == NpcDialogueGraph.TRIGGER
                 || node.type == NpcDialogueGraph.IF

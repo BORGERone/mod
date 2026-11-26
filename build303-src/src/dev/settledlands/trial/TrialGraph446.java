@@ -195,7 +195,7 @@ public final class TrialGraph446 {
         return target;
     }
 
-    /** Clears broken references to a deleted node from any trial card's third socket. */
+    /** Clears broken references to a deleted node from any trial card's third socket and re-syncs modules. */
     public static void onNodeRemoved(NpcDialogueGraph graph, int removedId) {
         if (graph == null || graph.nodes == null || removedId < 0) return;
         for (NpcDialogueGraph.Node n : graph.nodes.values()) {
@@ -203,6 +203,7 @@ public final class TrialGraph446 {
                 setStartWaveTarget(n, -1);
             }
         }
+        TrialModule447.syncCardConfig(graph);
     }
 
     public static boolean allowed(int type) {
@@ -212,17 +213,20 @@ public final class TrialGraph446 {
     public static NpcDialogueGraph defaultGraph(String liveConfigJson) {
         NpcDialogueGraph graph = new NpcDialogueGraph();
         graph.enabled = true;
-        NpcDialogueGraph.Node card = graph.add(TRIAL_TYPE, 120, 120);
+        TrialConfig446 cfg = liveConfigJson != null && !liveConfigJson.isBlank()
+                ? TrialConfig446.fromJson(liveConfigJson)
+                : TrialConfig446.defaults();
+        NpcDialogueGraph.Node card = graph.add(TRIAL_TYPE, 660, 247);
         if (card != null) {
             card.text = "";
             card.varValue = 0;
+            card.varOp = 1;
             card.originStep = 0;
             card.falseNext = -1;
             card.next = -1;
-            card.action = liveConfigJson != null && !liveConfigJson.isBlank()
-                    ? TrialConfig446.fromJson(liveConfigJson).toJson()
-                    : TrialConfig446.defaults().toJson();
+            card.action = cfg.toJson();
             graph.entry = card.id;
+            TrialModule447.createMissingModules(graph, card, cfg);
         }
         return graph;
     }
@@ -231,20 +235,27 @@ public final class TrialGraph446 {
         if (graph == null) return defaultGraph(null);
         NpcDialogueGraph.Node card = trialNode(graph);
         if (card == null) {
-            NpcDialogueGraph.Node made = graph.add(TRIAL_TYPE, 120, 120);
+            NpcDialogueGraph.Node made = graph.add(TRIAL_TYPE, 660, 247);
             if (made != null) {
-                made.action = TrialConfig446.defaults().toJson();
+                TrialConfig446 cfg = TrialConfig446.defaults();
+                made.action = cfg.toJson();
                 made.originStep = 0;
+                made.varOp = 1;
                 if (graph.entry < 0) graph.entry = made.id;
                 card = made;
+                TrialModule447.createMissingModules(graph, card, cfg);
             }
+        } else if (card.varOp == 0 && !TrialModule447.hasAnyModule(graph)) {
+            TrialConfig446 legacy = (card.action == null || card.action.isBlank())
+                    ? TrialConfig446.defaults()
+                    : TrialConfig446.fromJson(card.action);
+            card.x = 660;
+            card.y = 247;
+            card.varOp = 1;
+            TrialModule447.createMissingModules(graph, card, legacy);
         }
         if (card != null) {
-            if (card.action == null || card.action.isBlank()) {
-                card.action = TrialConfig446.defaults().toJson();
-            } else {
-                card.action = TrialConfig446.fromJson(card.action).toJson();
-            }
+            TrialModule447.syncCardConfig(graph);
             graph.entry = card.id;
         }
         return graph;
@@ -424,7 +435,11 @@ public final class TrialGraph446 {
             NpcDialogueGraph.Node card = trialNode(graph);
             if (card != null) {
                 if (liveJson != null && !liveJson.isBlank()) {
-                    card.action = liveJson;
+                    TrialConfig446 liveCfg = TrialConfig446.fromJson(liveJson);
+                    TrialConfig446 graphCfg = TrialModule447.compileConfig(graph);
+                    if (!liveCfg.toJson().equals(graphCfg.toJson())) {
+                        TrialModule447.applyConfigToConnectedModules(graph, liveCfg);
+                    }
                 }
                 if (stats[1] > waves(card)) {
                     setWaves(card, stats[1]);

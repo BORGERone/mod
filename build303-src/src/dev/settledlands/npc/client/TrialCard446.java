@@ -3,16 +3,19 @@ package dev.settledlands.npc.client;
 import com.mojang.blaze3d.vertex.PoseStack;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.trial.TrialConfig446;
 import dev.settledlands.trial.TrialGraph446;
+import dev.settledlands.trial.TrialModule447;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 /**
- * Build 446: canvas card renderer and third-socket geometry helper for {@link TrialGraph446#TRIAL_TYPE}
+ * Build 446/447: canvas hub card renderer and socket geometry helper for {@link TrialGraph446#TRIAL_TYPE}
  * ({@code 60}).
  *
- * <p>Right-edge sockets have >= 18 px vertical spacing so hit areas never overlap:</p>
+ * <p>Left-edge input slots ({@code 0..7}, y = 28..154 step 18) receive wires from the 8 specialized
+ * {@link TrialModule447} cards. Right-edge sockets stay on rows 32/50/68/92:</p>
  * <ul>
  *   <li>{@link #START_PIN_Y} = 32: Старт волны ({@code originStep}, mint green)</li>
  *   <li>{@code 50}: Зачистка волны (stock {@code next}, amber)</li>
@@ -21,6 +24,13 @@ import net.minecraft.network.chat.Component;
  * </ul>
  */
 public final class TrialCard446 {
+
+    public static final int CARD_W = 256;
+    public static final int CARD_H = 176;
+
+    public static final int INPUT_PIN_X = 0;
+    public static final int INPUT_PIN_Y0 = 28;
+    public static final int INPUT_PIN_STEP = 18;
 
     public static final int START_PIN_Y = 32;
     public static final int START_COLOR = 0xFF4CE0A8;
@@ -34,20 +44,32 @@ public final class TrialCard446 {
     private static final int EDGE = -5723992;
     private static final int LABEL = -5592406;
     private static final int AMBER = -3177856;
-    private static final int LABEL_STRIP = 74;
+    private static final int DIVIDER = 0xFF283444;
 
     private TrialCard446() {}
+
+    public static int inputPinY(int slot) {
+        return INPUT_PIN_Y0 + slot * INPUT_PIN_STEP;
+    }
+
+    public static double inputPinScreenX(NpcGraphCanvas canvas, Node hub) {
+        return canvas == null || hub == null ? 0.0D : canvas.screenX(hub.x);
+    }
+
+    public static double inputPinScreenY(NpcGraphCanvas canvas, Node hub, int slot) {
+        return canvas == null || hub == null ? 0.0D : canvas.screenY(hub.y + inputPinY(slot));
+    }
 
     public static void draw(NpcDialogueGraphScreen screen, GuiGraphics graphics, Node node) {
         if (screen == null || graphics == null || node == null) return;
         NpcGraphCanvas canvas = screen.settledlands$canvas();
         Font font = screen.settledlands$font();
+        NpcDialogueGraph graph = screen.settledlands$graph();
         if (canvas == null || font == null) return;
 
-        int width = NpcGraphCanvas.NODE_W;
-        int height = NpcGraphCanvas.NODE_H;
+        int width = CARD_W;
+        int height = CARD_H;
         boolean selected = screen.settledlands$isSelected(node.id);
-        int textWidth = width - 16 - LABEL_STRIP;
 
         PoseStack pose = graphics.pose();
         pose.pushPose();
@@ -65,22 +87,60 @@ public final class TrialCard446 {
                     8, 6, TrialGraph446.ACCENT_COLOR, false);
             graphics.drawString(font, idTag, width - 8 - idW, 6, EDGE, false);
 
-            String[] lines = TrialGraphClient446.lines(node);
-            graphics.drawString(font, clip(font, lines[0], textWidth), 8, 26, 0xFFE8EEF5, false);
-            graphics.drawString(font, clip(font, lines[1], textWidth), 8, 40, LABEL, false);
-            graphics.drawString(font, clip(font, lines[2], textWidth), 8, 54, LABEL, false);
-            graphics.drawString(font, clip(font, lines[3], textWidth), 8, 68, LABEL, false);
-            boolean nobody = TrialGraph446.lastPlayer(node).isEmpty();
-            graphics.drawString(font, clip(font, lines[4], textWidth), 8, 82, nobody ? EDGE : LABEL, false);
+            // Vertical divider between left module slots and right summary/outputs
+            graphics.fill(85, 24, 86, height - 6, DIVIDER);
 
-            // Socket labels (right-aligned inside the dedicated strip)
+            // Left 8 module input slots
+            int connected = 0;
+            for (int s = 0; s < TrialModule447.MODULE_COUNT; s++) {
+                int py = inputPinY(s);
+                boolean wired = TrialModule447.connectedModule(graph, node, s) != null;
+                if (wired) connected++;
+                int col = wired ? TrialModule447.color(s) : EDGE;
+                graphics.drawString(font, clip(font, tr(TrialModule447.pinKey(s)), 72),
+                        8, py - 4, col, false);
+                if (wired) {
+                    DoorCard382.diamond(graphics, INPUT_PIN_X, py, 4, TrialModule447.color(s));
+                } else {
+                    DoorCard382.diamond(graphics, INPUT_PIN_X, py, 4, TrialModule447.dimColor(s));
+                    graphics.fill(-1, py - 1, 2, py + 2, BODY);
+                }
+            }
+
+            // Middle-right summary (top section next to right pins)
+            int midX = 92;
+            int midW = 86;
+            String[] lines = TrialGraphClient446.lines(node);
+            graphics.drawString(font, clip(font, lines[0], midW), midX, 28, 0xFFE8EEF5, false);
+            graphics.drawString(font, clip(font, lines[1], midW), midX, 46, LABEL, false);
+            graphics.drawString(font, clip(font, lines[2], midW), midX, 64, LABEL, false);
+            graphics.drawString(font, clip(font, lines[3], midW), midX, 88, LABEL, false);
+
+            // Right output sockets & labels
             drawPinLabel(graphics, font, width, START_PIN_Y, tr("gui.settledlands.trial.pin_start"), START_COLOR);
             drawPinLabel(graphics, font, width, CardEventPin398.FIRST_ROW, tr("gui.settledlands.trial.pin_clear"), AMBER);
             drawPinLabel(graphics, font, width, CardEventPin398.SECOND_ROW, tr("gui.settledlands.trial.pin_destroy"), AMBER);
             drawPinLabel(graphics, font, width, PursuitGraphNode272.TARGET_PIN_Y,
                     tr("gui.settledlands.trial.pin_player"), PursuitGraphNode272.COL_VALUE);
 
-            // Socket indicators (drawn last)
+            // Lower-right summary box
+            graphics.fill(midX, 106, width - 8, 107, DIVIDER);
+            int botW = width - 8 - midX;
+            String modStatus = TrialGraphClient446.safe("gui.settledlands.trial.hub_modules",
+                    connected + "/" + TrialModule447.MODULE_COUNT);
+            graphics.drawString(font, clip(font, modStatus, botW), midX, 114,
+                    connected == TrialModule447.MODULE_COUNT ? 0xFF56D38C : 0xFFF5B841, false);
+
+            TrialConfig446 cfg = TrialGraph446.configOf(node);
+            String rangeLine = TrialGraphClient446.safe("gui.settledlands.trial.hub_range",
+                    cfg.activationRange + "/" + cfg.spawnRange);
+            graphics.drawString(font, clip(font, rangeLine, botW), midX, 131, LABEL, false);
+
+            boolean nobody = TrialGraph446.lastPlayer(node).isEmpty();
+            graphics.drawString(font, clip(font, lines[4], botW), midX, 148,
+                    nobody ? EDGE : 0xFF79C0FF, false);
+
+            // Socket indicators (drawn last on right edge)
             DoorCard382.socket(graphics, width, START_PIN_Y, START_COLOR);
             DoorCard382.socket(graphics, width, CardEventPin398.FIRST_ROW, AMBER);
             DoorCard382.socket(graphics, width, CardEventPin398.SECOND_ROW, AMBER);

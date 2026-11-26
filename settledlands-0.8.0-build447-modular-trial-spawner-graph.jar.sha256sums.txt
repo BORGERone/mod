@@ -1,0 +1,1 @@
+85e28fdf0bf17069ba33f195af41ac4a81a496040d4ded5df1e2c6c9c93fa815  settledlands-0.8.0-build447-modular-trial-spawner-graph.jar

@@ -58,7 +58,7 @@ public abstract class BlockMenu363Mixin {
         if (!door && !settledlands$blockEditor() && !chest && !trial) return;
         if (this.contextMenu == null) return;
         BlockMenu363.fit(this.contextMenu,
-                ((NpcDialogueGraphScreen) (Object) this).settledlands$canvas(), door, chest);
+                ((NpcDialogueGraphScreen) (Object) this).settledlands$canvas(), door, chest, trial);
     }
 
     /** Paint the cut-down panel in place of the stock one. A node's copy/delete menu stays stock. */

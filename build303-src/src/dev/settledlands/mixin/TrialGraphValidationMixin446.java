@@ -3,6 +3,7 @@ package dev.settledlands.mixin;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.trial.TrialControlNode446;
 import dev.settledlands.trial.TrialGraph446;
+import dev.settledlands.trial.TrialModule447;
 import java.util.ArrayList;
 import java.util.List;
 import org.spongepowered.asm.mixin.Mixin;
@@ -48,7 +49,8 @@ public abstract class TrialGraphValidationMixin446 {
         for (NpcDialogueGraph.Node n : graph.nodes.values()) {
             if (n == null) continue;
             boolean isTrialCard = TrialGraph446.isTrialNode(n);
-            boolean isLongSpawnerCtrl = TrialControlNode446.isControlNode(n)
+            boolean isLongSpawnerCtrl = (TrialControlNode446.isControlNode(n)
+                    || TrialModule447.isModuleNode(n))
                     && n.action != null && n.action.length() > 2048
                     && n.action.length() <= MAX_SPAWNER_JSON_LEN;
             boolean isTrialValueWire = n.varInputNode >= 0

@@ -4,6 +4,7 @@ import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.TeleportNode424;
 import dev.settledlands.trial.TrialControlNode446;
+import dev.settledlands.trial.TrialModule447;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -119,6 +120,7 @@ public final class BlockMenu363 {
      */
     private static boolean door;
     private static boolean chest;
+    private static boolean trial;
 
     /** Where the open panel is, measured when it appeared. */
     private static int left;
@@ -154,7 +156,8 @@ public final class BlockMenu363 {
      * and Build 436 appends «Пул предметов» when in chest editor mode ({@code rows().length + 2}).
      */
     public static int count() {
-        return rows().length + (chest ? 3 : 2);
+        int base = rows().length + (chest ? 3 : 2);
+        return trial ? base + TrialModule447.MODULE_COUNT : base;
     }
 
     /** True when {@code compact} is the Teleport row appended after the stock block rows. */
@@ -170,6 +173,14 @@ public final class BlockMenu363 {
     /** True when {@code compact} is the Build 436 Loot Pool row shown in chest editors. */
     public static boolean isLootPoolRow(int compact) {
         return chest && compact == rows().length + 2;
+    }
+
+    /** Build 447: module slot (0..7) when in trial spawner editor mode, or -1. */
+    public static int trialModuleSlot(int compact) {
+        if (!trial) return -1;
+        int start = rows().length + 2;
+        int idx = compact - start;
+        return idx >= 0 && idx < TrialModule447.MODULE_COUNT ? idx : -1;
     }
 
     /**
@@ -199,6 +210,10 @@ public final class BlockMenu363 {
         if (isLootPoolRow(compact)) {
             return Component.translatable(LootPool436.MENU_LABEL_KEY).getString();
         }
+        int modSlot = trialModuleSlot(compact);
+        if (modSlot >= 0) {
+            return Component.translatable(TrialModule447.menuKey(modSlot)).getString();
+        }
         int stock = stockRow(compact);
         return stock < 0 ? "" : Component.translatable(LABEL_KEYS[stock]).getString();
     }
@@ -213,6 +228,10 @@ public final class BlockMenu363 {
         }
         if (isLootPoolRow(compact)) {
             return LootPool436.ACCENT_COLOR;
+        }
+        int modSlot = trialModuleSlot(compact);
+        if (modSlot >= 0) {
+            return TrialModule447.color(modSlot);
         }
         int stock = stockRow(compact);
         if (stock < 0) return LABEL;
@@ -252,8 +271,14 @@ public final class BlockMenu363 {
 
     public static void fit(NpcGraphContextMenu menu, NpcGraphCanvas canvas, boolean doorMode,
             boolean chestMode) {
+        fit(menu, canvas, doorMode, chestMode, false);
+    }
+
+    public static void fit(NpcGraphContextMenu menu, NpcGraphCanvas canvas, boolean doorMode,
+            boolean chestMode, boolean trialMode) {
         door = doorMode;
         chest = chestMode;
+        trial = trialMode;
         if (menu == null || canvas == null || !menu.open || menu.targetNodeId >= 0) {
             reset();
             return;

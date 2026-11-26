@@ -3,6 +3,7 @@ package dev.settledlands.mixin;
 import dev.settledlands.npc.GuideNpc;
 import dev.settledlands.trial.TrialControlActions446;
 import dev.settledlands.trial.TrialControlNode446;
+import dev.settledlands.trial.TrialModule447;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import org.spongepowered.asm.mixin.Mixin;
@@ -21,6 +22,10 @@ public abstract class TrialControlActionsMixin446 {
             at = @At("HEAD"), cancellable = true, remap = false)
     private static void settledlands$runTrialControlSingle446(ServerPlayer player, GuideNpc npc,
             int relation, String action, CallbackInfoReturnable<Boolean> cir) {
+        if (TrialModule447.isModuleAction(action)) {
+            cir.setReturnValue(Boolean.TRUE);
+            return;
+        }
         if (TrialControlNode446.isControlAction(action)) {
             cir.setReturnValue(TrialControlActions446.execute(player, npc, action));
         }
@@ -30,6 +35,10 @@ public abstract class TrialControlActionsMixin446 {
             at = @At("HEAD"), cancellable = true, remap = false)
     private static void settledlands$runTrialControlForEntity446(Entity entity, GuideNpc npc,
             int relation, String action, CallbackInfoReturnable<Boolean> cir) {
+        if (TrialModule447.isModuleAction(action)) {
+            cir.setReturnValue(Boolean.TRUE);
+            return;
+        }
         if (TrialControlNode446.isControlAction(action)) {
             cir.setReturnValue(TrialControlActions446.executeForEntity(entity, npc, action));
         }
@@ -39,6 +48,10 @@ public abstract class TrialControlActionsMixin446 {
             at = @At("HEAD"), cancellable = true, remap = false)
     private static void settledlands$runTrialControlTrigger446(ServerPlayer player, GuideNpc npc,
             int relation, String action, CallbackInfoReturnable<Boolean> cir) {
+        if (TrialModule447.isModuleAction(action)) {
+            cir.setReturnValue(Boolean.TRUE);
+            return;
+        }
         if (TrialControlNode446.isStrippedControlAction(action)) {
             cir.setReturnValue(TrialControlActions446.execute(player, npc, action));
         }

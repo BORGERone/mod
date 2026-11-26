@@ -4,6 +4,7 @@ import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.TeleportNode424;
 import dev.settledlands.trial.TrialControlNode446;
 import dev.settledlands.trial.TrialGraph446;
+import dev.settledlands.trial.TrialModule447;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
@@ -31,7 +32,15 @@ public abstract class TrialControlWiringMixin446 {
 
         boolean fromTrialCard = TrialGraph446.isTrialNode(from);
         boolean toTrialCard = TrialGraph446.isTrialNode(to);
-        if (toTrialCard) {
+        boolean fromMod = TrialModule447.isModuleNode(from);
+        boolean toMod = TrialModule447.isModuleNode(to);
+        if (fromMod) {
+            cir.setReturnValue(toTrialCard
+                    ? Boolean.valueOf(TrialModule447.connectModule(graph, fromId, toId))
+                    : Boolean.FALSE);
+            return;
+        }
+        if (toMod || toTrialCard) {
             cir.setReturnValue(Boolean.FALSE);
             return;
         }

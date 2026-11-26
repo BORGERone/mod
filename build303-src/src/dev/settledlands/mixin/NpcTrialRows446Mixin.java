@@ -3,6 +3,7 @@ package dev.settledlands.mixin;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.TrialGraphClient446;
+import dev.settledlands.npc.client.TrialModuleClient447;
 import dev.settledlands.trial.TrialGraph446;
 import java.util.List;
 import net.minecraft.client.gui.components.AbstractWidget;
@@ -93,16 +94,23 @@ public abstract class NpcTrialRows446Mixin {
             label(TrialGraph446.TITLE_KEY, x, y);
             y += 14;
 
-            button("gui.settledlands.trial.btn_configure", x, y, width, 20,
-                    TrialGraphClient446.openConfigAction(screen, node));
-            y += 24;
-
             String[] summary = TrialGraphClient446.lines(node);
             for (int i = 0; i < summary.length; i++) {
                 label(summary[i], x, y);
                 y += 12;
             }
             y += 4;
+
+            String[] modSummary = TrialModuleClient447.hubModuleStatusLines(graph, node);
+            for (int i = 0; i < modSummary.length; i++) {
+                label(modSummary[i], x, y);
+                y += 11;
+            }
+            y += 4;
+
+            button("gui.settledlands.trial.btn_restore_modules", x, y, width, 18,
+                    TrialModuleClient447.restoreModulesAction(screen, node));
+            y += 22;
 
             label("gui.settledlands.trial.hint_start", x, y);
             y += 12;
