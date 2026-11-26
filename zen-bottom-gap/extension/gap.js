@@ -6,13 +6,10 @@
  *    Добавляет 20px В КОНЦЕ документа. Честное предупреждение: место
  *    закрашивается фоном самой страницы, поэтому на однотонных сайтах
  *    визуально это ничем не отличается от «страница просто кончилась».
- *    Заметно там, где у подвала/фона есть граница или свой цвет.
  *
  * 2) «полоса» (strip) — вместо padding'а в конец <body> вставляется
- *    распорный блок нужной высоты, закрашенный полупрозрачной плашкой.
- *    Это тот же отступ, но его ВИДНО на любом сайте: страница явно
- *    заканчивается на 20px выше. Включается отдельно, потому что это
- *    уже вмешательство в вид страницы, а не в её высоту.
+ *    распорный блок нужной высоты, закрашенный полупрозрачной плашкой:
+ *    отступ видно на любом сайте.
  *
  * 3) «панели» (lift) — ищет position: fixed у нижней кромки окна
  *    (плееры, док-бары) и поднимает их: bottom += px. Единственный
@@ -20,7 +17,7 @@
  *    на них не действует, они считаются от вьюпорта.
  *
  * Хранилище:
- *   { gaps: { "site.com": 20 }, strip: { "site.com": true }, lift: { "site.com": true } }
+ *   { gaps: { "site.com": 26 }, strip: { "site.com": true }, lift: { "site.com": true } }
  */
 
 const KEY_GAPS = 'gaps';
@@ -30,14 +27,26 @@ const KEY_LIFT = 'lift';
 const STRIP_ID = 'zbg-gap-strip';
 const STRIP_COLOR = 'rgba(127, 127, 127, 0.18)';
 
+/* Как часто максимум пересканируем страницу: чаще — только вредит */
+const MIN_SCAN_INTERVAL = 350;
+/* Страховочный тик для SPA, которые показывают панель вообще без мутаций */
+const TICK_INTERVAL = 2000;
+/* Первые проходы после загрузки: вёрстка часто «доезжает» */
+const BURST_DELAYS = [0, 400, 1200, 3000];
+
 let appliedPx = 0;
 let liftEnabled = false;
 
 /* el -> прежнее инлайновое значение bottom (чтобы вернуть как было) */
 const lifted = new Map();
 
-let scanTimers = [];
+let scanTimer = null;
+let burstTimers = [];
+let ticker = null;
+let lastScan = 0;
 let observer = null;
+
+const onMotion = () => requestScan(appliedPx);
 
 function withRoot(fn) {
   if (document.documentElement) {
@@ -77,7 +86,6 @@ function applyStrip(px, on) {
   }
 
   if (!document.body) {
-    // body ещё не создан — повторим после разбора документа
     document.addEventListener('DOMContentLoaded', () => applyStrip(px, on), { once: true });
     return;
   }
@@ -105,9 +113,13 @@ function liftBars(px) {
   const vh = window.innerHeight;
   if (!vh || !document.body || px <= 0) return;
 
-  // Уже поднятым панелям просто обновляем величину: значение могло
-  // измениться в попапе, а заново их никто не поднимет (они в lifted).
-  for (const el of lifted.keys()) {
+  // Уже поднятые: обновляем величину (могли поменять в попапе) и заодно
+  // выкидываем те, что сайт успел удалить из DOM.
+  for (const el of [...lifted.keys()]) {
+    if (el.isConnected === false) {
+      lifted.delete(el);
+      continue;
+    }
     el.style.setProperty('bottom', `${px}px`, 'important');
   }
 
@@ -140,34 +152,63 @@ function unliftAll() {
   lifted.clear();
 }
 
-function clearScans() {
-  for (const t of scanTimers) clearTimeout(t);
-  scanTimers = [];
-  if (observer) {
-    observer.disconnect();
-    observer = null;
-  }
+/* ---------- когда пересканировать ---------- */
+
+function requestScan(px) {
+  if (scanTimer !== null) return;  // проход уже запланирован
+  const wait = Math.max(0, MIN_SCAN_INTERVAL - (Date.now() - lastScan));
+  scanTimer = setTimeout(() => {
+    scanTimer = null;
+    lastScan = Date.now();
+    if (document.visibilityState === 'hidden') return;
+    if (!liftEnabled) return;
+    liftBars(px);
+  }, wait);
 }
 
-/* Панель часто дорисовывается скриптами сайта уже после загрузки,
- * поэтому сканируем несколько раз + следим за DOM. */
-function scheduleScans(px) {
-  clearScans();
-  for (const delay of [0, 400, 1200, 3000]) {
-    scanTimers.push(setTimeout(() => liftBars(px), delay));
+function startWatching(px) {
+  stopWatching();
+  if (!document.body) {
+    document.addEventListener('DOMContentLoaded', () => startWatching(px), { once: true });
+    return;
   }
 
-  if (!document.body) return;
-  let pending = false;
-  observer = new MutationObserver(() => {
-    if (pending) return;
-    pending = true;
-    setTimeout(() => {
-      pending = false;
-      liftBars(px);
-    }, 300);
+  // childList — панель добавили в DOM.
+  // attributes — панель уже была в DOM скрытой и стала видимой/фиксированной
+  // (именно так ведёт себя плеер Newgrounds: класс меняется при старте трека).
+  observer = new MutationObserver(() => requestScan(px));
+  observer.observe(document.body, {
+    childList: true,
+    subtree: true,
+    attributes: true,
+    attributeFilter: ['class', 'style', 'hidden'],
   });
-  observer.observe(document.body, { childList: true, subtree: true });
+
+  // Панель, выехавшая анимацией, «встаёт» только к её концу.
+  document.addEventListener('transitionend', onMotion, true);
+  document.addEventListener('animationend', onMotion, true);
+
+  // Страховка: часть SPA показывает панель вообще без мутаций в body
+  // (например, меняя только размеры контейнера).
+  ticker = setInterval(() => requestScan(px), TICK_INTERVAL);
+
+  for (const delay of BURST_DELAYS) {
+    burstTimers.push(setTimeout(() => requestScan(px), delay));
+  }
+  requestScan(px);
+}
+
+function stopWatching() {
+  if (scanTimer !== null) {
+    clearTimeout(scanTimer);
+    scanTimer = null;
+  }
+  for (const t of burstTimers) clearTimeout(t);
+  burstTimers = [];
+  if (ticker !== null) { clearInterval(ticker); ticker = null; }
+  if (observer) { observer.disconnect(); observer = null; }
+  document.removeEventListener('transitionend', onMotion, true);
+  document.removeEventListener('animationend', onMotion, true);
 }
 
 /* ---------- состояние ---------- */
@@ -189,9 +230,9 @@ function syncFromStorage() {
     applyStrip(appliedPx, useStrip);
 
     if (liftEnabled) {
-      scheduleScans(appliedPx);
+      startWatching(appliedPx);
     } else {
-      clearScans();
+      stopWatching();
       unliftAll();
     }
   });
@@ -207,7 +248,7 @@ browser.storage.onChanged.addListener((changes, area) => {
 });
 
 window.addEventListener('resize', () => {
-  if (liftEnabled) liftBars(appliedPx);
+  if (liftEnabled) requestScan(appliedPx);
 });
 
 /* Попап спрашивает состояние: есть ли скрипт на вкладке и сколько

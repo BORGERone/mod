@@ -7,7 +7,7 @@
 const KEY_GAPS = 'gaps';
 const KEY_STRIP = 'strip';
 const KEY_LIFT = 'lift';
-const DEFAULT_PX = 20;
+const DEFAULT_PX = 26;
 
 const hostEl = document.getElementById('host');
 const toggleEl = document.getElementById('toggle');
