@@ -317,7 +317,7 @@ public final class VarCatalogClient457 {
 
         if (tipText != null && font != null) {
             int tipW = font.width(tipText) + 8;
-            int tx = Math.max(4, Math.min(mx + 8, (x + w) - tipW + 40));
+            int tx = Math.max(4, Math.min(mx + 8, Math.max(4, (x + w) - tipW)));
             int ty = my - 16;
             if (ty < 4) ty = my + 14;
             g.fill(tx - 1, ty - 1, tx + tipW + 1, ty + 13, 0xFF000000 | tipAccent);

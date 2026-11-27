@@ -7,6 +7,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.network.chat.Component;
 
@@ -16,10 +17,11 @@ import java.util.Locale;
 import java.util.function.Consumer;
 
 /**
- * World-wide Variable Catalog & Editor Screen ({@code Build 457}), modeled after
- * {@link LootPoolEditorScreen440}. Lists variables from all loaded NPCs, blocks, doors,
- * chests, trials, {@code NpcPoints}, and catalog definitions, highlights scopes and ownership,
- * marks other objects' local variables as unavailable for binding, and supports create/edit/delete.
+ * World-wide Variable Catalog & Editor Screen ({@code Build 458}), modeled after
+ * {@link LootPoolEditorScreen440} & {@link TrialMobCatalogScreen449}. Lists variables from
+ * all loaded NPCs, blocks, doors, chests, trials, {@code NpcPoints}, and catalog definitions,
+ * renders crisp non-blurred panels, clips long header ownership strings cleanly, and adapts
+ * button widths proportionally so labels never truncate or collide.
  */
 public final class VarPoolEditorScreen457 extends Screen {
 
@@ -92,20 +94,21 @@ public final class VarPoolEditorScreen457 extends Screen {
     protected void init() {
         this.clearWidgets();
 
-        panelW = Math.min(540, this.width - 24);
-        panelH = Math.min(316, this.height - 24);
+        panelW = Math.max(300, Math.min(580, this.width - 12));
+        panelH = Math.max(222, Math.min(324, this.height - 12));
         panelX = (this.width - panelW) / 2;
         panelY = (this.height - panelH) / 2;
 
         int pad = 10;
-        int leftW = Math.max(210, (panelW - pad * 3) * 56 / 100);
-        formW = panelW - pad * 3 - leftW;
+        int innerW = panelW - pad * 3;
+        int leftW = Math.max(176, innerW * 49 / 100);
+        formW = innerW - leftW;
         listX = panelX + pad;
         formX = listX + leftW + pad;
-        formY = panelY + 26;
+        formY = panelY + 25;
 
         // Filter row above list
-        int fy = panelY + 26;
+        int fy = panelY + 25;
         int fw = (leftW - 12) / 4;
         filterAllBtn = addRenderableWidget(Button.builder(trComp("gui.settledlands.var_catalog.filter_all"),
                 b -> { scopeFilter = FILTER_ALL; scroll = 0; rebuildFiltered(); })
@@ -118,80 +121,80 @@ public final class VarPoolEditorScreen457 extends Screen {
                 .bounds(listX + (fw + 4) * 2, fy, fw, 16).build());
         filterLocalBtn = addRenderableWidget(Button.builder(trComp("gui.settledlands.var_catalog.scope_tag.local"),
                 b -> { scopeFilter = VarDataNode453.SCOPE_LOCAL; scroll = 0; rebuildFiltered(); })
-                .bounds(listX + (fw + 4) * 3, fy, fw, 16).build());
+                .bounds(listX + (fw + 4) * 3, fy, leftW - (fw + 4) * 3, 16).build());
 
         // Search box + hideUnavailable toggle
-        int sy = fy + 20;
-        int hideW = 92;
-        searchBox = addRenderableWidget(new EditBox(this.font, listX, sy, leftW - hideW - 4, 16,
+        int sy = fy + 19;
+        Component hideLbl = hideButtonLabel();
+        int hideW = Math.min(Math.max(76, this.font.width(hideLbl) + 14), Math.max(76, leftW * 45 / 100));
+        searchBox = addRenderableWidget(new EditBox(this.font, listX, sy, leftW - hideW - 4, 15,
                 trComp("gui.settledlands.var_catalog.search")));
         searchBox.setHint(trComp("gui.settledlands.var_catalog.search"));
         searchBox.setMaxLength(48);
         searchBox.setResponder(s -> { scroll = 0; rebuildFiltered(); });
 
-        hideOtherBtn = addRenderableWidget(Button.builder(hideButtonLabel(),
+        hideOtherBtn = addRenderableWidget(Button.builder(hideLbl,
                 b -> {
                     hideUnavailable = !hideUnavailable;
                     b.setMessage(hideButtonLabel());
+                    b.setTooltip(Tooltip.create(trComp(hideUnavailable
+                            ? "gui.settledlands.var_catalog.show_all_tip"
+                            : "gui.settledlands.var_catalog.only_avail_tip")));
                     scroll = 0;
                     rebuildFiltered();
                 })
-                .bounds(listX + leftW - hideW, sy, hideW, 16).build());
+                .bounds(listX + leftW - hideW, sy, hideW, 15)
+                .tooltip(Tooltip.create(trComp(hideUnavailable
+                        ? "gui.settledlands.var_catalog.show_all_tip"
+                        : "gui.settledlands.var_catalog.only_avail_tip")))
+                .build());
 
-        listY = sy + 20;
+        listY = sy + 19;
         listW = leftW;
-        listH = (panelY + panelH - 12) - listY;
+        listH = (panelY + panelH - 10) - listY;
 
         // Right side form
-        int ry = formY + 12;
-        nameBox = addRenderableWidget(new EditBox(this.font, formX, ry, formW, 16,
+        int ry = formY + 10;
+        nameBox = addRenderableWidget(new EditBox(this.font, formX, ry, formW, 15,
                 trComp("gui.settledlands.var_catalog.name_label")));
         nameBox.setMaxLength(32);
 
-        ry += 30;
-        valueBox = addRenderableWidget(new EditBox(this.font, formX, ry, formW, 16,
+        ry += 28;
+        valueBox = addRenderableWidget(new EditBox(this.font, formX, ry, formW, 15,
                 trComp("gui.settledlands.var_catalog.value_label")));
         valueBox.setMaxLength(12);
         valueBox.setFilter(VarPoolEditorScreen457::isIntInput);
 
-        ry += 30;
-        int sw = (formW - 8) / 3;
-        scopeLocalBtn = addRenderableWidget(Button.builder(trComp("gui.settledlands.var.scope.local"),
-                b -> { formScope = VarDataNode453.SCOPE_LOCAL; updateFormButtons(); })
-                .bounds(formX, ry, sw, 16).build());
-        scopePersonalBtn = addRenderableWidget(Button.builder(trComp("gui.settledlands.var.scope.personal"),
-                b -> { formScope = VarDataNode453.SCOPE_PERSONAL; updateFormButtons(); })
-                .bounds(formX + sw + 4, ry, sw, 16).build());
-        scopeSharedBtn = addRenderableWidget(Button.builder(trComp("gui.settledlands.var.scope.shared"),
-                b -> { formScope = VarDataNode453.SCOPE_SHARED; updateFormButtons(); })
-                .bounds(formX + (sw + 4) * 2, ry, sw, 16).build());
+        ry += 28;
+        buildScopeButtons(ry);
 
-        ry += 30;
-        descBox = addRenderableWidget(new EditBox(this.font, formX, ry, formW, 16,
+        ry += 28;
+        descBox = addRenderableWidget(new EditBox(this.font, formX, ry, formW, 15,
                 trComp("gui.settledlands.var_catalog.desc_label")));
         descBox.setMaxLength(128);
 
-        int by = panelY + panelH - 72;
+        int by = panelY + panelH - 61;
         int bw2 = (formW - 4) / 2;
+        int bwRight = formW - bw2 - 4;
         newBtn = addRenderableWidget(Button.builder(trComp("gui.settledlands.var_catalog.btn_new"),
                 b -> startCreateNew())
-                .bounds(formX, by, bw2, 18).build());
+                .bounds(formX, by, bw2, 16).build());
         saveBtn = addRenderableWidget(Button.builder(trComp("gui.settledlands.var_catalog.btn_save"),
                 b -> saveForm())
-                .bounds(formX + bw2 + 4, by, bw2, 18).build());
+                .bounds(formX + bw2 + 4, by, bwRight, 16).build());
 
-        by += 22;
+        by += 19;
         applyNodeBtn = addRenderableWidget(Button.builder(trComp("gui.settledlands.var_catalog.btn_apply"),
                 b -> applyToNodeAndClose())
-                .bounds(formX, by, bw2, 18).build());
+                .bounds(formX, by, bw2, 16).build());
         deleteBtn = addRenderableWidget(Button.builder(trComp("gui.settledlands.var_catalog.btn_delete"),
                 b -> handleDeleteClick())
-                .bounds(formX + bw2 + 4, by, bw2, 18).build());
+                .bounds(formX + bw2 + 4, by, bwRight, 16).build());
 
-        by += 22;
+        by += 19;
         closeBtn = addRenderableWidget(Button.builder(trComp("gui.settledlands.var_catalog.btn_close"),
                 b -> onClose())
-                .bounds(formX, by, formW, 18).build());
+                .bounds(formX, by, formW, 16).build());
 
         int eid = parentScreen != null ? parentScreen.entityId() : VarCatalogClient457.activeEntityId();
         VarCatalogClient457.requestSync(eid);
@@ -214,6 +217,50 @@ public final class VarPoolEditorScreen457 extends Screen {
         }
     }
 
+    /**
+     * Distributes the 3 scope buttons proportionally to each caption's text width (and falls back
+     * to short tags on ultra-narrow windows) so none of the labels ever truncate or scroll.
+     */
+    private void buildScopeButtons(int y) {
+        Component lblLoc = trComp("gui.settledlands.var.scope.local");
+        Component lblPers = trComp("gui.settledlands.var.scope.personal_btn");
+        Component lblShar = trComp("gui.settledlands.var.scope.shared");
+
+        int gap = 4;
+        int avail = formW - gap * 2;
+        int w1 = this.font.width(lblLoc) + 10;
+        int w2 = this.font.width(lblPers) + 10;
+        int w3 = this.font.width(lblShar) + 10;
+        if (w1 + w2 + w3 > avail) {
+            lblLoc = trComp("gui.settledlands.var_catalog.scope_tag.local");
+            lblPers = trComp("gui.settledlands.var_catalog.scope_tag.personal");
+            lblShar = trComp("gui.settledlands.var_catalog.scope_tag.shared");
+            w1 = this.font.width(lblLoc) + 10;
+            w2 = this.font.width(lblPers) + 10;
+            w3 = this.font.width(lblShar) + 10;
+        }
+        int sum = Math.max(1, w1 + w2 + w3);
+        int bw1 = avail * w1 / sum;
+        int bw2 = avail * w2 / sum;
+        int bw3 = avail - bw1 - bw2;
+
+        scopeLocalBtn = addRenderableWidget(Button.builder(lblLoc,
+                b -> { formScope = VarDataNode453.SCOPE_LOCAL; updateFormButtons(); })
+                .bounds(formX, y, bw1, 15)
+                .tooltip(Tooltip.create(trComp("gui.settledlands.var.scope.local.desc")))
+                .build());
+        scopePersonalBtn = addRenderableWidget(Button.builder(lblPers,
+                b -> { formScope = VarDataNode453.SCOPE_PERSONAL; updateFormButtons(); })
+                .bounds(formX + bw1 + gap, y, bw2, 15)
+                .tooltip(Tooltip.create(trComp("gui.settledlands.var.scope.personal.desc")))
+                .build());
+        scopeSharedBtn = addRenderableWidget(Button.builder(lblShar,
+                b -> { formScope = VarDataNode453.SCOPE_SHARED; updateFormButtons(); })
+                .bounds(formX + bw1 + gap + bw2 + gap, y, bw3, 15)
+                .tooltip(Tooltip.create(trComp("gui.settledlands.var.scope.shared.desc")))
+                .build());
+    }
+
     private Component hideButtonLabel() {
         return Component.translatable(hideUnavailable
                 ? "gui.settledlands.var_catalog.show_all"
@@ -222,6 +269,14 @@ public final class VarPoolEditorScreen457 extends Screen {
 
     private static Component trComp(String key, Object... args) {
         return Component.translatable(key, args);
+    }
+
+    private String ellipsize(String text, int maxW) {
+        if (text == null || maxW <= 0) return "";
+        if (this.font.width(text) <= maxW) return text;
+        int dotsW = this.font.width("...");
+        if (maxW <= dotsW) return "";
+        return this.font.plainSubstrByWidth(text, maxW - dotsW) + "...";
     }
 
     private static boolean isIntInput(String s) {
@@ -441,29 +496,62 @@ public final class VarPoolEditorScreen457 extends Screen {
         }
     }
 
+    /**
+     * Suppresses Minecraft 1.21's automatic blur pass inside {@link Screen#render}, which would
+     * otherwise smear panel chrome, list rows, and labels rendered before {@code super.render()}.
+     */
+    @Override
+    public void renderBackground(GuiGraphics g, int mx, int my, float partialTick) {
+    }
+
     @Override
     public void render(GuiGraphics g, int mx, int my, float partialTick) {
-        this.renderBackground(g, mx, my, partialTick);
+        g.fill(0, 0, this.width, this.height, 0x990A0D13);
 
         // Panel chrome
         g.fill(panelX - 1, panelY - 1, panelX + panelW + 1, panelY + panelH + 1, 0xFF0A0D13);
-        g.fill(panelX, panelY, panelX + panelW, panelY + panelH, 0xF0151A23);
+        g.fill(panelX, panelY, panelX + panelW, panelY + panelH, 0xF2151A23);
         g.fill(panelX, panelY, panelX + panelW, panelY + 20, 0xFF1F2633);
-        g.fill(panelX, panelY + 20, panelX + panelW, panelY + 21, 0xFFFF9A2E);
+        g.fill(panelX, panelY + 20, panelX + panelW, panelY + 21, VarCatalogClient457.ACCENT_COLOR);
+        g.renderOutline(panelX, panelY, panelW, panelH, 0xFF2D3546);
 
+        // Header: title on the left, non-overlapping ellipsized owner tag on the right
         String headerTitle = this.title.getString();
-        g.drawString(this.font, headerTitle, panelX + 10, panelY + 6, 0xFFF3F6FC, false);
+        int maxTitleW = Math.max(80, panelW * 48 / 100);
+        String drawnTitle = ellipsize(headerTitle, maxTitleW);
+        int titleX = panelX + 10;
+        g.drawString(this.font, drawnTitle, titleX, panelY + 6, 0xFFF3F6FC, false);
+        int titleEnd = titleX + this.font.width(drawnTitle);
+
+        String fullHeaderHover = null;
+        if (!drawnTitle.equals(headerTitle)
+                && mx >= titleX && mx <= titleEnd && my >= panelY && my <= panelY + 20) {
+            fullHeaderHover = headerTitle;
+        }
+
         String ctxOwner = VarCatalogClient457.currentOwnerLabel();
         if (ctxOwner != null && !ctxOwner.isEmpty()) {
             String ownerTxt = VarCatalogClient457.tr("gui.settledlands.var_catalog.current_owner", ctxOwner);
-            int ow = this.font.width(ownerTxt);
-            g.drawString(this.font, ownerTxt, panelX + panelW - ow - 10, panelY + 6, 0xFF9FB0C8, false);
+            int ownerMinX = titleEnd + 14;
+            int ownerRight = panelX + panelW - 10;
+            int availOwnerW = ownerRight - ownerMinX;
+            if (availOwnerW >= 40) {
+                String drawnOwner = ellipsize(ownerTxt, availOwnerW);
+                int ow = this.font.width(drawnOwner);
+                int ox = Math.max(ownerMinX, ownerRight - ow);
+                g.drawString(this.font, drawnOwner, ox, panelY + 6, 0xFF9FB0C8, false);
+                if (!drawnOwner.equals(ownerTxt)
+                        && mx >= ox && mx <= ownerRight && my >= panelY && my <= panelY + 20) {
+                    fullHeaderHover = ownerTxt;
+                }
+            }
         }
 
         // List container
         g.fill(listX - 1, listY - 1, listX + listW + 1, listY + listH + 1, 0xFF0B0E14);
         g.fill(listX, listY, listX + listW, listY + listH, 0xFF10151E);
 
+        String rowHoverTip = null;
         int maxVis = visibleRows();
         if (filtered.isEmpty()) {
             g.drawCenteredString(this.font, trComp("gui.settledlands.var_catalog.empty"),
@@ -489,19 +577,23 @@ public final class VarPoolEditorScreen457 extends Screen {
                 g.fill(listX + 5, ry + 3, listX + 5 + tw, ry + ROW_H - 3, (0x33 << 24) | (badgeCol & 0xFFFFFF));
                 g.drawString(this.font, tag, listX + 8, ry + 5, badgeCol, false);
 
-                // Name
+                // Name + value
                 int nameX = listX + 8 + tw;
                 int nameCol = e.available ? 0xFFE9EEF7 : 0xFF7B8291;
-                String valStr = e.available ? String.valueOf(e.value) : "🔒";
+                String valStr = e.available ? String.valueOf(e.value) : "x";
                 int valW = this.font.width(valStr);
                 String ownerSuffix = (e.scope == VarDataNode453.SCOPE_LOCAL && e.ownerLabel != null && !e.ownerLabel.isEmpty())
                         ? (" (" + e.ownerLabel + ")") : "";
                 String mainStr = e.name + ownerSuffix;
                 int availW = Math.max(24, (listX + listW - 14 - valW) - nameX);
-                String trimmed = this.font.plainSubstrByWidth(mainStr, availW);
+                String trimmed = ellipsize(mainStr, availW);
                 g.drawString(this.font, trimmed, nameX, ry + 5, nameCol, false);
                 g.drawString(this.font, valStr, listX + listW - 10 - valW, ry + 5,
-                        e.available ? 0xFFFFC777 : 0xFF8B6F68, false);
+                        e.available ? 0xFFFFC777 : 0xFFFF7766, false);
+
+                if (hovered && !trimmed.equals(mainStr)) {
+                    rowHoverTip = mainStr;
+                }
             }
         }
 
@@ -516,29 +608,39 @@ public final class VarPoolEditorScreen457 extends Screen {
         }
 
         // Form labels
-        g.drawString(this.font, trComp("gui.settledlands.var_catalog.name_label"), formX, formY + 2, 0xFF9EA8BC, false);
-        g.drawString(this.font, trComp("gui.settledlands.var_catalog.value_label"), formX, formY + 32, 0xFF9EA8BC, false);
-        g.drawString(this.font, trComp("gui.settledlands.var_catalog.scope_label"), formX, formY + 62, 0xFF9EA8BC, false);
-        g.drawString(this.font, trComp("gui.settledlands.var_catalog.desc_label"), formX, formY + 92, 0xFF9EA8BC, false);
+        g.drawString(this.font, trComp("gui.settledlands.var_catalog.name_label"), formX, formY, 0xFFB8C2D6, false);
+        g.drawString(this.font, trComp("gui.settledlands.var_catalog.value_label"), formX, formY + 28, 0xFFB8C2D6, false);
+        g.drawString(this.font, trComp("gui.settledlands.var_catalog.scope_label"), formX, formY + 56, 0xFFB8C2D6, false);
+        g.drawString(this.font, trComp("gui.settledlands.var_catalog.desc_label"), formX, formY + 84, 0xFFB8C2D6, false);
 
         if (formScope == VarDataNode453.SCOPE_LOCAL) {
             String ownerDisp = (selectedEntry != null && !creatingNew && !selectedEntry.ownerLabel.isEmpty())
                     ? selectedEntry.ownerLabel
                     : (ctxOwner == null || ctxOwner.isEmpty() ? "-" : ctxOwner);
-            String ownerLine = this.font.plainSubstrByWidth(
-                    VarCatalogClient457.tr("gui.settledlands.var_catalog.owner_row", ownerDisp), formW);
-            g.drawString(this.font, ownerLine, formX, formY + 128, 0xFFB8C1D1, false);
+            String fullOwnerRow = VarCatalogClient457.tr("gui.settledlands.var_catalog.owner_row", ownerDisp);
+            String ownerLine = ellipsize(fullOwnerRow, formW);
+            g.drawString(this.font, ownerLine, formX, formY + 114, 0xFFB8C1D1, false);
+            if (!ownerLine.equals(fullOwnerRow)
+                    && mx >= formX && mx <= formX + formW && my >= formY + 112 && my <= formY + 123) {
+                fullHeaderHover = fullOwnerRow;
+            }
         } else {
             String hint = VarCatalogClient457.tr(formScope == VarDataNode453.SCOPE_SHARED
                     ? "gui.settledlands.var.scope.shared.desc"
                     : "gui.settledlands.var.scope.personal.desc");
-            String trimmedHint = this.font.plainSubstrByWidth(hint, formW);
-            g.drawString(this.font, trimmedHint, formX, formY + 128, 0xFF8C97AB, false);
+            String trimmedHint = ellipsize(hint, formW);
+            g.drawString(this.font, trimmedHint, formX, formY + 114, 0xFF94A1B5, false);
         }
 
         if (statusText != null && !statusText.isEmpty()) {
-            String st = this.font.plainSubstrByWidth(statusText, formW);
-            g.drawString(this.font, st, formX, formY + 142, statusColor, false);
+            String st = ellipsize(statusText, formW);
+            g.drawString(this.font, st, formX, formY + 126, statusColor, false);
+        }
+
+        if (fullHeaderHover != null) {
+            this.setTooltipForNextRenderPass(Component.literal(fullHeaderHover));
+        } else if (rowHoverTip != null) {
+            this.setTooltipForNextRenderPass(Component.literal(rowHoverTip));
         }
 
         super.render(g, mx, my, partialTick);
