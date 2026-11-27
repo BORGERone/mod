@@ -88,6 +88,58 @@ public final class NpcWirePoints321 {
         }
     }
 
+    /** Marker port/channel constants for colored non-stock wires. Build 453. */
+    public static final char KIND_VALUE = 'v';
+    public static final char KIND_ORANGE = 'o';
+    public static final char KIND_AMBER = 'a';
+    public static final char KIND_TRIAL_START = 'g';
+    public static final char KIND_TRIAL_MOD = 'm';
+
+    @FunctionalInterface
+    public interface CustomWireCheck {
+        boolean isAlive(Node from, char kind, int toId);
+    }
+
+    /** A colored wire passing through points (orange var, amber event, trial start, module). Build 453. */
+    public static final class ColorBend {
+        public final Node from;
+        public final char kind;
+        public final int toId;
+        public final int x;
+        public final int y;
+
+        ColorBend(Node from, char kind, int toId, int x, int y) {
+            this.from = from;
+            this.kind = kind;
+            this.toId = toId;
+            this.x = x;
+            this.y = y;
+        }
+    }
+
+    /** A colored wire that stops at a point waiting for a target. Build 453. */
+    public static final class ColorHang {
+        public final Node from;
+        public final char kind;
+        public final int arg;
+        public final List<int[]> route;
+
+        ColorHang(Node from, char kind, int arg, List<int[]> route) {
+            this.from = from;
+            this.kind = kind;
+            this.arg = arg;
+            this.route = route;
+        }
+
+        public int endX() {
+            return route.isEmpty() ? 0 : route.get(route.size() - 1)[0];
+        }
+
+        public int endY() {
+            return route.isEmpty() ? 0 : route.get(route.size() - 1)[1];
+        }
+    }
+
     /**
      * A wire that stops at a point: the points it visits, in order, the last one being where it
      * stops.
@@ -121,10 +173,15 @@ public final class NpcWirePoints321 {
         final Map<String, List<int[]>> bends = new LinkedHashMap<>();
         /** Points of a blue value wire, keyed by the node on its far end. Build 332. */
         final Map<Integer, List<int[]>> value = new LinkedHashMap<>();
+        /** Points of colored wires keyed by {@code kind + ":" + toId}. Build 453. */
+        final Map<String, List<int[]>> custom = new LinkedHashMap<>();
         final List<int[]> hangs = new ArrayList<>();
+        /** Colored waiting wires stored as {@code {kindCode, arg, x1, y1, ...}}. Build 453. */
+        final List<int[]> colorHangs = new ArrayList<>();
 
         boolean empty() {
-            return bends.isEmpty() && value.isEmpty() && hangs.isEmpty();
+            return bends.isEmpty() && value.isEmpty() && custom.isEmpty()
+                    && hangs.isEmpty() && colorHangs.isEmpty();
         }
     }
 
@@ -201,9 +258,49 @@ public final class NpcWirePoints321 {
                     data.hangs.add(flat);
                     continue;
                 }
+                if (entry.startsWith("k") && entry.length() >= 4) {
+                    int at = entry.indexOf('@');
+                    if (at > 2) {
+                        char kind = entry.charAt(1);
+                        int arg = number(entry.substring(2, at), 0);
+                        List<int[]> route = new ArrayList<>();
+                        for (String pair : entry.substring(at + 1).trim().split(" ")) {
+                            int comma = pair.indexOf(',');
+                            if (comma < 0) continue;
+                            route.add(new int[] { number(pair.substring(0, comma), 0),
+                                    number(pair.substring(comma + 1), 0) });
+                        }
+                        if (!route.isEmpty()) {
+                            int[] flat = new int[2 + route.size() * 2];
+                            flat[0] = (int) kind;
+                            flat[1] = arg;
+                            for (int i = 0; i < route.size(); i++) {
+                                flat[2 + i * 2] = route.get(i)[0];
+                                flat[3 + i * 2] = route.get(i)[1];
+                            }
+                            data.colorHangs.add(flat);
+                        }
+                    }
+                    continue;
+                }
                 int colon = entry.indexOf(':');
                 if (colon < 0) continue;
                 String head = entry.substring(0, colon);
+                if (head.startsWith("c") && head.length() >= 3) {
+                    char kind = head.charAt(1);
+                    int to = number(head.substring(2), -1);
+                    List<int[]> points = new ArrayList<>();
+                    for (String pair : entry.substring(colon + 1).trim().split(" ")) {
+                        int comma = pair.indexOf(',');
+                        if (comma < 0) continue;
+                        points.add(new int[] { number(pair.substring(0, comma), 0),
+                                number(pair.substring(comma + 1), 0) });
+                    }
+                    if (to >= 0 && !points.isEmpty()) {
+                        data.custom.put(customKey(kind, to), points);
+                    }
+                    continue;
+                }
                 if (head.startsWith("v")) {
                     // A blue value wire: the node on the far end after the marker.
                     int to = number(head.substring(1), -1);
@@ -262,6 +359,19 @@ public final class NpcWirePoints321 {
                 first = false;
             }
         }
+        for (Map.Entry<String, List<int[]>> entry : data.custom.entrySet()) {
+            if (entry.getValue().isEmpty()) continue;
+            String k = entry.getKey();
+            int colon = k.indexOf(':');
+            if (colon != 1) continue;
+            out.append('|').append('c').append(k.charAt(0)).append(k.substring(2)).append(':');
+            boolean first = true;
+            for (int[] point : entry.getValue()) {
+                if (!first) out.append(' ');
+                out.append(point[0]).append(',').append(point[1]);
+                first = false;
+            }
+        }
         for (int[] hang : data.hangs) {
             out.append('|').append('h').append(hang[0]).append('@');
             for (int i = 1; i + 1 < hang.length; i += 2) {
@@ -269,7 +379,27 @@ public final class NpcWirePoints321 {
                 out.append(hang[i]).append(',').append(hang[i + 1]);
             }
         }
+        for (int[] hang : data.colorHangs) {
+            out.append('|').append('k').append((char) hang[0]).append(hang[1]).append('@');
+            for (int i = 2; i + 1 < hang.length; i += 2) {
+                if (i > 2) out.append(' ');
+                out.append(hang[i]).append(',').append(hang[i + 1]);
+            }
+        }
         return out.toString();
+    }
+
+    private static String customKey(char kind, int toId) {
+        return kind + ":" + toId;
+    }
+
+    private static char customKind(String k) {
+        return k.isEmpty() ? '?' : k.charAt(0);
+    }
+
+    private static int customTarget(String k) {
+        int c = k.indexOf(':');
+        return c < 0 ? -1 : number(k.substring(c + 1), -1);
     }
 
     private static void write(Node node, Data data) {
@@ -353,11 +483,202 @@ public final class NpcWirePoints321 {
         Data data = read(from);
         List<int[]> points = data.value.computeIfAbsent(toId, k -> new ArrayList<>());
         for (int[] point : points) {
-            if (point[0] == x && point[1] == y) return;      // the same spot twice is one point
+            if (Math.abs(point[0] - x) <= GRID && Math.abs(point[1] - y) <= GRID) return;
         }
         int at = Math.max(0, Math.min(index, points.size()));
         points.add(at, new int[] {x, y});
         write(from, data);
+    }
+
+    /** Drops bend points stored on a cut blue value wire. Build 453. */
+    public static void clearValueWire(Node from, int toId) {
+        if (from == null || toId < 0) return;
+        Data data = read(from);
+        if (data.value.remove(toId) != null) {
+            write(from, data);
+        }
+    }
+
+    /** Points of a colored wire (orange, amber, green trial start, module), in order. Build 453. */
+    public static List<int[]> customBends(Node from, char kind, int toId) {
+        if (from == null) return List.of();
+        if (kind == KIND_VALUE) return valueBends(from, toId);
+        return read(from).custom.getOrDefault(customKey(kind, toId), List.of());
+    }
+
+    /** Adds a bend point on a colored wire at {@code index}. Build 453. */
+    public static void addCustomPoint(Node from, char kind, int toId, int x, int y, int index) {
+        if (from == null || toId < 0) return;
+        if (kind == KIND_VALUE) {
+            addValuePoint(from, toId, x, y, index);
+            return;
+        }
+        Data data = read(from);
+        List<int[]> points = data.custom.computeIfAbsent(customKey(kind, toId), k -> new ArrayList<>());
+        for (int[] point : points) {
+            if (Math.abs(point[0] - x) <= GRID && Math.abs(point[1] - y) <= GRID) return;
+        }
+        points.add(Math.max(0, Math.min(index, points.size())), new int[] {x, y});
+        write(from, data);
+    }
+
+    /** Drops bend points of a cut colored wire. Build 453. */
+    public static void clearCustomWire(Node from, char kind, int toId) {
+        if (from == null || toId < 0) return;
+        if (kind == KIND_VALUE) {
+            clearValueWire(from, toId);
+            return;
+        }
+        Data data = read(from);
+        if (data.custom.remove(customKey(kind, toId)) != null) {
+            write(from, data);
+        }
+    }
+
+    /** Colored waiting wires leaving {@code from}. Build 453. */
+    public static List<ColorHang> colorHangs(Node from) {
+        if (from == null) return List.of();
+        Data data = read(from);
+        if (data.colorHangs.isEmpty()) return List.of();
+        List<ColorHang> out = new ArrayList<>(data.colorHangs.size());
+        for (int[] flat : data.colorHangs) {
+            List<int[]> route = new ArrayList<>();
+            for (int i = 2; i + 1 < flat.length; i += 2) {
+                route.add(new int[] { flat[i], flat[i + 1] });
+            }
+            if (!route.isEmpty()) {
+                out.add(new ColorHang(from, (char) flat[0], flat[1], route));
+            }
+        }
+        return out;
+    }
+
+    public static List<ColorHang> colorHangsAt(NpcDialogueGraph graph, int x, int y) {
+        List<ColorHang> out = new ArrayList<>();
+        if (graph == null || graph.nodes == null) return out;
+        for (Node n : graph.nodes.values()) {
+            for (ColorHang h : colorHangs(n)) {
+                if (h.endX() == x && h.endY() == y) out.add(h);
+            }
+        }
+        return out;
+    }
+
+    public static List<ColorBend> customBendsAt(NpcDialogueGraph graph, int x, int y) {
+        List<ColorBend> out = new ArrayList<>();
+        if (graph == null || graph.nodes == null) return out;
+        for (Node n : graph.nodes.values()) {
+            Data data = read(n);
+            for (Map.Entry<String, List<int[]>> entry : data.custom.entrySet()) {
+                char kind = customKind(entry.getKey());
+                int to = customTarget(entry.getKey());
+                for (int[] pt : entry.getValue()) {
+                    if (pt[0] == x && pt[1] == y) {
+                        out.add(new ColorBend(n, kind, to, x, y));
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    public static List<Bend> valueBendsAt(NpcDialogueGraph graph, int x, int y) {
+        List<Bend> out = new ArrayList<>();
+        if (graph == null || graph.nodes == null) return out;
+        for (Node n : graph.nodes.values()) {
+            Data data = read(n);
+            for (Map.Entry<Integer, List<int[]>> entry : data.value.entrySet()) {
+                for (int[] pt : entry.getValue()) {
+                    if (pt[0] == x && pt[1] == y) {
+                        out.add(new Bend(n, VALUE_PORT, entry.getKey(), x, y));
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    public static void attachColor(Node from, char kind, int arg, int x, int y) {
+        if (from == null) return;
+        Data data = read(from);
+        for (int[] flat : data.colorHangs) {
+            int size = (flat.length - 2) / 2;
+            if ((char) flat[0] == kind && flat[1] == arg && size > 0
+                    && flat[2 + (size - 1) * 2] == x && flat[3 + (size - 1) * 2] == y) {
+                return;
+            }
+        }
+        data.colorHangs.add(new int[] { (int) kind, arg, x, y });
+        write(from, data);
+    }
+
+    public static boolean addColorRoutePoint(Node from, char kind, int arg, int endX, int endY,
+            int x, int y, int index) {
+        if (from == null) return false;
+        Data data = read(from);
+        for (int i = data.colorHangs.size() - 1; i >= 0; i--) {
+            int[] flat = data.colorHangs.get(i);
+            if ((char) flat[0] != kind || flat[1] != arg) continue;
+            int size = (flat.length - 2) / 2;
+            if (size <= 0) continue;
+            if (flat[2 + (size - 1) * 2] != endX || flat[3 + (size - 1) * 2] != endY) continue;
+            for (int k = 0; k < size; k++) {
+                if (Math.abs(flat[2 + k * 2] - x) <= GRID
+                        && Math.abs(flat[3 + k * 2] - y) <= GRID) {
+                    return false;
+                }
+            }
+            int at = Math.max(0, Math.min(index, size));
+            int[] grown = new int[flat.length + 2];
+            System.arraycopy(flat, 0, grown, 0, 2 + at * 2);
+            grown[2 + at * 2] = x;
+            grown[3 + at * 2] = y;
+            System.arraycopy(flat, 2 + at * 2, grown, 4 + at * 2, flat.length - 2 - at * 2);
+            data.colorHangs.set(i, grown);
+            write(from, data);
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean promoteColor(Node from, char kind, int arg, int x, int y, int toId) {
+        if (from == null || toId < 0) return false;
+        Data data = read(from);
+        for (int i = data.colorHangs.size() - 1; i >= 0; i--) {
+            int[] flat = data.colorHangs.get(i);
+            if ((char) flat[0] != kind || flat[1] != arg) continue;
+            int size = (flat.length - 2) / 2;
+            if (size <= 0 || flat[2 + (size - 1) * 2] != x || flat[3 + (size - 1) * 2] != y) continue;
+            data.colorHangs.remove(i);
+            List<int[]> points = kind == KIND_VALUE
+                    ? data.value.computeIfAbsent(toId, k -> new ArrayList<>())
+                    : data.custom.computeIfAbsent(customKey(kind, toId), k -> new ArrayList<>());
+            for (int k = 0; k < size; k++) {
+                int px = flat[2 + k * 2];
+                int py = flat[3 + k * 2];
+                if (!contains(points, px, py)) points.add(new int[] { px, py });
+            }
+            write(from, data);
+            return true;
+        }
+        return false;
+    }
+
+    public static boolean retargetColor(Node from, char kind, int oldTarget, int newTarget) {
+        if (from == null || oldTarget < 0 || newTarget < 0 || oldTarget == newTarget) return false;
+        Data data = read(from);
+        List<int[]> pts = kind == KIND_VALUE
+                ? data.value.remove(oldTarget)
+                : data.custom.remove(customKey(kind, oldTarget));
+        if (pts == null) return false;
+        List<int[]> target = kind == KIND_VALUE
+                ? data.value.computeIfAbsent(newTarget, k -> new ArrayList<>())
+                : data.custom.computeIfAbsent(customKey(kind, newTarget), k -> new ArrayList<>());
+        for (int[] pt : pts) {
+            if (!contains(target, pt[0], pt[1])) target.add(pt);
+        }
+        write(from, data);
+        return true;
     }
 
     /**
@@ -402,8 +723,16 @@ public final class NpcWirePoints321 {
                 out.append("v").append(entry.getKey()).append('=')
                         .append(entry.getValue().size()).append(' ');
             }
+            for (Map.Entry<String, List<int[]>> entry : data.custom.entrySet()) {
+                out.append("c").append(entry.getKey()).append('=')
+                        .append(entry.getValue().size()).append(' ');
+            }
             for (int[] hang : data.hangs) {
                 out.append("h").append(hang[0]).append('=').append(routeSize(hang)).append(' ');
+            }
+            for (int[] hang : data.colorHangs) {
+                out.append("k").append((char) hang[0]).append(hang[1]).append('=')
+                        .append((hang.length - 2) / 2).append(' ');
             }
             out.append('}');
         }
@@ -511,15 +840,30 @@ public final class NpcWirePoints321 {
      * point does not outlive the value wire it was made on.
      */
     public static List<int[]> points(NpcDialogueGraph graph, BiPredicate<Node, Integer> valueAlive) {
+        return points(graph, valueAlive, null);
+    }
+
+    /**
+     * Every point of the graph, validating both blue value wires and colored wires (orange,
+     * amber, trial start, trial module). Build 453.
+     */
+    public static List<int[]> points(NpcDialogueGraph graph,
+            BiPredicate<Node, Integer> valueAlive, CustomWireCheck customAlive) {
         List<Bend> bends = new ArrayList<>();
         List<Hang> hangs = new ArrayList<>();
-        collect(graph, bends, hangs, true, valueAlive);
+        List<ColorHang> colorHangs = new ArrayList<>();
+        collect(graph, bends, hangs, colorHangs, true, valueAlive, customAlive);
         Set<Long> seen = new LinkedHashSet<>();
         List<int[]> out = new ArrayList<>();
         for (Bend bend : bends) {
             if (seen.add(pack(bend.x, bend.y))) out.add(new int[] { bend.x, bend.y });
         }
         for (Hang hang : hangs) {
+            for (int[] point : hang.route) {
+                if (seen.add(pack(point[0], point[1]))) out.add(new int[] { point[0], point[1] });
+            }
+        }
+        for (ColorHang hang : colorHangs) {
             for (int[] point : hang.route) {
                 if (seen.add(pack(point[0], point[1]))) out.add(new int[] { point[0], point[1] });
             }
@@ -574,19 +918,12 @@ public final class NpcWirePoints321 {
      */
     private static void collect(NpcDialogueGraph graph, List<Bend> bends, List<Hang> hangs,
             boolean prune) {
-        collect(graph, bends, hangs, prune, null);
+        collect(graph, bends, hangs, null, prune, null, null);
     }
 
-    /**
-     * Walks every node once.
-     *
-     * @param prune       drop carrying wires whose connection no longer exists, so a point never
-     *                    outlives the cable it was made on
-     * @param valueAlive  told whether a blue value wire still exists; null keeps them all, because
-     *                    only the client knows what a value wire is
-     */
     private static void collect(NpcDialogueGraph graph, List<Bend> bends, List<Hang> hangs,
-            boolean prune, BiPredicate<Node, Integer> valueAlive) {
+            List<ColorHang> colorHangs, boolean prune,
+            BiPredicate<Node, Integer> valueAlive, CustomWireCheck customAlive) {
         if (graph == null || graph.nodes == null) return;
         for (Node node : graph.nodes.values()) {
             Data data = read(node);
@@ -621,12 +958,39 @@ public final class NpcWirePoints321 {
                 for (Integer key : deadValue) data.value.remove(key);
                 changed = true;
             }
+            List<String> deadCustom = new ArrayList<>();
+            for (Map.Entry<String, List<int[]>> entry : data.custom.entrySet()) {
+                char kind = customKind(entry.getKey());
+                int to = customTarget(entry.getKey());
+                if (prune && customAlive != null && !customAlive.isAlive(node, kind, to)) {
+                    deadCustom.add(entry.getKey());
+                    continue;
+                }
+                for (int[] point : entry.getValue()) {
+                    bends.add(new Bend(node, VALUE_PORT, to, point[0], point[1]));
+                }
+            }
+            if (!deadCustom.isEmpty()) {
+                for (String key : deadCustom) data.custom.remove(key);
+                changed = true;
+            }
             for (int[] hang : data.hangs) {
                 List<int[]> route = new ArrayList<>();
                 for (int i = 0; i + 1 < hang.length; i += 2) {
                     route.add(new int[] { hang[1 + i], hang[2 + i] });
                 }
                 if (!route.isEmpty()) hangs.add(new Hang(node, hang[0], route));
+            }
+            if (colorHangs != null) {
+                for (int[] flat : data.colorHangs) {
+                    List<int[]> route = new ArrayList<>();
+                    for (int i = 2; i + 1 < flat.length; i += 2) {
+                        route.add(new int[] { flat[i], flat[i + 1] });
+                    }
+                    if (!route.isEmpty()) {
+                        colorHangs.add(new ColorHang(node, (char) flat[0], flat[1], route));
+                    }
+                }
             }
             if (changed) write(node, data);
         }
@@ -759,8 +1123,26 @@ public final class NpcWirePoints321 {
                     }
                 }
             }
+            for (List<int[]> points : data.custom.values()) {
+                for (int[] point : points) {
+                    if (point[0] == x && point[1] == y) {
+                        point[0] = tx;
+                        point[1] = ty;
+                        changed = true;
+                    }
+                }
+            }
             for (int[] hang : data.hangs) {
                 for (int i = 1; i + 1 < hang.length; i += 2) {
+                    if (hang[i] == x && hang[i + 1] == y) {
+                        hang[i] = tx;
+                        hang[i + 1] = ty;
+                        changed = true;
+                    }
+                }
+            }
+            for (int[] hang : data.colorHangs) {
+                for (int i = 2; i + 1 < hang.length; i += 2) {
                     if (hang[i] == x && hang[i + 1] == y) {
                         hang[i] = tx;
                         hang[i + 1] = ty;
@@ -807,6 +1189,18 @@ public final class NpcWirePoints321 {
                 if (points.isEmpty()) deadValue.add(entry.getKey());
             }
             for (Integer key : deadValue) data.value.remove(key);
+            List<String> deadCustom = new ArrayList<>();
+            for (Map.Entry<String, List<int[]>> entry : data.custom.entrySet()) {
+                List<int[]> points = entry.getValue();
+                for (int i = points.size() - 1; i >= 0; i--) {
+                    if (points.get(i)[0] == x && points.get(i)[1] == y) {
+                        points.remove(i);
+                        changed = true;
+                    }
+                }
+                if (points.isEmpty()) deadCustom.add(entry.getKey());
+            }
+            for (String key : deadCustom) data.custom.remove(key);
             for (int i = data.hangs.size() - 1; i >= 0; i--) {
                 int[] hang = data.hangs.get(i);
                 int size = routeSize(hang);
@@ -834,6 +1228,35 @@ public final class NpcWirePoints321 {
                     smaller[2 + k * 2] = route.get(k)[1];
                 }
                 data.hangs.set(i, smaller);
+            }
+            for (int i = data.colorHangs.size() - 1; i >= 0; i--) {
+                int[] flat = data.colorHangs.get(i);
+                int size = (flat.length - 2) / 2;
+                int kept = size;
+                List<int[]> route = new ArrayList<>();
+                for (int k = 0; k < size; k++) {
+                    int px = flat[2 + k * 2];
+                    int py = flat[3 + k * 2];
+                    if (px == x && py == y) {
+                        kept--;
+                        continue;
+                    }
+                    route.add(new int[] { px, py });
+                }
+                if (kept == size) continue;
+                changed = true;
+                if (route.isEmpty()) {
+                    data.colorHangs.remove(i);
+                    continue;
+                }
+                int[] smaller = new int[2 + route.size() * 2];
+                smaller[0] = flat[0];
+                smaller[1] = flat[1];
+                for (int k = 0; k < route.size(); k++) {
+                    smaller[2 + k * 2] = route.get(k)[0];
+                    smaller[3 + k * 2] = route.get(k)[1];
+                }
+                data.colorHangs.set(i, smaller);
             }
             if (changed) {
                 write(node, data);
@@ -892,6 +1315,38 @@ public final class NpcWirePoints321 {
         }
         write(from, data);
         return true;
+    }
+
+    public static boolean removeHang(Node from, int fromPort, int endX, int endY) {
+        if (from == null) return false;
+        Data data = read(from);
+        for (int i = data.hangs.size() - 1; i >= 0; i--) {
+            int[] h = data.hangs.get(i);
+            int size = routeSize(h);
+            if (h[0] == fromPort && size > 0
+                    && h[1 + (size - 1) * 2] == endX && h[2 + (size - 1) * 2] == endY) {
+                data.hangs.remove(i);
+                write(from, data);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    public static boolean removeColorHang(Node from, char kind, int arg, int endX, int endY) {
+        if (from == null) return false;
+        Data data = read(from);
+        for (int i = data.colorHangs.size() - 1; i >= 0; i--) {
+            int[] h = data.colorHangs.get(i);
+            int size = (h.length - 2) / 2;
+            if ((char) h[0] == kind && h[1] == arg && size > 0
+                    && h[2 + (size - 1) * 2] == endX && h[3 + (size - 1) * 2] == endY) {
+                data.colorHangs.remove(i);
+                write(from, data);
+                return true;
+            }
+        }
+        return false;
     }
 
     public static int snap(int value) {

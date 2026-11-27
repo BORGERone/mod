@@ -4,6 +4,7 @@ import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.npc.VarDataNode453;
 import dev.settledlands.trial.TrialControlNode446;
 import dev.settledlands.trial.TrialGraph446;
 import dev.settledlands.trial.TrialModule447;
@@ -873,6 +874,7 @@ public final class PursuitGraphNode272 {
      */
     public static boolean isValueInputNode(Node node) {
         if (node == null || isPursuitNode(node)) return false;
+        if (VarDataNode453.isVarDataNode(node)) return false;
         if (TrialModule447.isModuleNode(node) || TrialControlNode446.isControlNode(node)) return false;
         return node.type == NpcDialogueGraph.LINE
                 || node.type == NpcDialogueGraph.TRIGGER
@@ -947,15 +949,13 @@ public final class PursuitGraphNode272 {
     // Build 290: the blue input of the stock nodes that take a body.
     // ---------------------------------------------------------------------
 
-    /** Node this consumer reads, or -1. Stored in the field the graph NBT already has. */
+    /** Node this consumer reads on its blue entity pin, or -1. Build 453 separates IF/VARIABLE blue vs orange. */
     public static int inputSource(Node node) {
-        return node == null ? -1 : node.varInputNode;
+        return VarDataNode453.entityInput(node);
     }
 
     public static void setInputSource(Node node, int source) {
-        if (node == null) return;
-        // A node may not read itself; -1 clears the input.
-        node.varInputNode = source == node.id ? -1 : source;
+        VarDataNode453.setEntityInput(node, source);
     }
 
     /** Screen X of the blue input: the left edge of the card. */
@@ -1024,7 +1024,8 @@ public final class PursuitGraphNode272 {
         for (Node node : graph.nodes.values()) {
             if (node == null || node.type != NpcDialogueGraph.IF) continue;
             int source = inputSource(node);
-            Node from = source < 0 ? null : graph.get(source);
+            if (source < 0 || node.varInputNode != source) continue;
+            Node from = graph.get(source);
             if (from == null || !isValueSourceNode(from)) continue;
             HIDDEN_WIRES.add(new int[] {node.id, source});
             node.varInputNode = -1;

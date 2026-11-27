@@ -3,6 +3,7 @@ package dev.settledlands.npc.client;
 import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.TeleportNode424;
+import dev.settledlands.npc.VarDataNode453;
 import dev.settledlands.trial.TrialControlNode446;
 import dev.settledlands.trial.TrialModule447;
 import net.minecraft.client.gui.Font;
@@ -160,7 +161,12 @@ public final class BlockMenu363 {
      * slots cleanly.</p>
      */
     public static int count() {
-        return rows().length + 2 + (chest ? 1 : 0) + (trial ? 2 : 0);
+        return rows().length + 3 + (chest ? 1 : 0) + (trial ? 2 : 0);
+    }
+
+    /** True when {@code compact} is the Build 453 UE5 Variable data node row. */
+    public static boolean isVarDataRow(int compact) {
+        return compact == count() - 1;
     }
 
     /** True when {@code compact} is the Teleport row appended after the stock block rows. */
@@ -217,6 +223,9 @@ public final class BlockMenu363 {
         if (isLootPoolRow(compact)) {
             return Component.translatable(LootPool436.MENU_LABEL_KEY).getString();
         }
+        if (isVarDataRow(compact)) {
+            return Component.translatable(VarDataNode453.MENU_LABEL_KEY).getString();
+        }
         int modSlot = trialModuleSlot(compact);
         if (modSlot >= 0) {
             return Component.translatable(TrialModule447.menuKey(modSlot)).getString();
@@ -235,6 +244,9 @@ public final class BlockMenu363 {
         }
         if (isLootPoolRow(compact)) {
             return LootPool436.ACCENT_COLOR;
+        }
+        if (isVarDataRow(compact)) {
+            return VarDataNode453.ACCENT_COLOR;
         }
         int modSlot = trialModuleSlot(compact);
         if (modSlot >= 0) {

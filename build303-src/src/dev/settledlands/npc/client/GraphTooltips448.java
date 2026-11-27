@@ -11,6 +11,7 @@ import dev.settledlands.npc.NpcAutoAi255;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
 import dev.settledlands.npc.TeleportNode424;
+import dev.settledlands.npc.VarDataNode453;
 import dev.settledlands.trial.TrialConfig446;
 import dev.settledlands.trial.TrialControlNode446;
 import dev.settledlands.trial.TrialGraph446;
@@ -479,6 +480,10 @@ public final class GraphTooltips448 {
                 return tip("ctx:blk_lp", BlockMenu363.label(row),
                         tr("gui.settledlands.tip448.menu.loot_pool"), LootPool436.ACCENT_COLOR);
             }
+            if (BlockMenu363.isVarDataRow(row)) {
+                return tip("ctx:blk_v453", BlockMenu363.label(row),
+                        tr("gui.settledlands.tip448.menu.var453"), VarDataNode453.ACCENT_COLOR);
+            }
             int modSlot = BlockMenu363.trialModuleSlot(row);
             if (modSlot >= 0) {
                 return tip("ctx:tmod_" + modSlot, BlockMenu363.label(row),
@@ -516,6 +521,10 @@ public final class GraphTooltips448 {
             return tip("ctx:npc_18", tr(TrialControlNode446.MENU_LABEL_KEY),
                     tr("gui.settledlands.tip448.menu.trial_ctrl"), TrialControlNode446.ACCENT_COLOR);
         }
+        if (row == VarDataNode453.MENU_ROW) {
+            return tip("ctx:npc_19", tr(VarDataNode453.MENU_LABEL_KEY),
+                    tr("gui.settledlands.tip448.menu.var453"), VarDataNode453.ACCENT_COLOR);
+        }
         return null;
     }
 
@@ -542,6 +551,10 @@ public final class GraphTooltips448 {
             String opKey = trialOpTagByIndex(idx);
             return tip("drop:op:" + idx, entryText,
                     tr("gui.settledlands.tip448.op." + opKey), TrialControlNode446.ACCENT_COLOR);
+        }
+        if ("gui.settledlands.var453.op_label".equals(lk)) {
+            return tip("drop:v453op:" + idx, entryText,
+                    tr("gui.settledlands.tip448.var453_op"), VarDataNode453.ACCENT_COLOR);
         }
         if ("gui.settledlands.graph.var_op".equals(lk)) {
             return tip("drop:varop:" + idx, entryText,
@@ -968,6 +981,10 @@ public final class GraphTooltips448 {
                     tr("gui.settledlands.tip448.drop.reward_pool"),
                     TrialModule447.color(TrialModule447.SLOT_REWARDS));
         }
+        if ("gui.settledlands.var453.op_label".equals(lk) && node != null) {
+            return tip("w:drop_v453op", tr(lk),
+                    tr("gui.settledlands.tip448.var453_op"), VarDataNode453.ACCENT_COLOR);
+        }
         if ("gui.settledlands.graph.var_op".equals(lk) && node != null) {
             return tip("w:drop_varop", tr(lk),
                     tr("gui.settledlands.tip448.varop." + Math.max(0, Math.min(5, node.varOp))),
@@ -1262,9 +1279,36 @@ public final class GraphTooltips448 {
                             tr("gui.settledlands.tip448.pin.if_false"), WARN_ACCENT);
                 }
                 double lx = canvas.screenX(n.x);
+                if (distSq(mx, my, lx, canvas.screenY(n.y + VarDataCard453.IF_ORANGE_Y)) <= rSq) {
+                    return tip("pin:" + n.id + ":if_orange",
+                            tr("gui.settledlands.tip448.pin.var_orange_title"),
+                            tr("gui.settledlands.tip448.pin.var_orange_in"),
+                            VarDataNode453.PIN_COLOR);
+                }
                 if (distSq(mx, my, lx, canvas.screenY(n.y + h - 8.0D)) <= rSq) {
                     return tip("pin:" + n.id + ":var_in", tr("gui.settledlands.graph.var_input"),
                             tr("gui.settledlands.tip448.pin.var_input"), 0xFF55AAFF);
+                }
+            }
+
+            // Orange data output/input pins (VarDataNode453 & VARIABLE)
+            if (VarDataCard453.hitOrangeOut(canvas, n, mx, my)) {
+                return tip("pin:" + n.id + ":o_out",
+                        tr("gui.settledlands.tip448.pin.var453_out_title"),
+                        tr("gui.settledlands.tip448.pin.var453_out"),
+                        VarDataNode453.PIN_COLOR);
+            }
+            if (n.type == NpcDialogueGraph.VARIABLE) {
+                if (VarDataCard453.hitOrangeIn(canvas, n, mx, my)) {
+                    return tip("pin:" + n.id + ":v_orange",
+                            tr("gui.settledlands.tip448.pin.var_orange_title"),
+                            tr("gui.settledlands.tip448.pin.var_orange_in"),
+                            VarDataNode453.PIN_COLOR);
+                }
+                if (PursuitGraphNode272.hitInputPin(canvas, n, mx, my)) {
+                    return tip("pin:" + n.id + ":v_blue",
+                            tr("gui.settledlands.tip448.pin.var_blue_title"),
+                            tr("gui.settledlands.tip448.pin.var_blue_in"), 0xFF55AAFF);
                 }
             }
 
@@ -1358,8 +1402,7 @@ public final class GraphTooltips448 {
             if (n == null) continue;
             int w = GraphCardDesc448.cardWidth(n);
             int h = GraphCardDesc448.cardHeight(n);
-            int fh = GraphCardDesc448.nodeFooterHeight(font, n);
-            if (wx >= n.x && wx <= n.x + w && wy >= n.y && wy <= n.y + h + fh) {
+            if (wx >= n.x && wx <= n.x + w && wy >= n.y && wy <= n.y + h) {
                 hit = n;
             }
         }
@@ -1426,6 +1469,10 @@ public final class GraphTooltips448 {
         if (TeleportNode424.isTeleportNode(hit)) {
             return tip("node:" + hit.id, tr(TeleportNode424.TITLE_KEY),
                     tr("gui.settledlands.tip448.node.teleport"), TeleportNode424.ACCENT_COLOR);
+        }
+        if (VarDataNode453.isVarDataNode(hit)) {
+            return tip("node:" + hit.id, tr(VarDataNode453.TITLE_KEY),
+                    tr("gui.settledlands.tip448.node.var453"), VarDataNode453.ACCENT_COLOR);
         }
         if (LootPool436.isLootPoolNode(hit)) {
             return tip("node:" + hit.id, tr(LootPool436.TITLE_KEY),

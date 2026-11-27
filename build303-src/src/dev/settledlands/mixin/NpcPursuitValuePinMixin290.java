@@ -8,10 +8,12 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.npc.NpcWirePoints321;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphCanvas;
-import dev.settledlands.npc.NpcWirePoints321;
+import dev.settledlands.npc.client.NpcWirePointsUi321;
 import dev.settledlands.npc.client.PursuitGraphNode272;
+import dev.settledlands.npc.client.WireHover453;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
@@ -107,25 +109,32 @@ public abstract class NpcPursuitValuePinMixin290 {
         NpcGraphCanvas canvas = screen.settledlands$canvas();
         if (graph == null || canvas == null || !canvas.contains(mouseX, mouseY)) return;
 
+        // Bend points and their ports always take precedence so right-click / grab works reliably
+        if (NpcWirePointsUi321.pointAt(screen, graph, mouseX, mouseY) != null
+                || NpcWirePointsUi321.portAt(screen, graph, mouseX, mouseY) != null) {
+            return;
+        }
+
         if (button == 2) {
-            // Stock behaviour: the middle button cuts the cable under the cursor.
-            if (settledlands$cutValueWire(screen, graph, canvas, mouseX, mouseY)) {
+            if (WireHover453.cutNonStockWire(screen, graph, mouseX, mouseY)) {
                 cir.setReturnValue(true);
             }
             return;
         }
 
-        // A blue output: "В радиусе" or "Урон". It is the only pin on those cards.
+        // A blue output: "В радиусе", "Урон", "Дверь", "Сундук", "Триал".
         Node sourceHit = settledlands$sourceNodeAt(graph, canvas, mouseX, mouseY);
         if (sourceHit != null) {
             if (button == 1) {
-                // Right click unplugs every node that reads this output.
-                screen.settledlands$remember();
-                PursuitGraphNode272.unplugFrom(graph, sourceHit.id);
-                screen.settledlands$changed();
-            } else {
-                settledlands$dragOut = sourceHit.id;
+                if (PursuitGraphNode272.wiredTo(graph, sourceHit.id) > 0) {
+                    screen.settledlands$remember();
+                    PursuitGraphNode272.unplugFrom(graph, sourceHit.id);
+                    screen.settledlands$changed();
+                    cir.setReturnValue(true);
+                }
+                return;
             }
+            settledlands$dragOut = sourceHit.id;
             cir.setReturnValue(true);
             return;
         }
@@ -134,12 +143,15 @@ public abstract class NpcPursuitValuePinMixin290 {
         Node inputHit = settledlands$inputNodeAt(graph, canvas, mouseX, mouseY);
         if (inputHit != null) {
             if (button == 1) {
-                screen.settledlands$remember();
-                PursuitGraphNode272.setInputSource(inputHit, -1);
-                screen.settledlands$changed();
-            } else {
-                settledlands$dragIn = inputHit.id;
+                if (PursuitGraphNode272.inputSource(inputHit) >= 0) {
+                    screen.settledlands$remember();
+                    PursuitGraphNode272.setInputSource(inputHit, -1);
+                    screen.settledlands$changed();
+                    cir.setReturnValue(true);
+                }
+                return;
             }
+            settledlands$dragIn = inputHit.id;
             cir.setReturnValue(true);
             return;
         }
@@ -152,16 +164,18 @@ public abstract class NpcPursuitValuePinMixin290 {
         boolean in = !out && PursuitGraphNode272.hitTargetInPin(canvas, node, mouseX, mouseY);
         if (!out && !in) return;
         if (button == 1) {
-            // Right click on a value pin clears that pin: the output drops its consumers,
-            // the input drops its source.
-            screen.settledlands$remember();
-            if (out) {
+            // Only swallow RMB when this pin actually has wires to unplug; otherwise open card context menu.
+            if (out && !PursuitGraphNode272.consumers(node).isEmpty()) {
+                screen.settledlands$remember();
                 PursuitGraphNode272.toggleConsumer(node, -1);
-            } else {
+                screen.settledlands$changed();
+                cir.setReturnValue(true);
+            } else if (in && PursuitGraphNode272.sourceId(node) >= 0) {
+                screen.settledlands$remember();
                 PursuitGraphNode272.setSource(node, -1);
+                screen.settledlands$changed();
+                cir.setReturnValue(true);
             }
-            screen.settledlands$changed();
-            cir.setReturnValue(true);
             return;
         }
         if (out) {
@@ -188,6 +202,20 @@ public abstract class NpcPursuitValuePinMixin290 {
         NpcGraphCanvas canvas = screen.settledlands$canvas();
         int id = canvas == null ? -1 : canvas.hit(graph, mouseX, mouseY);
         Node over = id >= 0 ? graph.get(id) : null;
+
+        if (out >= 0 && over == null) {
+            int[] bendPt = NpcWirePointsUi321.pointAt(screen, graph, mouseX, mouseY);
+            Node outNode = graph.get(out);
+            if (bendPt != null && (PursuitGraphNode272.isValueSourceNode(outNode)
+                    || PursuitGraphNode272.isPursuitNode(outNode))) {
+                screen.settledlands$remember();
+                NpcWirePoints321.attachColor(outNode, NpcWirePoints321.KIND_VALUE, 0,
+                        bendPt[0], bendPt[1]);
+                WireHover453.invalidateCache();
+                screen.settledlands$changed();
+                return;
+            }
+        }
 
         if (out >= 0 && PursuitGraphNode272.isValueSourceNode(graph.get(out))) {
             // A blue output can only feed a blue input: a pursuit node's target, or the
@@ -471,18 +499,15 @@ public abstract class NpcPursuitValuePinMixin290 {
             } else if (source >= 0) {
                 NpcDialogueGraph.Node from = graph.get(source);
                 if (from != null && PursuitGraphNode272.isPursuitNode(from)) {
-                    quads += settledlands$blue(buffer, matrix, from, node,
+                    quads += settledlands$blue(screen, graph, buffer, matrix, from, node,
                             PursuitGraphNode272.targetPinScreenX(canvas, from),
-                            PursuitGraphNode272.targetPinScreenY(canvas, from), inX, outY, color);
+                            PursuitGraphNode272.targetPinScreenY(canvas, from),
+                            inX, outY, color, mouseX, mouseY);
                 } else if (from != null && PursuitGraphNode272.isValueSourceNode(from)) {
-                    // The body comes from a blue output - "В радиусе" or "Урон": the pin sits
-                    // on the right edge of either card, so one cable, blue, from that pin.
-                    // Build 310: this branch used to accept only the check node, so a wire
-                    // pulled out of an "Урон" node was stored in the graph, took part in the
-                    // server pass, and was simply never drawn.
-                    quads += settledlands$blue(buffer, matrix, from, node,
+                    quads += settledlands$blue(screen, graph, buffer, matrix, from, node,
                             PursuitGraphNode272.checkPinScreenX(canvas, from),
-                            PursuitGraphNode272.checkPinScreenY(canvas, from), inX, outY, color);
+                            PursuitGraphNode272.checkPinScreenY(canvas, from),
+                            inX, outY, color, mouseX, mouseY);
                 }
             }
 
@@ -494,9 +519,10 @@ public abstract class NpcPursuitValuePinMixin290 {
             for (Integer consumerId : PursuitGraphNode272.consumers(node)) {
                 NpcDialogueGraph.Node consumer = consumerId == null ? null : graph.get(consumerId);
                 if (consumer == null) continue;
-                quads += settledlands$blue(buffer, matrix, node, consumer, outX, outY,
+                quads += settledlands$blue(screen, graph, buffer, matrix, node, consumer, outX, outY,
                         PursuitGraphNode272.consumerAnchorX(canvas, consumer),
-                        PursuitGraphNode272.consumerAnchorY(canvas, consumer), color);
+                        PursuitGraphNode272.consumerAnchorY(canvas, consumer),
+                        color, mouseX, mouseY);
             }
         }
 
@@ -512,10 +538,11 @@ public abstract class NpcPursuitValuePinMixin290 {
             int source = PursuitGraphNode272.stockInputSource(node);
             NpcDialogueGraph.Node from = source < 0 ? null : graph.get(source);
             if (from == null || !PursuitGraphNode272.isValueSourceNode(from)) continue;
-            quads += settledlands$blue(buffer, matrix, from, node,
+            quads += settledlands$blue(screen, graph, buffer, matrix, from, node,
                     PursuitGraphNode272.checkPinScreenX(canvas, from),
                     PursuitGraphNode272.checkPinScreenY(canvas, from),
-                    PursuitGraphNode272.inputPinScreenX(canvas, node), inY, color);
+                    PursuitGraphNode272.inputPinScreenX(canvas, node), inY,
+                    color, mouseX, mouseY);
         }
 
         // Rubber band from a check node's blue output while it is being dragged.
@@ -537,25 +564,20 @@ public abstract class NpcPursuitValuePinMixin290 {
         RenderSystem.disableBlend();
     }
 
-    /**
-     * Build 332: one blue value wire, bent through the points made on it.
-     *
-     * <p>A blue wire is drawn here, not by the stock pass: it joins two pins, not two ports, so the
-     * stock route never sees it. That is why the points of a blue wire could not reach their wire
-     * before - there was no place in the drawing that knew both of its ends. This is that place:
-     * both node ids are known at every call, the points are stored under the source end, and with
-     * no points the call is exactly the curve it replaced.</p>
-     */
-    private int settledlands$blue(BufferBuilder buffer, Matrix4f matrix, Node from, Node to,
-            double x1, double y1, double x2, double y2, int color) {
+    private int settledlands$blue(NpcDialogueGraphScreen screen, NpcDialogueGraph graph,
+            BufferBuilder buffer, Matrix4f matrix, Node from, Node to,
+            double x1, double y1, double x2, double y2, int color, double mouseX, double mouseY) {
+        boolean hov = settledlands$dragOut < 0 && settledlands$dragIn < 0
+                && WireHover453.isColoredHovered(screen, graph, WireHover453.KIND_VALUE,
+                        from.id, to.id, mouseX, mouseY);
         List<int[]> points = from == null || to == null
                 ? List.of() : NpcWirePoints321.valueBends(from, to.id);
         if (points.isEmpty()) {
-            return curve(buffer, matrix, x1, y1, x2, y2, color, false);
+            return curve(buffer, matrix, x1, y1, x2, y2, color, hov);
         }
-        NpcGraphCanvas canvas = settledlands$screen(this).settledlands$canvas();
+        NpcGraphCanvas canvas = screen.settledlands$canvas();
         if (canvas == null) {
-            return curve(buffer, matrix, x1, y1, x2, y2, color, false);
+            return curve(buffer, matrix, x1, y1, x2, y2, color, hov);
         }
         int drawn = 0;
         double x = x1;
@@ -563,11 +585,11 @@ public abstract class NpcPursuitValuePinMixin290 {
         for (int[] point : points) {
             double px = canvas.screenX(point[0]);
             double py = canvas.screenY(point[1]);
-            drawn += curve(buffer, matrix, x, y, px, py, color, false);
+            drawn += curve(buffer, matrix, x, y, px, py, color, hov);
             x = px;
             y = py;
         }
-        drawn += curve(buffer, matrix, x, y, x2, y2, color, false);
+        drawn += curve(buffer, matrix, x, y, x2, y2, color, hov);
         return drawn;
     }
 }

@@ -14,6 +14,7 @@ import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphCanvas;
 import dev.settledlands.npc.client.NpcWirePointsUi321;
 import dev.settledlands.npc.client.PursuitGraphNode272;
+import dev.settledlands.npc.client.WireHover453;
 import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
@@ -111,6 +112,11 @@ public abstract class NpcWirePointsMixin321 {
 
     @Shadow
     private String tr(String key) {
+        throw new AssertionError();
+    }
+
+    @Shadow
+    private boolean isShiftDownSafe() {
         throw new AssertionError();
     }
 
@@ -238,7 +244,8 @@ public abstract class NpcWirePointsMixin321 {
         boolean any = settledlands$pull;
         if (!any) {
             for (Node node : graph.nodes.values()) {
-                if (!NpcWirePoints321.hangs(node).isEmpty()) {
+                if (!NpcWirePoints321.hangs(node).isEmpty()
+                        || !NpcWirePoints321.colorHangs(node).isEmpty()) {
                     any = true;
                     break;
                 }
@@ -255,37 +262,60 @@ public abstract class NpcWirePointsMixin321 {
         BufferBuilder buffer = Tesselator.getInstance()
                 .begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_COLOR);
         Matrix4f matrix = graphics.pose().last().pose();
+        NpcDialogueGraphScreen screen = (NpcDialogueGraphScreen) (Object) this;
         int color = PursuitGraphNode272.COL_CABLE_WHITE;
         int quads = 0;
 
         for (Node node : graph.nodes.values()) {
             List<int[]> hangs = NpcWirePoints321.hangs(node);
-            if (hangs.isEmpty()) continue;
-            double x = canvas.portScreenX(node, true);
-            for (int[] hang : hangs) {
-                int size = NpcWirePoints321.routeSize(hang);
-                double y = canvas.portScreenY(node, true, hang[0]);
-                for (int i = 0; i < size; i++) {
-                    double qx = canvas.screenX(NpcWirePoints321.routeX(hang, i));
-                    double qy = canvas.screenY(NpcWirePoints321.routeY(hang, i));
+            if (!hangs.isEmpty()) {
+                double x = canvas.portScreenX(node, true);
+                for (int[] hang : hangs) {
+                    int size = NpcWirePoints321.routeSize(hang);
+                    double y = canvas.portScreenY(node, true, hang[0]);
+                    boolean hov = size > 0 && WireHover453.isWhiteHangHovered(screen, graph, node,
+                            hang[0], NpcWirePoints321.routeX(hang, size - 1),
+                            NpcWirePoints321.routeY(hang, size - 1), mouseX, mouseY);
+                    for (int i = 0; i < size; i++) {
+                        double qx = canvas.screenX(NpcWirePoints321.routeX(hang, i));
+                        double qy = canvas.screenY(NpcWirePoints321.routeY(hang, i));
+                        if (Math.max(x, qx) >= canvas.left && Math.min(x, qx) <= canvas.right
+                                && Math.max(y, qy) >= canvas.top && Math.min(y, qy) <= canvas.bottom) {
+                            quads += curve(buffer, matrix, x, y, qx, qy, color, hov);
+                        }
+                        x = qx;
+                        y = qy;
+                    }
+                    x = canvas.portScreenX(node, true);
+                }
+            }
+            for (NpcWirePoints321.ColorHang ch : NpcWirePoints321.colorHangs(node)) {
+                double[] start = WireHover453.colorHangStart(canvas, node, ch.kind, ch.arg);
+                if (start == null) continue;
+                double x = start[0];
+                double y = start[1];
+                int chColor = WireHover453.colorForKind(ch.kind, ch.arg);
+                boolean hov = WireHover453.isColorHangHovered(screen, graph, node, ch.kind, ch.arg,
+                        ch.endX(), ch.endY(), mouseX, mouseY);
+                for (int[] pt : ch.route) {
+                    double qx = canvas.screenX(pt[0]);
+                    double qy = canvas.screenY(pt[1]);
                     if (Math.max(x, qx) >= canvas.left && Math.min(x, qx) <= canvas.right
                             && Math.max(y, qy) >= canvas.top && Math.min(y, qy) <= canvas.bottom) {
-                        // One curve per segment, exactly as a carrying wire is drawn through its
-                        // points, so a run of points looks the same either way.
-                        quads += curve(buffer, matrix, x, y, qx, qy, color, false);
+                        quads += curve(buffer, matrix, x, y, qx, qy, chColor, hov);
                     }
                     x = qx;
                     y = qy;
                 }
-                x = canvas.portScreenX(node, true);
             }
         }
 
         if (settledlands$pull) {
+            int pullColor = WireHover453.pullColorAtPoint(graph, settledlands$pullX, settledlands$pullY);
             quads += curve(buffer, matrix,
                     NpcWirePointsUi321.portX(canvas, settledlands$pullX),
                     NpcWirePointsUi321.portY(canvas, settledlands$pullY),
-                    mouseX, mouseY, color, false);
+                    mouseX, mouseY, pullColor, false);
         }
 
         if (quads > 0) {
@@ -317,6 +347,17 @@ public abstract class NpcWirePointsMixin321 {
         boolean portFree = port != null
                 && (point == null || (point[0] == port[0] && point[1] == port[1]
                         && NpcWirePointsUi321.overPort(screen, graph, port, mouseX, mouseY)));
+
+        // Cut any colored or waiting wire under the cursor on MMB or Shift+LMB when not on a bend dot/port
+        if (point == null && port == null
+                && (button == 2 || (button == 0 && isShiftDownSafe()))) {
+            if (WireHover453.cutNonStockWire(screen, graph, mouseX, mouseY)) {
+                status = tr("gui.settledlands.graph.disconnected");
+                cir.setReturnValue(true);
+                return;
+            }
+        }
+
         // The wire is only looked up when the answer can use it, so a plain drag costs nothing.
         NpcWirePointsUi321.Wire wire = again && !onDot && button == 0
                 ? NpcWirePointsUi321.wireAt(screen, graph, mouseX, mouseY)
@@ -349,9 +390,18 @@ public abstract class NpcWirePointsMixin321 {
                 remember();
                 int px = at[0];
                 int py = at[1];
-                if (wire.value) {
+                if (wire.wireKind == WireHover453.KIND_HANG_COLOR) {
+                    NpcWirePoints321.addColorRoutePoint(wire.from, (char) wire.fromPort,
+                            wire.colorArg, wire.endX, wire.endY, px, py, wire.index);
+                } else if (wire.value || wire.wireKind == WireHover453.KIND_VALUE) {
                     // A blue value wire: its points live under the source end of the wire.
                     NpcWirePoints321.addValuePoint(wire.from, wire.toId, px, py, wire.index);
+                } else if (wire.wireKind == WireHover453.KIND_ORANGE
+                        || wire.wireKind == WireHover453.KIND_AMBER
+                        || wire.wireKind == WireHover453.KIND_TRIAL_START
+                        || wire.wireKind == WireHover453.KIND_TRIAL_MOD) {
+                    NpcWirePoints321.addCustomPoint(wire.from, wire.wireKind, wire.toId,
+                            px, py, wire.index);
                 } else if (wire.waiting()) {
                     // One more point in the run this wire visits, where it was clicked, so
                     // node - point - point - point is possible.
@@ -361,6 +411,7 @@ public abstract class NpcWirePointsMixin321 {
                     NpcWirePoints321.addBend(wire.from, wire.fromPort, wire.toId, px, py,
                             wire.index);
                 }
+                WireHover453.invalidateCache();
                 changed();
                 status = tr("gui.settledlands.graph.point_added");
                 cir.setReturnValue(true);
@@ -432,7 +483,8 @@ public abstract class NpcWirePointsMixin321 {
                 int target = canvas.hit(graph, mouseX, mouseY);
                 if (target >= 0) {
                     remember();
-                    if (NpcWireJoin322.aim(graph, x, y, target) > 0) {
+                    if (NpcWireJoin322.aim(graph, x, y, target)
+                            + WireHover453.aimColoredAtPoint(graph, x, y, target) > 0) {
                         changed();
                         status = tr("gui.settledlands.graph.connected");
                     }
@@ -459,7 +511,8 @@ public abstract class NpcWirePointsMixin321 {
                     // wires at it are sent to the node it was dropped on.
                     NpcWirePoints321.movePoint(graph, x, y, startX, startY);
                     remember();
-                    if (NpcWireJoin322.aim(graph, startX, startY, target) > 0) {
+                    if (NpcWireJoin322.aim(graph, startX, startY, target)
+                            + WireHover453.aimColoredAtPoint(graph, startX, startY, target) > 0) {
                         changed();
                         status = tr("gui.settledlands.graph.connected");
                     }

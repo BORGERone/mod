@@ -23,16 +23,14 @@ public abstract class GraphCardFooter448Mixin {
             at = @At("RETURN"), remap = false)
     private static void settledlands$drawNodeFooter448(NpcDialogueGraphScreen screen,
             GuiGraphics graphics, NpcDialogueGraph.Node node, CallbackInfo ci) {
-        GraphCardDesc448.drawNodeFooter(screen, graphics, node);
+        // Build 453: node descriptions moved cleanly into the bottom-right inspector footer.
     }
 
     @Inject(method = "visible(Ldev/settledlands/npc/client/NpcGraphCanvas;Ldev/settledlands/npc/NpcDialogueGraph$Node;)Z",
             at = @At("RETURN"), cancellable = true, remap = false)
     private static void settledlands$visibleWithFooter448(NpcGraphCanvas canvas,
             NpcDialogueGraph.Node node, CallbackInfoReturnable<Boolean> cir) {
-        if (!Boolean.TRUE.equals(cir.getReturnValue()) && GraphCardDesc448.isFooterVisible(canvas, node)) {
-            cir.setReturnValue(Boolean.TRUE);
-        }
+        // Build 453: no extra footer height below canvas cards.
     }
 
     @Inject(method = "hit(Ldev/settledlands/npc/client/NpcGraphCanvas;Ldev/settledlands/npc/NpcDialogueGraph;DD)I",
@@ -40,12 +38,6 @@ public abstract class GraphCardFooter448Mixin {
     private static void settledlands$hitWithFooter448(NpcGraphCanvas canvas,
             NpcDialogueGraph graph, double mouseX, double mouseY,
             CallbackInfoReturnable<Integer> cir) {
-        Integer hitId = cir.getReturnValue();
-        if (hitId == null || hitId.intValue() < 0) {
-            int f = GraphCardDesc448.hitNodeFooterId(canvas, graph, mouseX, mouseY);
-            if (f >= 0) {
-                cir.setReturnValue(Integer.valueOf(f));
-            }
-        }
+        // Build 453: canvas card hitbox covers the card itself.
     }
 }

@@ -29,13 +29,13 @@ public final class TeleportNode424 {
     /** Row index in the NPC/common context menu (stock 0..15, Pursuit 16, Teleport 17). */
     public static final int TELEPORT_ROW = 17;
 
-    /** Total rows in the NPC/common context menu once Teleport (17) and Trial Control (18) join. */
-    public static final int NPC_MENU_ITEMS = 19;
+    /** Total rows in the NPC/common context menu once Teleport (17), Trial Control (18), and UE5 Var (19) join. */
+    public static final int NPC_MENU_ITEMS = VarDataNode453.NPC_MENU_ITEMS;
 
     /** Visible rows in the NPC/common context menu window. */
     public static final int NPC_VISIBLE_ROWS = 5;
 
-    /** Maximum {@code scrollRow} in the NPC/common context menu ({@code 18 - 5 = 13}). */
+    /** Maximum {@code scrollRow} in the NPC/common context menu ({@code 20 - 5 = 15}). */
     public static final int NPC_MAX_SCROLL = NPC_MENU_ITEMS - NPC_VISIBLE_ROWS;
 
     /** Distinct cyan-blue accent for the Teleport menu row and canvas card. */

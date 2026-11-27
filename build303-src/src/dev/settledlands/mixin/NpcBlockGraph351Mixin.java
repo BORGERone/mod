@@ -3,6 +3,7 @@ package dev.settledlands.mixin;
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.TeleportNode424;
+import dev.settledlands.npc.VarDataNode453;
 import dev.settledlands.npc.client.BlockMenu363;
 import dev.settledlands.npc.client.BlockTriggerClient351;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
@@ -124,6 +125,17 @@ public abstract class NpcBlockGraph351Mixin {
                 } else {
                     this.status = Component.translatable("gui.settledlands.trial_ctl.added").getString();
                 }
+                this.widgets();
+                this.changed();
+            }
+            return;
+        }
+
+        if (BlockMenu363.isVarDataRow(row)) {
+            NpcDialogueGraph.Node created = this.addAt(NpcDialogueGraph.TRIGGER, worldX, worldY);
+            if (created != null) {
+                VarDataNode453.applyDefaults(created);
+                this.status = Component.translatable("gui.settledlands.var453.added").getString();
                 this.widgets();
                 this.changed();
             }

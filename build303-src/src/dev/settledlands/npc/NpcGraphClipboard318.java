@@ -281,6 +281,7 @@ public final class NpcGraphClipboard318 {
         num(out, "next", node.next);
         num(out, "falseNext", node.falseNext);
         num(out, "varInputNode", node.varInputNode);
+        num(out, "entityInput453", VarDataNode453.entityInput(node));
         ints(out, "choices", node.choices);
         ints(out, "randomBranches", node.randomBranches);
         ints(out, "triggers", node.triggers);
@@ -357,6 +358,7 @@ public final class NpcGraphClipboard318 {
         node.next = link(row, "next", moved, -1);
         node.falseNext = link(row, "falseNext", moved, -1);
         node.varInputNode = link(row, "varInputNode", moved, -1);
+        VarDataNode453.setEntityInput(node, link(row, "entityInput453", moved, -1));
         // The three link lists are final on the node, so they are refilled in place.
         refill(row, "choices", moved, node.choices);
         refill(row, "randomBranches", moved, node.randomBranches);

@@ -22,15 +22,13 @@ public abstract class AutoAiFooter448Mixin {
             at = @At("RETURN"), remap = false)
     private static void settledlands$drawAutoAiFooter448(NpcDialogueGraphScreen screen,
             GuiGraphics graphics, CallbackInfo ci) {
-        GraphCardDesc448.drawAutoAiFooter(screen, graphics);
+        // Build 453: canvas footer disabled to keep the canvas uncluttered.
     }
 
     @Inject(method = "visible(Ldev/settledlands/npc/client/NpcGraphCanvas;Ldev/settledlands/npc/NpcAutoAi255$GraphState;)Z",
             at = @At("RETURN"), cancellable = true, remap = false)
     private static void settledlands$visibleAutoAiFooter448(NpcGraphCanvas canvas,
             NpcAutoAi255.GraphState state, CallbackInfoReturnable<Boolean> cir) {
-        if (!Boolean.TRUE.equals(cir.getReturnValue()) && GraphCardDesc448.isAutoAiFooterVisible(canvas, state)) {
-            cir.setReturnValue(Boolean.TRUE);
-        }
+        // Build 453: canvas footer disabled.
     }
 }

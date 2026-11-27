@@ -40,7 +40,7 @@ public final class TrialControlNode446 {
 
     /** Row index in the NPC/common context menu (stock 0..15, Pursuit 16, Teleport 17, Spawner 18). */
     public static final int SPAWNER_ROW = 18;
-    public static final int NPC_MENU_ITEMS = 19;
+    public static final int NPC_MENU_ITEMS = 20;
     public static final int NPC_VISIBLE_ROWS = 5;
     public static final int NPC_MAX_SCROLL = NPC_MENU_ITEMS - NPC_VISIBLE_ROWS;
 

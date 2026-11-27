@@ -71,7 +71,10 @@ public final class NpcWireJoin322 {
         Node target = graph.get(targetId);
         if (target == null || target.special != NpcDialogueGraph.NORMAL) return false;
         return !NpcWirePoints321.bendsAt(graph, x, y).isEmpty()
-                || !NpcWirePoints321.hangsAt(graph, x, y).isEmpty();
+                || !NpcWirePoints321.hangsAt(graph, x, y).isEmpty()
+                || !NpcWirePoints321.valueBendsAt(graph, x, y).isEmpty()
+                || !NpcWirePoints321.customBendsAt(graph, x, y).isEmpty()
+                || !NpcWirePoints321.colorHangsAt(graph, x, y).isEmpty();
     }
 
     /**

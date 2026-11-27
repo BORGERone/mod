@@ -10,9 +10,13 @@ import dev.settledlands.chest.ChestGraph396;
 import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.npc.NpcWirePoints321;
 import dev.settledlands.npc.client.CardEventPin398;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphCanvas;
+import dev.settledlands.npc.client.NpcWirePointsUi321;
+import dev.settledlands.npc.client.WireHover453;
+import java.util.List;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
 import org.joml.Matrix4f;
@@ -84,26 +88,33 @@ public abstract class CardEventPin398Mixin {
             NpcGraphCanvas canvas = screen.settledlands$canvas();
             if (graph == null || canvas == null || !canvas.contains(mouseX, mouseY)) return;
 
+            if (NpcWirePointsUi321.pointAt(screen, graph, mouseX, mouseY) != null
+                    || NpcWirePointsUi321.portAt(screen, graph, mouseX, mouseY) != null) {
+                return;
+            }
+
             if (button == 2) {
-                Node cut = CardEventPin398.wireAt(graph, canvas, mouseX, mouseY);
-                if (cut == null) return;
-                screen.settledlands$remember();
-                CardEventPin398.setSecondChain(cut, -1);
-                screen.settledlands$changed();
-                cir.setReturnValue(true);
+                if (WireHover453.cutNonStockWire(screen, graph, mouseX, mouseY)) {
+                    cir.setReturnValue(true);
+                }
                 return;
             }
 
             Node card = CardEventPin398.cardAt(graph, canvas, mouseX, mouseY);
             if (card == null) return;
             if (button == 1) {
-                // Right click: this socket lets go of everything it points at. The stock shortcut for a pin.
-                screen.settledlands$remember();
-                CardEventPin398.setSecondChain(card, -1);
-                screen.settledlands$changed();
-            } else {
-                settledlands$dragCard = card.id;
+                if (CardEventPin398.secondChain(card) >= 0) {
+                    screen.settledlands$remember();
+                    int old = CardEventPin398.secondChain(card);
+                    CardEventPin398.setSecondChain(card, -1);
+                    NpcWirePoints321.clearCustomWire(card, NpcWirePoints321.KIND_AMBER, old);
+                    WireHover453.invalidateCache();
+                    screen.settledlands$changed();
+                    cir.setReturnValue(true);
+                }
+                return;
             }
+            settledlands$dragCard = card.id;
             cir.setReturnValue(true);
         } catch (Throwable ignored) {
             // a click on a second socket must never cost the screen
@@ -128,11 +139,28 @@ public abstract class CardEventPin398Mixin {
             // The drop is on a node, never on empty canvas: a chain that points at nothing is not a chain, and
             // the author's wire would look connected while leading nowhere.
             int over = canvas.hit(graph, mouseX, mouseY);
-            if (over < 0 || over == card.id) return;
+            if (over < 0) {
+                int[] bendPt = NpcWirePointsUi321.pointAt(screen, graph, mouseX, mouseY);
+                if (bendPt != null) {
+                    screen.settledlands$remember();
+                    int old = CardEventPin398.secondChain(card);
+                    if (old >= 0) {
+                        CardEventPin398.setSecondChain(card, -1);
+                        NpcWirePoints321.clearCustomWire(card, NpcWirePoints321.KIND_AMBER, old);
+                    }
+                    NpcWirePoints321.attachColor(card, NpcWirePoints321.KIND_AMBER, 0,
+                            bendPt[0], bendPt[1]);
+                    WireHover453.invalidateCache();
+                    screen.settledlands$changed();
+                }
+                return;
+            }
+            if (over == card.id) return;
             Node target = graph.get(over);
             if (target == null || CardEventPin398.isCard(target)) return;
             screen.settledlands$remember();
             CardEventPin398.setSecondChain(card, over);
+            WireHover453.invalidateCache();
             screen.settledlands$changed();
         } catch (Throwable ignored) {
             // a drop that went nowhere must never cost the screen
@@ -186,6 +214,7 @@ public abstract class CardEventPin398Mixin {
     /** Every cable of a second socket, plus the rubber band of the one being pulled. */
     private int settledlands$cables(BufferBuilder buffer, Matrix4f matrix, NpcDialogueGraph graph,
             NpcGraphCanvas canvas, double mouseX, double mouseY) {
+        NpcDialogueGraphScreen screen = settledlands$cardScreen(this);
         int color = CardEventPin398.COL_AMBER_WIRE;
         int quads = 0;
         for (Node card : graph.nodes.values()) {
@@ -199,8 +228,26 @@ public abstract class CardEventPin398Mixin {
             if (!CardEventPin398.hasWire(graph, card)) continue;
             Node to = graph.get(CardEventPin398.secondChain(card));
             if (to == null) continue;
-            quads += curve(buffer, matrix, x1, y1, canvas.portScreenX(to, false),
-                    canvas.portScreenY(to, false, 0), color, false);
+            boolean hov = settledlands$dragCard < 0
+                    && WireHover453.isColoredHovered(screen, graph, WireHover453.KIND_AMBER,
+                            card.id, to.id, mouseX, mouseY);
+            List<int[]> pts = NpcWirePoints321.customBends(card, NpcWirePoints321.KIND_AMBER, to.id);
+            double x2 = canvas.portScreenX(to, false);
+            double y2 = canvas.portScreenY(to, false, 0);
+            if (pts.isEmpty()) {
+                quads += curve(buffer, matrix, x1, y1, x2, y2, color, hov);
+            } else {
+                double cx = x1;
+                double cy = y1;
+                for (int[] pt : pts) {
+                    double px = canvas.screenX(pt[0]);
+                    double py = canvas.screenY(pt[1]);
+                    quads += curve(buffer, matrix, cx, cy, px, py, color, hov);
+                    cx = px;
+                    cy = py;
+                }
+                quads += curve(buffer, matrix, cx, cy, x2, y2, color, hov);
+            }
         }
         return quads;
     }

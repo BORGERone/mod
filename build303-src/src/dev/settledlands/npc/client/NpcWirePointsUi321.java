@@ -71,6 +71,10 @@ public final class NpcWirePointsUi321 {
 
         /** True when this wire is a blue value wire, not a stock connection. Build 332. */
         public final boolean value;
+        /** Wire channel kind (Build 453: stock, value, orange, amber, trial start, module, color hang). */
+        public final char wireKind;
+        /** Extra channel arg (e.g. module slot or color hang kind). Build 453. */
+        public final int colorArg;
 
         public Wire(Node from, int fromPort, int toId, int endX, int endY, int index, double sx1,
                 double sy1, double sx2, double sy2) {
@@ -79,7 +83,15 @@ public final class NpcWirePointsUi321 {
 
         public Wire(Node from, int fromPort, int toId, int endX, int endY, int index, double sx1,
                 double sy1, double sx2, double sy2, boolean value) {
+            this(from, fromPort, toId, endX, endY, index, sx1, sy1, sx2, sy2, value,
+                    value ? NpcWirePoints321.KIND_VALUE : WireHover453.KIND_STOCK, 0);
+        }
+
+        public Wire(Node from, int fromPort, int toId, int endX, int endY, int index, double sx1,
+                double sy1, double sx2, double sy2, boolean value, char wireKind, int colorArg) {
             this.value = value;
+            this.wireKind = wireKind;
+            this.colorArg = colorArg;
             this.from = from;
             this.fromPort = fromPort;
             this.toId = toId;
@@ -121,8 +133,7 @@ public final class NpcWirePointsUi321 {
         double radius = hitRadius(canvas);
         int[] best = null;
         double bestSq = radius * radius;
-        for (int[] point : NpcWirePoints321.points(graph,
-                (node, id) -> PursuitGraphNode272.blueLinked(graph, node, id))) {
+        for (int[] point : WireHover453.livePoints(graph)) {
             double dx = mouseX - canvas.screenX(point[0]);
             double dy = mouseY - canvas.screenY(point[1]);
             double distSq = dx * dx + dy * dy;
@@ -154,58 +165,11 @@ public final class NpcWirePointsUi321 {
 
     public static Wire wireAt(NpcGraphCanvas canvas, NpcDialogueGraph graph, double mouseX,
             double mouseY) {
-        if (canvas == null || graph == null || graph.nodes == null) return null;
-        if (!canvas.contains(mouseX, mouseY)) return null;
-        if (canvas.hit(graph, mouseX, mouseY) >= 0) return null;
-        if (canvas.hitPort(graph, mouseX, mouseY, true) >= 0) return null;
-        if (canvas.hitPort(graph, mouseX, mouseY, false) >= 0) return null;
-
-        double limit = Math.max(3.0, Math.min(6.5, 4.0 * canvas.zoom + 1.5));
-        double[] best = { limit * limit };
-        Wire found = null;
-        for (Node node : graph.nodes.values()) {
-            if (node.type == NpcDialogueGraph.IF && node.falseNext >= 0) {
-                found = scan(canvas, graph, node, 1, node.falseNext, mouseX, mouseY, best, found);
-            }
-            if (node.next >= 0) {
-                found = scan(canvas, graph, node, 0, node.next, mouseX, mouseY, best, found);
-            }
-            for (int to : node.choices) {
-                found = scan(canvas, graph, node, 0, to, mouseX, mouseY, best, found);
-            }
-            for (int i = 0; i < node.randomBranches.size(); i++) {
-                int to = node.randomBranches.get(i);
-                if (to < 0) continue;
-                // The screen draws branch i with port i, so the point has to be keyed with i.
-                found = scan(canvas, graph, node, i, to, mouseX, mouseY, best, found);
-            }
-            for (int to : node.triggers) {
-                found = scan(canvas, graph, node, 0, to, mouseX, mouseY, best, found);
-            }
-            // Wires that wait at a point have no link at all, so they are tested here.
-            for (int[] hang : NpcWirePoints321.hangs(node)) {
-                found = scanWaiting(canvas, node, hang, mouseX, mouseY, best, found);
-            }
-            // Blue value wires are drawn by the value pass, not by the stock one, so they are
-            // looked up through the same helper that draws them. Build 332.
-            if (PursuitGraphNode272.isPursuitNode(node)) {
-                int source = PursuitGraphNode272.sourceId(node);
-                if (source >= 0) {
-                    found = scanValue(canvas, graph.get(source), node, mouseX, mouseY, best, found);
-                }
-                for (Integer consumer : PursuitGraphNode272.consumers(node)) {
-                    found = scanValue(canvas, node, graph.get(consumer), mouseX, mouseY, best,
-                            found);
-                }
-            }
-            if (PursuitGraphNode272.isValueInputNode(node)) {
-                int source = PursuitGraphNode272.stockInputSource(node);
-                if (source >= 0) {
-                    found = scanValue(canvas, graph.get(source), node, mouseX, mouseY, best, found);
-                }
-            }
-        }
-        return found;
+        WireHover453.WireHit hit = WireHover453.scanNearestWire(null, canvas, graph, mouseX, mouseY);
+        if (hit == null) return null;
+        return new Wire(hit.from, hit.fromPort, hit.toId, hit.endX, hit.endY, hit.segment,
+                hit.sx1, hit.sy1, hit.sx2, hit.sy2,
+                hit.kind == WireHover453.KIND_VALUE, hit.kind, hit.arg);
     }
 
     /** The blue value wire between these two nodes, measured along its drawn route. */
@@ -421,7 +385,7 @@ public final class NpcWirePointsUi321 {
         double radius = Math.max(9.0, 6.0 * canvas.zoom);
         int[] best = null;
         double bestSq = radius * radius;
-        for (int[] point : NpcWirePoints321.points(graph)) {
+        for (int[] point : WireHover453.livePoints(graph)) {
             double dx = mouseX - portX(canvas, point[0]);
             double dy = mouseY - portY(canvas, point[1]);
             double distSq = dx * dx + dy * dy;
@@ -556,7 +520,7 @@ public final class NpcWirePointsUi321 {
         int port = portHalf(canvas);
         double radius = hitRadius(canvas);
         double portRadius = Math.max(9.0, 6.0 * canvas.zoom);
-        for (int[] point : NpcWirePoints321.points(graph)) {
+        for (int[] point : WireHover453.livePoints(graph)) {
             double x = canvas.screenX(point[0]);
             double y = canvas.screenY(point[1]);
             if (x < canvas.left - 24 || x > canvas.right + 24) continue;

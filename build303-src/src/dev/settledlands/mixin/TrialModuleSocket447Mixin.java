@@ -8,14 +8,18 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.npc.NpcWirePoints321;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphCanvas;
+import dev.settledlands.npc.client.NpcWirePointsUi321;
 import dev.settledlands.npc.client.TrialCard446;
 import dev.settledlands.npc.client.TrialModuleCard447;
 import dev.settledlands.npc.client.TrialModuleClient447;
+import dev.settledlands.npc.client.WireHover453;
 import dev.settledlands.trial.TrialGraph446;
 import dev.settledlands.trial.TrialModule447;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
@@ -61,13 +65,14 @@ public abstract class TrialModuleSocket447Mixin {
             NpcGraphCanvas canvas = screen.settledlands$canvas();
             if (graph == null || canvas == null || !canvas.contains(mouseX, mouseY)) return;
 
+            if (NpcWirePointsUi321.pointAt(screen, graph, mouseX, mouseY) != null
+                    || NpcWirePointsUi321.portAt(screen, graph, mouseX, mouseY) != null) {
+                return;
+            }
+
             if (button == 2) {
-                Node cut = TrialModuleCard447.wireAt(graph, canvas, mouseX, mouseY);
-                if (cut != null) {
-                    screen.settledlands$remember();
-                    TrialModule447.disconnectModule(graph, cut.id);
+                if (WireHover453.cutNonStockWire(screen, graph, mouseX, mouseY)) {
                     TrialModuleClient447.requestInspectorRebuild();
-                    screen.settledlands$changed();
                     cir.setReturnValue(Boolean.TRUE);
                 }
                 return;
@@ -79,6 +84,7 @@ public abstract class TrialModuleSocket447Mixin {
                     screen.settledlands$remember();
                     TrialModule447.disconnectIncoming(graph, inHit.id);
                     TrialModuleClient447.requestInspectorRebuild();
+                    WireHover453.invalidateCache();
                     screen.settledlands$changed();
                     cir.setReturnValue(Boolean.TRUE);
                     return;
@@ -88,13 +94,20 @@ public abstract class TrialModuleSocket447Mixin {
             Node modHit = TrialModuleCard447.moduleAtPin(graph, canvas, mouseX, mouseY);
             if (modHit != null) {
                 if (button == 1) {
-                    screen.settledlands$remember();
-                    TrialModule447.disconnectModule(graph, modHit.id);
-                    TrialModuleClient447.requestInspectorRebuild();
-                    screen.settledlands$changed();
-                } else {
-                    settledlands$dragModOut447 = modHit.id;
+                    if (modHit.next >= 0) {
+                        int old = modHit.next;
+                        screen.settledlands$remember();
+                        if (TrialModule447.disconnectModule(graph, modHit.id)) {
+                            NpcWirePoints321.clearCustomWire(modHit, NpcWirePoints321.KIND_TRIAL_MOD, old);
+                        }
+                        TrialModuleClient447.requestInspectorRebuild();
+                        WireHover453.invalidateCache();
+                        screen.settledlands$changed();
+                        cir.setReturnValue(Boolean.TRUE);
+                    }
+                    return;
                 }
+                settledlands$dragModOut447 = modHit.id;
                 cir.setReturnValue(Boolean.TRUE);
                 return;
             }
@@ -103,13 +116,16 @@ public abstract class TrialModuleSocket447Mixin {
             if (slotHit != null) {
                 if (button == 1) {
                     screen.settledlands$remember();
-                    TrialModule447.disconnectSlot(graph, slotHit[0], slotHit[1]);
-                    TrialModuleClient447.requestInspectorRebuild();
-                    screen.settledlands$changed();
-                } else {
-                    settledlands$dragHubSlotHub447 = slotHit[0];
-                    settledlands$dragHubSlotIdx447 = slotHit[1];
+                    if (TrialModule447.disconnectSlot(graph, slotHit[0], slotHit[1])) {
+                        TrialModuleClient447.requestInspectorRebuild();
+                        WireHover453.invalidateCache();
+                        screen.settledlands$changed();
+                        cir.setReturnValue(Boolean.TRUE);
+                    }
+                    return;
                 }
+                settledlands$dragHubSlotHub447 = slotHit[0];
+                settledlands$dragHubSlotIdx447 = slotHit[1];
                 cir.setReturnValue(Boolean.TRUE);
             }
         } catch (Throwable ignored) {
@@ -152,6 +168,23 @@ public abstract class TrialModuleSocket447Mixin {
                 }
                 int overId = canvas.hit(graph, mouseX, mouseY);
                 Node over = overId >= 0 ? graph.get(overId) : null;
+                if (over == null) {
+                    int[] bendPt = NpcWirePointsUi321.pointAt(screen, graph, mouseX, mouseY);
+                    if (bendPt != null) {
+                        screen.settledlands$remember();
+                        int old = mod.next;
+                        if (old >= 0) {
+                            TrialModule447.disconnectModule(graph, mod.id);
+                            NpcWirePoints321.clearCustomWire(mod, NpcWirePoints321.KIND_TRIAL_MOD, old);
+                        }
+                        NpcWirePoints321.attachColor(mod, NpcWirePoints321.KIND_TRIAL_MOD, modSlot,
+                                bendPt[0], bendPt[1]);
+                        TrialModuleClient447.requestInspectorRebuild();
+                        WireHover453.invalidateCache();
+                        screen.settledlands$changed();
+                        return;
+                    }
+                }
                 if (TrialGraph446.isTrialNode(over)) {
                     screen.settledlands$remember();
                     TrialModule447.connectModule(graph, mod.id, over.id);
@@ -213,6 +246,7 @@ public abstract class TrialModuleSocket447Mixin {
                 n.next = -1;
             }
         }
+        WireHover453.setHiddenModuleNext(settledlands$tmHiddenNext447);
     }
 
     @Inject(method = "wires(Lnet/minecraft/client/gui/GuiGraphics;II)V", at = @At("TAIL"), remap = false)
@@ -227,6 +261,7 @@ public abstract class TrialModuleSocket447Mixin {
             }
         }
         settledlands$tmHiddenNext447.clear();
+        WireHover453.setHiddenModuleNext(null);
 
         try {
             NpcGraphCanvas canvas = screen.settledlands$canvas();
@@ -262,6 +297,7 @@ public abstract class TrialModuleSocket447Mixin {
 
     private int settledlands$paintModuleWires447(BufferBuilder buffer, Matrix4f matrix,
             NpcDialogueGraph graph, NpcGraphCanvas canvas, double mouseX, double mouseY) {
+        NpcDialogueGraphScreen screen = settledlands$tmScreen(this);
         int quads = 0;
         for (Node mod : graph.nodes.values()) {
             int slot = TrialModule447.slotOf(mod);
@@ -272,7 +308,26 @@ public abstract class TrialModuleSocket447Mixin {
             double y1 = TrialModuleCard447.outputPinScreenY(canvas, mod);
             double x2 = TrialCard446.inputPinScreenX(canvas, hub);
             double y2 = TrialCard446.inputPinScreenY(canvas, hub, slot);
-            quads += curve(buffer, matrix, x1, y1, x2, y2, TrialModule447.color(slot), false);
+            boolean hov = settledlands$dragModOut447 < 0 && settledlands$dragHubSlotHub447 < 0
+                    && WireHover453.isColoredHovered(screen, graph, WireHover453.KIND_TRIAL_MOD,
+                            mod.id, hub.id, mouseX, mouseY);
+            List<int[]> pts = NpcWirePoints321.customBends(mod,
+                    NpcWirePoints321.KIND_TRIAL_MOD, hub.id);
+            int modColor = TrialModule447.color(slot);
+            if (pts.isEmpty()) {
+                quads += curve(buffer, matrix, x1, y1, x2, y2, modColor, hov);
+            } else {
+                double cx = x1;
+                double cy = y1;
+                for (int[] pt : pts) {
+                    double px = canvas.screenX(pt[0]);
+                    double py = canvas.screenY(pt[1]);
+                    quads += curve(buffer, matrix, cx, cy, px, py, modColor, hov);
+                    cx = px;
+                    cy = py;
+                }
+                quads += curve(buffer, matrix, cx, cy, x2, y2, modColor, hov);
+            }
         }
 
         if (settledlands$dragModOut447 >= 0) {
