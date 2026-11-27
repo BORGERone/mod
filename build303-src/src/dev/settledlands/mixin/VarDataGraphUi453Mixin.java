@@ -18,6 +18,8 @@ import dev.settledlands.npc.client.NpcGraphCanvas;
 import dev.settledlands.npc.client.NpcGraphContextMenu;
 import dev.settledlands.npc.client.NpcUi;
 import dev.settledlands.npc.client.NpcWirePointsUi321;
+import dev.settledlands.npc.client.PursuitGraphNode272;
+import dev.settledlands.npc.client.VarCatalogClient457;
 import dev.settledlands.npc.client.VarDataCard453;
 import dev.settledlands.npc.client.VarDataInspector453;
 import dev.settledlands.npc.client.WireHover453;
@@ -118,11 +120,28 @@ public abstract class VarDataGraphUi453Mixin implements VarDataInspector453.Host
         return dropdown;
     }
     @Override
+    public void settledlands$addRenderable453(AbstractWidget widget) {
+        if (widget == null) return;
+        ((NpcDialogueGraphScreen) (Object) this).addRenderableWidget(widget);
+        inspectorWidgets.add(widget);
+    }
+    @Override
+    public int settledlands$entityId453() {
+        return ((NpcDialogueGraphScreen) (Object) this).entityId();
+    }
+    @Override
+    public NpcDialogueGraphScreen settledlands$screen453() {
+        return (NpcDialogueGraphScreen) (Object) this;
+    }
+    @Override
     public void settledlands$deleteNode453(int nodeId) {
         if (graph == null) return;
         remember();
+        PursuitGraphNode272.unplugFrom(graph, nodeId);
+        VarDataNode453.unplugOrangeFrom(graph, nodeId);
         graph.remove(nodeId);
         if (selected == nodeId) selected = -1;
+        WireHover453.invalidateCache();
         changed();
         widgets();
     }
@@ -132,6 +151,8 @@ public abstract class VarDataGraphUi453Mixin implements VarDataInspector453.Host
         remember();
         graph.disconnectOutputs(nodeId);
         VarDataNode453.unplugOrangeFrom(graph, nodeId);
+        PursuitGraphNode272.unplugFrom(graph, nodeId);
+        WireHover453.invalidateCache();
         changed();
         widgets();
     }
@@ -311,6 +332,7 @@ public abstract class VarDataGraphUi453Mixin implements VarDataInspector453.Host
     private void settledlands$mouseClickVar453(double mouseX, double mouseY, int button,
             CallbackInfoReturnable<Boolean> cir) {
         NpcDialogueGraphScreen screen = (NpcDialogueGraphScreen) (Object) this;
+        VarCatalogClient457.setActiveEntityId(screen.entityId());
         if (contextMenu != null && contextMenu.open) {
             if (button != 0 || contextMenu.targetNodeId >= 0) return;
             int id = screen.entityId();
@@ -447,10 +469,11 @@ public abstract class VarDataGraphUi453Mixin implements VarDataInspector453.Host
         }
     }
 
-    // ---- Inspector build for VarDataNode453 + math enhancements for VARIABLE & IF ----
+    // ---- Inspector build for VarDataNode453 + math/catalog enhancements for VARIABLE, IF, & blue-input nodes ----
 
     @Inject(method = "widgets()V", at = @At("HEAD"), remap = false)
     private void settledlands$skipStockForVarData453(CallbackInfo ci) {
+        VarCatalogClient457.setActiveEntityId(((NpcDialogueGraphScreen) (Object) this).entityId());
         settledlands$varDataNode453 = null;
         if (graph == null || selected < 0) return;
         Node node = graph.get(selected);
@@ -473,7 +496,12 @@ public abstract class VarDataGraphUi453Mixin implements VarDataInspector453.Host
         }
         if (graph == null || selected < 0) return;
         Node node = graph.get(selected);
-        if (node != null && (node.type == NpcDialogueGraph.VARIABLE || node.type == NpcDialogueGraph.IF)) {
+        if (node != null && node.special == 0
+                && (node.type == NpcDialogueGraph.VARIABLE
+                        || node.type == NpcDialogueGraph.IF
+                        || node.type == NpcDialogueGraph.LINE
+                        || node.type == NpcDialogueGraph.BUTTON
+                        || node.type == NpcDialogueGraph.TRIGGER)) {
             sidebarHeight = VarDataInspector453.enhanceStockVariableAndIf(
                     graph, node, inspectorX, inspectorY, inspectorW, inspectorH,
                     sidebarScroll, sidebarHeight, labels, inspectorWidgets, this);

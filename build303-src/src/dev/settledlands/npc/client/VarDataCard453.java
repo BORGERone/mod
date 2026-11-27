@@ -140,14 +140,19 @@ public final class VarDataCard453 {
                 graphics.drawString(font, outHint, CARD_W - 12 - hintW, 65, COL_ORANGE, false);
             }
 
-            // Bottom line: blue target status or integer hint
+            // Bottom line: blue target status, outgoing blue count, or integer/placeholder hint
+            int blueOut = PursuitGraphNode272.wiredTo(graph, node.id);
             if (blueId >= 0) {
                 String blueTxt = Component.translatable("gui.settledlands.var453.blue_linked",
                         blueId).getString();
-                graphics.drawString(font, clip(font, blueTxt, CARD_W - 20), 10, 84, COL_BLUE, false);
+                graphics.drawString(font, clip(font, blueTxt, CARD_W - 28), 10, 84, COL_BLUE, false);
+            } else if (blueOut > 0) {
+                String blueTxt = Component.translatable("gui.settledlands.var453.blue_out_card",
+                        blueOut).getString();
+                graphics.drawString(font, clip(font, blueTxt, CARD_W - 28), 10, 84, COL_BLUE, false);
             } else {
                 String typeTag = Component.translatable("gui.settledlands.var453.numbers_only").getString();
-                graphics.drawString(font, clip(font, typeTag, CARD_W - 20), 10, 84, COL_MUTED, false);
+                graphics.drawString(font, clip(font, typeTag, CARD_W - 28), 10, 84, COL_MUTED, false);
             }
         } finally {
             pose.popPose();
@@ -168,7 +173,7 @@ public final class VarDataCard453 {
         PursuitGraphNode272.drawPin(graphics, ix, iy, r, COL_ORANGE);
         PursuitGraphNode272.drawPin(graphics, ix, iy, Math.max(1.2D, r * 0.42D), 0xFFFFF4E6);
 
-        // Left-edge blue entity input pin (y=92) - must be called explicitly because ci.cancel() skips drawNode @TAIL
+        // Left-edge blue input pin (0, 92) & right-edge blue output pin (220, 92)
         PursuitGraphNode272.drawValuePins(screen, graphics, node);
     }
 

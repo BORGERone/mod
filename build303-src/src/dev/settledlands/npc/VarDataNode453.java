@@ -130,6 +130,7 @@ public final class VarDataNode453 {
 
     public static boolean isBlueSourceNode(NpcDialogueGraph.Node node) {
         if (node == null || node.special != 0) return false;
+        if (isVarDataNode(node)) return false;
         int t = node.type;
         if (t == NpcDialogueGraph.CHECK || t == NpcDialogueGraph.DAMAGE
                 || t == 40 || t == 50 || t == 60) {
@@ -143,6 +144,11 @@ public final class VarDataNode453 {
         return false;
     }
 
+    /** True when {@code node} can feed a blue input pin (body source OR Variable data node). */
+    public static boolean isBlueCapableSource(NpcDialogueGraph.Node node) {
+        return isBlueSourceNode(node) || isVarDataNode(node);
+    }
+
     public static void applyDefaults(NpcDialogueGraph.Node node) {
         if (node == null) return;
         node.type = NpcDialogueGraph.TRIGGER;
@@ -153,7 +159,7 @@ public final class VarDataNode453 {
         }
         node.varValue = 0;
         node.pointsShared = false;
-        node.varLocal = false;
+        node.varLocal = true;
         node.varOp = 0;
         node.varInputNode = -1;
         node.next = -1;
@@ -188,7 +194,9 @@ public final class VarDataNode453 {
             }
             return -1;
         }
-        if (node.type == NpcDialogueGraph.LINE || node.type == NpcDialogueGraph.TRIGGER) {
+        if (node.type == NpcDialogueGraph.LINE
+                || node.type == NpcDialogueGraph.BUTTON
+                || node.type == NpcDialogueGraph.TRIGGER) {
             return node.varInputNode;
         }
         return -1;

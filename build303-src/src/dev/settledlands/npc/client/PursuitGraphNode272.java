@@ -832,10 +832,11 @@ public final class PursuitGraphNode272 {
         return node != null && node.type == NpcDialogueGraph.DAMAGE;
     }
 
-    /** True for a node with a blue output: it hands out a body. */
+    /** True for a node with a blue output: it hands out a body or Variable data value. */
     public static boolean isValueSourceNode(Node node) {
         return isCheckValueNode(node) || isDamageValueNode(node) || isDoorValueNode(node)
-                || isChestValueNode(node) || isTrialValueNode(node);
+                || isChestValueNode(node) || isTrialValueNode(node)
+                || VarDataNode453.isVarDataNode(node);
     }
 
     /** Build 446: the blue socket of a trial spawner's card hands out the last participant player. */
@@ -877,6 +878,7 @@ public final class PursuitGraphNode272 {
         if (TrialModule447.isModuleNode(node) || TrialControlNode446.isControlNode(node)) return false;
         return VarDataNode453.isVarDataNode(node)
                 || node.type == NpcDialogueGraph.LINE
+                || node.type == NpcDialogueGraph.BUTTON
                 || node.type == NpcDialogueGraph.TRIGGER
                 || node.type == NpcDialogueGraph.IF
                 || node.type == NpcDialogueGraph.VARIABLE;
@@ -1138,6 +1140,12 @@ public final class PursuitGraphNode272 {
         }
         if (isDoorValueNode(from)) {
             return Component.translatable(DoorGraph382.TITLE_KEY).getString() + " #" + from.id;
+        }
+        if (VarDataNode453.isVarDataNode(from)) {
+            String vn = (from.pointsName != null && !from.pointsName.isBlank())
+                    ? from.pointsName : String.valueOf(from.varValue);
+            return Component.translatable(VarDataNode453.TITLE_KEY).getString()
+                    + " #" + from.id + " (" + vn + ")";
         }
         return null;
     }

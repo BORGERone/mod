@@ -38,10 +38,54 @@ public final class VarScopeStore453 extends SavedData {
     private static final String TAG_VARS = "V";
     private static final String TAG_INIT = "Init";
 
-    private static final UUID ZERO_UUID = new UUID(0L, 0L);
+    public static final UUID ZERO_UUID = new UUID(0L, 0L);
 
     private final Map<String, Map<String, Integer>> localScopes = new HashMap<>();
     private final Set<String> initializedKeys = new HashSet<>();
+
+    /** Execution context for substituting variable placeholders inside lines, choices, triggers, and actions. */
+    public static final class TextVarContext {
+        public final MinecraftServer server;
+        public final ServerPlayer player;
+        public final GuideNpc npc;
+        public final BlockTalk358.Where where;
+        public final NpcDialogueGraph graph;
+        public final NpcDialogueGraph.Node node;
+
+        public TextVarContext(MinecraftServer server, ServerPlayer player, GuideNpc npc,
+                BlockTalk358.Where where, NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+            this.server = server;
+            this.player = player;
+            this.npc = npc;
+            this.where = where;
+            this.graph = graph;
+            this.node = node;
+        }
+    }
+
+    private static final ThreadLocal<Deque<TextVarContext>> TEXT_VAR_STACK = new ThreadLocal<>();
+
+    public static void pushTextContext(MinecraftServer server, ServerPlayer player, GuideNpc npc,
+            BlockTalk358.Where where, NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+        Deque<TextVarContext> st = TEXT_VAR_STACK.get();
+        if (st == null) {
+            st = new ArrayDeque<>();
+            TEXT_VAR_STACK.set(st);
+        }
+        st.push(new TextVarContext(server, player, npc, where, graph, node));
+    }
+
+    public static void popTextContext() {
+        Deque<TextVarContext> st = TEXT_VAR_STACK.get();
+        if (st == null) return;
+        if (!st.isEmpty()) st.pop();
+        if (st.isEmpty()) TEXT_VAR_STACK.remove();
+    }
+
+    public static TextVarContext peekTextContext() {
+        Deque<TextVarContext> st = TEXT_VAR_STACK.get();
+        return st == null ? null : st.peek();
+    }
 
     public interface NpcLocalVarBridge {
         CompoundTag getOrCreate(GuideNpc npc, boolean create);
@@ -52,6 +96,7 @@ public final class VarScopeStore453 extends SavedData {
         public final NpcDialogueGraph graph;
         public final BlockTalk358.Where where;
         public final MinecraftServer server;
+        public NpcDialogueGraph.Node activeIfNode;
 
         public BlockWalkFrame(NpcDialogueGraph graph, BlockTalk358.Where where,
                 MinecraftServer server) {
@@ -198,6 +243,46 @@ public final class VarScopeStore453 extends SavedData {
         setDirty();
     }
 
+    public boolean removeScopedLocal(String scopeKey, String varName) {
+        if (scopeKey == null || scopeKey.isEmpty() || varName == null || varName.isBlank()) return false;
+        Map<String, Integer> map = localScopes.get(scopeKey);
+        if (map == null) return false;
+        String clean = cleanVarName(varName);
+        if (map.remove(clean) != null) {
+            if (map.isEmpty()) localScopes.remove(scopeKey);
+            setDirty();
+            return true;
+        }
+        return false;
+    }
+
+    public Map<String, Map<String, Integer>> snapshotLocalScopes() {
+        Map<String, Map<String, Integer>> copy = new HashMap<>();
+        for (Map.Entry<String, Map<String, Integer>> e : localScopes.entrySet()) {
+            if (e.getValue() != null && !e.getValue().isEmpty()) {
+                copy.put(e.getKey(), new HashMap<>(e.getValue()));
+            }
+        }
+        return copy;
+    }
+
+    public void removeInitKeysFor(String varName, int scope, String scopeTag) {
+        String clean = cleanVarName(varName);
+        if (clean.isEmpty()) return;
+        boolean changed = false;
+        if (scope == VarDataNode453.SCOPE_SHARED) {
+            changed = initializedKeys.remove("s:" + clean);
+        } else if (scope == VarDataNode453.SCOPE_LOCAL) {
+            if (scopeTag != null && !scopeTag.isEmpty()) {
+                changed = initializedKeys.remove("l:" + scopeTag + ":" + clean);
+            }
+        } else {
+            String suffix = ":" + clean;
+            changed = initializedKeys.removeIf(k -> k.startsWith("p:") && k.endsWith(suffix));
+        }
+        if (changed) setDirty();
+    }
+
     public boolean isInitialized(String initKey) {
         return initKey != null && initializedKeys.contains(initKey);
     }
@@ -208,7 +293,7 @@ public final class VarScopeStore453 extends SavedData {
         }
     }
 
-    private static String cleanVarName(String name) {
+    public static String cleanVarName(String name) {
         return name == null ? "" : NpcPoints.cleanName(name);
     }
 
@@ -240,7 +325,7 @@ public final class VarScopeStore453 extends SavedData {
             return null;
         }
         NpcDialogueGraph.Node src = graph.get(srcId);
-        if (src == null) return null;
+        if (src == null || VarDataNode453.isVarDataNode(src)) return null;
         if (NpcValueSource290.isSource(npc, srcId)) {
             return NpcValueSource290.resolve(npc, srcId);
         }
@@ -248,6 +333,54 @@ public final class VarScopeStore453 extends SavedData {
             return resolvePursuitEntity(npc, src);
         }
         return null;
+    }
+
+    /**
+     * Resolves a {@link VarDataNode453} wired into {@code consumer}'s blue input (either directly
+     * via {@code entityInput453}/{@code varInputNode} or forwarded through a {@code Pursuit} node).
+     */
+    public static NpcDialogueGraph.Node resolveBlueVarNode(NpcDialogueGraph graph,
+            NpcDialogueGraph.Node consumer) {
+        if (graph == null || consumer == null) return null;
+        int srcId = VarDataNode453.entityInput(graph, consumer);
+        if (srcId >= 0) {
+            NpcDialogueGraph.Node src = graph.get(srcId);
+            if (VarDataNode453.isVarDataNode(src)) return src;
+            if (src != null && NpcPursuit269.isPursuitAction(src.action)) {
+                int pSrc = pursuitSourceId(src.action);
+                if (pSrc >= 0) {
+                    NpcDialogueGraph.Node ps = graph.get(pSrc);
+                    if (VarDataNode453.isVarDataNode(ps)) return ps;
+                }
+            }
+            return null;
+        }
+        if (graph.nodes != null) {
+            for (NpcDialogueGraph.Node cand : graph.nodes.values()) {
+                if (cand != null && NpcPursuit269.isPursuitAction(cand.action)
+                        && pursuitHasConsumer(cand.action, consumer.id)) {
+                    int pSrc = pursuitSourceId(cand.action);
+                    if (pSrc >= 0) {
+                        NpcDialogueGraph.Node ps = graph.get(pSrc);
+                        if (VarDataNode453.isVarDataNode(ps)) return ps;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    private static int pursuitSourceId(String action) {
+        if (action == null) return -1;
+        int hash = action.lastIndexOf("|#");
+        if (hash < 0) return -1;
+        try {
+            String tail = action.substring(hash + 2);
+            int bar = tail.indexOf('|');
+            return Integer.parseInt((bar >= 0 ? tail.substring(0, bar) : tail).trim());
+        } catch (NumberFormatException ignored) {
+            return -1;
+        }
     }
 
     private static Entity resolvePursuitEntity(GuideNpc npc, NpcDialogueGraph.Node src) {
@@ -291,6 +424,7 @@ public final class VarScopeStore453 extends SavedData {
         if (srcId < 0) return actor;
         NpcDialogueGraph.Node src = graph.get(srcId);
         if (src == null) return null;
+        if (VarDataNode453.isVarDataNode(src)) return actor;
         if (level == null && where != null) level = where.level();
         if (TrialGraph446.isTrialNode(src) && level != null && where != null) {
             BlockPos pos = new BlockPos(where.x(), where.y(), where.z());
@@ -368,7 +502,7 @@ public final class VarScopeStore453 extends SavedData {
                     return defaultInit;
                 }
             }
-            return 0;
+            return hasDefaultInit ? defaultInit : 0;
         }
 
         if (server == null) return hasDefaultInit ? defaultInit : 0;
@@ -452,8 +586,9 @@ public final class VarScopeStore453 extends SavedData {
         ServerPlayer targetPlayer = player;
         GuideNpc targetNpc = npc;
         int blueId = VarDataNode453.entityInput(graph, node);
-        Entity blueEnt = resolveNpcBlueEntity(npc, graph, node);
-        if (blueId >= 0 || blueEnt != null) {
+        boolean blueIsVar = resolveBlueVarNode(graph, node) != null;
+        if (!blueIsVar && blueId >= 0) {
+            Entity blueEnt = resolveNpcBlueEntity(npc, graph, node);
             if (blueEnt instanceof ServerPlayer sp) {
                 targetPlayer = sp;
             } else if (blueEnt instanceof GuideNpc gn) {
@@ -495,13 +630,22 @@ public final class VarScopeStore453 extends SavedData {
             BlockTalk358.Where where,
             NpcDialogueGraph graph,
             NpcDialogueGraph.Node node) {
-        if (node == null || node.pointsName == null || node.pointsName.isBlank()) return;
+        String effName = effectiveVarName(node);
+        if (node == null || effName.isBlank()) return;
         NpcDialogueGraph.Node orangeSrc = VarDataNode453.resolveOrangeSource(graph, node);
-        int valueToWrite = orangeSrc != null
-                ? readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, where, graph, orangeSrc, 0)
-                : node.varValue;
+        int valueToWrite;
+        if (orangeSrc != null) {
+            valueToWrite = readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals,
+                    where, graph, orangeSrc, 0);
+        } else {
+            NpcDialogueGraph.Node blueVar = resolveBlueVarNode(graph, node);
+            valueToWrite = blueVar != null
+                    ? readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals,
+                            where, graph, blueVar, 0)
+                    : node.varValue;
+        }
         writeRaw(server, targetPlayer, targetNpc, npcLocals, where,
-                node.pointsName, node.pointsShared, node.varLocal, valueToWrite);
+                effName, node.pointsShared, node.varLocal, valueToWrite);
     }
 
     /** Executes {@link NpcDialogueGraph#VARIABLE} inside an NPC graph. */
@@ -517,11 +661,12 @@ public final class VarScopeStore453 extends SavedData {
                 : (npc != null && npc.level() != null ? npc.level().getServer() : null);
         if (server == null) return;
 
-        // Blue input selects whose player/NPC variable is read/modified.
+        // Blue input selects whose player/NPC variable is read/modified (when wired to entity source).
         ServerPlayer targetPlayer = player;
         GuideNpc targetNpc = npc;
         int blueId = VarDataNode453.entityInput(graph, node);
-        if (blueId >= 0) {
+        boolean blueIsVar = resolveBlueVarNode(graph, node) != null;
+        if (!blueIsVar && blueId >= 0) {
             Entity blueEnt = resolveNpcBlueEntity(npc, graph, node);
             if (blueEnt instanceof ServerPlayer sp) {
                 targetPlayer = sp;
@@ -565,6 +710,7 @@ public final class VarScopeStore453 extends SavedData {
             NpcDialogueGraph graph,
             NpcDialogueGraph.Node node) {
         NpcDialogueGraph.Node orangeSrc = VarDataNode453.resolveOrangeSource(graph, node);
+        NpcDialogueGraph.Node blueVar = resolveBlueVarNode(graph, node);
         boolean hasOwnName = node.pointsName != null && !node.pointsName.isBlank();
 
         if (orangeSrc != null && !hasOwnName) {
@@ -574,10 +720,13 @@ public final class VarScopeStore453 extends SavedData {
             if (tName.isBlank()) return;
             ServerPlayer tPlayer = resolveNodePlayer(server, targetPlayer, targetNpc, where, graph, orangeSrc);
             GuideNpc tNpc = resolveNodeNpc(targetNpc, graph, orangeSrc);
+            int operand = blueVar != null
+                    ? readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, where, graph, blueVar, 0)
+                    : node.varValue;
             boolean hasInit = VarDataNode453.isVarDataNode(orangeSrc) && orangeSrc.varValue != 0;
             int cur = readRaw(server, tPlayer, tNpc, npcLocals, where,
                     tName, orangeSrc.pointsShared, orangeSrc.varLocal, hasInit, orangeSrc.varValue);
-            int next = VarDataNode453.applyMathOp(cur, node.varOp, node.varValue);
+            int next = VarDataNode453.applyMathOp(cur, node.varOp, operand);
             writeRaw(server, tPlayer, tNpc, npcLocals, where,
                     tName, orangeSrc.pointsShared, orangeSrc.varLocal, next);
             propagateToLinkedVarNodes(server, targetPlayer, targetNpc, npcLocals, where, graph, node.id, next);
@@ -595,6 +744,33 @@ public final class VarScopeStore453 extends SavedData {
                     node.pointsName, node.pointsShared, node.varLocal, next);
             propagateToLinkedVarNodes(server, targetPlayer, targetNpc, npcLocals, where, graph, node.id, next);
             return;
+        }
+
+        if (blueVar != null && hasOwnName) {
+            // Pattern B2 (Variable wired into Math Expression's blue input -> supplies dynamic operand)
+            int operand = readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, where, graph, blueVar, 0);
+            int cur = readRaw(server, targetPlayer, targetNpc, npcLocals, where,
+                    node.pointsName, node.pointsShared, node.varLocal, false, 0);
+            int next = VarDataNode453.applyMathOp(cur, node.varOp, operand);
+            writeRaw(server, targetPlayer, targetNpc, npcLocals, where,
+                    node.pointsName, node.pointsShared, node.varLocal, next);
+            propagateToLinkedVarNodes(server, targetPlayer, targetNpc, npcLocals, where, graph, node.id, next);
+            return;
+        }
+
+        if (blueVar != null && !hasOwnName) {
+            // Pattern A2 (Variable wired into Math Expression's blue input without own name -> modifies that Variable)
+            String tName = effectiveVarName(blueVar);
+            if (!tName.isBlank()) {
+                boolean hasInit = blueVar.varValue != 0;
+                int cur = readRaw(server, targetPlayer, targetNpc, npcLocals, where,
+                        tName, blueVar.pointsShared, blueVar.varLocal, hasInit, blueVar.varValue);
+                int next = VarDataNode453.applyMathOp(cur, node.varOp, node.varValue);
+                writeRaw(server, targetPlayer, targetNpc, npcLocals, where,
+                        tName, blueVar.pointsShared, blueVar.varLocal, next);
+                propagateToLinkedVarNodes(server, targetPlayer, targetNpc, npcLocals, where, graph, node.id, next);
+                return;
+            }
         }
 
         if (!hasOwnName) {
@@ -647,6 +823,8 @@ public final class VarScopeStore453 extends SavedData {
         if (graph == null || dataNode == null) return fallbackPlayer;
         int blueId = VarDataNode453.entityInput(graph, dataNode);
         if (blueId < 0) return fallbackPlayer;
+        NpcDialogueGraph.Node blueSrc = graph.get(blueId);
+        if (blueSrc == null || VarDataNode453.isVarDataNode(blueSrc)) return fallbackPlayer;
         if (hostNpc != null) {
             Entity e = resolveNpcBlueEntity(hostNpc, graph, dataNode);
             return e instanceof ServerPlayer sp ? sp : null;
@@ -664,6 +842,8 @@ public final class VarScopeStore453 extends SavedData {
         if (fallbackNpc == null || graph == null || dataNode == null) return fallbackNpc;
         int blueId = VarDataNode453.entityInput(graph, dataNode);
         if (blueId < 0) return fallbackNpc;
+        NpcDialogueGraph.Node blueSrc = graph.get(blueId);
+        if (blueSrc == null || VarDataNode453.isVarDataNode(blueSrc)) return fallbackNpc;
         Entity e = resolveNpcBlueEntity(fallbackNpc, graph, dataNode);
         return e instanceof GuideNpc gn ? gn : fallbackNpc;
     }
@@ -733,6 +913,17 @@ public final class VarScopeStore453 extends SavedData {
         }
     }
 
+    /** Reads the numeric value supplied by a Variable node across NPC/block graphs. */
+    public static int readVarNodeValue(
+            MinecraftServer server,
+            ServerPlayer player,
+            GuideNpc npc,
+            BlockTalk358.Where where,
+            NpcDialogueGraph graph,
+            NpcDialogueGraph.Node varNode) {
+        return readOrangeNodeValue(server, player, npc, null, where, graph, varNode, 0);
+    }
+
     /** Reads the numeric value supplied by an orange source node (Variable or Math Expression). */
     public static int readOrangeNodeValue(
             MinecraftServer server,
@@ -772,6 +963,10 @@ public final class VarScopeStore453 extends SavedData {
                     if (chained != null && chained != src) {
                         return readOrangeNodeValue(server, player, npc, npcLocals, where, graph, chained, depth + 1);
                     }
+                    NpcDialogueGraph.Node blueVar = resolveBlueVarNode(graph, src);
+                    if (blueVar != null && blueVar != src) {
+                        return readOrangeNodeValue(server, player, npc, npcLocals, where, graph, blueVar, depth + 1);
+                    }
                 }
                 if (hasExplicitName) {
                     return readRaw(server, effPlayer, effNpc, npcLocals, where,
@@ -810,7 +1005,8 @@ public final class VarScopeStore453 extends SavedData {
         ServerPlayer targetPlayer = player;
         GuideNpc targetNpc = npc;
         int blueId = VarDataNode453.entityInput(graph, node);
-        if (blueId >= 0) {
+        NpcDialogueGraph.Node blueVar = resolveBlueVarNode(graph, node);
+        if (blueVar == null && blueId >= 0) {
             Entity blueEnt = resolveNpcBlueEntity(npc, graph, node);
             if (blueEnt instanceof ServerPlayer sp) {
                 targetPlayer = sp;
@@ -837,7 +1033,36 @@ public final class VarScopeStore453 extends SavedData {
             }
             return cur;
         }
+        if (blueVar != null) {
+            return readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, null, graph, blueVar, 0);
+        }
         return fallback;
+    }
+
+    /**
+     * Reads right-hand comparison operand for {@link NpcDialogueGraph#IF} in an NPC graph:
+     * when a {@link VarDataNode453} feeds the blue pin alongside an explicit variable or orange
+     * input, that blue variable supplies a dynamic right-hand value instead of static {@code varCompare}.
+     */
+    public static int readIfRightValueForNpc(
+            ServerPlayer player,
+            Entity contextEntity,
+            GuideNpc npc,
+            NpcDialogueGraph graph,
+            NpcDialogueGraph.Node node) {
+        if (node == null) return 0;
+        NpcDialogueGraph.Node blueVar = resolveBlueVarNode(graph, node);
+        if (blueVar == null) return node.varCompare;
+        boolean hasLeftSource = VarDataNode453.resolveOrangeSource(graph, node) != null
+                || (node.pointsName != null && !node.pointsName.isBlank());
+        if (!hasLeftSource) return node.varCompare;
+        MinecraftServer server = player != null ? player.getServer()
+                : (npc != null && npc.level() != null ? npc.level().getServer()
+                : (contextEntity != null && contextEntity.level() != null
+                        ? contextEntity.level().getServer() : null));
+        ServerPlayer sp = player != null ? player
+                : (contextEntity instanceof ServerPlayer p ? p : null);
+        return readOrangeNodeValue(server, sp, npc, null, null, graph, blueVar, 0);
     }
 
     /** Reads left-hand value for {@link NpcDialogueGraph#IF} in a block/door/chest/trial graph. */
@@ -862,6 +1087,214 @@ public final class VarScopeStore453 extends SavedData {
             return readRaw(server, targetPlayer, null, null, where,
                     node.pointsName, node.pointsShared, node.varLocal, false, 0);
         }
+        NpcDialogueGraph.Node blueVar = resolveBlueVarNode(graph, node);
+        if (blueVar != null) {
+            return readOrangeNodeValue(server, targetPlayer, null, null, where, graph, blueVar, 0);
+        }
         return 0;
+    }
+
+    /** Dynamic right-hand comparison operand for block/door/chest/trial {@link NpcDialogueGraph#IF}. */
+    public static int readIfRightValueForBlock(
+            ServerPlayer actor,
+            MinecraftServer server,
+            NpcDialogueGraph graph,
+            NpcDialogueGraph.Node node,
+            BlockTalk358.Where where) {
+        if (node == null) return 0;
+        NpcDialogueGraph.Node blueVar = resolveBlueVarNode(graph, node);
+        if (blueVar == null) return node.varCompare;
+        boolean hasLeftSource = VarDataNode453.resolveOrangeSource(graph, node) != null
+                || (node.pointsName != null && !node.pointsName.isBlank());
+        if (!hasLeftSource) return node.varCompare;
+        ServerLevel level = where != null ? where.level()
+                : (actor != null ? actor.serverLevel() : null);
+        if (server == null && level != null) server = level.getServer();
+        if (server == null && actor != null) server = actor.getServer();
+        return readOrangeNodeValue(server, actor, null, null, where, graph, blueVar, 0);
+    }
+
+    // ---- Placeholder substitution for LINE / BUTTON / TRIGGER / Teleport / Pursuit ----
+
+    private static boolean isReservedPlaceholder(String token) {
+        return switch (token) {
+            case "player", "npc", "npc_id", "npc_uuid", "uuid", "relation",
+                    "target", "target_kind", "target_uuid",
+                    "pursuit", "pursuit_kind", "pursuit_uuid" -> true;
+            default -> false;
+        };
+    }
+
+    /**
+     * Resolves variable tokens inside dialogue lines, choice captions, trigger commands, teleport
+     * targets, and pursuit commands:
+     * <ul>
+     *   <li>If {@code consumerNode} has a {@link VarDataNode453} wired to its blue input: replaces
+     *       {@code %var%}, {@code %value%}, {@code %target_value%}, {@code %var_name%}, and
+     *       {@code %target%} / {@code %target_kind%} / {@code %target_uuid%}.</li>
+     *   <li>Also replaces {@code %<varName>%} tokens for any known local/personal/shared variable
+     *       visible in the current NPC/object/player context.</li>
+     * </ul>
+     */
+    public static String substituteVarTokens(
+            String text,
+            MinecraftServer server,
+            ServerPlayer player,
+            GuideNpc npc,
+            BlockTalk358.Where where,
+            NpcDialogueGraph graph,
+            NpcDialogueGraph.Node consumerNode) {
+        if (text == null || text.isEmpty() || text.indexOf('%') < 0) return text;
+        if (server == null) {
+            if (player != null) server = player.getServer();
+            else if (npc != null && npc.level() != null) server = npc.level().getServer();
+            else if (where != null && where.level() != null) server = where.level().getServer();
+        }
+        String out = text;
+        NpcDialogueGraph.Node blueVar = resolveBlueVarNode(graph, consumerNode);
+        int blueVal = 0;
+        String blueClean = "";
+        String blueDisplayName = "";
+        if (blueVar != null) {
+            blueVal = readOrangeNodeValue(server, player, npc, null, where, graph, blueVar, 0);
+            blueClean = cleanVarName(blueVar.pointsName);
+            blueDisplayName = (blueVar.pointsName != null && !blueVar.pointsName.isBlank())
+                    ? blueVar.pointsName : ("#" + blueVar.id);
+        }
+
+        if (out.indexOf('%') < 0) return out;
+        StringBuilder sb = null;
+        int len = out.length();
+        int i = 0;
+        while (i < len) {
+            char c = out.charAt(i);
+            if (c == '%') {
+                int close = out.indexOf('%', i + 1);
+                if (close > i + 1 && close - i - 1 <= 32) {
+                    String rawTok = out.substring(i + 1, close);
+                    String lowerTok = rawTok.toLowerCase(java.util.Locale.ROOT);
+                    String replacement = null;
+                    if (blueVar != null) {
+                        if ("var".equals(lowerTok) || "value".equals(lowerTok)
+                                || "target_value".equals(lowerTok) || "target".equals(lowerTok)) {
+                            replacement = String.valueOf(blueVal);
+                        } else if ("var_name".equals(lowerTok)) {
+                            replacement = blueDisplayName;
+                        } else if ("target_kind".equals(lowerTok)) {
+                            replacement = "variable";
+                        } else if ("target_uuid".equals(lowerTok)) {
+                            replacement = "var:" + blueVar.id;
+                        } else if (!blueClean.isEmpty() && cleanVarName(rawTok).equalsIgnoreCase(blueClean)) {
+                            replacement = String.valueOf(blueVal);
+                        }
+                    }
+                    if (replacement == null && isSimpleVarToken(rawTok) && !isReservedPlaceholder(lowerTok)) {
+                        Integer resolved = lookupNamedVarValue(server, player, npc, where, graph, rawTok);
+                        if (resolved != null) {
+                            replacement = String.valueOf(resolved.intValue());
+                        }
+                    }
+                    if (replacement != null) {
+                        if (sb == null) {
+                            sb = new StringBuilder(len + 16);
+                            sb.append(out, 0, i);
+                        }
+                        sb.append(replacement);
+                        i = close + 1;
+                        continue;
+                    }
+                }
+            }
+            if (sb != null) sb.append(c);
+            i++;
+        }
+        return sb == null ? out : sb.toString();
+    }
+
+    /** Convenience substitution using the active {@link TextVarContext} if one is on the thread stack. */
+    public static String substituteActiveTextVars(String text, ServerPlayer player, GuideNpc npc) {
+        if (text == null || text.isEmpty() || text.indexOf('%') < 0) return text;
+        TextVarContext ctx = peekTextContext();
+        MinecraftServer srv = ctx != null ? ctx.server
+                : (player != null ? player.getServer()
+                : (npc != null && npc.level() != null ? npc.level().getServer() : null));
+        ServerPlayer effPlayer = player != null ? player : (ctx != null ? ctx.player : null);
+        GuideNpc effNpc = npc != null ? npc : (ctx != null ? ctx.npc : null);
+        BlockTalk358.Where where = ctx != null ? ctx.where : null;
+        NpcDialogueGraph graph = ctx != null ? ctx.graph : null;
+        NpcDialogueGraph.Node node = ctx != null ? ctx.node : null;
+        return substituteVarTokens(text, srv, effPlayer, effNpc, where, graph, node);
+    }
+
+    /** Convenience substitution for block/door/chest/trial dialogue lines and chat fallbacks. */
+    public static String substituteBlockText(String text, ServerPlayer player,
+            NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+        if (text == null || text.isEmpty() || text.indexOf('%') < 0) return text;
+        TextVarContext ctx = peekTextContext();
+        MinecraftServer srv = player != null ? player.getServer() : (ctx != null ? ctx.server : null);
+        BlockTalk358.Where where = ctx != null ? ctx.where : null;
+        return substituteVarTokens(text, srv, player, null, where, graph, node);
+    }
+
+    private static boolean isSimpleVarToken(String s) {
+        if (s == null || s.isEmpty()) return false;
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            if (!Character.isLetterOrDigit(c) && c != '_' && c != '-') return false;
+        }
+        return true;
+    }
+
+    private static Integer lookupNamedVarValue(
+            MinecraftServer server,
+            ServerPlayer player,
+            GuideNpc npc,
+            BlockTalk358.Where where,
+            NpcDialogueGraph graph,
+            String rawName) {
+        String clean = cleanVarName(rawName);
+        if (clean.isEmpty()) return null;
+
+        // 1. Direct local storage on the active NPC or block/door/chest/trial
+        if (npc != null) {
+            CompoundTag tag = getOrCreateNpcLocalTag(npc, false);
+            if (tag != null && tag.contains(clean)) {
+                return tag.getInt(clean);
+            }
+        }
+        VarScopeStore453 store = server == null ? null : get(server);
+        if (where != null && store != null && store.hasScopedLocal(where.key(), clean)) {
+            return store.getScopedLocal(where.key(), clean);
+        }
+
+        // 2. Graph node definition (matches VarDataNode453 scope & default initial value)
+        if (graph != null && graph.nodes != null) {
+            for (NpcDialogueGraph.Node n : graph.nodes.values()) {
+                if (n == null || n.pointsName == null || n.pointsName.isBlank()) continue;
+                if (cleanVarName(n.pointsName).equalsIgnoreCase(clean)) {
+                    if (server == null) {
+                        return readOrangeNodeValue(null, player, npc, null, where, graph, n, 0);
+                    }
+                    boolean hasInit = VarDataNode453.isVarDataNode(n) && n.varValue != 0;
+                    return readRaw(server, player, npc, null, where,
+                            n.pointsName, n.pointsShared, n.varLocal, hasInit, n.varValue);
+                }
+            }
+        }
+        if (server == null) return null;
+
+        // 3. Player personal or global shared NpcPoints (if registered/used anywhere in world)
+        NpcPoints pts = NpcPoints.get(server);
+        if (player != null) {
+            Map<String, Integer> pMap = pts.personalPoints(player.getUUID());
+            if (pMap != null && pMap.containsKey(clean)) {
+                return pMap.get(clean);
+            }
+        }
+        Map<String, Integer> sMap = pts.sharedPoints();
+        if (sMap != null && sMap.containsKey(clean)) {
+            return sMap.get(clean);
+        }
+        return null;
     }
 }

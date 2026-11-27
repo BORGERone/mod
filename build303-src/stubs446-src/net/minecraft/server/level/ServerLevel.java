@@ -55,6 +55,10 @@ public class ServerLevel extends Level implements ServerLevelAccessor {
         return null;
     }
 
+    public Entity getEntity(int id) {
+        return null;
+    }
+
     public boolean isPositionEntityTicking(BlockPos pos) {
         return true;
     }

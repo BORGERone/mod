@@ -122,13 +122,14 @@ public abstract class NpcPursuitValuePinMixin290 {
             return;
         }
 
-        // A blue output: "В радиусе", "Урон", "Дверь", "Сундук", "Триал".
+        // A blue output: "В радиусе", "Урон", "Дверь", "Сундук", "Триал", "Переменная".
         Node sourceHit = settledlands$sourceNodeAt(graph, canvas, mouseX, mouseY);
         if (sourceHit != null) {
             if (button == 1) {
                 if (PursuitGraphNode272.wiredTo(graph, sourceHit.id) > 0) {
                     screen.settledlands$remember();
                     PursuitGraphNode272.unplugFrom(graph, sourceHit.id);
+                    WireHover453.invalidateCache();
                     screen.settledlands$changed();
                     cir.setReturnValue(true);
                 }
@@ -139,13 +140,14 @@ public abstract class NpcPursuitValuePinMixin290 {
             return;
         }
 
-        // A blue input on one of the stock nodes that take a body.
+        // A blue input on one of the stock/data nodes that accept blue wires.
         Node inputHit = settledlands$inputNodeAt(graph, canvas, mouseX, mouseY);
         if (inputHit != null) {
             if (button == 1) {
                 if (PursuitGraphNode272.inputSource(inputHit) >= 0) {
                     screen.settledlands$remember();
                     PursuitGraphNode272.setInputSource(inputHit, -1);
+                    WireHover453.invalidateCache();
                     screen.settledlands$changed();
                     cir.setReturnValue(true);
                 }

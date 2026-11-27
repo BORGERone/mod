@@ -88,6 +88,9 @@ public class Screen implements GuiEventListener {
     protected void removeWidget(GuiEventListener listener) {
     }
 
+    protected void clearWidgets() {
+    }
+
     public static boolean hasShiftDown() {
         return false;
     }

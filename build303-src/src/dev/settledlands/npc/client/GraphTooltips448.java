@@ -1330,11 +1330,25 @@ public final class GraphTooltips448 {
                 }
             }
 
-            // Blue value source output pin on RADIUS_TARGET and Pursuit
+            // Blue value input pin on LINE, BUTTON, TRIGGER, Teleport, IF
+            if (n.type != NpcDialogueGraph.VARIABLE && !VarDataNode453.isVarDataNode(n)
+                    && PursuitGraphNode272.isValueInputNode(n)
+                    && PursuitGraphNode272.hitInputPin(canvas, n, mx, my)) {
+                return tip("pin:" + n.id + ":in_blue",
+                        tr("gui.settledlands.tip448.pin.blue_in_title"),
+                        tr("gui.settledlands.tip448.pin.blue_in"), 0xFF55AAFF);
+            }
+
+            // Blue value source output pin on RADIUS_TARGET, VarDataNode453, and other sources
             if (PursuitGraphNode272.isValueSourceNode(n) && !TrialGraph446.isTrialNode(n)
                     && !DoorGraph382.isDoorNode(n) && !ChestGraph396.isChestNode(n)) {
                 double rx = canvas.screenX(n.x + w);
                 if (distSq(mx, my, rx, canvas.screenY(n.y + h - 8.0D)) <= rSq) {
+                    if (VarDataNode453.isVarDataNode(n)) {
+                        return tip("pin:" + n.id + ":var_blue_out",
+                                tr("gui.settledlands.tip448.pin.var453_blue_out_title"),
+                                tr("gui.settledlands.tip448.pin.var453_blue_out"), 0xFF55AAFF);
+                    }
                     return tip("pin:" + n.id + ":val_out", tr("gui.settledlands.pursuit.output"),
                             tr("gui.settledlands.tip448.pin.value_source"), 0xFF55AAFF);
                 }

@@ -41,8 +41,8 @@ public final class TeleportNode424 {
     /** Distinct cyan-blue accent for the Teleport menu row and canvas card. */
     public static final int ACCENT_COLOR = -11873793; // 0xFF4AD2FF
 
-    /** Maximum character length permitted in each coordinate box. */
-    public static final int MAX_COORD_LEN = 24;
+    /** Maximum character length permitted in each coordinate box (supports {@code %var%} placeholders). */
+    public static final int MAX_COORD_LEN = 32;
 
     /** Reasonable world bounds clamp (Vanilla horizontal border +/- 30,000,000). */
     private static final double MAX_ABS_COORD = 30_000_000.0D;
@@ -227,9 +227,17 @@ public final class TeleportNode424 {
         return clean.toLowerCase(java.util.Locale.ROOT);
     }
 
+    /** True if {@code node} is a valid coordinate token: numeric chars or {@code %var%} placeholder. */
     public static boolean isCoordInput(String text) {
         if (text == null || text.isEmpty()) return true;
         if (text.length() > MAX_COORD_LEN) return false;
+        if (text.indexOf('%') >= 0) {
+            for (int i = 0; i < text.length(); i++) {
+                char c = text.charAt(i);
+                if (c == '|' || c == '\n' || c == '\r') return false;
+            }
+            return true;
+        }
         boolean seenDot = false;
         for (int i = 0; i < text.length(); i++) {
             char c = text.charAt(i);
@@ -363,6 +371,9 @@ public final class TeleportNode424 {
     public static String formatSummaryCoords(NpcDialogueGraph.Node node) {
         Parsed p = node == null ? null : parse(node.action);
         if (p == null) return "0, 0, 0";
-        return formatCoord(p.x) + ", " + formatCoord(p.y) + ", " + formatCoord(p.z);
+        String sx = p.rawX != null && p.rawX.indexOf('%') >= 0 ? p.rawX : formatCoord(p.x);
+        String sy = p.rawY != null && p.rawY.indexOf('%') >= 0 ? p.rawY : formatCoord(p.y);
+        String sz = p.rawZ != null && p.rawZ.indexOf('%') >= 0 ? p.rawZ : formatCoord(p.z);
+        return sx + ", " + sy + ", " + sz;
     }
 }

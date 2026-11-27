@@ -29,6 +29,7 @@ public class Entity {
     public double distanceToSqr(Entity other) { return 0; }
     public Component getName() { return null; }
     public UUID getUUID() { return null; }
+    public int getId() { return 0; }
     public net.minecraft.world.phys.Vec3 getDeltaMovement() { return null; }
     public double distanceToSqr(double x, double y, double z) { return 0; }
     public net.minecraft.world.phys.AABB getBoundingBox() { return null; }
