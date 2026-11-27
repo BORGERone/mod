@@ -19,8 +19,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 
 /**
- * Build 449: full modpack Mob Catalog with live 3D entity previews, category filtering,
- * search by display name / mod / registry ID, and Shift-click multi-add without closing.
+ * Build 451: clean border-to-border 3D Mob Catalog without header/Back clutter or bottom hint,
+ * clipped short search placeholder, and a stretched grid exposing an extra partial/full row at
+ * the bottom.
  */
 public final class TrialMobCatalogScreen449 extends Screen {
 
@@ -59,6 +60,7 @@ public final class TrialMobCatalogScreen449 extends Screen {
     private int cols;
     private int cellW;
     private int visibleRows;
+    private int drawRows;
     private int scrollTrackX;
 
     public TrialMobCatalogScreen449(Screen parentScreen, int replaceRowIndex,
@@ -72,8 +74,8 @@ public final class TrialMobCatalogScreen449 extends Screen {
 
     @Override
     protected void init() {
-        panelW = Math.max(300, width - 8);
-        panelH = Math.max(190, height - 8);
+        panelW = Math.max(300, width - 6);
+        panelH = Math.max(176, height - 6);
         panelX = (width - panelW) / 2;
         panelY = (height - panelH) / 2;
 
@@ -81,30 +83,26 @@ public final class TrialMobCatalogScreen449 extends Screen {
             allMobs = TrialMobPreview449.collectAllMobs();
         }
 
-        int topY = panelY + 18;
-        int rightEdge = panelX + panelW - 8;
+        int topY = panelY + 5;
+        int innerW = panelW - 12;
 
-        Component backLbl = Component.translatable("gui.settledlands.loot_pool.editor.back");
-        int backW = Math.max(50, font.width(backLbl.getString()) + 12);
-        addRenderableWidget(Button.builder(backLbl, b -> onClose())
-                .bounds(rightEdge - backW, panelY + 3, backW, 13)
-                .build());
-
-        int modeW = Math.max(96, Math.max(
+        int modeW = Math.max(92, Math.max(
                 font.width(filterLabelText(TrialMobPreview449.CAT_ALL)),
                 Math.max(
                         font.width(filterLabelText(TrialMobPreview449.CAT_HOSTILE)),
                         font.width(filterLabelText(TrialMobPreview449.CAT_FRIENDLY))))
                 + 12);
         Component addIdLbl = Component.translatable("gui.settledlands.loot_pool.picker.add_id");
-        int idBtnW = Math.max(56, font.width(addIdLbl.getString()) + 12);
+        int idBtnW = Math.max(54, font.width(addIdLbl.getString()) + 12);
         int gap = 4;
-        int searchW = Math.max(90, panelW - 16 - modeW - idBtnW - gap * 2);
+        int searchW = Math.max(80, innerW - modeW - idBtnW - gap * 2);
 
-        searchBox = new EditBox(font, panelX + 8, topY, searchW, 16,
+        searchBox = new EditBox(font, panelX + 6, topY, searchW, 16,
                 Component.translatable("gui.settledlands.trial.cfg.search"));
         searchBox.setMaxLength(120);
-        searchBox.setHint(Component.translatable("gui.settledlands.trial.mob_cat.search_hint"));
+        String rawHint = Component.translatable("gui.settledlands.trial.mob_cat.search_hint").getString();
+        searchBox.setHint(Component.literal(
+                TrialMobPreview449.clip(font, rawHint, Math.max(24, searchW - 10))));
         searchBox.setValue(query);
         searchBox.setResponder(text -> {
             query = text == null ? "" : text;
@@ -120,27 +118,28 @@ public final class TrialMobCatalogScreen449 extends Screen {
                     b.setMessage(Component.literal(filterLabelText(categoryFilter)));
                     refreshShown();
                 })
-                .bounds(panelX + 8 + searchW + gap, topY, modeW, 16)
+                .bounds(panelX + 6 + searchW + gap, topY, modeW, 16)
                 .tooltip(Tooltip.create(Component.translatable("gui.settledlands.trial.mob_cat.filter_tip")))
                 .build();
         addRenderableWidget(filterBtn);
 
         addByIdBtn = Button.builder(addIdLbl, b -> addTypedId())
-                .bounds(panelX + 8 + searchW + gap + modeW + gap, topY, idBtnW, 16)
+                .bounds(panelX + 6 + searchW + gap + modeW + gap, topY, idBtnW, 16)
                 .tooltip(Tooltip.create(Component.translatable("gui.settledlands.trial.mob_cat.add_id_tip")))
                 .build();
         addRenderableWidget(addByIdBtn);
 
-        gridX = panelX + 8;
-        gridY = panelY + 37;
-        int footerH = 14;
-        gridW = panelW - 22;
-        scrollTrackX = gridX + gridW + 4;
-        gridH = Math.max(CELL_H + 4, panelY + panelH - footerH - gridY);
+        gridX = panelX + 6;
+        gridY = panelY + 25;
+        int bottomPad = 4;
+        gridW = innerW - 8;
+        scrollTrackX = gridX + gridW + 3;
+        gridH = Math.max(CELL_H + 8, panelY + panelH - bottomPad - gridY);
 
         cols = Math.max(3, Math.min(12, (gridW + CELL_GAP) / 68));
         cellW = Math.max(54, (gridW - CELL_GAP * (cols - 1)) / cols);
-        visibleRows = Math.max(2, (gridH + CELL_GAP) / (CELL_H + CELL_GAP));
+        visibleRows = Math.max(1, (gridH + CELL_GAP) / (CELL_H + CELL_GAP));
+        drawRows = Math.max(visibleRows, (gridH - 1) / (CELL_H + CELL_GAP) + 1);
 
         refreshShown();
     }
@@ -229,36 +228,31 @@ public final class TrialMobCatalogScreen449 extends Screen {
         graphics.fill(panelX, panelY, panelX + panelW, panelY + 2, accent);
         graphics.renderOutline(panelX, panelY, panelW, panelH, 0xFF2D3546);
 
-        String titleKey = replaceRowIndex >= 0
-                ? "gui.settledlands.trial.mob_cat.title_replace"
-                : "gui.settledlands.trial.mob_cat.title";
-        String title = Component.translatable(titleKey, Integer.valueOf(shown.size())).getString();
-        graphics.drawString(font, title, panelX + 8, panelY + 6, 0xFFF2F5FA, false);
-
         super.render(graphics, mouseX, mouseY, partialTick);
 
-        // Background grid container
-        int containerH = Math.min(gridH, visibleRows * (CELL_H + CELL_GAP) - CELL_GAP + 4);
-        graphics.fill(gridX - 2, gridY - 2, gridX + gridW + 2, gridY + containerH, 0x990D1118);
-        graphics.renderOutline(gridX - 2, gridY - 2, gridW + 4, containerH + 2, 0xFF272F40);
+        // Background grid container spans the full stretched gridH
+        graphics.fill(gridX - 2, gridY - 2, gridX + gridW + 2, gridY + gridH + 1, 0x990D1118);
+        graphics.renderOutline(gridX - 2, gridY - 2, gridW + 4, gridH + 3, 0xFF272F40);
 
         TrialMobPreview449.MobEntry hoveredEntry = null;
         int startIdx = scrollRow * cols;
         int previewH = PREVIEW_H;
+        boolean insideGrid = mouseX >= gridX && mouseX < gridX + gridW
+                && mouseY >= gridY && mouseY < gridY + gridH;
 
-        graphics.enableScissor(gridX - 1, gridY - 1, gridX + gridW + 1, gridY + containerH);
+        graphics.enableScissor(gridX - 1, gridY - 1, gridX + gridW + 1, gridY + gridH + 1);
         try {
-            for (int r = 0; r < visibleRows; r++) {
+            for (int r = 0; r < drawRows; r++) {
+                int cy = gridY + r * (CELL_H + CELL_GAP);
+                if (cy >= gridY + gridH) break;
                 for (int c = 0; c < cols; c++) {
                     int idx = startIdx + r * cols + c;
                     if (idx >= shown.size()) break;
                     TrialMobPreview449.MobEntry entry = shown.get(idx);
 
                     int cx = gridX + c * (cellW + CELL_GAP);
-                    int cy = gridY + r * (CELL_H + CELL_GAP);
-                    if (cy + CELL_H > gridY + gridH + 2) break;
-
-                    boolean over = mouseX >= cx && mouseX < cx + cellW
+                    boolean over = insideGrid
+                            && mouseX >= cx && mouseX < cx + cellW
                             && mouseY >= cy && mouseY < cy + CELL_H;
                     boolean inPool = existingIds.contains(entry.id);
                     if (over) hoveredEntry = entry;
@@ -316,10 +310,10 @@ public final class TrialMobCatalogScreen449 extends Screen {
                     gridX + gridW / 2, gridY + Math.max(20, gridH / 2 - 4), 0xFF7F8A9E);
         }
 
-        // Scrollbar
+        // Scrollbar along the full stretched gridH
         int maxScr = maxScrollRow();
         if (maxScr > 0) {
-            int trackH = Math.max(24, containerH - 2);
+            int trackH = Math.max(24, gridH);
             graphics.fill(scrollTrackX, gridY, scrollTrackX + 5, gridY + trackH, 0xFF10141C);
             int totalRows = (shown.size() + cols - 1) / cols;
             int thumbH = Math.max(16, (int) ((double) visibleRows / totalRows * trackH));
@@ -327,17 +321,16 @@ public final class TrialMobCatalogScreen449 extends Screen {
             graphics.fill(scrollTrackX, thumbY, scrollTrackX + 5, thumbY + thumbH, accent);
         }
 
-        // Bottom hint & status
-        int hintY = panelY + panelH - 11;
-        String hintLine = !statusText.isEmpty()
-                ? statusText
-                : Component.translatable(replaceRowIndex >= 0
-                        ? "gui.settledlands.trial.mob_cat.hint_replace"
-                        : "gui.settledlands.trial.mob_cat.hint_multi").getString();
-        int hintMax = Math.max(80, (int) ((panelW - 18) / 0.80F));
-        drawScaledText(graphics,
-                TrialMobPreview449.clip(font, hintLine, hintMax),
-                panelX + 8, hintY, !statusText.isEmpty() ? statusColor : 0xFF8C97AB, 0.80F);
+        // Transient floating toast only when an action produced feedback (Shift-add / bad ID)
+        if (!statusText.isEmpty()) {
+            String msg = TrialMobPreview449.clip(font, statusText, Math.max(80, gridW - 24));
+            int tw = font.width(msg) + 12;
+            int tx = gridX + 4;
+            int ty = gridY + gridH - 16;
+            graphics.fill(tx, ty, tx + tw, ty + 13, 0xE810141C);
+            graphics.renderOutline(tx, ty, tw, 13, statusColor);
+            graphics.drawString(font, msg, tx + 6, ty + 3, statusColor, false);
+        }
 
         if (hoveredEntry != null) {
             renderHoveredMobTip(graphics, hoveredEntry, mouseX, mouseY);
@@ -382,26 +375,30 @@ public final class TrialMobCatalogScreen449 extends Screen {
     public boolean mouseClicked(double mouseX, double mouseY, int button) {
         if (button == 0) {
             int maxScr = maxScrollRow();
-            int containerH = Math.min(gridH, visibleRows * (CELL_H + CELL_GAP) - CELL_GAP + 6);
+            int trackH = Math.max(24, gridH);
             if (maxScr > 0 && mouseX >= scrollTrackX - 2 && mouseX <= scrollTrackX + 8
-                    && mouseY >= gridY && mouseY <= gridY + containerH) {
+                    && mouseY >= gridY && mouseY <= gridY + trackH) {
                 draggingScroll = true;
-                updateScrollFromMouse(mouseY, containerH);
+                updateScrollFromMouse(mouseY, trackH);
                 return true;
             }
 
-            int startIdx = scrollRow * cols;
-            for (int r = 0; r < visibleRows; r++) {
-                for (int c = 0; c < cols; c++) {
-                    int idx = startIdx + r * cols + c;
-                    if (idx >= shown.size()) break;
-                    int cx = gridX + c * (cellW + CELL_GAP);
+            if (mouseX >= gridX && mouseX < gridX + gridW
+                    && mouseY >= gridY && mouseY < gridY + gridH) {
+                int startIdx = scrollRow * cols;
+                for (int r = 0; r < drawRows; r++) {
                     int cy = gridY + r * (CELL_H + CELL_GAP);
-                    if (cy + CELL_H > gridY + gridH + 2) break;
-                    if (mouseX >= cx && mouseX < cx + cellW && mouseY >= cy && mouseY < cy + CELL_H) {
-                        boolean keepOpen = replaceRowIndex < 0 && hasShiftDown();
-                        applySelection(shown.get(idx).id, keepOpen);
-                        return true;
+                    if (cy >= gridY + gridH) break;
+                    for (int c = 0; c < cols; c++) {
+                        int idx = startIdx + r * cols + c;
+                        if (idx >= shown.size()) break;
+                        int cx = gridX + c * (cellW + CELL_GAP);
+                        if (mouseX >= cx && mouseX < cx + cellW
+                                && mouseY >= cy && mouseY < cy + CELL_H) {
+                            boolean keepOpen = replaceRowIndex < 0 && hasShiftDown();
+                            applySelection(shown.get(idx).id, keepOpen);
+                            return true;
+                        }
                     }
                 }
             }
@@ -412,8 +409,7 @@ public final class TrialMobCatalogScreen449 extends Screen {
     @Override
     public boolean mouseDragged(double mouseX, double mouseY, int button, double dragX, double dragY) {
         if (draggingScroll && button == 0) {
-            int containerH = Math.min(gridH, visibleRows * (CELL_H + CELL_GAP) - CELL_GAP + 6);
-            updateScrollFromMouse(mouseY, containerH);
+            updateScrollFromMouse(mouseY, Math.max(24, gridH));
             return true;
         }
         return super.mouseDragged(mouseX, mouseY, button, dragX, dragY);
