@@ -1,5 +1,7 @@
 package dev.settledlands.npc;
 
+import dev.settledlands.chest.ChestGraph396;
+import dev.settledlands.door.DoorGraph382;
 import dev.settledlands.trial.TrialGraph446;
 import dev.settledlands.trial.TrialSpawnerBridge446;
 import java.util.ArrayDeque;
@@ -97,6 +99,8 @@ public final class VarScopeStore453 extends SavedData {
         public final BlockTalk358.Where where;
         public final MinecraftServer server;
         public NpcDialogueGraph.Node activeIfNode;
+        public ServerPlayer blueLineOverride;
+        public boolean suppressStep;
 
         public BlockWalkFrame(NpcDialogueGraph graph, BlockTalk358.Where where,
                 MinecraftServer server) {
@@ -106,22 +110,75 @@ public final class VarScopeStore453 extends SavedData {
         }
     }
 
+    private static final ThreadLocal<Deque<BlockWalkFrame>> BLOCK_WALK_STACK = new ThreadLocal<>();
+
+    public static Deque<BlockWalkFrame> blockWalkStack(boolean create) {
+        Deque<BlockWalkFrame> st = BLOCK_WALK_STACK.get();
+        if (st == null && create) {
+            st = new ArrayDeque<>();
+            BLOCK_WALK_STACK.set(st);
+        }
+        return st;
+    }
+
+    public static BlockWalkFrame peekBlockWalkFrame() {
+        Deque<BlockWalkFrame> st = BLOCK_WALK_STACK.get();
+        return st == null ? null : st.peek();
+    }
+
+    public static void popBlockWalkFrame() {
+        Deque<BlockWalkFrame> st = BLOCK_WALK_STACK.get();
+        if (st == null) return;
+        if (!st.isEmpty()) st.pop();
+        if (st.isEmpty()) BLOCK_WALK_STACK.remove();
+    }
+
     /** Execution frame for {@link GuideDialogue#resolveExecutionTarget} (lives outside mixin pkg). */
     public static final class NpcResolveFrame {
         public final ServerPlayer player;
         public final Entity contextEntity;
         public final GuideNpc npc;
         public final NpcDialogueGraph graph;
+        public final boolean hasSession;
         public NpcDialogueGraph.Node activeIfNode;
         public NpcDialogueGraph.Node activeNode;
 
         public NpcResolveFrame(ServerPlayer player, Entity contextEntity,
                 GuideNpc npc, NpcDialogueGraph graph) {
+            this(player, contextEntity, npc, graph, false);
+        }
+
+        public NpcResolveFrame(ServerPlayer player, Entity contextEntity,
+                GuideNpc npc, NpcDialogueGraph graph, boolean hasSession) {
             this.player = player;
             this.contextEntity = contextEntity;
             this.npc = npc;
             this.graph = graph;
+            this.hasSession = hasSession;
         }
+    }
+
+    private static final ThreadLocal<Deque<NpcResolveFrame>> NPC_RESOLVE_STACK = new ThreadLocal<>();
+
+    public static Deque<NpcResolveFrame> resolveStack(boolean create) {
+        Deque<NpcResolveFrame> st = NPC_RESOLVE_STACK.get();
+        if (st == null && create) {
+            st = new ArrayDeque<>();
+            NPC_RESOLVE_STACK.set(st);
+        }
+        return st;
+    }
+
+    public static NpcResolveFrame peekResolveFrame() {
+        Deque<NpcResolveFrame> st = NPC_RESOLVE_STACK.get();
+        return st == null ? null : st.peek();
+    }
+
+    public static void popResolveFrame() {
+        Deque<NpcResolveFrame> st = NPC_RESOLVE_STACK.get();
+        if (st == null) return;
+        if (!st.isEmpty()) st.pop();
+        if (st.isEmpty()) NPC_RESOLVE_STACK.remove();
     }
 
     /** Execution frame for {@link GuideDialogue#executeGraphTriggers} (lives outside mixin pkg). */
@@ -433,30 +490,17 @@ public final class VarScopeStore453 extends SavedData {
             return TrialSpawnerBridge446.resolveBestPlayer(level, pos, participants, actor);
         }
         if (src.type == NpcDialogueGraph.CHECK && level != null && where != null) {
-            BlockPos pos = new BlockPos(where.x(), where.y(), where.z());
-            double r = Math.max(1.0D, src.checkRadius);
-            if (RadiusZone456.isSquare(src)) {
-                double cx = pos.getX() + 0.5D;
-                double cy = pos.getY() + 0.5D;
-                double cz = pos.getZ() + 0.5D;
-                ServerPlayer best = null;
-                double bestD2 = Double.MAX_VALUE;
-                for (ServerPlayer sp : level.players()) {
-                    if (sp == null || !sp.isAlive() || sp.isSpectator()) continue;
-                    if (!RadiusZone456.isInsideBox(cx, cy, cz, sp.getX(), sp.getY(), sp.getZ(), r)) {
-                        continue;
-                    }
-                    double d2 = sp.distanceToSqr(cx, cy, cz);
-                    if (d2 < bestD2) {
-                        bestD2 = d2;
-                        best = sp;
-                    }
-                }
-                return best;
-            }
-            return TrialSpawnerBridge446.nearestPlayer(level, pos, r, false);
+            return BlueLineTarget459.resolveBlockCheckPlayer(level, src, where);
         }
-        if (src.type == 40 || src.type == 50 || src.type == NpcDialogueGraph.DAMAGE) {
+        if (src.type == 40) {
+            if (actor != null) return actor;
+            return BlueLineTarget459.findOnlinePlayerByName(level, DoorGraph382.opener(src));
+        }
+        if (src.type == 50) {
+            if (actor != null) return actor;
+            return BlueLineTarget459.findOnlinePlayerByName(level, ChestGraph396.opener(src));
+        }
+        if (src.type == NpcDialogueGraph.DAMAGE) {
             return actor;
         }
         return actor;

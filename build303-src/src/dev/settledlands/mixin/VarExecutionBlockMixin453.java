@@ -2,13 +2,13 @@ package dev.settledlands.mixin;
 
 import dev.settledlands.npc.BlockTalk358;
 import dev.settledlands.npc.BlockTrigger351;
+import dev.settledlands.npc.BlueLineTarget459;
 import dev.settledlands.npc.GraphRanges450;
 import dev.settledlands.npc.GuideDialogue;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcPoints;
 import dev.settledlands.npc.VarScopeStore453;
 import dev.settledlands.npc.VarScopeStore453.BlockWalkFrame;
-import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Set;
 import java.util.UUID;
@@ -32,9 +32,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(value = BlockTrigger351.class, remap = false)
 public abstract class VarExecutionBlockMixin453 {
 
-    @Unique
-    private static final ThreadLocal<Deque<BlockWalkFrame>> WALK_STACK = new ThreadLocal<>();
-
     @Shadow
     private static void act(ServerPlayer player, NpcDialogueGraph.Node node) {
         throw new AssertionError();
@@ -47,26 +44,17 @@ public abstract class VarExecutionBlockMixin453 {
 
     @Unique
     private static Deque<BlockWalkFrame> settledlands$stack453(boolean create) {
-        Deque<BlockWalkFrame> st = WALK_STACK.get();
-        if (st == null && create) {
-            st = new ArrayDeque<>();
-            WALK_STACK.set(st);
-        }
-        return st;
+        return VarScopeStore453.blockWalkStack(create);
     }
 
     @Unique
     private static BlockWalkFrame settledlands$peekWalkFrame453() {
-        Deque<BlockWalkFrame> st = WALK_STACK.get();
-        return st == null ? null : st.peek();
+        return VarScopeStore453.peekBlockWalkFrame();
     }
 
     @Unique
     private static void settledlands$popFrame453() {
-        Deque<BlockWalkFrame> st = WALK_STACK.get();
-        if (st == null) return;
-        if (!st.isEmpty()) st.pop();
-        if (st.isEmpty()) WALK_STACK.remove();
+        VarScopeStore453.popBlockWalkFrame();
     }
 
     @Inject(method = "walk(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph;ILjava/util/Set;Ldev/settledlands/npc/BlockTalk358$Where;[Z)I",
@@ -105,6 +93,30 @@ public abstract class VarExecutionBlockMixin453 {
     private static void settledlands$executeBlockVarAndAct453(ServerPlayer player,
             NpcDialogueGraph.Node node) {
         BlockWalkFrame f = settledlands$peekWalkFrame453();
+        if (f != null && node != null) {
+            if (node.type == NpcDialogueGraph.LINE) {
+                if (f.suppressStep) {
+                    return;
+                }
+                if (f.blueLineOverride != null) {
+                    player = f.blueLineOverride;
+                }
+            } else if (node.type == NpcDialogueGraph.BUTTON
+                    || node.type == NpcDialogueGraph.CUTSCENE) {
+                f.blueLineOverride = null;
+                f.suppressStep = false;
+                ServerPlayer effective = BlueLineTarget459.resolveBlockDialogTarget(
+                        player, f.graph, node, f.where);
+                if (effective == null) {
+                    f.suppressStep = true;
+                    return;
+                }
+                if (effective != player) {
+                    f.blueLineOverride = effective;
+                    player = effective;
+                }
+            }
+        }
         if (node != null && node.type == NpcDialogueGraph.VARIABLE && f != null) {
             VarScopeStore453.executeVariableForBlock(player, f.server, f.graph, node, f.where);
         }

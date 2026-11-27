@@ -1,12 +1,12 @@
 package dev.settledlands.mixin;
 
+import dev.settledlands.npc.BlueLineTarget459;
 import dev.settledlands.npc.GraphRanges450;
 import dev.settledlands.npc.GuideDialogue;
 import dev.settledlands.npc.GuideNpc;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.VarScopeStore453;
 import dev.settledlands.npc.VarScopeStore453.NpcResolveFrame;
-import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.List;
 import java.util.Set;
@@ -33,8 +33,6 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 @Mixin(targets = "dev.settledlands.npc.GuideDialogue", remap = false)
 public abstract class VarExecutionNpcMixin453 {
 
-    @Unique
-    private static final ThreadLocal<Deque<NpcResolveFrame>> RESOLVE_STACK = new ThreadLocal<>();
     @Unique
     private static final ThreadLocal<NpcDialogueGraph> PEEK_GRAPH = new ThreadLocal<>();
     @Unique
@@ -63,26 +61,17 @@ public abstract class VarExecutionNpcMixin453 {
 
     @Unique
     private static Deque<NpcResolveFrame> settledlands$resolveStack454(boolean create) {
-        Deque<NpcResolveFrame> st = RESOLVE_STACK.get();
-        if (st == null && create) {
-            st = new ArrayDeque<>();
-            RESOLVE_STACK.set(st);
-        }
-        return st;
+        return VarScopeStore453.resolveStack(create);
     }
 
     @Unique
     private static NpcResolveFrame settledlands$peekResolve454() {
-        Deque<NpcResolveFrame> st = RESOLVE_STACK.get();
-        return st == null ? null : st.peek();
+        return VarScopeStore453.peekResolveFrame();
     }
 
     @Unique
     private static void settledlands$popResolve454() {
-        Deque<NpcResolveFrame> st = RESOLVE_STACK.get();
-        if (st == null) return;
-        if (!st.isEmpty()) st.pop();
-        if (st.isEmpty()) RESOLVE_STACK.remove();
+        VarScopeStore453.popResolveFrame();
     }
 
     @Inject(method = "evalIfNode(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/GuideNpc;ILdev/settledlands/npc/NpcDialogueGraph;Ldev/settledlands/npc/NpcDialogueGraph$Node;)Z",
@@ -114,7 +103,7 @@ public abstract class VarExecutionNpcMixin453 {
             GuideNpc npc, GuideDialogue.Session session, NpcDialogueGraph graph, int startId,
             Set visited, CallbackInfoReturnable<Integer> cir) {
         settledlands$resolveStack454(true).push(
-                new NpcResolveFrame(player, contextEntity, npc, graph));
+                new NpcResolveFrame(player, contextEntity, npc, graph, session != null));
     }
 
     @Inject(method = "resolveExecutionTarget(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/entity/Entity;Ldev/settledlands/npc/GuideNpc;Ldev/settledlands/npc/GuideDialogue$Session;Ldev/settledlands/npc/NpcDialogueGraph;ILjava/util/Set;)I",
@@ -131,9 +120,23 @@ public abstract class VarExecutionNpcMixin453 {
             remap = false)
     private static boolean settledlands$interceptIncomingAndVar453(ServerPlayer player, GuideNpc npc,
             int relation, NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+        NpcResolveFrame f = settledlands$peekResolve454();
+        if (node != null
+                && (node.type == NpcDialogueGraph.LINE || node.type == NpcDialogueGraph.CUTSCENE)
+                && BlueLineTarget459.isNoEventTarget()
+                && (f == null || !f.hasSession)) {
+            ServerPlayer bluePlayer = BlueLineTarget459.resolveNpcLineBluePlayer(npc, graph, node);
+            if (bluePlayer == null) {
+                return false;
+            }
+            if (node.type == NpcDialogueGraph.LINE) {
+                BlueLineTarget459.recordResolvedPlayer(bluePlayer);
+            }
+            int effRel = npc != null ? npc.relationTo(bluePlayer) : relation;
+            return isIncomingIfSatisfied(bluePlayer, npc, effRel, graph, node);
+        }
         boolean ok = isIncomingIfSatisfied(player, npc, relation, graph, node);
         if (ok && node != null && node.type == NpcDialogueGraph.VARIABLE) {
-            NpcResolveFrame f = settledlands$peekResolve454();
             Entity ctx = f == null ? null : f.contextEntity;
             VarScopeStore453.executeVariableForNpc(player, ctx, npc, graph, node, null);
         }
@@ -155,9 +158,10 @@ public abstract class VarExecutionNpcMixin453 {
             remap = false)
     private static NpcDialogueGraph.Node settledlands$trackIfInResolve453(NpcDialogueGraph graph, int id) {
         NpcDialogueGraph.Node n = graph == null ? null : graph.get(id);
-        if (n != null && n.type == NpcDialogueGraph.IF) {
-            NpcResolveFrame f = settledlands$peekResolve454();
-            if (f != null) {
+        NpcResolveFrame f = settledlands$peekResolve454();
+        if (f != null) {
+            f.activeNode = n;
+            if (n != null && n.type == NpcDialogueGraph.IF) {
                 f.activeIfNode = n;
             }
         }
