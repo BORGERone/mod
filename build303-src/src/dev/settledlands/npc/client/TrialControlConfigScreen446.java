@@ -2,6 +2,7 @@ package dev.settledlands.npc.client;
 
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcItems;
+import dev.settledlands.trial.RangeSpec450;
 import dev.settledlands.trial.TrialConfig446;
 import dev.settledlands.trial.TrialControlNode446;
 import dev.settledlands.trial.TrialGraph446;
@@ -75,8 +76,7 @@ public final class TrialControlConfigScreen446 extends Screen {
     private String batchStr;
     private String actRangeStr;
     private String spawnRangeStr;
-    private String minDelayStr;
-    private String maxDelayStr;
+    private String delayStr;
     private String cooldownStr;
     private String mobsPerPlayerStr;
     private String simPerPlayerStr;
@@ -120,39 +120,40 @@ public final class TrialControlConfigScreen446 extends Screen {
     }
 
     private void syncBuffersFromConfig() {
-        totalMobsStr = Integer.toString(cfg.totalMobs);
-        simMobsStr = Integer.toString(cfg.simultaneousMobs);
-        batchStr = Integer.toString(cfg.spawnBatchSize);
-        actRangeStr = Integer.toString(cfg.activationRange);
-        spawnRangeStr = Integer.toString(cfg.spawnRange);
-        minDelayStr = Integer.toString(cfg.minSpawnDelayTicks);
-        maxDelayStr = Integer.toString(cfg.maxSpawnDelayTicks);
-        cooldownStr = Integer.toString(cfg.cooldownTicks);
-        mobsPerPlayerStr = Integer.toString(cfg.totalMobsAddedPerPlayer);
-        simPerPlayerStr = Integer.toString(cfg.simultaneousMobsAddedPerPlayer);
-        selfWavesStr = Integer.toString(cfg.selfDestructAfterWaves);
-        selfChanceStr = Integer.toString(cfg.selfDestructChancePercent);
-        ominousMultStr = String.format(Locale.ROOT, "%.2f", cfg.ominousMobMultiplier);
-        ominousIntervalStr = Integer.toString(cfg.ominousHazardIntervalTicks);
+        totalMobsStr = cfg.rangeOrIntText("totalMobs", cfg.totalMobs);
+        simMobsStr = cfg.rangeOrIntText("simultaneousMobs", cfg.simultaneousMobs);
+        batchStr = cfg.rangeOrIntText("spawnBatchSize", cfg.spawnBatchSize);
+        actRangeStr = cfg.rangeOrIntText("activationRange", cfg.activationRange);
+        spawnRangeStr = cfg.rangeOrIntText("spawnRange", cfg.spawnRange);
+        delayStr = RangeSpec450.formatInt(cfg.minSpawnDelayTicks, cfg.maxSpawnDelayTicks);
+        cooldownStr = cfg.rangeOrIntText("cooldownTicks", cfg.cooldownTicks);
+        mobsPerPlayerStr = cfg.rangeOrIntText("totalMobsAddedPerPlayer", cfg.totalMobsAddedPerPlayer);
+        simPerPlayerStr = cfg.rangeOrIntText("simultaneousMobsAddedPerPlayer", cfg.simultaneousMobsAddedPerPlayer);
+        selfWavesStr = cfg.rangeOrIntText("selfDestructAfterWaves", cfg.selfDestructAfterWaves);
+        selfChanceStr = cfg.rangeOrIntText("selfDestructChancePercent", cfg.selfDestructChancePercent);
+        ominousMultStr = cfg.rangeOrFloatText("ominousMobMultiplier", cfg.ominousMobMultiplier);
+        ominousIntervalStr = cfg.rangeOrIntText("ominousHazardIntervalTicks", cfg.ominousHazardIntervalTicks);
     }
 
     private void commitBuffersToConfig() {
-        cfg.totalMobs = parseInt(totalMobsStr, cfg.totalMobs, 1, 512);
-        cfg.simultaneousMobs = parseInt(simMobsStr, cfg.simultaneousMobs, 1, 96);
-        cfg.spawnBatchSize = parseInt(batchStr, cfg.spawnBatchSize, 1, 32);
-        cfg.activationRange = parseInt(actRangeStr, cfg.activationRange, 1, 64);
-        cfg.spawnRange = parseInt(spawnRangeStr, cfg.spawnRange, 1, 32);
-        cfg.minSpawnDelayTicks = parseInt(minDelayStr, cfg.minSpawnDelayTicks, 0, 72000);
-        cfg.maxSpawnDelayTicks = parseInt(maxDelayStr, cfg.maxSpawnDelayTicks, 0, 72000);
-        cfg.cooldownTicks = parseInt(cooldownStr, cfg.cooldownTicks, 0, 72000);
-        cfg.totalMobsAddedPerPlayer = parseInt(mobsPerPlayerStr, cfg.totalMobsAddedPerPlayer, 0, 64);
-        cfg.simultaneousMobsAddedPerPlayer = parseInt(simPerPlayerStr,
+        cfg.setIntFieldWithRange("totalMobs", totalMobsStr, cfg.totalMobs, 1, 256);
+        cfg.setIntFieldWithRange("simultaneousMobs", simMobsStr, cfg.simultaneousMobs, 1, 64);
+        cfg.setIntFieldWithRange("spawnBatchSize", batchStr, cfg.spawnBatchSize, 1, 8);
+        cfg.setIntFieldWithRange("activationRange", actRangeStr, cfg.activationRange, 1, 64);
+        cfg.setIntFieldWithRange("spawnRange", spawnRangeStr, cfg.spawnRange, 1, 16);
+        RangeSpec450.IntRange dr = RangeSpec450.parseInt(
+                delayStr, cfg.minSpawnDelayTicks, cfg.maxSpawnDelayTicks, 1, 12000);
+        cfg.minSpawnDelayTicks = dr.min;
+        cfg.maxSpawnDelayTicks = dr.max;
+        cfg.setIntFieldWithRange("cooldownTicks", cooldownStr, cfg.cooldownTicks, 0, 720000);
+        cfg.setIntFieldWithRange("totalMobsAddedPerPlayer", mobsPerPlayerStr, cfg.totalMobsAddedPerPlayer, 0, 64);
+        cfg.setIntFieldWithRange("simultaneousMobsAddedPerPlayer", simPerPlayerStr,
                 cfg.simultaneousMobsAddedPerPlayer, 0, 32);
-        cfg.selfDestructAfterWaves = parseInt(selfWavesStr, cfg.selfDestructAfterWaves, 1, 999);
-        cfg.selfDestructChancePercent = parseInt(selfChanceStr, cfg.selfDestructChancePercent, 1, 100);
-        cfg.ominousMobMultiplier = parseFloat(ominousMultStr, cfg.ominousMobMultiplier, 1.0F, 10.0F);
-        cfg.ominousHazardIntervalTicks = parseInt(ominousIntervalStr,
-                cfg.ominousHazardIntervalTicks, 10, 72000);
+        cfg.setIntFieldWithRange("selfDestructAfterWaves", selfWavesStr, cfg.selfDestructAfterWaves, 1, 100);
+        cfg.setIntFieldWithRange("selfDestructChancePercent", selfChanceStr, cfg.selfDestructChancePercent, 0, 100);
+        cfg.setFloatFieldWithRange("ominousMobMultiplier", ominousMultStr, cfg.ominousMobMultiplier, 1.0F, 4.0F);
+        cfg.setIntFieldWithRange("ominousHazardIntervalTicks", ominousIntervalStr,
+                cfg.ominousHazardIntervalTicks, 20, 12000);
         syncBuffersFromConfig();
     }
 
@@ -277,7 +278,7 @@ public final class TrialControlConfigScreen446 extends Screen {
         addTip("cfg:nobreak", noBreakBtn, rightX, y, colW, 18, "prevent_break", "");
         y += 24;
 
-        int fieldW = 54;
+        int fieldW = 64;
         addLabeledBox(leftX, y, colW, fieldW, "gui.settledlands.trial.cfg.total_mobs",
                 totalMobsStr, v -> totalMobsStr = v);
         addLabeledBox(rightX, y, colW, fieldW, "gui.settledlands.trial.cfg.sim_mobs",
@@ -296,10 +297,8 @@ public final class TrialControlConfigScreen446 extends Screen {
                 cooldownStr, v -> cooldownStr = v);
         y += 22;
 
-        addLabeledBox(leftX, y, colW, fieldW, "gui.settledlands.trial.cfg.min_delay",
-                minDelayStr, v -> minDelayStr = v);
-        addLabeledBox(rightX, y, colW, fieldW, "gui.settledlands.trial.cfg.max_delay",
-                maxDelayStr, v -> maxDelayStr = v);
+        addLabeledBox(leftX, y, colW, fieldW, "gui.settledlands.trial.cfg.delay",
+                delayStr, v -> delayStr = v);
         y += 24;
 
         Button scaleBtn = Button.builder(toggleLabel("gui.settledlands.trial.cfg.scale_players",
@@ -386,7 +385,7 @@ public final class TrialControlConfigScreen446 extends Screen {
 
         int pickW = 56;
         int delW = 20;
-        int weightW = 54;
+        int weightW = 64;
         int idW = Math.max(80, w - pickW - delW - weightW - 18);
 
         for (int s = 0; s < vis; s++) {
@@ -418,9 +417,14 @@ public final class TrialControlConfigScreen446 extends Screen {
             addTip("cfg:m_pk_" + s, pickBtn, x + idW + 4, ry, pickW, 18, "mob_pick", "");
 
             EditBox wgtBox = new EditBox(font, x + idW + pickW + 8, ry, weightW, 18, Component.empty());
-            wgtBox.setMaxLength(8);
-            wgtBox.setValue(Integer.toString(entry.weight));
-            wgtBox.setResponder(val -> entry.weight = parseInt(val, entry.weight, 1, 10000));
+            wgtBox.setMaxLength(15);
+            wgtBox.setFilter(TrialModuleClient447.intRangeFilter());
+            wgtBox.setValue(entry.displayWeight());
+            wgtBox.setResponder(val -> {
+                RangeSpec450.IntRange rr = RangeSpec450.parseInt(val, entry.weight, entry.weight, 1, 100000);
+                entry.weight = rr.min;
+                entry.weightRange = rr.isRange() ? rr.format() : "";
+            });
             addDyn(wgtBox);
             addTip("cfg:m_wg_" + s, wgtBox, x + idW + pickW + 8, ry, weightW, 18, "mob_weight", "");
 
@@ -458,12 +462,11 @@ public final class TrialControlConfigScreen446 extends Screen {
         listScroll = Math.max(0, Math.min(listScroll, Math.max(0, cfg.rewards.size() - vis)));
 
         int pickW = 52;
-        int minW = 34;
-        int maxW = 34;
-        int wgtW = 38;
-        int pctW = 38;
+        int cntW = 54;
+        int wgtW = 48;
+        int pctW = 48;
         int delW = 20;
-        int idW = Math.max(70, w - pickW - minW - maxW - wgtW - pctW - delW - 24);
+        int idW = Math.max(70, w - pickW - cntW - wgtW - pctW - delW - 20);
 
         for (int s = 0; s < vis; s++) {
             final int idx = listScroll + s;
@@ -492,34 +495,42 @@ public final class TrialControlConfigScreen446 extends Screen {
             addTip("cfg:r_pk_" + s, pickBtn, cx, ry, pickW, 18, "rew_pick", "");
             cx += pickW + 4;
 
-            EditBox minBox = new EditBox(font, cx, ry, minW, 18, Component.empty());
-            minBox.setMaxLength(4);
-            minBox.setValue(Integer.toString(entry.minCount));
-            minBox.setResponder(val -> entry.minCount = parseInt(val, entry.minCount, 1, 64));
-            addDyn(minBox);
-            addTip("cfg:r_mn_" + s, minBox, cx, ry, minW, 18, "rew_min", "");
-            cx += minW + 4;
-
-            EditBox maxBox = new EditBox(font, cx, ry, maxW, 18, Component.empty());
-            maxBox.setMaxLength(4);
-            maxBox.setValue(Integer.toString(entry.maxCount));
-            maxBox.setResponder(val -> entry.maxCount = parseInt(val, entry.maxCount, 1, 64));
-            addDyn(maxBox);
-            addTip("cfg:r_mx_" + s, maxBox, cx, ry, maxW, 18, "rew_max", "");
-            cx += maxW + 4;
+            EditBox cntBox = new EditBox(font, cx, ry, cntW, 18, Component.empty());
+            cntBox.setMaxLength(12);
+            cntBox.setFilter(TrialModuleClient447.intRangeFilter());
+            cntBox.setHint(Component.literal("1-3"));
+            cntBox.setValue(RangeSpec450.formatInt(entry.minCount, entry.maxCount));
+            cntBox.setResponder(val -> {
+                RangeSpec450.IntRange rr = RangeSpec450.parseInt(val, entry.minCount, entry.maxCount, 1, 64);
+                entry.minCount = rr.min;
+                entry.maxCount = rr.max;
+            });
+            addDyn(cntBox);
+            addTip("cfg:r_cnt_" + s, cntBox, cx, ry, cntW, 18, "rew_count", "");
+            cx += cntW + 4;
 
             EditBox wgtBox = new EditBox(font, cx, ry, wgtW, 18, Component.empty());
-            wgtBox.setMaxLength(6);
-            wgtBox.setValue(Integer.toString(entry.weight));
-            wgtBox.setResponder(val -> entry.weight = parseInt(val, entry.weight, 1, 10000));
+            wgtBox.setMaxLength(15);
+            wgtBox.setFilter(TrialModuleClient447.intRangeFilter());
+            wgtBox.setValue(entry.displayWeight());
+            wgtBox.setResponder(val -> {
+                RangeSpec450.IntRange rr = RangeSpec450.parseInt(val, entry.weight, entry.weight, 1, 100000);
+                entry.weight = rr.min;
+                entry.weightRange = rr.isRange() ? rr.format() : "";
+            });
             addDyn(wgtBox);
             addTip("cfg:r_wg_" + s, wgtBox, cx, ry, wgtW, 18, "rew_weight", "");
             cx += wgtW + 4;
 
             EditBox pctBox = new EditBox(font, cx, ry, pctW, 18, Component.empty());
-            pctBox.setMaxLength(4);
-            pctBox.setValue(Integer.toString(entry.chancePercent));
-            pctBox.setResponder(val -> entry.chancePercent = parseInt(val, entry.chancePercent, 1, 100));
+            pctBox.setMaxLength(12);
+            pctBox.setFilter(TrialModuleClient447.intRangeFilter());
+            pctBox.setValue(entry.displayChance());
+            pctBox.setResponder(val -> {
+                RangeSpec450.IntRange rr = RangeSpec450.parseInt(val, entry.chancePercent, entry.chancePercent, 0, 100);
+                entry.chancePercent = rr.min;
+                entry.chanceRange = rr.isRange() ? rr.format() : "";
+            });
             addDyn(pctBox);
             addTip("cfg:r_ch_" + s, pctBox, cx, ry, pctW, 18, "rew_chance", "");
             cx += pctW + 4;
@@ -635,6 +646,12 @@ public final class TrialControlConfigScreen446 extends Screen {
         int boxX = x + colW - fieldW;
         EditBox box = new EditBox(font, boxX, y, fieldW, 18, Component.empty());
         box.setMaxLength(16);
+        box.setFilter("gui.settledlands.trial.cfg.ominous_mult".equals(labelKey)
+                ? TrialModuleClient447.floatRangeFilter()
+                : TrialModuleClient447.intRangeFilter());
+        if ("gui.settledlands.trial.cfg.delay".equals(labelKey)) {
+            box.setHint(Component.literal("20-40"));
+        }
         box.setValue(initialValue == null ? "" : initialValue);
         box.setResponder(val -> setter.accept(val == null ? "" : val));
         addDyn(box);
@@ -693,7 +710,7 @@ public final class TrialControlConfigScreen446 extends Screen {
         int rightX = leftX + colW + 12;
         if (activeTab == TAB_GENERAL) {
             int y = bodyTop + 4 + 24;
-            int lblMax = colW - 58;
+            int lblMax = colW - 68;
             drawLbl(graphics, "gui.settledlands.trial.cfg.total_mobs", leftX, y + 5, lblMax);
             drawLbl(graphics, "gui.settledlands.trial.cfg.sim_mobs", rightX, y + 5, lblMax);
             y += 22;
@@ -703,8 +720,7 @@ public final class TrialControlConfigScreen446 extends Screen {
             drawLbl(graphics, "gui.settledlands.trial.cfg.spawn_range", leftX, y + 5, lblMax);
             drawLbl(graphics, "gui.settledlands.trial.cfg.cooldown", rightX, y + 5, lblMax);
             y += 22;
-            drawLbl(graphics, "gui.settledlands.trial.cfg.min_delay", leftX, y + 5, lblMax);
-            drawLbl(graphics, "gui.settledlands.trial.cfg.max_delay", rightX, y + 5, lblMax);
+            drawLbl(graphics, "gui.settledlands.trial.cfg.delay", leftX, y + 5, lblMax);
             y += 24 + 22;
             drawLbl(graphics, "gui.settledlands.trial.cfg.per_player_total", leftX, y + 5, lblMax);
             drawLbl(graphics, "gui.settledlands.trial.cfg.destruct_waves", rightX, y + 5, lblMax);

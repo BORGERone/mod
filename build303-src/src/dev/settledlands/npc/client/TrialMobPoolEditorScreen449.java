@@ -1,6 +1,7 @@
 package dev.settledlands.npc.client;
 
 import dev.settledlands.npc.NpcDialogueGraph;
+import dev.settledlands.trial.RangeSpec450;
 import dev.settledlands.trial.TrialConfig446;
 import dev.settledlands.trial.TrialMobPool449;
 import dev.settledlands.trial.TrialMobPoolNet449;
@@ -102,20 +103,32 @@ public final class TrialMobPoolEditorScreen449 extends Screen {
         String weightText;
 
         RowData(String entityId, int weight) {
+            this(entityId, weight, "");
+        }
+
+        RowData(String entityId, int weight, String weightRange) {
             this.entityId = entityId == null ? "minecraft:zombie" : entityId;
-            this.weightText = Integer.toString(TrialMobPool449.clampWeight(weight));
+            if (weightRange != null && !weightRange.isBlank()) {
+                this.weightText = weightRange;
+            } else {
+                this.weightText = Integer.toString(TrialMobPool449.clampWeight(weight));
+            }
+        }
+
+        RangeSpec450.IntRange parsedRange() {
+            return TrialMobPool449.parseWeightRangeInput(weightText);
         }
 
         int parsedWeight() {
-            Integer v = TrialMobPool449.parseWeightInput(weightText);
-            return v == null ? -1 : v;
+            RangeSpec450.IntRange rr = parsedRange();
+            return rr == null ? -1 : rr.min;
         }
 
         TrialConfig446.SpawnEntry toEntry() {
             String norm = TrialConfig446.normalizeId(entityId);
-            int w = parsedWeight();
-            if (norm == null || !norm.contains(":") || w <= 0) return null;
-            return new TrialConfig446.SpawnEntry(norm, w);
+            RangeSpec450.IntRange rr = parsedRange();
+            if (norm == null || !norm.contains(":") || rr == null || rr.min <= 0) return null;
+            return new TrialConfig446.SpawnEntry(norm, rr.min, rr.isRange() ? rr.format() : "");
         }
     }
 
@@ -253,9 +266,9 @@ public final class TrialMobPoolEditorScreen449 extends Screen {
             RowSlot slot = new RowSlot();
 
             slot.weightBox = new EditBox(font, wgtX, wy, wgtW, 18, Component.empty());
-            slot.weightBox.setMaxLength(6);
+            slot.weightBox.setMaxLength(15);
             slot.weightBox.setHint(Component.literal("10"));
-            slot.weightBox.setFilter(TrialModuleClient447.intFilter());
+            slot.weightBox.setFilter(TrialModuleClient447.intRangeFilter());
             slot.weightBox.setResponder(val -> onRowWeightChanged(slotIdx, val));
             addRenderableWidget(slot.weightBox);
 
@@ -403,11 +416,11 @@ public final class TrialMobPoolEditorScreen449 extends Screen {
         if ("OK".equals(status)) {
             List<TrialConfig446.SpawnEntry> entries = TrialMobPool449.decodeEntriesWire(lines, 2);
             for (TrialConfig446.SpawnEntry e : entries) {
-                rowsData.add(new RowData(e.entityId, e.weight));
+                rowsData.add(new RowData(e.entityId, e.weight, e.weightRange));
             }
             if (rowsData.isEmpty()) {
                 for (TrialConfig446.SpawnEntry e : TrialConfig446.defaultMobs()) {
-                    rowsData.add(new RowData(e.entityId, e.weight));
+                    rowsData.add(new RowData(e.entityId, e.weight, e.weightRange));
                 }
             }
             loadedServerFile = file;
@@ -422,7 +435,7 @@ public final class TrialMobPoolEditorScreen449 extends Screen {
                     ? TrialModule447.readMobs(sourceNode)
                     : TrialConfig446.defaultMobs();
             for (TrialConfig446.SpawnEntry e : seed) {
-                rowsData.add(new RowData(e.entityId, e.weight));
+                rowsData.add(new RowData(e.entityId, e.weight, e.weightRange));
             }
             statusColor = 0xFFF5B841;
             statusText = Component.translatable("gui.settledlands.trial.mob_pool.new_hint").getString();
@@ -720,14 +733,26 @@ public final class TrialMobPoolEditorScreen449 extends Screen {
 
         // Summary line
         long totalW = 0L;
+        long totalWMax = 0L;
         List<TrialConfig446.SpawnEntry> rowEntries = new ArrayList<>(rowsData.size());
         for (RowData r : rowsData) {
             TrialConfig446.SpawnEntry e = r.toEntry();
             rowEntries.add(e);
-            if (e != null) totalW += e.weight;
+            if (e != null) {
+                RangeSpec450.IntRange rr = r.parsedRange();
+                if (rr != null) {
+                    totalW += rr.min;
+                    totalWMax += rr.max;
+                } else {
+                    totalW += e.weight;
+                    totalWMax += e.weight;
+                }
+            }
         }
+        String weightSum = RangeSpec450.formatInt((int) Math.min(Integer.MAX_VALUE, totalW),
+                (int) Math.min(Integer.MAX_VALUE, totalWMax));
         String sumStr = Component.translatable("gui.settledlands.trial.mob_pool.summary",
-                Integer.valueOf(rowsData.size()), Long.valueOf(totalW)).getString();
+                Integer.valueOf(rowsData.size()), weightSum).getString();
         graphics.drawString(font, TrialMobPreview449.clip(font, sumStr, panelW - 24),
                 panelX + 10, panelY + 48, 0xFF9AA5B8, false);
 

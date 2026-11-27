@@ -116,29 +116,35 @@ public final class TrialModuleCard447 {
             case TrialModule447.SLOT_RADIUS -> {
                 TrialModule447.RadiusData d = TrialModule447.readRadius(node);
                 yield new String[] {
-                    safe("gui.settledlands.trial.mod.card_act", String.valueOf(d.activationRange)),
-                    safe("gui.settledlands.trial.mod.card_spawn", String.valueOf(d.spawnRange)),
+                    safe("gui.settledlands.trial.mod.card_act",
+                            TrialModuleClient447.rangeText(d.activationRange, d.activationRangeText)),
+                    safe("gui.settledlands.trial.mod.card_spawn",
+                            TrialModuleClient447.rangeText(d.spawnRange, d.spawnRangeText)),
                     ""
                 };
             }
             case TrialModule447.SLOT_WAVE -> {
                 TrialModule447.WaveData d = TrialModule447.readWave(node);
+                String tot = TrialModuleClient447.rangeText(d.totalMobs, d.totalMobsText);
+                String totP = TrialModuleClient447.rangeText(d.totalMobsAddedPerPlayer, d.totalMobsAddedPerPlayerText);
+                String sim = TrialModuleClient447.rangeText(d.simultaneousMobs, d.simultaneousMobsText);
+                String simP = TrialModuleClient447.rangeText(d.simultaneousMobsAddedPerPlayer, d.simultaneousMobsAddedPerPlayerText);
+                String batch = TrialModuleClient447.rangeText(d.spawnBatchSize, d.spawnBatchSizeText);
                 yield new String[] {
-                    safe("gui.settledlands.trial.mod.card_total",
-                            d.totalMobs + " (+" + d.totalMobsAddedPerPlayer + ")"),
-                    safe("gui.settledlands.trial.mod.card_sim",
-                            d.simultaneousMobs + " (+" + d.simultaneousMobsAddedPerPlayer + ")"),
-                    safe("gui.settledlands.trial.mod.card_batch", String.valueOf(d.spawnBatchSize))
+                    safe("gui.settledlands.trial.mod.card_total", tot + " (+" + totP + ")"),
+                    safe("gui.settledlands.trial.mod.card_sim", sim + " (+" + simP + ")"),
+                    safe("gui.settledlands.trial.mod.card_batch", batch)
                 };
             }
             case TrialModule447.SLOT_TIMING -> {
                 TrialModule447.TimingData d = TrialModule447.readTiming(node);
-                int cdSec = Math.max(0, d.cooldownTicks / 20);
+                String cdStr = d.cooldownTicksText != null && !d.cooldownTicksText.isBlank()
+                        ? d.cooldownTicksText + "t"
+                        : Math.max(0, d.cooldownTicks / 20) + "s (" + d.cooldownTicks + "t)";
                 yield new String[] {
                     safe("gui.settledlands.trial.mod.card_delay",
-                            d.minSpawnDelayTicks + "–" + d.maxSpawnDelayTicks),
-                    safe("gui.settledlands.trial.mod.card_cd",
-                            cdSec + "s (" + d.cooldownTicks + "t)"),
+                            TrialModuleClient447.delayText(d)),
+                    safe("gui.settledlands.trial.mod.card_cd", cdStr),
                     ""
                 };
             }
@@ -150,9 +156,9 @@ public final class TrialModuleCard447 {
                         : Component.translatable("gui.settledlands.trial.mod.card_pool_file",
                                 pool, String.valueOf(mobs.size())).getString();
                 String l2 = mobs.isEmpty() ? "" : "1. " + TrialMobPreview449.displayName(mobs.get(0).entityId)
-                        + " (w:" + mobs.get(0).weight + ")";
+                        + " (w:" + mobs.get(0).displayWeight() + ")";
                 String l3 = mobs.size() > 1 ? "2. " + TrialMobPreview449.displayName(mobs.get(1).entityId)
-                        + " (w:" + mobs.get(1).weight + ")"
+                        + " (w:" + mobs.get(1).displayWeight() + ")"
                         + (mobs.size() > 2 ? " +" + (mobs.size() - 2) : "")
                         : "";
                 yield new String[] { l1, l2, l3 };
@@ -174,24 +180,31 @@ public final class TrialModuleCard447 {
             }
             case TrialModule447.SLOT_OMINOUS -> {
                 TrialModule447.OminousData d = TrialModule447.readOminous(node);
+                String mult = (d.mobMultiplierText != null && !d.mobMultiplierText.isBlank())
+                        ? "x" + d.mobMultiplierText
+                        : String.format(Locale.ROOT, "x%.2f", d.mobMultiplier);
+                String iv = TrialModuleClient447.rangeText(d.hazardIntervalTicks, d.hazardIntervalTicksText);
                 yield new String[] {
-                    safe("gui.settledlands.trial.mod.card_om_mult",
-                            String.format(Locale.ROOT, "x%.2f", d.mobMultiplier)),
+                    safe("gui.settledlands.trial.mod.card_om_mult", mult),
                     safe("gui.settledlands.trial.mod.card_om_flags",
-                            yesNo(d.equipment) + " / " + yesNo(d.hazards) + " (" + d.hazardIntervalTicks + "t)"),
+                            yesNo(d.equipment) + " / " + yesNo(d.hazards) + " (" + iv + "t)"),
                     safe("gui.settledlands.trial.mod.card_om_keys", yesNo(d.keyConversion))
                 };
             }
             case TrialModule447.SLOT_PROTECT -> {
                 TrialModule447.ProtectData d = TrialModule447.readProtect(node);
+                String rTxt = TrialModuleClient447.rangeText(d.noBreakRadius, d.noBreakRadiusText);
+                String sTxt = TrialModuleClient447.rangeText(d.noBreakSeconds, d.noBreakSecondsText);
+                String wTxt = TrialModuleClient447.rangeText(d.selfDestructAfterWaves, d.selfDestructAfterWavesText);
+                String cTxt = TrialModuleClient447.rangeText(d.selfDestructChancePercent, d.selfDestructChancePercentText);
                 yield new String[] {
                     safe("gui.settledlands.trial.mod.card_nb",
                             d.noBreakEnabled
-                                    ? yesNo(true) + " (R" + d.noBreakRadius + ", " + d.noBreakSeconds + "s)"
+                                    ? yesNo(true) + " (R" + rTxt + ", " + sTxt + "s)"
                                     : yesNo(false)),
                     safe("gui.settledlands.trial.mod.card_sd",
                             d.selfDestruct
-                                    ? d.selfDestructAfterWaves + "w · " + d.selfDestructChancePercent + "%"
+                                    ? wTxt + "w · " + cTxt + "%"
                                     : yesNo(false)),
                     ""
                 };
@@ -204,7 +217,7 @@ public final class TrialModuleCard447 {
         String count = r.minCount == r.maxCount ? String.valueOf(r.minCount)
                 : r.minCount + "-" + r.maxCount;
         return num + ". " + TrialGraphClient446.shortId(r.itemId)
-                + " x" + count + " (" + r.chancePercent + "%)";
+                + " x" + count + " (" + r.displayChance() + "%)";
     }
 
     public static Node moduleAtPin(NpcDialogueGraph graph, NpcGraphCanvas canvas,

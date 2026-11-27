@@ -5,6 +5,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Random;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
 
@@ -26,18 +27,29 @@ public final class TrialConfig446 {
     public static final class SpawnEntry {
         public String entityId;
         public int weight;
+        public String weightRange = "";
 
         public SpawnEntry() {
             this("minecraft:zombie", 1);
         }
 
         public SpawnEntry(String entityId, int weight) {
+            this(entityId, weight, "");
+        }
+
+        public SpawnEntry(String entityId, int weight, String weightRange) {
             this.entityId = entityId == null ? "minecraft:zombie" : entityId;
             this.weight = weight;
+            this.weightRange = weightRange == null ? "" : weightRange;
+        }
+
+        public String displayWeight() {
+            return (weightRange != null && !weightRange.isBlank())
+                    ? weightRange : Integer.toString(weight);
         }
 
         public SpawnEntry copy() {
-            return new SpawnEntry(entityId, weight);
+            return new SpawnEntry(entityId, weight, weightRange);
         }
     }
 
@@ -47,21 +59,41 @@ public final class TrialConfig446 {
         public int minCount;
         public int maxCount;
         public int chancePercent;
+        public String weightRange = "";
+        public String chanceRange = "";
 
         public RewardEntry() {
             this("minecraft:bread", 1, 1, 1, 100);
         }
 
         public RewardEntry(String itemId, int weight, int minCount, int maxCount, int chancePercent) {
+            this(itemId, weight, minCount, maxCount, chancePercent, "", "");
+        }
+
+        public RewardEntry(String itemId, int weight, int minCount, int maxCount, int chancePercent,
+                String weightRange, String chanceRange) {
             this.itemId = itemId == null ? "minecraft:bread" : itemId;
             this.weight = weight;
             this.minCount = minCount;
             this.maxCount = maxCount;
             this.chancePercent = chancePercent;
+            this.weightRange = weightRange == null ? "" : weightRange;
+            this.chanceRange = chanceRange == null ? "" : chanceRange;
+        }
+
+        public String displayWeight() {
+            return (weightRange != null && !weightRange.isBlank())
+                    ? weightRange : Integer.toString(weight);
+        }
+
+        public String displayChance() {
+            return (chanceRange != null && !chanceRange.isBlank())
+                    ? chanceRange : Integer.toString(chancePercent);
         }
 
         public RewardEntry copy() {
-            return new RewardEntry(itemId, weight, minCount, maxCount, chancePercent);
+            return new RewardEntry(itemId, weight, minCount, maxCount, chancePercent,
+                    weightRange, chanceRange);
         }
     }
 
@@ -93,6 +125,7 @@ public final class TrialConfig446 {
     public int noBreakRadius = 24;
     public int noBreakSeconds = 60;
     public int noBreakAmplifier = 3;
+    public final Map<String, String> ranges = new LinkedHashMap<>();
 
     public static TrialConfig446 defaults() {
         return new TrialConfig446();
@@ -154,6 +187,7 @@ public final class TrialConfig446 {
                 if (r != null) c.rewards.add(r.copy());
             }
         }
+        c.ranges.putAll(ranges);
         return sanitize(c);
     }
 
@@ -193,6 +227,8 @@ public final class TrialConfig446 {
         this.noBreakRadius = c.noBreakRadius;
         this.noBreakSeconds = c.noBreakSeconds;
         this.noBreakAmplifier = c.noBreakAmplifier;
+        this.ranges.clear();
+        this.ranges.putAll(c.ranges);
     }
 
     public static TrialConfig446 sanitize(TrialConfig446 cfg) {
@@ -225,7 +261,18 @@ public final class TrialConfig446 {
                 if (e == null || cleanMobs.size() >= MAX_ENTRIES) continue;
                 String id = normalizeId(e.entityId);
                 if (id == null) continue;
-                cleanMobs.add(new SpawnEntry(id, clamp(e.weight, 1, 100000)));
+                String wr = "";
+                int w = clamp(e.weight, 1, 100000);
+                if (RangeSpec450.hasRangeSeparator(e.weightRange)) {
+                    RangeSpec450.IntRange rr = RangeSpec450.parseInt(e.weightRange, w, w, 1, 100000);
+                    if (rr.isRange()) {
+                        wr = rr.format();
+                        w = rr.min;
+                    } else {
+                        w = rr.min;
+                    }
+                }
+                cleanMobs.add(new SpawnEntry(id, w, wr));
             }
         }
         if (cleanMobs.isEmpty()) cleanMobs = defaultMobs();
@@ -239,12 +286,205 @@ public final class TrialConfig446 {
                 if (id == null) continue;
                 int minC = clamp(r.minCount, 1, 64);
                 int maxC = clamp(r.maxCount, minC, 64);
-                cleanRewards.add(new RewardEntry(id, clamp(r.weight, 1, 100000),
-                        minC, maxC, clamp(r.chancePercent, 0, 100)));
+                int w = clamp(r.weight, 1, 100000);
+                String wr = "";
+                if (RangeSpec450.hasRangeSeparator(r.weightRange)) {
+                    RangeSpec450.IntRange rr = RangeSpec450.parseInt(r.weightRange, w, w, 1, 100000);
+                    if (rr.isRange()) {
+                        wr = rr.format();
+                        w = rr.min;
+                    } else {
+                        w = rr.min;
+                    }
+                }
+                int ch = clamp(r.chancePercent, 0, 100);
+                String cr = "";
+                if (RangeSpec450.hasRangeSeparator(r.chanceRange)) {
+                    RangeSpec450.IntRange crR = RangeSpec450.parseInt(r.chanceRange, ch, ch, 0, 100);
+                    if (crR.isRange()) {
+                        cr = crR.format();
+                        ch = crR.min;
+                    } else {
+                        ch = crR.min;
+                    }
+                }
+                cleanRewards.add(new RewardEntry(id, w, minC, maxC, ch, wr, cr));
             }
         }
         cfg.rewards = cleanRewards;
+        sanitizeRangesMap(cfg);
         return cfg;
+    }
+
+    private static void sanitizeRangesMap(TrialConfig446 cfg) {
+        if (cfg.ranges.isEmpty()) return;
+        Map<String, String> cleaned = new LinkedHashMap<>();
+        cleanIntRange(cfg, cleaned, "activationRange", cfg.activationRange, 1, 64);
+        cleanIntRange(cfg, cleaned, "spawnRange", cfg.spawnRange, 1, 16);
+        cleanIntRange(cfg, cleaned, "totalMobs", cfg.totalMobs, 1, 256);
+        cleanIntRange(cfg, cleaned, "totalMobsAddedPerPlayer", cfg.totalMobsAddedPerPlayer, 0, 64);
+        cleanIntRange(cfg, cleaned, "simultaneousMobs", cfg.simultaneousMobs, 1, 64);
+        cleanIntRange(cfg, cleaned, "simultaneousMobsAddedPerPlayer", cfg.simultaneousMobsAddedPerPlayer, 0, 32);
+        cleanIntRange(cfg, cleaned, "spawnBatchSize", cfg.spawnBatchSize, 1, 8);
+        cleanIntRange(cfg, cleaned, "cooldownTicks", cfg.cooldownTicks, 0, 720000);
+        cleanIntRange(cfg, cleaned, "selfDestructAfterWaves", cfg.selfDestructAfterWaves, 1, 100);
+        cleanIntRange(cfg, cleaned, "selfDestructChancePercent", cfg.selfDestructChancePercent, 0, 100);
+        cleanFloatRange(cfg, cleaned, "ominousMobMultiplier", cfg.ominousMobMultiplier, 1.0F, 4.0F);
+        cleanIntRange(cfg, cleaned, "ominousHazardIntervalTicks", cfg.ominousHazardIntervalTicks, 20, 12000);
+        cleanIntRange(cfg, cleaned, "noBreakRadius", cfg.noBreakRadius, 1, 64);
+        cleanIntRange(cfg, cleaned, "noBreakSeconds", cfg.noBreakSeconds, 1, 600);
+        cleanIntRange(cfg, cleaned, "noBreakAmplifier", cfg.noBreakAmplifier, 0, 3);
+        cfg.ranges.clear();
+        cfg.ranges.putAll(cleaned);
+    }
+
+    private static void cleanIntRange(TrialConfig446 cfg, Map<String, String> dst, String key,
+            int curVal, int min, int max) {
+        String raw = cfg.ranges.get(key);
+        if (raw == null || !RangeSpec450.hasRangeSeparator(raw)) return;
+        RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, curVal, curVal, min, max);
+        if (r.isRange()) {
+            dst.put(key, r.format());
+        }
+    }
+
+    private static void cleanFloatRange(TrialConfig446 cfg, Map<String, String> dst, String key,
+            float curVal, float min, float max) {
+        String raw = cfg.ranges.get(key);
+        if (raw == null || !RangeSpec450.hasRangeSeparator(raw)) return;
+        RangeSpec450.FloatRange r = RangeSpec450.parseFloat(raw, curVal, curVal, min, max);
+        if (r.isRange()) {
+            dst.put(key, r.format());
+        }
+    }
+
+    public boolean hasRanges() {
+        if (!ranges.isEmpty()) return true;
+        if (mobs != null) {
+            for (SpawnEntry e : mobs) {
+                if (e != null && e.weightRange != null && !e.weightRange.isBlank()) return true;
+            }
+        }
+        if (rewards != null) {
+            for (RewardEntry r : rewards) {
+                if (r != null && ((r.weightRange != null && !r.weightRange.isBlank())
+                        || (r.chanceRange != null && !r.chanceRange.isBlank()))) {
+                    return true;
+                }
+            }
+        }
+        return false;
+    }
+
+    public void setIntFieldWithRange(String key, String raw, int fallback, int min, int max) {
+        RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, fallback, fallback, min, max);
+        setIntByKey(key, r.min);
+        if (r.isRange()) ranges.put(key, r.format());
+        else ranges.remove(key);
+    }
+
+    public void setFloatFieldWithRange(String key, String raw, float fallback, float min, float max) {
+        RangeSpec450.FloatRange r = RangeSpec450.parseFloat(raw, fallback, fallback, min, max);
+        if ("ominousMobMultiplier".equals(key)) ominousMobMultiplier = r.min;
+        if (r.isRange()) ranges.put(key, r.format());
+        else ranges.remove(key);
+    }
+
+    public String rangeOrIntText(String key, int fallback) {
+        String r = ranges.get(key);
+        return (r != null && !r.isBlank()) ? r : Integer.toString(fallback);
+    }
+
+    public String rangeOrFloatText(String key, float fallback) {
+        String r = ranges.get(key);
+        return (r != null && !r.isBlank()) ? r : RangeSpec450.formatFloatCompact(fallback);
+    }
+
+    /** Resolves all dynamic ranges into concrete numbers for TrialSpawnerBlockEntity. */
+    public TrialConfig446 resolveRanges(Random rnd) {
+        TrialConfig446 out = copy();
+        if (rnd == null) rnd = new Random();
+        if (!out.ranges.isEmpty()) {
+            out.activationRange = pickRangeInt(out.ranges.get("activationRange"), out.activationRange, 1, 64, rnd);
+            out.spawnRange = pickRangeInt(out.ranges.get("spawnRange"), out.spawnRange, 1, 16, rnd);
+            out.totalMobs = pickRangeInt(out.ranges.get("totalMobs"), out.totalMobs, 1, 256, rnd);
+            out.totalMobsAddedPerPlayer = pickRangeInt(out.ranges.get("totalMobsAddedPerPlayer"),
+                    out.totalMobsAddedPerPlayer, 0, 64, rnd);
+            out.simultaneousMobs = pickRangeInt(out.ranges.get("simultaneousMobs"), out.simultaneousMobs, 1, 64, rnd);
+            out.simultaneousMobsAddedPerPlayer = pickRangeInt(out.ranges.get("simultaneousMobsAddedPerPlayer"),
+                    out.simultaneousMobsAddedPerPlayer, 0, 32, rnd);
+            out.spawnBatchSize = pickRangeInt(out.ranges.get("spawnBatchSize"), out.spawnBatchSize, 1, 8, rnd);
+            out.cooldownTicks = pickRangeInt(out.ranges.get("cooldownTicks"), out.cooldownTicks, 0, 720000, rnd);
+            out.selfDestructAfterWaves = pickRangeInt(out.ranges.get("selfDestructAfterWaves"),
+                    out.selfDestructAfterWaves, 1, 100, rnd);
+            out.selfDestructChancePercent = pickRangeInt(out.ranges.get("selfDestructChancePercent"),
+                    out.selfDestructChancePercent, 0, 100, rnd);
+            String multRaw = out.ranges.get("ominousMobMultiplier");
+            if (multRaw != null && !multRaw.isBlank()) {
+                out.ominousMobMultiplier = RangeSpec450.parseFloat(
+                        multRaw, out.ominousMobMultiplier, out.ominousMobMultiplier, 1.0F, 4.0F).pick(rnd);
+            }
+            out.ominousHazardIntervalTicks = pickRangeInt(out.ranges.get("ominousHazardIntervalTicks"),
+                    out.ominousHazardIntervalTicks, 20, 12000, rnd);
+            out.noBreakRadius = pickRangeInt(out.ranges.get("noBreakRadius"), out.noBreakRadius, 1, 64, rnd);
+            out.noBreakSeconds = pickRangeInt(out.ranges.get("noBreakSeconds"), out.noBreakSeconds, 1, 600, rnd);
+            out.noBreakAmplifier = pickRangeInt(out.ranges.get("noBreakAmplifier"), out.noBreakAmplifier, 0, 3, rnd);
+            out.ranges.clear();
+        }
+        if (out.mobs != null) {
+            for (SpawnEntry e : out.mobs) {
+                if (e == null) continue;
+                if (e.weightRange != null && !e.weightRange.isBlank()) {
+                    e.weight = RangeSpec450.parseInt(e.weightRange, e.weight, e.weight, 1, 100000).pick(rnd);
+                    e.weightRange = "";
+                }
+            }
+        }
+        if (out.rewards != null) {
+            for (RewardEntry r : out.rewards) {
+                if (r == null) continue;
+                if (r.weightRange != null && !r.weightRange.isBlank()) {
+                    r.weight = RangeSpec450.parseInt(r.weightRange, r.weight, r.weight, 1, 100000).pick(rnd);
+                    r.weightRange = "";
+                }
+                if (r.chanceRange != null && !r.chanceRange.isBlank()) {
+                    r.chancePercent = RangeSpec450.parseInt(
+                            r.chanceRange, r.chancePercent, r.chancePercent, 0, 100).pick(rnd);
+                    r.chanceRange = "";
+                }
+            }
+        }
+        return sanitize(out);
+    }
+
+    public String toResolvedJson(Random rnd) {
+        if (!hasRanges()) return toJson();
+        return resolveRanges(rnd).toJson();
+    }
+
+    private static int pickRangeInt(String raw, int fallback, int min, int max, Random rnd) {
+        if (raw == null || raw.isBlank()) return fallback;
+        return RangeSpec450.parseInt(raw, fallback, fallback, min, max).pick(rnd);
+    }
+
+    private void setIntByKey(String key, int val) {
+        switch (key) {
+            case "activationRange" -> activationRange = val;
+            case "spawnRange" -> spawnRange = val;
+            case "totalMobs" -> totalMobs = val;
+            case "totalMobsAddedPerPlayer" -> totalMobsAddedPerPlayer = val;
+            case "simultaneousMobs" -> simultaneousMobs = val;
+            case "simultaneousMobsAddedPerPlayer" -> simultaneousMobsAddedPerPlayer = val;
+            case "spawnBatchSize" -> spawnBatchSize = val;
+            case "cooldownTicks" -> cooldownTicks = val;
+            case "selfDestructAfterWaves" -> selfDestructAfterWaves = val;
+            case "selfDestructChancePercent" -> selfDestructChancePercent = val;
+            case "ominousHazardIntervalTicks" -> ominousHazardIntervalTicks = val;
+            case "noBreakRadius" -> noBreakRadius = val;
+            case "noBreakSeconds" -> noBreakSeconds = val;
+            case "noBreakAmplifier" -> noBreakAmplifier = val;
+            default -> { }
+        }
     }
 
     /** Strips unknown entity/item ids only when registries are actually initialized (runtime). */
@@ -378,7 +618,8 @@ public final class TrialConfig446 {
                     if (!(item instanceof Map<?, ?> em)) continue;
                     String eid = asString(em.get("entityId"), "");
                     int w = asInt(em.get("weight"), 1);
-                    if (!eid.isEmpty()) mobs.add(new SpawnEntry(eid, w));
+                    String wr = asString(em.get("weightRange"), "");
+                    if (!eid.isEmpty()) mobs.add(new SpawnEntry(eid, w, wr));
                 }
                 cfg.mobs = mobs;
             }
@@ -392,9 +633,18 @@ public final class TrialConfig446 {
                     int minC = asInt(rm.get("minCount"), 1);
                     int maxC = asInt(rm.get("maxCount"), 1);
                     int chance = asInt(rm.get("chancePercent"), 100);
-                    if (!iid.isEmpty()) rewards.add(new RewardEntry(iid, w, minC, maxC, chance));
+                    String wr = asString(rm.get("weightRange"), "");
+                    String cr = asString(rm.get("chanceRange"), "");
+                    if (!iid.isEmpty()) rewards.add(new RewardEntry(iid, w, minC, maxC, chance, wr, cr));
                 }
                 cfg.rewards = rewards;
+            }
+            Object rawRanges = map.get("ranges");
+            if (rawRanges instanceof Map<?, ?> rm) {
+                for (Map.Entry<?, ?> en : rm.entrySet()) {
+                    if (en.getKey() == null || en.getValue() == null) continue;
+                    cfg.ranges.put(String.valueOf(en.getKey()), String.valueOf(en.getValue()));
+                }
             }
             return sanitize(cfg);
         } catch (Throwable ignored) {
@@ -434,6 +684,9 @@ public final class TrialConfig446 {
             sb.append('{');
             appendStrField(sb, "entityId", e.entityId, true);
             appendIntField(sb, "weight", e.weight, false);
+            if (e.weightRange != null && !e.weightRange.isBlank()) {
+                appendStrField(sb, "weightRange", e.weightRange, false);
+            }
             sb.append('}');
         }
         sb.append(']');
@@ -448,6 +701,12 @@ public final class TrialConfig446 {
             appendIntField(sb, "minCount", r.minCount, false);
             appendIntField(sb, "maxCount", r.maxCount, false);
             appendIntField(sb, "chancePercent", r.chancePercent, false);
+            if (r.weightRange != null && !r.weightRange.isBlank()) {
+                appendStrField(sb, "weightRange", r.weightRange, false);
+            }
+            if (r.chanceRange != null && !r.chanceRange.isBlank()) {
+                appendStrField(sb, "chanceRange", r.chanceRange, false);
+            }
             sb.append('}');
         }
         sb.append(']');
@@ -458,6 +717,15 @@ public final class TrialConfig446 {
         appendIntField(sb, "noBreakRadius", c.noBreakRadius, false);
         appendIntField(sb, "noBreakSeconds", c.noBreakSeconds, false);
         appendIntField(sb, "noBreakAmplifier", c.noBreakAmplifier, false);
+        if (!c.ranges.isEmpty()) {
+            sb.append(",\"ranges\":{");
+            boolean first = true;
+            for (Map.Entry<String, String> en : c.ranges.entrySet()) {
+                appendStrField(sb, en.getKey(), en.getValue(), first);
+                first = false;
+            }
+            sb.append('}');
+        }
         sb.append('}');
         return sb.toString();
     }

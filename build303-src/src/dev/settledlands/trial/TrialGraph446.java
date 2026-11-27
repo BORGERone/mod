@@ -442,7 +442,7 @@ public final class TrialGraph446 {
                 } else if (liveJson != null && !liveJson.isBlank()) {
                     TrialConfig446 liveCfg = TrialConfig446.fromJson(liveJson);
                     TrialConfig446 graphCfg = TrialModule447.compileConfig(graph);
-                    if (!liveCfg.toJson().equals(graphCfg.toJson())) {
+                    if (!graphCfg.hasRanges() && !liveCfg.toJson().equals(graphCfg.toJson())) {
                         TrialModule447.applyConfigToConnectedModules(graph, liveCfg);
                     }
                 }
@@ -562,6 +562,10 @@ public final class TrialGraph446 {
                 if (best != null) setLastPlayer(card, best.getName().getString());
                 store.put(key, graph);
                 ensureBlockEntityGraph(level, pos, graph);
+                if (card.action != null && !card.action.isBlank()
+                        && TrialConfig446.fromJson(card.action).hasRanges()) {
+                    TrialSpawnerBridge446.applyConfigJson(level, pos, card.action);
+                }
             }
             NpcDialogueGraph.Node start = waveClearStart(graph);
             if (start != null) {

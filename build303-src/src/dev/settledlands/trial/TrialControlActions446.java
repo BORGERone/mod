@@ -102,8 +102,10 @@ public final class TrialControlActions446 {
                 String json = parsed.config().toJson();
                 yield syncConfigAndCard(targetLevel, targetPos, json);
             }
-            case TrialControlNode446.OP_START ->
-                    TrialSpawnerBridge446.startWave(targetLevel, targetPos, player);
+            case TrialControlNode446.OP_START -> {
+                rerollCardIfNeeded(targetLevel, targetPos);
+                yield TrialSpawnerBridge446.startWave(targetLevel, targetPos, player);
+            }
             case TrialControlNode446.OP_CONFIG_START -> {
                 String json = parsed.config().toJson();
                 syncConfigAndCard(targetLevel, targetPos, json);
@@ -130,6 +132,20 @@ public final class TrialControlActions446 {
         return execute(null, npc, action);
     }
 
+    private static void rerollCardIfNeeded(ServerLevel level, BlockPos pos) {
+        try {
+            TrialGraph446Store store = TrialGraph446Store.get(level.getServer());
+            if (store == null) return;
+            var graph = store.graph(TrialGraph446Store.key(level, pos));
+            var card = TrialGraph446.trialNode(graph);
+            if (card != null && card.action != null && !card.action.isBlank()
+                    && TrialConfig446.fromJson(card.action).hasRanges()) {
+                TrialSpawnerBridge446.applyConfigJson(level, pos, card.action);
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
     private static boolean syncConfigAndCard(ServerLevel level, BlockPos pos, String json) {
         boolean ok = TrialSpawnerBridge446.applyConfigJson(level, pos, json);
         if (!ok) return false;
@@ -143,6 +159,7 @@ public final class TrialControlActions446 {
                     var card = TrialGraph446.trialNode(graph);
                     if (card != null) {
                         card.action = json;
+                        TrialModule447.applyConfigToConnectedModules(graph, TrialConfig446.fromJson(json));
                         store.put(key, graph);
                         TrialGraph446.writeBlockEntityGraph(level, pos, graph);
                     }

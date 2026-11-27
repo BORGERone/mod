@@ -253,6 +253,31 @@ public final class GraphTooltips448 {
         st.labels.add(new TrackedLabel(key, x, y));
     }
 
+    public static void removeLabel(NpcDialogueGraphScreen screen, String key, int y) {
+        if (screen == null || key == null) return;
+        ScreenState st = SCREENS.get(screen);
+        if (st == null) return;
+        for (int i = st.labels.size() - 1; i >= 0; i--) {
+            TrackedLabel tl = st.labels.get(i);
+            if (tl.y == y && key.equals(tl.key)) {
+                st.labels.remove(i);
+            }
+        }
+    }
+
+    public static void replaceLabelKey(NpcDialogueGraphScreen screen, String oldKey,
+            String newKey, int y) {
+        if (screen == null || oldKey == null || newKey == null) return;
+        ScreenState st = SCREENS.get(screen);
+        if (st == null) return;
+        for (int i = 0; i < st.labels.size(); i++) {
+            TrackedLabel tl = st.labels.get(i);
+            if (tl.y == y && oldKey.equals(tl.key)) {
+                st.labels.set(i, new TrackedLabel(newKey, tl.x, tl.y));
+            }
+        }
+    }
+
     public static void finishScreenWidgets(NpcDialogueGraphScreen screen,
             List<?> rawInspectorWidgets, NpcDialogueGraph graph, int selected) {
         if (screen == null) return;
@@ -1530,6 +1555,10 @@ public final class GraphTooltips448 {
                 return tip(a.slotId, tr("gui.settledlands.trial.cfg.pick"),
                         tr("gui.settledlands.tip448.mod.pick_reward"),
                         TrialModule447.color(TrialModule447.SLOT_REWARDS));
+            case "rew_count":
+                return tip(a.slotId, tr("gui.settledlands.loot_pool.editor.col_count"),
+                        tr("gui.settledlands.tip448.cfg.rew_count"),
+                        TrialModule447.color(TrialModule447.SLOT_REWARDS));
             case "rew_min":
                 return tip(a.slotId, tr("gui.settledlands.loot_pool.editor.col_count"),
                         tr("gui.settledlands.tip448.cfg.rew_min"),
@@ -1758,6 +1787,7 @@ public final class GraphTooltips448 {
             case "gui.settledlands.trial.cfg.sim_mobs" -> "gui.settledlands.tip448.tf.sim_mobs";
             case "gui.settledlands.trial.cfg.per_player_sim" -> "gui.settledlands.tip448.tf.per_player_sim";
             case "gui.settledlands.trial.cfg.batch" -> "gui.settledlands.tip448.tf.batch";
+            case "gui.settledlands.trial.cfg.delay" -> "gui.settledlands.tip448.tf.delay";
             case "gui.settledlands.trial.cfg.min_delay" -> "gui.settledlands.tip448.tf.min_delay";
             case "gui.settledlands.trial.cfg.max_delay" -> "gui.settledlands.tip448.tf.max_delay";
             case "gui.settledlands.trial.cfg.cooldown" -> "gui.settledlands.tip448.tf.cooldown";
@@ -1788,6 +1818,7 @@ public final class GraphTooltips448 {
             case "gui.settledlands.graph.quest_title" -> "gui.settledlands.tip448.fld.quest_title";
             case "gui.settledlands.graph.min_relation" -> "gui.settledlands.tip448.fld.min_relation";
             case "gui.settledlands.graph.max_relation" -> "gui.settledlands.tip448.fld.max_relation";
+            case "gui.settledlands.graph.relation_range" -> "gui.settledlands.tip448.fld.relation_range";
             case "gui.settledlands.graph.move_coords" -> "gui.settledlands.tip448.fld.move_coords";
             case "gui.settledlands.graph.move_speed" -> "gui.settledlands.tip448.fld.move_speed";
             case "gui.settledlands.graph.random_range" -> "gui.settledlands.tip448.fld.random_range";
@@ -1798,6 +1829,7 @@ public final class GraphTooltips448 {
             case "gui.settledlands.graph.points" -> "gui.settledlands.tip448.fld.points";
             case "gui.settledlands.graph.min_points" -> "gui.settledlands.tip448.fld.min_points";
             case "gui.settledlands.graph.max_points" -> "gui.settledlands.tip448.fld.max_points";
+            case "gui.settledlands.graph.points_range" -> "gui.settledlands.tip448.fld.points_range";
             default -> "";
         };
     }

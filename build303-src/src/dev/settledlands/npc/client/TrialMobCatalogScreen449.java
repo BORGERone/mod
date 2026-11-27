@@ -24,8 +24,9 @@ import net.minecraft.sounds.SoundEvents;
  */
 public final class TrialMobCatalogScreen449 extends Screen {
 
-    private static final int CELL_H = 74;
-    private static final int CELL_GAP = 6;
+    private static final int CELL_H = 46;
+    private static final int CELL_GAP = 3;
+    private static final int PREVIEW_H = 29;
 
     private final Screen parentScreen;
     private final int replaceRowIndex;
@@ -71,8 +72,8 @@ public final class TrialMobCatalogScreen449 extends Screen {
 
     @Override
     protected void init() {
-        panelW = Math.max(Math.min(width - 16, 680), Math.min(width - 8, 360));
-        panelH = Math.max(height - 16, Math.min(height - 8, 220));
+        panelW = Math.max(300, width - 8);
+        panelH = Math.max(190, height - 8);
         panelX = (width - panelW) / 2;
         panelY = (height - panelH) / 2;
 
@@ -80,27 +81,27 @@ public final class TrialMobCatalogScreen449 extends Screen {
             allMobs = TrialMobPreview449.collectAllMobs();
         }
 
-        int topY = panelY + 26;
-        int rightEdge = panelX + panelW - 10;
+        int topY = panelY + 18;
+        int rightEdge = panelX + panelW - 8;
 
         Component backLbl = Component.translatable("gui.settledlands.loot_pool.editor.back");
-        int backW = Math.max(54, font.width(backLbl.getString()) + 14);
+        int backW = Math.max(50, font.width(backLbl.getString()) + 12);
         addRenderableWidget(Button.builder(backLbl, b -> onClose())
-                .bounds(rightEdge - backW, panelY + 6, backW, 16)
+                .bounds(rightEdge - backW, panelY + 3, backW, 13)
                 .build());
 
-        int modeW = Math.max(106, Math.max(
+        int modeW = Math.max(96, Math.max(
                 font.width(filterLabelText(TrialMobPreview449.CAT_ALL)),
                 Math.max(
                         font.width(filterLabelText(TrialMobPreview449.CAT_HOSTILE)),
                         font.width(filterLabelText(TrialMobPreview449.CAT_FRIENDLY))))
-                + 14);
+                + 12);
         Component addIdLbl = Component.translatable("gui.settledlands.loot_pool.picker.add_id");
-        int idBtnW = Math.max(60, font.width(addIdLbl.getString()) + 14);
+        int idBtnW = Math.max(56, font.width(addIdLbl.getString()) + 12);
         int gap = 4;
-        int searchW = Math.max(90, panelW - 20 - modeW - idBtnW - gap * 2);
+        int searchW = Math.max(90, panelW - 16 - modeW - idBtnW - gap * 2);
 
-        searchBox = new EditBox(font, panelX + 10, topY, searchW, 18,
+        searchBox = new EditBox(font, panelX + 8, topY, searchW, 16,
                 Component.translatable("gui.settledlands.trial.cfg.search"));
         searchBox.setMaxLength(120);
         searchBox.setHint(Component.translatable("gui.settledlands.trial.mob_cat.search_hint"));
@@ -119,27 +120,27 @@ public final class TrialMobCatalogScreen449 extends Screen {
                     b.setMessage(Component.literal(filterLabelText(categoryFilter)));
                     refreshShown();
                 })
-                .bounds(panelX + 10 + searchW + gap, topY, modeW, 18)
+                .bounds(panelX + 8 + searchW + gap, topY, modeW, 16)
                 .tooltip(Tooltip.create(Component.translatable("gui.settledlands.trial.mob_cat.filter_tip")))
                 .build();
         addRenderableWidget(filterBtn);
 
         addByIdBtn = Button.builder(addIdLbl, b -> addTypedId())
-                .bounds(panelX + 10 + searchW + gap + modeW + gap, topY, idBtnW, 18)
+                .bounds(panelX + 8 + searchW + gap + modeW + gap, topY, idBtnW, 16)
                 .tooltip(Tooltip.create(Component.translatable("gui.settledlands.trial.mob_cat.add_id_tip")))
                 .build();
         addRenderableWidget(addByIdBtn);
 
-        gridX = panelX + 10;
-        gridY = panelY + 52;
-        int footerH = 26;
-        gridW = panelW - 28;
-        scrollTrackX = gridX + gridW + 6;
-        gridH = Math.max(CELL_H + 8, panelY + panelH - footerH - gridY);
+        gridX = panelX + 8;
+        gridY = panelY + 37;
+        int footerH = 14;
+        gridW = panelW - 22;
+        scrollTrackX = gridX + gridW + 4;
+        gridH = Math.max(CELL_H + 4, panelY + panelH - footerH - gridY);
 
-        cols = Math.max(2, Math.min(5, (gridW + CELL_GAP) / 114));
-        cellW = Math.max(78, (gridW - CELL_GAP * (cols - 1)) / cols);
-        visibleRows = Math.max(1, (gridH + CELL_GAP) / (CELL_H + CELL_GAP));
+        cols = Math.max(3, Math.min(12, (gridW + CELL_GAP) / 68));
+        cellW = Math.max(54, (gridW - CELL_GAP * (cols - 1)) / cols);
+        visibleRows = Math.max(2, (gridH + CELL_GAP) / (CELL_H + CELL_GAP));
 
         refreshShown();
     }
@@ -232,71 +233,81 @@ public final class TrialMobCatalogScreen449 extends Screen {
                 ? "gui.settledlands.trial.mob_cat.title_replace"
                 : "gui.settledlands.trial.mob_cat.title";
         String title = Component.translatable(titleKey, Integer.valueOf(shown.size())).getString();
-        graphics.drawString(font, title, panelX + 10, panelY + 9, 0xFFF2F5FA, false);
+        graphics.drawString(font, title, panelX + 8, panelY + 6, 0xFFF2F5FA, false);
 
         super.render(graphics, mouseX, mouseY, partialTick);
 
         // Background grid container
-        int containerH = Math.min(gridH, visibleRows * (CELL_H + CELL_GAP) - CELL_GAP + 6);
+        int containerH = Math.min(gridH, visibleRows * (CELL_H + CELL_GAP) - CELL_GAP + 4);
         graphics.fill(gridX - 2, gridY - 2, gridX + gridW + 2, gridY + containerH, 0x990D1118);
         graphics.renderOutline(gridX - 2, gridY - 2, gridW + 4, containerH + 2, 0xFF272F40);
 
         TrialMobPreview449.MobEntry hoveredEntry = null;
         int startIdx = scrollRow * cols;
-        int previewH = 44;
+        int previewH = PREVIEW_H;
 
-        for (int r = 0; r < visibleRows; r++) {
-            for (int c = 0; c < cols; c++) {
-                int idx = startIdx + r * cols + c;
-                if (idx >= shown.size()) break;
-                TrialMobPreview449.MobEntry entry = shown.get(idx);
+        graphics.enableScissor(gridX - 1, gridY - 1, gridX + gridW + 1, gridY + containerH);
+        try {
+            for (int r = 0; r < visibleRows; r++) {
+                for (int c = 0; c < cols; c++) {
+                    int idx = startIdx + r * cols + c;
+                    if (idx >= shown.size()) break;
+                    TrialMobPreview449.MobEntry entry = shown.get(idx);
 
-                int cx = gridX + c * (cellW + CELL_GAP);
-                int cy = gridY + r * (CELL_H + CELL_GAP);
-                if (cy + CELL_H > gridY + gridH + 2) break;
+                    int cx = gridX + c * (cellW + CELL_GAP);
+                    int cy = gridY + r * (CELL_H + CELL_GAP);
+                    if (cy + CELL_H > gridY + gridH + 2) break;
 
-                boolean over = mouseX >= cx && mouseX < cx + cellW && mouseY >= cy && mouseY < cy + CELL_H;
-                boolean inPool = existingIds.contains(entry.id);
-                if (over) hoveredEntry = entry;
+                    boolean over = mouseX >= cx && mouseX < cx + cellW
+                            && mouseY >= cy && mouseY < cy + CELL_H;
+                    boolean inPool = existingIds.contains(entry.id);
+                    if (over) hoveredEntry = entry;
 
-                int cardBg = over ? 0xFF242E3F : (inPool ? 0xFF17261E : 0xFF181D28);
-                int border = over ? accent : (inPool ? 0xFF4CA86B : 0xFF2B3445);
-                graphics.fill(cx, cy, cx + cellW, cy + CELL_H, cardBg);
-                graphics.renderOutline(cx, cy, cellW, CELL_H, border);
+                    int cardBg = over ? 0xFF242E3F : (inPool ? 0xFF17261E : 0xFF181D28);
+                    int border = over ? accent : (inPool ? 0xFF4CA86B : 0xFF2B3445);
+                    graphics.fill(cx, cy, cx + cellW, cy + CELL_H, cardBg);
+                    graphics.renderOutline(cx, cy, cellW, CELL_H, border);
 
-                // Podium behind the 3D mob preview
-                int px1 = cx + 2;
-                int py1 = cy + 2;
-                int px2 = cx + cellW - 2;
-                int py2 = cy + 2 + previewH;
-                graphics.fill(px1, py1, px2, py2, over ? 0xFF121822 : 0xFF0E121A);
-                graphics.fill(px1, py2 - 1, px2, py2, 0xFF252E3E);
+                    // Podium behind the 3D mob preview
+                    int px1 = cx + 2;
+                    int py1 = cy + 2;
+                    int px2 = cx + cellW - 2;
+                    int py2 = cy + 2 + previewH;
+                    graphics.fill(px1, py1, px2, py2, over ? 0xFF121822 : 0xFF0E121A);
+                    graphics.fill(px1, py2 - 1, px2, py2, 0xFF252E3E);
 
-                float lookX = over ? (float) mouseX : (float) ((px1 + px2) / 2 + 16);
-                float lookY = over ? (float) mouseY : (float) ((py1 + py2) / 2 - 4);
-                TrialMobPreview449.renderPreviewBox(
-                        graphics, font, entry.id, px1 + 2, py1 + 1, px2 - 2, py2 - 2, lookX, lookY);
+                    float lookX = over ? (float) mouseX : (float) ((px1 + px2) / 2 + 12);
+                    float lookY = over ? (float) mouseY : (float) ((py1 + py2) / 2 - 3);
+                    TrialMobPreview449.renderPreviewBox(
+                            graphics, font, entry.id, px1 + 1, py1 + 1, px2 - 1, py2 - 1, lookX, lookY);
 
-                // Category badge at top-right of podium
-                String catTxt = Component.translatable(
-                        TrialMobPreview449.categoryLabelKey(entry.categoryName)).getString();
-                int catCol = TrialMobPreview449.categoryBadgeColor(entry.categoryName);
-                int catW = font.width(catTxt) + 4;
-                graphics.fill(px2 - catW - 1, py1 + 1, px2 - 1, py1 + 10, 0xBB0A0D13);
-                graphics.drawString(font, catTxt, px2 - catW + 1, py1 + 2, catCol, false);
+                    // Category badge at top-right of podium (0.68x compact scale)
+                    String catTxt = Component.translatable(
+                            TrialMobPreview449.categoryLabelKey(entry.categoryName)).getString();
+                    int catCol = TrialMobPreview449.categoryBadgeColor(entry.categoryName);
+                    int catW = (int) Math.ceil(font.width(catTxt) * 0.68F) + 3;
+                    graphics.fill(px2 - catW - 1, py1 + 1, px2 - 1, py1 + 9, 0xBB0A0D13);
+                    drawScaledText(graphics, catTxt, px2 - catW + 1, py1 + 2, catCol, 0.68F);
 
-                if (inPool) {
-                    graphics.fill(px1 + 1, py1 + 1, px1 + 11, py1 + 11, 0xCC1E3B28);
-                    graphics.drawString(font, "\u2713", px1 + 3, py1 + 2, 0xFF7BE088, false);
+                    if (inPool) {
+                        graphics.fill(px1 + 1, py1 + 1, px1 + 9, py1 + 9, 0xCC1E3B28);
+                        drawScaledText(graphics, "\u2713", px1 + 2, py1 + 2, 0xFF7BE088, 0.68F);
+                    }
+
+                    // Compact name + id lines (0.75x / 0.65x scale)
+                    int textMaxW = Math.max(24, (int) ((cellW - 6) / 0.75F));
+                    int nameY = cy + previewH + 3;
+                    drawScaledText(graphics,
+                            TrialMobPreview449.clip(font, entry.displayName, textMaxW),
+                            cx + 3, nameY, 0xFFF2F5FA, 0.75F);
+                    int idMaxW = Math.max(24, (int) ((cellW - 6) / 0.65F));
+                    drawScaledText(graphics,
+                            TrialMobPreview449.clip(font, entry.id, idMaxW),
+                            cx + 3, nameY + 7, 0xFF8391A6, 0.65F);
                 }
-
-                // Name + namespace:id lines
-                int nameY = cy + previewH + 5;
-                graphics.drawString(font, TrialMobPreview449.clip(font, entry.displayName, cellW - 8),
-                        cx + 4, nameY, 0xFFF2F5FA, false);
-                graphics.drawString(font, TrialMobPreview449.clip(font, entry.id, cellW - 8),
-                        cx + 4, nameY + 11, 0xFF8391A6, false);
             }
+        } finally {
+            graphics.disableScissor();
         }
 
         if (shown.isEmpty()) {
@@ -317,23 +328,30 @@ public final class TrialMobCatalogScreen449 extends Screen {
         }
 
         // Bottom hint & status
-        int hintY = panelY + panelH - 18;
-        if (!statusText.isEmpty()) {
-            graphics.drawString(font, TrialMobPreview449.clip(font, statusText, panelW - 24),
-                    panelX + 10, hintY, statusColor, false);
-        } else {
-            graphics.drawString(font,
-                    TrialMobPreview449.clip(font,
-                            Component.translatable(replaceRowIndex >= 0
-                                    ? "gui.settledlands.trial.mob_cat.hint_replace"
-                                    : "gui.settledlands.trial.mob_cat.hint_multi").getString(),
-                            panelW - 24),
-                    panelX + 10, hintY, 0xFF8C97AB, false);
-        }
+        int hintY = panelY + panelH - 11;
+        String hintLine = !statusText.isEmpty()
+                ? statusText
+                : Component.translatable(replaceRowIndex >= 0
+                        ? "gui.settledlands.trial.mob_cat.hint_replace"
+                        : "gui.settledlands.trial.mob_cat.hint_multi").getString();
+        int hintMax = Math.max(80, (int) ((panelW - 18) / 0.80F));
+        drawScaledText(graphics,
+                TrialMobPreview449.clip(font, hintLine, hintMax),
+                panelX + 8, hintY, !statusText.isEmpty() ? statusColor : 0xFF8C97AB, 0.80F);
 
         if (hoveredEntry != null) {
             renderHoveredMobTip(graphics, hoveredEntry, mouseX, mouseY);
         }
+    }
+
+    private void drawScaledText(GuiGraphics graphics, String text, int x, int y, int color, float scale) {
+        if (text == null || text.isEmpty()) return;
+        var pose = graphics.pose();
+        pose.pushPose();
+        pose.translate((float) x, (float) y, 0.0F);
+        pose.scale(scale, scale, 1.0F);
+        graphics.drawString(font, text, 0, 0, color, false);
+        pose.popPose();
     }
 
     private void renderHoveredMobTip(GuiGraphics graphics, TrialMobPreview449.MobEntry e,

@@ -4,6 +4,7 @@ import dev.settledlands.chest.ChestLootNet436;
 import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.trial.RangeSpec450;
 import dev.settledlands.trial.TrialConfig446;
 import dev.settledlands.trial.TrialGraph446;
 import dev.settledlands.trial.TrialMobPool449;
@@ -40,6 +41,7 @@ public final class TrialModuleClient447 {
     public static final int FIELD_TIMING_MIN = 20;
     public static final int FIELD_TIMING_MAX = 21;
     public static final int FIELD_TIMING_CD = 22;
+    public static final int FIELD_TIMING_DELAY = 23;
 
     public static final int FIELD_OMINOUS_MULT = 30;
     public static final int FIELD_OMINOUS_INTERVAL = 31;
@@ -68,6 +70,26 @@ public final class TrialModuleClient447 {
         return true;
     }
 
+    public static Predicate<String> intRangeFilter() {
+        return raw -> RangeSpec450.isIntRangeInput(raw, false);
+    }
+
+    public static Predicate<String> floatRangeFilter() {
+        return RangeSpec450::isFloatRangeInput;
+    }
+
+    public static String rangeText(int val, String rangeText) {
+        return (rangeText != null && !rangeText.isBlank()) ? rangeText : Integer.toString(val);
+    }
+
+    public static String floatRangeText(float val, String rangeText) {
+        return (rangeText != null && !rangeText.isBlank()) ? rangeText : formatFloat(val);
+    }
+
+    public static String delayText(TrialModule447.TimingData d) {
+        if (d == null) return "20-40";
+        return RangeSpec450.formatInt(d.minSpawnDelayTicks, d.maxSpawnDelayTicks);
+    }
     public static Predicate<String> intFilter() {
         return raw -> {
             if (raw == null || raw.isEmpty()) return true;
@@ -239,37 +261,51 @@ public final class TrialModuleClient447 {
             switch (fieldId) {
                 case FIELD_RADIUS_ACT -> {
                     TrialModule447.RadiusData d = TrialModule447.readRadius(node);
-                    d.activationRange = parseInt(raw, d.activationRange, 1, 64);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.activationRange, d.activationRange, 1, 64);
+                    d.activationRange = r.min;
+                    d.activationRangeText = r.isRange() ? r.format() : "";
                     TrialModule447.writeRadius(node, d);
                 }
                 case FIELD_RADIUS_SPAWN -> {
                     TrialModule447.RadiusData d = TrialModule447.readRadius(node);
-                    d.spawnRange = parseInt(raw, d.spawnRange, 1, 16);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.spawnRange, d.spawnRange, 1, 16);
+                    d.spawnRange = r.min;
+                    d.spawnRangeText = r.isRange() ? r.format() : "";
                     TrialModule447.writeRadius(node, d);
                 }
                 case FIELD_WAVE_TOTAL -> {
                     TrialModule447.WaveData d = TrialModule447.readWave(node);
-                    d.totalMobs = parseInt(raw, d.totalMobs, 1, 256);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.totalMobs, d.totalMobs, 1, 256);
+                    d.totalMobs = r.min;
+                    d.totalMobsText = r.isRange() ? r.format() : "";
                     TrialModule447.writeWave(node, d);
                 }
                 case FIELD_WAVE_PER_PLAYER -> {
                     TrialModule447.WaveData d = TrialModule447.readWave(node);
-                    d.totalMobsAddedPerPlayer = parseInt(raw, d.totalMobsAddedPerPlayer, 0, 64);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.totalMobsAddedPerPlayer, d.totalMobsAddedPerPlayer, 0, 64);
+                    d.totalMobsAddedPerPlayer = r.min;
+                    d.totalMobsAddedPerPlayerText = r.isRange() ? r.format() : "";
                     TrialModule447.writeWave(node, d);
                 }
                 case FIELD_WAVE_SIM -> {
                     TrialModule447.WaveData d = TrialModule447.readWave(node);
-                    d.simultaneousMobs = parseInt(raw, d.simultaneousMobs, 1, 64);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.simultaneousMobs, d.simultaneousMobs, 1, 64);
+                    d.simultaneousMobs = r.min;
+                    d.simultaneousMobsText = r.isRange() ? r.format() : "";
                     TrialModule447.writeWave(node, d);
                 }
                 case FIELD_WAVE_SIM_PER_PLAYER -> {
                     TrialModule447.WaveData d = TrialModule447.readWave(node);
-                    d.simultaneousMobsAddedPerPlayer = parseInt(raw, d.simultaneousMobsAddedPerPlayer, 0, 32);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.simultaneousMobsAddedPerPlayer, d.simultaneousMobsAddedPerPlayer, 0, 32);
+                    d.simultaneousMobsAddedPerPlayer = r.min;
+                    d.simultaneousMobsAddedPerPlayerText = r.isRange() ? r.format() : "";
                     TrialModule447.writeWave(node, d);
                 }
                 case FIELD_WAVE_BATCH -> {
                     TrialModule447.WaveData d = TrialModule447.readWave(node);
-                    d.spawnBatchSize = parseInt(raw, d.spawnBatchSize, 1, 8);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.spawnBatchSize, d.spawnBatchSize, 1, 8);
+                    d.spawnBatchSize = r.min;
+                    d.spawnBatchSizeText = r.isRange() ? r.format() : "";
                     TrialModule447.writeWave(node, d);
                 }
                 case FIELD_TIMING_MIN -> {
@@ -285,44 +321,69 @@ public final class TrialModuleClient447 {
                     d.maxSpawnDelayTicks = parseInt(raw, d.maxSpawnDelayTicks, d.minSpawnDelayTicks, 12000);
                     TrialModule447.writeTiming(node, d);
                 }
+                case FIELD_TIMING_DELAY -> {
+                    TrialModule447.TimingData d = TrialModule447.readTiming(node);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(
+                            raw, d.minSpawnDelayTicks, d.maxSpawnDelayTicks, 1, 12000);
+                    d.minSpawnDelayTicks = r.min;
+                    d.maxSpawnDelayTicks = r.max;
+                    TrialModule447.writeTiming(node, d);
+                }
                 case FIELD_TIMING_CD -> {
                     TrialModule447.TimingData d = TrialModule447.readTiming(node);
-                    d.cooldownTicks = parseInt(raw, d.cooldownTicks, 0, 720000);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.cooldownTicks, d.cooldownTicks, 0, 720000);
+                    d.cooldownTicks = r.min;
+                    d.cooldownTicksText = r.isRange() ? r.format() : "";
                     TrialModule447.writeTiming(node, d);
                 }
                 case FIELD_OMINOUS_MULT -> {
                     TrialModule447.OminousData d = TrialModule447.readOminous(node);
-                    d.mobMultiplier = parseFloat(raw, d.mobMultiplier, 1.0f, 4.0f);
+                    RangeSpec450.FloatRange r = RangeSpec450.parseFloat(
+                            raw, d.mobMultiplier, d.mobMultiplier, 1.0f, 4.0f);
+                    d.mobMultiplier = r.min;
+                    d.mobMultiplierText = r.isRange() ? r.format() : "";
                     TrialModule447.writeOminous(node, d);
                 }
                 case FIELD_OMINOUS_INTERVAL -> {
                     TrialModule447.OminousData d = TrialModule447.readOminous(node);
-                    d.hazardIntervalTicks = parseInt(raw, d.hazardIntervalTicks, 20, 12000);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.hazardIntervalTicks, d.hazardIntervalTicks, 20, 12000);
+                    d.hazardIntervalTicks = r.min;
+                    d.hazardIntervalTicksText = r.isRange() ? r.format() : "";
                     TrialModule447.writeOminous(node, d);
                 }
                 case FIELD_PROTECT_RADIUS -> {
                     TrialModule447.ProtectData d = TrialModule447.readProtect(node);
-                    d.noBreakRadius = parseInt(raw, d.noBreakRadius, 1, 64);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.noBreakRadius, d.noBreakRadius, 1, 64);
+                    d.noBreakRadius = r.min;
+                    d.noBreakRadiusText = r.isRange() ? r.format() : "";
                     TrialModule447.writeProtect(node, d);
                 }
                 case FIELD_PROTECT_SECS -> {
                     TrialModule447.ProtectData d = TrialModule447.readProtect(node);
-                    d.noBreakSeconds = parseInt(raw, d.noBreakSeconds, 1, 600);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.noBreakSeconds, d.noBreakSeconds, 1, 600);
+                    d.noBreakSeconds = r.min;
+                    d.noBreakSecondsText = r.isRange() ? r.format() : "";
                     TrialModule447.writeProtect(node, d);
                 }
                 case FIELD_PROTECT_AMP -> {
                     TrialModule447.ProtectData d = TrialModule447.readProtect(node);
-                    d.noBreakAmplifier = parseInt(raw, d.noBreakAmplifier, 0, 3);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.noBreakAmplifier, d.noBreakAmplifier, 0, 3);
+                    d.noBreakAmplifier = r.min;
+                    d.noBreakAmplifierText = r.isRange() ? r.format() : "";
                     TrialModule447.writeProtect(node, d);
                 }
                 case FIELD_PROTECT_WAVES -> {
                     TrialModule447.ProtectData d = TrialModule447.readProtect(node);
-                    d.selfDestructAfterWaves = parseInt(raw, d.selfDestructAfterWaves, 1, 100);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.selfDestructAfterWaves, d.selfDestructAfterWaves, 1, 100);
+                    d.selfDestructAfterWaves = r.min;
+                    d.selfDestructAfterWavesText = r.isRange() ? r.format() : "";
                     TrialModule447.writeProtect(node, d);
                 }
                 case FIELD_PROTECT_CHANCE -> {
                     TrialModule447.ProtectData d = TrialModule447.readProtect(node);
-                    d.selfDestructChancePercent = parseInt(raw, d.selfDestructChancePercent, 0, 100);
+                    RangeSpec450.IntRange r = RangeSpec450.parseInt(raw, d.selfDestructChancePercent, d.selfDestructChancePercent, 0, 100);
+                    d.selfDestructChancePercent = r.min;
+                    d.selfDestructChancePercentText = r.isRange() ? r.format() : "";
                     TrialModule447.writeProtect(node, d);
                 }
                 default -> {
@@ -427,7 +488,7 @@ public final class TrialModuleClient447 {
         int shown = Math.min(4, mobs.size());
         for (int i = 0; i < shown; i++) {
             TrialConfig446.SpawnEntry e = mobs.get(i);
-            lines.add("• " + TrialMobPreview449.displayName(e.entityId) + " (w=" + e.weight + ")");
+            lines.add("• " + TrialMobPreview449.displayName(e.entityId) + " (w=" + e.displayWeight() + ")");
         }
         if (mobs.size() > shown) {
             lines.add(Component.translatable("gui.settledlands.trial.mod.more_entries",
@@ -494,8 +555,9 @@ public final class TrialModuleClient447 {
         int shown = Math.min(4, rewards.size());
         for (int i = 0; i < shown; i++) {
             TrialConfig446.RewardEntry r = rewards.get(i);
+            String cnt = RangeSpec450.formatInt(r.minCount, r.maxCount);
             lines.add("• " + TrialGraphClient446.shortId(r.itemId)
-                    + " x" + r.minCount + "-" + r.maxCount + " (" + r.chancePercent + "%)");
+                    + " x" + cnt + " (" + r.displayChance() + "%)");
         }
         if (rewards.size() > shown) {
             lines.add(Component.translatable("gui.settledlands.trial.mod.more_entries",
@@ -576,7 +638,10 @@ public final class TrialModuleClient447 {
             if (node == null || raw == null || raw.isBlank()) return;
             List<TrialConfig446.SpawnEntry> mobs = TrialModule447.readMobs(node);
             if (row < 0 || row >= mobs.size()) return;
-            mobs.get(row).weight = parseInt(raw, mobs.get(row).weight, 1, 10000);
+            TrialConfig446.SpawnEntry entry = mobs.get(row);
+            RangeSpec450.IntRange rr = RangeSpec450.parseInt(raw, entry.weight, entry.weight, 1, 100000);
+            entry.weight = rr.min;
+            entry.weightRange = rr.isRange() ? rr.format() : "";
             TrialModule447.writeMobs(node, mobs);
             if (graph != null) TrialModule447.syncCardConfig(graph);
         };
@@ -620,13 +685,26 @@ public final class TrialModuleClient447 {
             if (row < 0 || row >= rewards.size()) return;
             TrialConfig446.RewardEntry r = rewards.get(row);
             switch (which) {
-                case 0 -> r.weight = parseInt(raw, r.weight, 1, 10000);
+                case 0 -> {
+                    RangeSpec450.IntRange rr = RangeSpec450.parseInt(raw, r.weight, r.weight, 1, 100000);
+                    r.weight = rr.min;
+                    r.weightRange = rr.isRange() ? rr.format() : "";
+                }
                 case 1 -> {
-                    r.minCount = parseInt(raw, r.minCount, 1, 64);
-                    if (r.maxCount < r.minCount) r.maxCount = r.minCount;
+                    RangeSpec450.IntRange rr = RangeSpec450.parseInt(raw, r.minCount, r.maxCount, 1, 64);
+                    r.minCount = rr.min;
+                    if (rr.isRange()) {
+                        r.maxCount = rr.max;
+                    } else if (r.maxCount < r.minCount) {
+                        r.maxCount = r.minCount;
+                    }
                 }
                 case 2 -> r.maxCount = parseInt(raw, r.maxCount, r.minCount, 64);
-                case 3 -> r.chancePercent = parseInt(raw, r.chancePercent, 0, 100);
+                case 3 -> {
+                    RangeSpec450.IntRange rr = RangeSpec450.parseInt(raw, r.chancePercent, r.chancePercent, 0, 100);
+                    r.chancePercent = rr.min;
+                    r.chanceRange = rr.isRange() ? rr.format() : "";
+                }
                 default -> {
                 }
             }

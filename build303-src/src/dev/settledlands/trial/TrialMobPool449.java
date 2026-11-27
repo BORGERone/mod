@@ -154,15 +154,15 @@ public final class TrialMobPool449 {
             if (idPart.isEmpty() || idPart.indexOf(' ') >= 0) continue;
             String normId = TrialConfig446.normalizeId(idPart);
             if (normId == null || !normId.contains(":")) continue;
-            int w;
-            if (weightPart == null || weightPart.isEmpty()) {
-                w = 1;
-            } else {
-                Integer parsedW = parseWeightInput(weightPart);
-                if (parsedW == null || parsedW <= 0) continue;
-                w = parsedW;
+            int w = 1;
+            String wr = "";
+            if (weightPart != null && !weightPart.isEmpty()) {
+                RangeSpec450.IntRange rr = parseWeightRangeInput(weightPart);
+                if (rr == null || rr.max <= 0) continue;
+                w = rr.min;
+                if (rr.isRange()) wr = rr.format();
             }
-            out.add(new TrialConfig446.SpawnEntry(normId, w));
+            out.add(new TrialConfig446.SpawnEntry(normId, w, wr));
         }
         return out;
     }
@@ -170,15 +170,14 @@ public final class TrialMobPool449 {
     public static String formatPoolFile(String fileName, List<TrialConfig446.SpawnEntry> entries) {
         StringBuilder sb = new StringBuilder();
         sb.append("# SettledLands Mob Pool: ").append(fileName == null ? "" : fileName).append('\n');
-        sb.append("# Format: entity_id | weight\n");
+        sb.append("# Format: entity_id | weight_or_range\n");
         if (entries != null) {
             int count = 0;
             for (TrialConfig446.SpawnEntry e : entries) {
                 if (e == null || count >= MAX_ENTRIES) continue;
                 String id = TrialConfig446.normalizeId(e.entityId);
                 if (id == null || !id.contains(":")) continue;
-                int w = clampWeight(e.weight);
-                sb.append(id).append(" | ").append(w).append('\n');
+                sb.append(id).append(" | ").append(formatWeightToken(e)).append('\n');
                 count++;
             }
         }
@@ -194,7 +193,7 @@ public final class TrialMobPool449 {
             String id = TrialConfig446.normalizeId(e.entityId);
             if (id == null || !id.contains(":")) continue;
             if (sb.length() > 0) sb.append('\n');
-            sb.append(id).append('|').append(clampWeight(e.weight));
+            sb.append(id).append('|').append(formatWeightToken(e));
             count++;
         }
         return sb.toString();
@@ -209,8 +208,12 @@ public final class TrialMobPool449 {
             String[] p = row.split("\\|", -1);
             String id = p.length >= 1 ? TrialConfig446.normalizeId(p[0]) : null;
             if (id == null || !id.contains(":")) continue;
-            int w = p.length >= 2 ? parseWeight(p[1], 1) : 1;
-            out.add(new TrialConfig446.SpawnEntry(id, w));
+            RangeSpec450.IntRange rr = p.length >= 2 ? parseWeightRangeInput(p[1]) : null;
+            if (rr != null) {
+                out.add(new TrialConfig446.SpawnEntry(id, rr.min, rr.isRange() ? rr.format() : ""));
+            } else {
+                out.add(new TrialConfig446.SpawnEntry(id, parseWeight(p.length >= 2 ? p[1] : "", 1)));
+            }
         }
         return out;
     }
@@ -220,16 +223,23 @@ public final class TrialMobPool449 {
     public static double[] computeEffectiveChancesPct(List<TrialConfig446.SpawnEntry> entries) {
         if (entries == null || entries.isEmpty()) return new double[0];
         double[] out = new double[entries.size()];
+        double[] eff = new double[entries.size()];
         double total = 0.0D;
         for (int i = 0; i < entries.size(); i++) {
             TrialConfig446.SpawnEntry e = entries.get(i);
-            if (e != null && e.weight > 0) total += e.weight;
+            if (e == null || e.weight <= 0) continue;
+            double w = e.weight;
+            if (e.weightRange != null && !e.weightRange.isBlank()) {
+                RangeSpec450.IntRange rr = parseWeightRangeInput(e.weightRange);
+                if (rr != null) w = (rr.min + rr.max) * 0.5D;
+            }
+            eff[i] = w;
+            total += w;
         }
         if (total <= 0.0D) return out;
         for (int i = 0; i < entries.size(); i++) {
-            TrialConfig446.SpawnEntry e = entries.get(i);
-            if (e != null && e.weight > 0) {
-                out[i] = (e.weight / total) * 100.0D;
+            if (eff[i] > 0.0D) {
+                out[i] = (eff[i] / total) * 100.0D;
             }
         }
         return out;
@@ -247,6 +257,10 @@ public final class TrialMobPool449 {
             String id = TrialConfig446.normalizeId(e.entityId);
             if (id == null) continue;
             int w = clampWeight(e.weight);
+            if (e.weightRange != null && !e.weightRange.isBlank()) {
+                RangeSpec450.IntRange rr = parseWeightRangeInput(e.weightRange);
+                if (rr != null) w = rr.pick(rnd);
+            }
             valid.add(new TrialConfig446.SpawnEntry(id, w));
             totalW += w;
         }
@@ -272,6 +286,26 @@ public final class TrialMobPool449 {
             out.add(new WavePick(en.getKey(), en.getValue()));
         }
         return out;
+    }
+
+    private static String formatWeightToken(TrialConfig446.SpawnEntry e) {
+        if (e.weightRange != null && !e.weightRange.isBlank()) {
+            RangeSpec450.IntRange rr = parseWeightRangeInput(e.weightRange);
+            if (rr != null && rr.isRange()) return rr.format();
+        }
+        return Integer.toString(clampWeight(e.weight));
+    }
+
+    public static RangeSpec450.IntRange parseWeightRangeInput(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        if (!RangeSpec450.hasRangeSeparator(raw)) {
+            Integer single = parseWeightInput(raw);
+            return single == null ? null : new RangeSpec450.IntRange(single, single);
+        }
+        RangeSpec450.IntRange rawUnclamped = RangeSpec450.tryParseInt(raw, 0, MAX_WEIGHT);
+        if (rawUnclamped == null || rawUnclamped.max <= 0) return null;
+        return new RangeSpec450.IntRange(
+                clampWeight(rawUnclamped.min), clampWeight(rawUnclamped.max));
     }
 
     public static Integer parseWeightInput(String raw) {

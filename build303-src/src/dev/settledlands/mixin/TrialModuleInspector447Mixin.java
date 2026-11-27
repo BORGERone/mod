@@ -153,9 +153,9 @@ public abstract class TrialModuleInspector447Mixin {
             int fieldId, int x, int y, int width) {
         label(labelKey, x, y);
         y += 11;
-        EditBox box = textBox(value, 10, x, y, width, 18,
+        EditBox box = textBox(value, 16, x, y, width, 18,
                 TrialModuleClient447.scalarSetter(graph, node, fieldId));
-        box.setFilter(TrialModuleClient447.intFilter());
+        box.setFilter(TrialModuleClient447.intRangeFilter());
         return y + 22;
     }
 
@@ -172,37 +172,41 @@ public abstract class TrialModuleInspector447Mixin {
     private int settledlands$buildRadiusRows447(NpcDialogueGraph.Node node, int x, int y, int width) {
         TrialModule447.RadiusData d = TrialModule447.readRadius(node);
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.act_range",
-                Integer.toString(d.activationRange), TrialModuleClient447.FIELD_RADIUS_ACT, x, y, width);
+                TrialModuleClient447.rangeText(d.activationRange, d.activationRangeText),
+                TrialModuleClient447.FIELD_RADIUS_ACT, x, y, width);
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.spawn_range",
-                Integer.toString(d.spawnRange), TrialModuleClient447.FIELD_RADIUS_SPAWN, x, y, width);
+                TrialModuleClient447.rangeText(d.spawnRange, d.spawnRangeText),
+                TrialModuleClient447.FIELD_RADIUS_SPAWN, x, y, width);
         return y;
     }
 
     private int settledlands$buildWaveRows447(NpcDialogueGraph.Node node, int x, int y, int width) {
         TrialModule447.WaveData d = TrialModule447.readWave(node);
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.total_mobs",
-                Integer.toString(d.totalMobs), TrialModuleClient447.FIELD_WAVE_TOTAL, x, y, width);
+                TrialModuleClient447.rangeText(d.totalMobs, d.totalMobsText),
+                TrialModuleClient447.FIELD_WAVE_TOTAL, x, y, width);
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.per_player_total",
-                Integer.toString(d.totalMobsAddedPerPlayer),
+                TrialModuleClient447.rangeText(d.totalMobsAddedPerPlayer, d.totalMobsAddedPerPlayerText),
                 TrialModuleClient447.FIELD_WAVE_PER_PLAYER, x, y, width);
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.sim_mobs",
-                Integer.toString(d.simultaneousMobs), TrialModuleClient447.FIELD_WAVE_SIM, x, y, width);
+                TrialModuleClient447.rangeText(d.simultaneousMobs, d.simultaneousMobsText),
+                TrialModuleClient447.FIELD_WAVE_SIM, x, y, width);
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.per_player_sim",
-                Integer.toString(d.simultaneousMobsAddedPerPlayer),
+                TrialModuleClient447.rangeText(d.simultaneousMobsAddedPerPlayer, d.simultaneousMobsAddedPerPlayerText),
                 TrialModuleClient447.FIELD_WAVE_SIM_PER_PLAYER, x, y, width);
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.batch",
-                Integer.toString(d.spawnBatchSize), TrialModuleClient447.FIELD_WAVE_BATCH, x, y, width);
+                TrialModuleClient447.rangeText(d.spawnBatchSize, d.spawnBatchSizeText),
+                TrialModuleClient447.FIELD_WAVE_BATCH, x, y, width);
         return y;
     }
 
     private int settledlands$buildTimingRows447(NpcDialogueGraph.Node node, int x, int y, int width) {
         TrialModule447.TimingData d = TrialModule447.readTiming(node);
-        y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.min_delay",
-                Integer.toString(d.minSpawnDelayTicks), TrialModuleClient447.FIELD_TIMING_MIN, x, y, width);
-        y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.max_delay",
-                Integer.toString(d.maxSpawnDelayTicks), TrialModuleClient447.FIELD_TIMING_MAX, x, y, width);
+        y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.delay",
+                TrialModuleClient447.delayText(d), TrialModuleClient447.FIELD_TIMING_DELAY, x, y, width);
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.cooldown",
-                Integer.toString(d.cooldownTicks), TrialModuleClient447.FIELD_TIMING_CD, x, y, width);
+                TrialModuleClient447.rangeText(d.cooldownTicks, d.cooldownTicksText),
+                TrialModuleClient447.FIELD_TIMING_CD, x, y, width);
         return y;
     }
 
@@ -285,10 +289,11 @@ public abstract class TrialModuleInspector447Mixin {
         TrialModule447.OminousData d = TrialModule447.readOminous(node);
         label("gui.settledlands.trial.cfg.ominous_mult", x, y);
         y += 11;
-        EditBox multBox = textBox(TrialModuleClient447.formatFloat(d.mobMultiplier), 8,
+        EditBox multBox = textBox(
+                TrialModuleClient447.floatRangeText(d.mobMultiplier, d.mobMultiplierText), 16,
                 x, y, width, 18,
                 TrialModuleClient447.scalarSetter(graph, node, TrialModuleClient447.FIELD_OMINOUS_MULT));
-        multBox.setFilter(TrialModuleClient447.floatFilter());
+        multBox.setFilter(TrialModuleClient447.floatRangeFilter());
         y += 22;
 
         button(TrialModuleClient447.ominousToggleLabel(node, 0), x, y, width, 18,
@@ -298,7 +303,7 @@ public abstract class TrialModuleInspector447Mixin {
                 TrialModuleClient447.toggleOminousAction(screen, graph, node, 1));
         y += 22;
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.ominous_interval",
-                Integer.toString(d.hazardIntervalTicks),
+                TrialModuleClient447.rangeText(d.hazardIntervalTicks, d.hazardIntervalTicksText),
                 TrialModuleClient447.FIELD_OMINOUS_INTERVAL, x, y, width);
         button(TrialModuleClient447.ominousToggleLabel(node, 2), x, y, width, 18,
                 TrialModuleClient447.toggleOminousAction(screen, graph, node, 2));
@@ -312,19 +317,22 @@ public abstract class TrialModuleInspector447Mixin {
                 TrialModuleClient447.toggleProtectAction(screen, graph, node, 0));
         y += 22;
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.nobreak_r",
-                Integer.toString(d.noBreakRadius), TrialModuleClient447.FIELD_PROTECT_RADIUS, x, y, width);
+                TrialModuleClient447.rangeText(d.noBreakRadius, d.noBreakRadiusText),
+                TrialModuleClient447.FIELD_PROTECT_RADIUS, x, y, width);
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.nobreak_s",
-                Integer.toString(d.noBreakSeconds), TrialModuleClient447.FIELD_PROTECT_SECS, x, y, width);
+                TrialModuleClient447.rangeText(d.noBreakSeconds, d.noBreakSecondsText),
+                TrialModuleClient447.FIELD_PROTECT_SECS, x, y, width);
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.nobreak_amp",
-                Integer.toString(d.noBreakAmplifier), TrialModuleClient447.FIELD_PROTECT_AMP, x, y, width);
+                TrialModuleClient447.rangeText(d.noBreakAmplifier, d.noBreakAmplifierText),
+                TrialModuleClient447.FIELD_PROTECT_AMP, x, y, width);
         button(TrialModuleClient447.protectToggleLabel(node, 1), x, y, width, 18,
                 TrialModuleClient447.toggleProtectAction(screen, graph, node, 1));
         y += 22;
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.destruct_waves",
-                Integer.toString(d.selfDestructAfterWaves),
+                TrialModuleClient447.rangeText(d.selfDestructAfterWaves, d.selfDestructAfterWavesText),
                 TrialModuleClient447.FIELD_PROTECT_WAVES, x, y, width);
         y = settledlands$intRow447(node, "gui.settledlands.trial.cfg.destruct_chance",
-                Integer.toString(d.selfDestructChancePercent),
+                TrialModuleClient447.rangeText(d.selfDestructChancePercent, d.selfDestructChancePercentText),
                 TrialModuleClient447.FIELD_PROTECT_CHANCE, x, y, width);
         return y;
     }

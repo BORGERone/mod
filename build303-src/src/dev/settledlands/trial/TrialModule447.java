@@ -171,6 +171,8 @@ public final class TrialModule447 {
     public static final class RadiusData {
         public int activationRange = 14;
         public int spawnRange = 4;
+        public String activationRangeText = "";
+        public String spawnRangeText = "";
     }
 
     public static final class WaveData {
@@ -179,12 +181,18 @@ public final class TrialModule447 {
         public int simultaneousMobs = 2;
         public int simultaneousMobsAddedPerPlayer = 1;
         public int spawnBatchSize = 1;
+        public String totalMobsText = "";
+        public String totalMobsAddedPerPlayerText = "";
+        public String simultaneousMobsText = "";
+        public String simultaneousMobsAddedPerPlayerText = "";
+        public String spawnBatchSizeText = "";
     }
 
     public static final class TimingData {
         public int minSpawnDelayTicks = 20;
         public int maxSpawnDelayTicks = 40;
         public int cooldownTicks = 36000;
+        public String cooldownTicksText = "";
     }
 
     public static final class OminousData {
@@ -193,6 +201,8 @@ public final class TrialModule447 {
         public boolean hazards = true;
         public int hazardIntervalTicks = 160;
         public boolean keyConversion = true;
+        public String mobMultiplierText = "";
+        public String hazardIntervalTicksText = "";
     }
 
     public static final class ProtectData {
@@ -203,6 +213,11 @@ public final class TrialModule447 {
         public boolean selfDestruct = false;
         public int selfDestructAfterWaves = 3;
         public int selfDestructChancePercent = 25;
+        public String noBreakRadiusText = "";
+        public String noBreakSecondsText = "";
+        public String noBreakAmplifierText = "";
+        public String selfDestructAfterWavesText = "";
+        public String selfDestructChancePercentText = "";
     }
 
     private static String payloadOf(NpcDialogueGraph.Node node, int expectedSlot) {
@@ -234,8 +249,16 @@ public final class TrialModule447 {
     public static RadiusData readRadius(NpcDialogueGraph.Node node) {
         RadiusData d = new RadiusData();
         String[] p = splitPipes(payloadOf(node, SLOT_RADIUS));
-        if (p.length >= 1) d.activationRange = clamp(parseInt(p[0], d.activationRange), 1, 64);
-        if (p.length >= 2) d.spawnRange = clamp(parseInt(p[1], d.spawnRange), 1, 16);
+        if (p.length >= 1) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[0], d.activationRange, d.activationRange, 1, 64);
+            d.activationRange = r.min;
+            d.activationRangeText = r.isRange() ? r.format() : "";
+        }
+        if (p.length >= 2) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[1], d.spawnRange, d.spawnRange, 1, 16);
+            d.spawnRange = r.min;
+            d.spawnRangeText = r.isRange() ? r.format() : "";
+        }
         return d;
     }
 
@@ -243,18 +266,38 @@ public final class TrialModule447 {
         if (node == null) return;
         RadiusData v = d == null ? new RadiusData() : d;
         node.action = PREFIX + "radius:"
-                + clamp(v.activationRange, 1, 64) + "|"
-                + clamp(v.spawnRange, 1, 16);
+                + intTok(v.activationRange, v.activationRangeText, 1, 64) + "|"
+                + intTok(v.spawnRange, v.spawnRangeText, 1, 16);
     }
 
     public static WaveData readWave(NpcDialogueGraph.Node node) {
         WaveData d = new WaveData();
         String[] p = splitPipes(payloadOf(node, SLOT_WAVE));
-        if (p.length >= 1) d.totalMobs = clamp(parseInt(p[0], d.totalMobs), 1, 256);
-        if (p.length >= 2) d.totalMobsAddedPerPlayer = clamp(parseInt(p[1], d.totalMobsAddedPerPlayer), 0, 64);
-        if (p.length >= 3) d.simultaneousMobs = clamp(parseInt(p[2], d.simultaneousMobs), 1, 64);
-        if (p.length >= 4) d.simultaneousMobsAddedPerPlayer = clamp(parseInt(p[3], d.simultaneousMobsAddedPerPlayer), 0, 32);
-        if (p.length >= 5) d.spawnBatchSize = clamp(parseInt(p[4], d.spawnBatchSize), 1, 8);
+        if (p.length >= 1) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[0], d.totalMobs, d.totalMobs, 1, 256);
+            d.totalMobs = r.min;
+            d.totalMobsText = r.isRange() ? r.format() : "";
+        }
+        if (p.length >= 2) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[1], d.totalMobsAddedPerPlayer, d.totalMobsAddedPerPlayer, 0, 64);
+            d.totalMobsAddedPerPlayer = r.min;
+            d.totalMobsAddedPerPlayerText = r.isRange() ? r.format() : "";
+        }
+        if (p.length >= 3) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[2], d.simultaneousMobs, d.simultaneousMobs, 1, 64);
+            d.simultaneousMobs = r.min;
+            d.simultaneousMobsText = r.isRange() ? r.format() : "";
+        }
+        if (p.length >= 4) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[3], d.simultaneousMobsAddedPerPlayer, d.simultaneousMobsAddedPerPlayer, 0, 32);
+            d.simultaneousMobsAddedPerPlayer = r.min;
+            d.simultaneousMobsAddedPerPlayerText = r.isRange() ? r.format() : "";
+        }
+        if (p.length >= 5) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[4], d.spawnBatchSize, d.spawnBatchSize, 1, 8);
+            d.spawnBatchSize = r.min;
+            d.spawnBatchSizeText = r.isRange() ? r.format() : "";
+        }
         return d;
     }
 
@@ -262,11 +305,11 @@ public final class TrialModule447 {
         if (node == null) return;
         WaveData v = d == null ? new WaveData() : d;
         node.action = PREFIX + "wave:"
-                + clamp(v.totalMobs, 1, 256) + "|"
-                + clamp(v.totalMobsAddedPerPlayer, 0, 64) + "|"
-                + clamp(v.simultaneousMobs, 1, 64) + "|"
-                + clamp(v.simultaneousMobsAddedPerPlayer, 0, 32) + "|"
-                + clamp(v.spawnBatchSize, 1, 8);
+                + intTok(v.totalMobs, v.totalMobsText, 1, 256) + "|"
+                + intTok(v.totalMobsAddedPerPlayer, v.totalMobsAddedPerPlayerText, 0, 64) + "|"
+                + intTok(v.simultaneousMobs, v.simultaneousMobsText, 1, 64) + "|"
+                + intTok(v.simultaneousMobsAddedPerPlayer, v.simultaneousMobsAddedPerPlayerText, 0, 32) + "|"
+                + intTok(v.spawnBatchSize, v.spawnBatchSizeText, 1, 8);
     }
 
     public static TimingData readTiming(NpcDialogueGraph.Node node) {
@@ -274,7 +317,11 @@ public final class TrialModule447 {
         String[] p = splitPipes(payloadOf(node, SLOT_TIMING));
         if (p.length >= 1) d.minSpawnDelayTicks = clamp(parseInt(p[0], d.minSpawnDelayTicks), 1, 12000);
         if (p.length >= 2) d.maxSpawnDelayTicks = clamp(parseInt(p[1], d.maxSpawnDelayTicks), d.minSpawnDelayTicks, 12000);
-        if (p.length >= 3) d.cooldownTicks = clamp(parseInt(p[2], d.cooldownTicks), 0, 720000);
+        if (p.length >= 3) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[2], d.cooldownTicks, d.cooldownTicks, 0, 720000);
+            d.cooldownTicks = r.min;
+            d.cooldownTicksText = r.isRange() ? r.format() : "";
+        }
         if (d.maxSpawnDelayTicks < d.minSpawnDelayTicks) d.maxSpawnDelayTicks = d.minSpawnDelayTicks;
         return d;
     }
@@ -284,8 +331,8 @@ public final class TrialModule447 {
         TimingData v = d == null ? new TimingData() : d;
         int minD = clamp(v.minSpawnDelayTicks, 1, 12000);
         int maxD = clamp(v.maxSpawnDelayTicks, minD, 12000);
-        int cd = clamp(v.cooldownTicks, 0, 720000);
-        node.action = PREFIX + "timing:" + minD + "|" + maxD + "|" + cd;
+        String cdTok = intTok(v.cooldownTicks, v.cooldownTicksText, 0, 720000);
+        node.action = PREFIX + "timing:" + minD + "|" + maxD + "|" + cdTok;
     }
 
     public static String mobPoolFile(NpcDialogueGraph.Node node) {
@@ -318,10 +365,11 @@ public final class TrialModule447 {
                 if (row.isEmpty()) continue;
                 int star = row.indexOf('*');
                 String eid = star >= 0 ? row.substring(0, star) : row;
-                int w = star >= 0 ? parseInt(row.substring(star + 1), 1) : 1;
+                String wTok = star >= 0 ? row.substring(star + 1) : "1";
+                RangeSpec450.IntRange wr = RangeSpec450.parseInt(wTok, 1, 1, 1, 100000);
                 String norm = TrialConfig446.normalizeId(eid);
                 if (norm != null) {
-                    out.add(new TrialConfig446.SpawnEntry(norm, clamp(w, 1, 100000)));
+                    out.add(new TrialConfig446.SpawnEntry(norm, wr.min, wr.isRange() ? wr.format() : ""));
                 }
             }
         }
@@ -343,7 +391,16 @@ public final class TrialModule447 {
                 TrialConfig446.SpawnEntry e = mobs.get(i);
                 if (e == null) continue;
                 String id = TrialConfig446.normalizeId(e.entityId);
-                if (id != null) clean.add(new TrialConfig446.SpawnEntry(id, clamp(e.weight, 1, 100000)));
+                if (id != null) {
+                    String wr = "";
+                    int w = clamp(e.weight, 1, 100000);
+                    if (RangeSpec450.hasRangeSeparator(e.weightRange)) {
+                        RangeSpec450.IntRange rr = RangeSpec450.parseInt(e.weightRange, w, w, 1, 100000);
+                        w = rr.min;
+                        if (rr.isRange()) wr = rr.format();
+                    }
+                    clean.add(new TrialConfig446.SpawnEntry(id, w, wr));
+                }
             }
         }
         if (clean.isEmpty()) clean = TrialConfig446.defaultMobs();
@@ -356,7 +413,7 @@ public final class TrialModule447 {
         for (int i = 0; i < clean.size(); i++) {
             if (i > 0) sb.append(';');
             TrialConfig446.SpawnEntry e = clean.get(i);
-            sb.append(e.entityId).append('*').append(e.weight);
+            sb.append(e.entityId).append('*').append(e.displayWeight());
         }
         node.action = sb.toString();
     }
@@ -396,11 +453,16 @@ public final class TrialModule447 {
             String[] p = row.split("\\*", -1);
             String id = p.length >= 1 ? TrialConfig446.normalizeId(p[0]) : null;
             if (id == null) continue;
-            int w = p.length >= 2 ? clamp(parseInt(p[1], 1), 1, 100000) : 1;
+            RangeSpec450.IntRange wr = p.length >= 2
+                    ? RangeSpec450.parseInt(p[1], 1, 1, 1, 100000)
+                    : new RangeSpec450.IntRange(1, 1);
             int minC = p.length >= 3 ? clamp(parseInt(p[2], 1), 1, 64) : 1;
             int maxC = p.length >= 4 ? clamp(parseInt(p[3], minC), minC, 64) : minC;
-            int chance = p.length >= 5 ? clamp(parseInt(p[4], 100), 0, 100) : 100;
-            out.add(new TrialConfig446.RewardEntry(id, w, minC, maxC, chance));
+            RangeSpec450.IntRange cr = p.length >= 5
+                    ? RangeSpec450.parseInt(p[4], 100, 100, 0, 100)
+                    : new RangeSpec450.IntRange(100, 100);
+            out.add(new TrialConfig446.RewardEntry(id, wr.min, minC, maxC, cr.min,
+                    wr.isRange() ? wr.format() : "", cr.isRange() ? cr.format() : ""));
         }
         return out;
     }
@@ -428,11 +490,11 @@ public final class TrialModule447 {
                 if (id == null) continue;
                 int minC = clamp(r.minCount, 1, 64);
                 int maxC = clamp(r.maxCount, minC, 64);
-                int w = clamp(r.weight, 1, 100000);
-                int ch = clamp(r.chancePercent, 0, 100);
+                String wTok = intTok(r.weight, r.weightRange, 1, 100000);
+                String cTok = intTok(r.chancePercent, r.chanceRange, 0, 100);
                 if (count > 0) sb.append(';');
-                sb.append(id).append('*').append(w).append('*')
-                        .append(minC).append('*').append(maxC).append('*').append(ch);
+                sb.append(id).append('*').append(wTok).append('*')
+                        .append(minC).append('*').append(maxC).append('*').append(cTok);
                 count++;
             }
         }
@@ -510,10 +572,18 @@ public final class TrialModule447 {
     public static OminousData readOminous(NpcDialogueGraph.Node node) {
         OminousData d = new OminousData();
         String[] p = splitPipes(payloadOf(node, SLOT_OMINOUS));
-        if (p.length >= 1) d.mobMultiplier = clampFloat(parseFloat(p[0], d.mobMultiplier), 1.0f, 4.0f);
+        if (p.length >= 1) {
+            RangeSpec450.FloatRange fr = RangeSpec450.parseFloat(p[0], d.mobMultiplier, d.mobMultiplier, 1.0f, 4.0f);
+            d.mobMultiplier = fr.min;
+            d.mobMultiplierText = fr.isRange() ? fr.format() : "";
+        }
         if (p.length >= 2) d.equipment = parseBool(p[1], d.equipment);
         if (p.length >= 3) d.hazards = parseBool(p[2], d.hazards);
-        if (p.length >= 4) d.hazardIntervalTicks = clamp(parseInt(p[3], d.hazardIntervalTicks), 20, 12000);
+        if (p.length >= 4) {
+            RangeSpec450.IntRange ir = RangeSpec450.parseInt(p[3], d.hazardIntervalTicks, d.hazardIntervalTicks, 20, 12000);
+            d.hazardIntervalTicks = ir.min;
+            d.hazardIntervalTicksText = ir.isRange() ? ir.format() : "";
+        }
         if (p.length >= 5) d.keyConversion = parseBool(p[4], d.keyConversion);
         return d;
     }
@@ -521,13 +591,20 @@ public final class TrialModule447 {
     public static void writeOminous(NpcDialogueGraph.Node node, OminousData d) {
         if (node == null) return;
         OminousData v = d == null ? new OminousData() : d;
-        float mult = clampFloat(v.mobMultiplier, 1.0f, 4.0f);
-        int interval = clamp(v.hazardIntervalTicks, 20, 12000);
+        String multTok;
+        if (RangeSpec450.hasRangeSeparator(v.mobMultiplierText)) {
+            RangeSpec450.FloatRange fr = RangeSpec450.parseFloat(
+                    v.mobMultiplierText, v.mobMultiplier, v.mobMultiplier, 1.0f, 4.0f);
+            multTok = fr.isRange() ? fr.format() : String.format(Locale.ROOT, "%.2f", fr.min);
+        } else {
+            multTok = String.format(Locale.ROOT, "%.2f", clampFloat(v.mobMultiplier, 1.0f, 4.0f));
+        }
+        String intervalTok = intTok(v.hazardIntervalTicks, v.hazardIntervalTicksText, 20, 12000);
         node.action = PREFIX + "ominous:"
-                + String.format(Locale.ROOT, "%.2f", mult) + "|"
+                + multTok + "|"
                 + (v.equipment ? "1" : "0") + "|"
                 + (v.hazards ? "1" : "0") + "|"
-                + interval + "|"
+                + intervalTok + "|"
                 + (v.keyConversion ? "1" : "0");
     }
 
@@ -535,12 +612,32 @@ public final class TrialModule447 {
         ProtectData d = new ProtectData();
         String[] p = splitPipes(payloadOf(node, SLOT_PROTECT));
         if (p.length >= 1) d.noBreakEnabled = parseBool(p[0], d.noBreakEnabled);
-        if (p.length >= 2) d.noBreakRadius = clamp(parseInt(p[1], d.noBreakRadius), 1, 64);
-        if (p.length >= 3) d.noBreakSeconds = clamp(parseInt(p[2], d.noBreakSeconds), 1, 600);
-        if (p.length >= 4) d.noBreakAmplifier = clamp(parseInt(p[3], d.noBreakAmplifier), 0, 3);
+        if (p.length >= 2) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[1], d.noBreakRadius, d.noBreakRadius, 1, 64);
+            d.noBreakRadius = r.min;
+            d.noBreakRadiusText = r.isRange() ? r.format() : "";
+        }
+        if (p.length >= 3) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[2], d.noBreakSeconds, d.noBreakSeconds, 1, 600);
+            d.noBreakSeconds = r.min;
+            d.noBreakSecondsText = r.isRange() ? r.format() : "";
+        }
+        if (p.length >= 4) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[3], d.noBreakAmplifier, d.noBreakAmplifier, 0, 3);
+            d.noBreakAmplifier = r.min;
+            d.noBreakAmplifierText = r.isRange() ? r.format() : "";
+        }
         if (p.length >= 5) d.selfDestruct = parseBool(p[4], d.selfDestruct);
-        if (p.length >= 6) d.selfDestructAfterWaves = clamp(parseInt(p[5], d.selfDestructAfterWaves), 1, 100);
-        if (p.length >= 7) d.selfDestructChancePercent = clamp(parseInt(p[6], d.selfDestructChancePercent), 0, 100);
+        if (p.length >= 6) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[5], d.selfDestructAfterWaves, d.selfDestructAfterWaves, 1, 100);
+            d.selfDestructAfterWaves = r.min;
+            d.selfDestructAfterWavesText = r.isRange() ? r.format() : "";
+        }
+        if (p.length >= 7) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(p[6], d.selfDestructChancePercent, d.selfDestructChancePercent, 0, 100);
+            d.selfDestructChancePercent = r.min;
+            d.selfDestructChancePercentText = r.isRange() ? r.format() : "";
+        }
         return d;
     }
 
@@ -549,12 +646,12 @@ public final class TrialModule447 {
         ProtectData v = d == null ? new ProtectData() : d;
         node.action = PREFIX + "protect:"
                 + (v.noBreakEnabled ? "1" : "0") + "|"
-                + clamp(v.noBreakRadius, 1, 64) + "|"
-                + clamp(v.noBreakSeconds, 1, 600) + "|"
-                + clamp(v.noBreakAmplifier, 0, 3) + "|"
+                + intTok(v.noBreakRadius, v.noBreakRadiusText, 1, 64) + "|"
+                + intTok(v.noBreakSeconds, v.noBreakSecondsText, 1, 600) + "|"
+                + intTok(v.noBreakAmplifier, v.noBreakAmplifierText, 0, 3) + "|"
                 + (v.selfDestruct ? "1" : "0") + "|"
-                + clamp(v.selfDestructAfterWaves, 1, 100) + "|"
-                + clamp(v.selfDestructChancePercent, 0, 100);
+                + intTok(v.selfDestructAfterWaves, v.selfDestructAfterWavesText, 1, 100) + "|"
+                + intTok(v.selfDestructChancePercent, v.selfDestructChancePercentText, 0, 100);
     }
 
     // ---- config <-> modules bridging ----------------------------------------
@@ -573,6 +670,8 @@ public final class TrialModule447 {
                 RadiusData d = new RadiusData();
                 d.activationRange = c.activationRange;
                 d.spawnRange = c.spawnRange;
+                d.activationRangeText = c.ranges.getOrDefault("activationRange", "");
+                d.spawnRangeText = c.ranges.getOrDefault("spawnRange", "");
                 writeRadius(node, d);
             }
             case SLOT_WAVE -> {
@@ -582,6 +681,11 @@ public final class TrialModule447 {
                 d.simultaneousMobs = c.simultaneousMobs;
                 d.simultaneousMobsAddedPerPlayer = c.simultaneousMobsAddedPerPlayer;
                 d.spawnBatchSize = c.spawnBatchSize;
+                d.totalMobsText = c.ranges.getOrDefault("totalMobs", "");
+                d.totalMobsAddedPerPlayerText = c.ranges.getOrDefault("totalMobsAddedPerPlayer", "");
+                d.simultaneousMobsText = c.ranges.getOrDefault("simultaneousMobs", "");
+                d.simultaneousMobsAddedPerPlayerText = c.ranges.getOrDefault("simultaneousMobsAddedPerPlayer", "");
+                d.spawnBatchSizeText = c.ranges.getOrDefault("spawnBatchSize", "");
                 writeWave(node, d);
             }
             case SLOT_TIMING -> {
@@ -589,6 +693,7 @@ public final class TrialModule447 {
                 d.minSpawnDelayTicks = c.minSpawnDelayTicks;
                 d.maxSpawnDelayTicks = c.maxSpawnDelayTicks;
                 d.cooldownTicks = c.cooldownTicks;
+                d.cooldownTicksText = c.ranges.getOrDefault("cooldownTicks", "");
                 writeTiming(node, d);
             }
             case SLOT_MOBS -> writeMobs(node, c.mobs);
@@ -600,6 +705,8 @@ public final class TrialModule447 {
                 d.hazards = c.ominousHazards;
                 d.hazardIntervalTicks = c.ominousHazardIntervalTicks;
                 d.keyConversion = c.ominousKeyConversion;
+                d.mobMultiplierText = c.ranges.getOrDefault("ominousMobMultiplier", "");
+                d.hazardIntervalTicksText = c.ranges.getOrDefault("ominousHazardIntervalTicks", "");
                 writeOminous(node, d);
             }
             case SLOT_PROTECT -> {
@@ -611,6 +718,11 @@ public final class TrialModule447 {
                 d.selfDestruct = c.selfDestruct;
                 d.selfDestructAfterWaves = c.selfDestructAfterWaves;
                 d.selfDestructChancePercent = c.selfDestructChancePercent;
+                d.noBreakRadiusText = c.ranges.getOrDefault("noBreakRadius", "");
+                d.noBreakSecondsText = c.ranges.getOrDefault("noBreakSeconds", "");
+                d.noBreakAmplifierText = c.ranges.getOrDefault("noBreakAmplifier", "");
+                d.selfDestructAfterWavesText = c.ranges.getOrDefault("selfDestructAfterWaves", "");
+                d.selfDestructChancePercentText = c.ranges.getOrDefault("selfDestructChancePercent", "");
                 writeProtect(node, d);
             }
             default -> {
@@ -631,6 +743,8 @@ public final class TrialModule447 {
                 RadiusData d = readRadius(node);
                 dst.activationRange = d.activationRange;
                 dst.spawnRange = d.spawnRange;
+                putOrClearRange(dst, "activationRange", d.activationRangeText);
+                putOrClearRange(dst, "spawnRange", d.spawnRangeText);
             }
             case SLOT_WAVE -> {
                 WaveData d = readWave(node);
@@ -639,12 +753,18 @@ public final class TrialModule447 {
                 dst.simultaneousMobs = d.simultaneousMobs;
                 dst.simultaneousMobsAddedPerPlayer = d.simultaneousMobsAddedPerPlayer;
                 dst.spawnBatchSize = d.spawnBatchSize;
+                putOrClearRange(dst, "totalMobs", d.totalMobsText);
+                putOrClearRange(dst, "totalMobsAddedPerPlayer", d.totalMobsAddedPerPlayerText);
+                putOrClearRange(dst, "simultaneousMobs", d.simultaneousMobsText);
+                putOrClearRange(dst, "simultaneousMobsAddedPerPlayer", d.simultaneousMobsAddedPerPlayerText);
+                putOrClearRange(dst, "spawnBatchSize", d.spawnBatchSizeText);
             }
             case SLOT_TIMING -> {
                 TimingData d = readTiming(node);
                 dst.minSpawnDelayTicks = d.minSpawnDelayTicks;
                 dst.maxSpawnDelayTicks = d.maxSpawnDelayTicks;
                 dst.cooldownTicks = d.cooldownTicks;
+                putOrClearRange(dst, "cooldownTicks", d.cooldownTicksText);
             }
             case SLOT_MOBS -> dst.mobs = readMobs(node);
             case SLOT_REWARDS -> dst.rewards = readRewards(node);
@@ -655,6 +775,8 @@ public final class TrialModule447 {
                 dst.ominousHazards = d.hazards;
                 dst.ominousHazardIntervalTicks = d.hazardIntervalTicks;
                 dst.ominousKeyConversion = d.keyConversion;
+                putOrClearRange(dst, "ominousMobMultiplier", d.mobMultiplierText);
+                putOrClearRange(dst, "ominousHazardIntervalTicks", d.hazardIntervalTicksText);
             }
             case SLOT_PROTECT -> {
                 ProtectData d = readProtect(node);
@@ -665,9 +787,31 @@ public final class TrialModule447 {
                 dst.selfDestruct = d.selfDestruct;
                 dst.selfDestructAfterWaves = d.selfDestructAfterWaves;
                 dst.selfDestructChancePercent = d.selfDestructChancePercent;
+                putOrClearRange(dst, "noBreakRadius", d.noBreakRadiusText);
+                putOrClearRange(dst, "noBreakSeconds", d.noBreakSecondsText);
+                putOrClearRange(dst, "noBreakAmplifier", d.noBreakAmplifierText);
+                putOrClearRange(dst, "selfDestructAfterWaves", d.selfDestructAfterWavesText);
+                putOrClearRange(dst, "selfDestructChancePercent", d.selfDestructChancePercentText);
             }
             default -> {
             }
+        }
+    }
+
+    private static String intTok(int val, String rangeText, int min, int max) {
+        if (RangeSpec450.hasRangeSeparator(rangeText)) {
+            RangeSpec450.IntRange r = RangeSpec450.parseInt(rangeText, val, val, min, max);
+            if (r.isRange()) return r.format();
+            return Integer.toString(r.min);
+        }
+        return Integer.toString(clamp(val, min, max));
+    }
+
+    private static void putOrClearRange(TrialConfig446 dst, String key, String rangeText) {
+        if (rangeText != null && !rangeText.isBlank()) {
+            dst.ranges.put(key, rangeText);
+        } else {
+            dst.ranges.remove(key);
         }
     }
 

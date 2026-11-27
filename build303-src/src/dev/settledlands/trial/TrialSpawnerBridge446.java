@@ -7,6 +7,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.registries.BuiltInRegistries;
 import net.minecraft.resources.ResourceLocation;
@@ -194,8 +195,9 @@ public final class TrialSpawnerBridge446 {
         BlockEntity be = level.getBlockEntity(pos);
         if (!isTrialSpawnerBe(be) || mCfgFromJson == null || mApplyConfig == null) return false;
         try {
-            String sanitized = TrialConfig446.sanitizeWithRegistries(TrialConfig446.fromJson(json)).toJson();
-            Object cfg = mCfgFromJson.invoke(null, sanitized);
+            TrialConfig446 cleaned = TrialConfig446.sanitizeWithRegistries(TrialConfig446.fromJson(json));
+            String resolved = cleaned.toResolvedJson(ThreadLocalRandom.current());
+            Object cfg = mCfgFromJson.invoke(null, resolved);
             if (cfg == null) return false;
             mApplyConfig.invoke(be, cfg);
             be.setChanged();
