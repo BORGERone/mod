@@ -23,8 +23,8 @@ import net.minecraft.world.level.saveddata.SavedData;
 import net.neoforged.neoforge.common.extensions.IEntityExtension;
 
 /**
- * Build 453: persistent world storage for object-local variables (block/door/chest/trial),
- * one-time initialization markers for UE5 {@link VarDataNode453} containers, and unified
+ * Build 453/456: persistent world storage for object-local variables (block/door/chest/trial),
+ * one-time initialization markers for {@link VarDataNode453} containers, and unified
  * variable/IF runtime evaluation supporting all 14 math operations plus simultaneous blue (entity)
  * and orange (variable/numeric) inputs across both NPC and block/trial graphs.
  */
@@ -66,8 +66,26 @@ public final class VarScopeStore453 extends SavedData {
         public final GuideNpc npc;
         public final NpcDialogueGraph graph;
         public NpcDialogueGraph.Node activeIfNode;
+        public NpcDialogueGraph.Node activeNode;
 
         public NpcResolveFrame(ServerPlayer player, Entity contextEntity,
+                GuideNpc npc, NpcDialogueGraph graph) {
+            this.player = player;
+            this.contextEntity = contextEntity;
+            this.npc = npc;
+            this.graph = graph;
+        }
+    }
+
+    /** Execution frame for {@link GuideDialogue#executeGraphTriggers} (lives outside mixin pkg). */
+    public static final class NpcTriggerFrame {
+        public final ServerPlayer player;
+        public final Entity contextEntity;
+        public final GuideNpc npc;
+        public final NpcDialogueGraph graph;
+        public NpcDialogueGraph.Node currentNode;
+
+        public NpcTriggerFrame(ServerPlayer player, Entity contextEntity,
                 GuideNpc npc, NpcDialogueGraph graph) {
             this.player = player;
             this.contextEntity = contextEntity;
@@ -206,32 +224,62 @@ public final class VarScopeStore453 extends SavedData {
     public static Entity resolveNpcBlueEntity(GuideNpc npc, NpcDialogueGraph graph, NpcDialogueGraph.Node consumer) {
         if (npc == null || graph == null || consumer == null) return null;
         int srcId = VarDataNode453.entityInput(graph, consumer);
-        if (srcId < 0) return null;
+        if (srcId < 0) {
+            // Also check if a Pursuit node feeds this consumer directly via "|@ids"
+            if (graph.nodes != null) {
+                for (NpcDialogueGraph.Node cand : graph.nodes.values()) {
+                    if (cand != null && NpcPursuit269.isPursuitAction(cand.action)
+                            && pursuitHasConsumer(cand.action, consumer.id)) {
+                        Entity pe = resolvePursuitEntity(npc, cand);
+                        if (pe != null) return pe;
+                    }
+                }
+            }
+            return null;
+        }
         NpcDialogueGraph.Node src = graph.get(srcId);
         if (src == null) return null;
         if (NpcValueSource290.isSource(npc, srcId)) {
             return NpcValueSource290.resolve(npc, srcId);
         }
         if (NpcPursuit269.isPursuitAction(src.action)) {
-            // Check if the Pursuit node itself takes its body from a blue source node (#id)
-            String act = src.action;
-            if (act != null) {
-                int hash = act.lastIndexOf("|#");
-                if (hash >= 0) {
-                    try {
-                        String tail = act.substring(hash + 2);
-                        int bar = tail.indexOf('|');
-                        int pSrc = Integer.parseInt((bar >= 0 ? tail.substring(0, bar) : tail).trim());
-                        if (pSrc >= 0 && NpcValueSource290.isSource(npc, pSrc)) {
-                            Entity ent = NpcValueSource290.resolve(npc, pSrc);
-                            if (ent != null) return ent;
-                        }
-                    } catch (NumberFormatException ignored) {}
-                }
-            }
-            return ((Mob) (Object) npc).getTarget();
+            return resolvePursuitEntity(npc, src);
         }
         return null;
+    }
+
+    private static Entity resolvePursuitEntity(GuideNpc npc, NpcDialogueGraph.Node src) {
+        if (npc == null || src == null) return null;
+        String act = src.action;
+        if (act != null) {
+            int hash = act.lastIndexOf("|#");
+            if (hash >= 0) {
+                try {
+                    String tail = act.substring(hash + 2);
+                    int bar = tail.indexOf('|');
+                    int pSrc = Integer.parseInt((bar >= 0 ? tail.substring(0, bar) : tail).trim());
+                    if (pSrc >= 0 && NpcValueSource290.isSource(npc, pSrc)) {
+                        Entity ent = NpcValueSource290.resolve(npc, pSrc);
+                        if (ent != null) return ent;
+                    }
+                } catch (NumberFormatException ignored) {}
+            }
+        }
+        return ((Mob) (Object) npc).getTarget();
+    }
+
+    private static boolean pursuitHasConsumer(String action, int nodeId) {
+        if (action == null) return false;
+        int at = action.indexOf("|@");
+        if (at < 0) return false;
+        int end = action.indexOf('|', at + 2);
+        String list = end < 0 ? action.substring(at + 2) : action.substring(at + 2, end);
+        for (String part : list.split(",")) {
+            try {
+                if (Integer.parseInt(part.trim()) == nodeId) return true;
+            } catch (NumberFormatException ignored) {}
+        }
+        return false;
     }
 
     public static ServerPlayer resolveBlockBluePlayer(ServerLevel level, ServerPlayer actor,
@@ -251,6 +299,25 @@ public final class VarScopeStore453 extends SavedData {
         if (src.type == NpcDialogueGraph.CHECK && level != null && where != null) {
             BlockPos pos = new BlockPos(where.x(), where.y(), where.z());
             double r = Math.max(1.0D, src.checkRadius);
+            if (RadiusZone456.isSquare(src)) {
+                double cx = pos.getX() + 0.5D;
+                double cy = pos.getY() + 0.5D;
+                double cz = pos.getZ() + 0.5D;
+                ServerPlayer best = null;
+                double bestD2 = Double.MAX_VALUE;
+                for (ServerPlayer sp : level.players()) {
+                    if (sp == null || !sp.isAlive() || sp.isSpectator()) continue;
+                    if (!RadiusZone456.isInsideBox(cx, cy, cz, sp.getX(), sp.getY(), sp.getZ(), r)) {
+                        continue;
+                    }
+                    double d2 = sp.distanceToSqr(cx, cy, cz);
+                    if (d2 < bestD2) {
+                        bestD2 = d2;
+                        best = sp;
+                    }
+                }
+                return best;
+            }
             return TrialSpawnerBridge446.nearestPlayer(level, pos, r, false);
         }
         if (src.type == 40 || src.type == 50 || src.type == NpcDialogueGraph.DAMAGE) {
@@ -259,7 +326,7 @@ public final class VarScopeStore453 extends SavedData {
         return actor;
     }
 
-    // ---- Low-level read / write with UE5 initial value support ----
+    // ---- Low-level read / write with variable initial value support ----
 
     private static int readRaw(
             MinecraftServer server,
@@ -363,7 +430,77 @@ public final class VarScopeStore453 extends SavedData {
         }
     }
 
-    // ---- Execution & Evaluation for VARIABLE (4) and IF (3) ----
+    // ---- Execution & Evaluation for VarDataNode453, VARIABLE (4) and IF (3) ----
+
+    /** Executes {@link VarDataNode453} inside an NPC graph: writes either its orange input value or its constant value into its variable. */
+    public static void executeVarDataNodeForNpc(
+            ServerPlayer player,
+            Entity contextEntity,
+            GuideNpc npc,
+            NpcDialogueGraph graph,
+            NpcDialogueGraph.Node node,
+            NpcLocalVarBridge npcLocals) {
+        if (!VarDataNode453.isVarDataNode(node)) return;
+        MinecraftServer server = player != null ? player.getServer()
+                : (npc != null && npc.level() != null ? npc.level().getServer()
+                : (contextEntity != null && contextEntity.level() != null
+                        ? contextEntity.level().getServer() : null));
+        if (server == null) return;
+
+        ServerPlayer targetPlayer = player;
+        GuideNpc targetNpc = npc;
+        int blueId = VarDataNode453.entityInput(graph, node);
+        Entity blueEnt = resolveNpcBlueEntity(npc, graph, node);
+        if (blueId >= 0 || blueEnt != null) {
+            if (blueEnt instanceof ServerPlayer sp) {
+                targetPlayer = sp;
+            } else if (blueEnt instanceof GuideNpc gn) {
+                targetNpc = gn;
+                targetPlayer = null;
+            } else {
+                targetPlayer = null;
+            }
+        } else if (targetPlayer == null && contextEntity instanceof ServerPlayer sp) {
+            targetPlayer = sp;
+        }
+
+        executeVarDataNodeCommon(server, targetPlayer, targetNpc, npcLocals, null, graph, node);
+    }
+
+    /** Executes {@link VarDataNode453} inside a block/door/chest/trial graph. */
+    public static void executeVarDataNodeForBlock(
+            ServerPlayer actor,
+            MinecraftServer server,
+            NpcDialogueGraph graph,
+            NpcDialogueGraph.Node node,
+            BlockTalk358.Where where) {
+        if (!VarDataNode453.isVarDataNode(node)) return;
+        ServerLevel level = where != null ? where.level()
+                : (actor != null ? actor.serverLevel() : null);
+        if (server == null && level != null) server = level.getServer();
+        if (server == null && actor != null) server = actor.getServer();
+        if (server == null) return;
+
+        ServerPlayer targetPlayer = resolveBlockBluePlayer(level, actor, graph, node, where);
+        executeVarDataNodeCommon(server, targetPlayer, null, null, where, graph, node);
+    }
+
+    private static void executeVarDataNodeCommon(
+            MinecraftServer server,
+            ServerPlayer targetPlayer,
+            GuideNpc targetNpc,
+            NpcLocalVarBridge npcLocals,
+            BlockTalk358.Where where,
+            NpcDialogueGraph graph,
+            NpcDialogueGraph.Node node) {
+        if (node == null || node.pointsName == null || node.pointsName.isBlank()) return;
+        NpcDialogueGraph.Node orangeSrc = VarDataNode453.resolveOrangeSource(graph, node);
+        int valueToWrite = orangeSrc != null
+                ? readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, where, graph, orangeSrc, 0)
+                : node.varValue;
+        writeRaw(server, targetPlayer, targetNpc, npcLocals, where,
+                node.pointsName, node.pointsShared, node.varLocal, valueToWrite);
+    }
 
     /** Executes {@link NpcDialogueGraph#VARIABLE} inside an NPC graph. */
     public static void executeVariableForNpc(
@@ -436,7 +573,7 @@ public final class VarScopeStore453 extends SavedData {
         int operand;
 
         if (orangeSrc != null && !hasOwnName) {
-            // Pattern A (UE5 Set/Modify linked variable): node points directly at UE5 variable container
+            // Pattern A (Set/Modify linked variable): node reads target variable from orange input
             targetName = orangeSrc.pointsName;
             targetShared = orangeSrc.pointsShared;
             targetLocal = orangeSrc.varLocal;
@@ -448,7 +585,17 @@ public final class VarScopeStore453 extends SavedData {
             targetName = node.pointsName;
             targetShared = node.pointsShared;
             targetLocal = node.varLocal;
-            operand = readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, where, orangeSrc);
+            operand = readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, where, graph, orangeSrc, 0);
+        } else if (!hasOwnName) {
+            // Pattern C (Output wired into VarDataNode's orange input): modify the downstream VarDataNode directly
+            NpcDialogueGraph.Node outTarget = VarDataNode453.findLinkedOrangeTarget(graph, node.id);
+            if (outTarget == null) return;
+            targetName = outTarget.pointsName;
+            targetShared = outTarget.pointsShared;
+            targetLocal = outTarget.varLocal;
+            targetHasInit = outTarget.varValue != 0;
+            targetInit = outTarget.varValue;
+            operand = node.varValue;
         } else {
             // No orange wire: modify node's own variable using node.varValue
             targetName = node.pointsName;
@@ -465,7 +612,7 @@ public final class VarScopeStore453 extends SavedData {
                 targetName, targetShared, targetLocal, next);
     }
 
-    /** Reads the numeric value supplied by an orange source node (UE5 Var node or VARIABLE). */
+    /** Reads the numeric value supplied by an orange source node (Variable Value or VARIABLE). */
     public static int readOrangeNodeValue(
             MinecraftServer server,
             ServerPlayer player,
@@ -473,11 +620,29 @@ public final class VarScopeStore453 extends SavedData {
             NpcLocalVarBridge npcLocals,
             BlockTalk358.Where where,
             NpcDialogueGraph.Node src) {
+        return readOrangeNodeValue(server, player, npc, npcLocals, where, null, src, 0);
+    }
+
+    public static int readOrangeNodeValue(
+            MinecraftServer server,
+            ServerPlayer player,
+            GuideNpc npc,
+            NpcLocalVarBridge npcLocals,
+            BlockTalk358.Where where,
+            NpcDialogueGraph graph,
+            NpcDialogueGraph.Node src,
+            int depth) {
         if (src == null) return 0;
         if (src.pointsName != null && !src.pointsName.isBlank()) {
             boolean hasInit = VarDataNode453.isVarDataNode(src) && src.varValue != 0;
             return readRaw(server, player, npc, npcLocals, where,
                     src.pointsName, src.pointsShared, src.varLocal, hasInit, src.varValue);
+        }
+        if (depth < 16 && graph != null) {
+            NpcDialogueGraph.Node chained = VarDataNode453.resolveOrangeSource(graph, src);
+            if (chained != null && chained != src) {
+                return readOrangeNodeValue(server, player, npc, npcLocals, where, graph, chained, depth + 1);
+            }
         }
         return src.varValue;
     }
@@ -514,7 +679,7 @@ public final class VarScopeStore453 extends SavedData {
 
         NpcDialogueGraph.Node orangeSrc = VarDataNode453.resolveOrangeSource(graph, node);
         if (orangeSrc != null) {
-            return readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, null, orangeSrc);
+            return readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, null, graph, orangeSrc, 0);
         }
         if (node.pointsName != null && !node.pointsName.isBlank()) {
             int cur = readRaw(server, targetPlayer, targetNpc, npcLocals, null,
@@ -544,7 +709,7 @@ public final class VarScopeStore453 extends SavedData {
         ServerPlayer targetPlayer = resolveBlockBluePlayer(level, actor, graph, node, where);
         NpcDialogueGraph.Node orangeSrc = VarDataNode453.resolveOrangeSource(graph, node);
         if (orangeSrc != null) {
-            return readOrangeNodeValue(server, targetPlayer, null, null, where, orangeSrc);
+            return readOrangeNodeValue(server, targetPlayer, null, null, where, graph, orangeSrc, 0);
         }
         if (node.pointsName != null && !node.pointsName.isBlank()) {
             return readRaw(server, targetPlayer, null, null, where,

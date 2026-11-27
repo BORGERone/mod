@@ -1,0 +1,1 @@
+0408d8efc0843172591b4916aa9e64fed5e0284e3ea2810af355c5c064fbbfcd  settledlands-0.8.0-build456-variable-node-ports-and-square-zones.jar

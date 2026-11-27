@@ -10,10 +10,10 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 /**
- * Build 453: renders the UE5-style variable data card ({@link VarDataNode453}), draws the orange
- * data input socket on {@link NpcDialogueGraph#VARIABLE}, upgrades the {@code VARIABLE} card face
- * with its real math operation and wired input indicators, and handles orange pin geometry/hit-tests
- * plus the NPC create-menu row.
+ * Build 453/456: renders the Variable Value card ({@link VarDataNode453}), draws the orange data
+ * sockets and white execution ports on {@link VarDataNode453} and {@link NpcDialogueGraph#VARIABLE},
+ * upgrades the {@code VARIABLE} card face with its real math operation and wired input indicators,
+ * and handles orange pin geometry/hit-tests plus the NPC create-menu row.
  */
 public final class VarDataCard453 {
 
@@ -21,8 +21,8 @@ public final class VarDataCard453 {
     public static final int CARD_H = 100;
     private static final int HEADER_H = 22;
 
-    /** Y offset on the right edge of a UE5 VarData node's orange output pin (aligns with IF's orange pin). */
-    public static final double VAR_DATA_PIN_Y = 65.0D;
+    /** Y offset on the left/right edges of a Variable Value node's orange data pins (below white exec at 50, above blue pin at 92). */
+    public static final double VAR_DATA_PIN_Y = 74.0D;
     /** Y offset on the left/right edges of a VARIABLE node's orange data pins (below white exec at 50, above blue pin at 92). */
     public static final double VARIABLE_ORANGE_Y = 74.0D;
     /** Y offset on the left edge of an IF node's orange input pin. */
@@ -37,8 +37,8 @@ public final class VarDataCard453 {
     private static final int COL_MUTED = 0xFF9C846E;
     private static final int COL_ORANGE = 0xFFFB923C;
     private static final int COL_ORANGE_DARK = 0xFF42220B;
-    private static final int COL_EXEC_PORT = -3876630;
     private static final int COL_WHITE_PORT = 0xFFF2F2F2;
+    private static final int COL_BLUE = 0xFF5FB4FF;
 
     private VarDataCard453() {}
 
@@ -66,7 +66,7 @@ public final class VarDataCard453 {
                 menu.left + 24, ry + 7, hover == row ? -1 : -1852043, false);
     }
 
-    // ---- Drawing the new UE5 variable node card ----
+    // ---- Drawing the Variable Value node card ----
 
     public static void drawVarDataCard(NpcDialogueGraphScreen screen, GuiGraphics graphics,
             Node node) {
@@ -80,6 +80,8 @@ public final class VarDataCard453 {
 
         boolean selected = screen.settledlands$isSelected(node.id);
         int border = selected ? COL_BORDER_SELECTED : COL_BORDER_IDLE;
+        Node orangeSrc = VarDataNode453.resolveOrangeSource(graph, node);
+        int blueId = findBlueSourceId(graph, node);
 
         PoseStack pose = graphics.pose();
         pose.pushPose();
@@ -89,7 +91,7 @@ public final class VarDataCard453 {
             graphics.fill(-2, -2, CARD_W + 2, CARD_H + 2, border);
             graphics.fill(0, 0, CARD_W, CARD_H, COL_BODY);
             graphics.fill(0, 0, CARD_W, HEADER_H, COL_HEADER);
-            graphics.fill(0, HEADER_H, CARD_W, HEADER_H + 1, 0xFFFB923C);
+            graphics.fill(0, HEADER_H, CARD_W, HEADER_H + 1, COL_ORANGE);
 
             String title = "\u25C6 " + Component.translatable(VarDataNode453.TITLE_KEY).getString()
                     + " #" + node.id;
@@ -103,57 +105,98 @@ public final class VarDataCard453 {
                     ? node.pointsName
                     : Component.translatable("gui.settledlands.var453.const_mode").getString();
             graphics.drawString(font, clip(font, nameLabel + shownName, CARD_W - 16),
-                    8, 30, hasName ? COL_TEXT : COL_MUTED, false);
+                    8, 28, hasName ? COL_TEXT : COL_MUTED, false);
 
-            // Numeric value badge
-            String valNum = String.valueOf(node.varValue);
+            // Numeric value or wired orange input source badge
+            String valShown;
+            if (orangeSrc != null) {
+                String srcLabel = (orangeSrc.pointsName != null && !orangeSrc.pointsName.isBlank())
+                        ? orangeSrc.pointsName
+                        : "#" + orangeSrc.id + " (" + orangeSrc.varValue + ")";
+                valShown = "\u2190 " + srcLabel;
+            } else {
+                valShown = String.valueOf(node.varValue);
+            }
             String valBadge = Component.translatable("gui.settledlands.var453.card_val").getString()
-                    + " " + valNum;
-            int badgeW = Math.min(CARD_W - 16, font.width(valBadge) + 12);
-            graphics.fill(8, 44, 8 + badgeW, 59, COL_ORANGE_DARK);
-            graphics.fill(8, 44, 10, 59, COL_ORANGE);
-            graphics.drawString(font, clip(font, valBadge, badgeW - 6), 13, 48, COL_ORANGE, false);
+                    + " " + valShown;
+            int badgeW = Math.min(CARD_W - 22, font.width(valBadge) + 12);
+            graphics.fill(10, 42, 10 + badgeW, 57, COL_ORANGE_DARK);
+            graphics.fill(10, 42, 12, 57, COL_ORANGE);
+            graphics.drawString(font, clip(font, valBadge, badgeW - 6), 15, 46, COL_ORANGE, false);
 
             // Scope pill (Personal / Shared / Local)
             String scopeTxt = Component.translatable(VarDataNode453.scopeBadgeKey(node)).getString();
             int scopeCol = VarDataNode453.scopeColor(node);
-            int pillW = Math.min(CARD_W - 50, font.width(scopeTxt) + 10);
-            graphics.fill(8, 66, 8 + pillW, 80, 0xFF151922);
-            graphics.fill(8, 66, 10, 80, scopeCol);
-            graphics.drawString(font, clip(font, scopeTxt, pillW - 6), 13, 69, scopeCol, false);
+            int pillW = Math.min(CARD_W - 76, font.width(scopeTxt) + 10);
+            graphics.fill(10, 62, 10 + pillW, 76, 0xFF151922);
+            graphics.fill(10, 62, 12, 76, scopeCol);
+            graphics.drawString(font, clip(font, scopeTxt, pillW - 6), 15, 65, scopeCol, false);
 
-            // Link count / output hint near right edge
+            // Output hint near right edge
             int consumers = VarDataNode453.wiredOrangeConsumers(graph, node.id);
-            String outHint = consumers > 0
-                    ? consumers + " \u2192"
-                    : "\u2192 Set/Get";
+            String outHint = consumers > 0 ? consumers + " \u2192" : "Set/Get";
             int hintW = font.width(outHint);
-            graphics.drawString(font, outHint, CARD_W - 12 - hintW, 61,
+            graphics.drawString(font, outHint, CARD_W - 12 - hintW, 65,
                     consumers > 0 ? COL_ORANGE : COL_MUTED, false);
 
-            // Bottom subtle hint
-            String typeTag = Component.translatable("gui.settledlands.var453.numbers_only").getString();
-            graphics.drawString(font, clip(font, typeTag, CARD_W - 16), 8, 86, COL_MUTED, false);
+            // Bottom line: blue target status or integer hint
+            if (blueId >= 0) {
+                String blueTxt = Component.translatable("gui.settledlands.var453.blue_linked",
+                        blueId).getString();
+                graphics.drawString(font, clip(font, blueTxt, CARD_W - 20), 10, 84, COL_BLUE, false);
+            } else {
+                String typeTag = Component.translatable("gui.settledlands.var453.numbers_only").getString();
+                graphics.drawString(font, clip(font, typeTag, CARD_W - 20), 10, 84, COL_MUTED, false);
+            }
+
+            // Left white execution input port (y=50) & Right white execution output port (y=50)
+            graphics.fill(-5, 45, 5, 55, COL_WHITE_PORT);
+            graphics.fill(CARD_W - 5, 45, CARD_W + 5, 55, COL_WHITE_PORT);
+
+            // Left orange data input socket (y=74)
+            graphics.fill(-5, (int) VAR_DATA_PIN_Y - 5, 5, (int) VAR_DATA_PIN_Y + 5, COL_ORANGE);
+            graphics.fill(-3, (int) VAR_DATA_PIN_Y - 3, 3, (int) VAR_DATA_PIN_Y + 3, 0xFFFFEBD2);
         } finally {
             pose.popPose();
         }
 
-        // Draw screen-space orange output pin on the right edge (zoom-consistent circle)
+        // Right-edge orange output pin (y=74, screen space)
         double px = Math.round(orangeOutScreenX(canvas, node));
         double py = Math.round(orangeOutScreenY(canvas, node));
         double r = Math.max(2.0D, 3.0D * canvas.zoom);
         PursuitGraphNode272.drawPin(graphics, px, py, r + 1.0D, 0xFF2B1605);
         PursuitGraphNode272.drawPin(graphics, px, py, r, COL_ORANGE);
         PursuitGraphNode272.drawPin(graphics, px, py, Math.max(1.0D, r * 0.4D), 0xFFFFF4E6);
+
+        // Left-edge orange input pin dot (y=74, screen space)
+        double ix = Math.round(orangeInScreenX(canvas, node));
+        double iy = Math.round(orangeInScreenY(canvas, node));
+        double ir = Math.max(1.8D, 2.5D * canvas.zoom);
+        PursuitGraphNode272.drawPin(graphics, ix, iy, ir + 1.0D, 0xFF2B1605);
+        PursuitGraphNode272.drawPin(graphics, ix, iy, ir, COL_ORANGE);
+
+        // Left-edge blue entity input pin (y=92) - must be called explicitly because ci.cancel() skips drawNode @TAIL
+        PursuitGraphNode272.drawValuePins(screen, graphics, node);
+    }
+
+    /** Returns the connected blue source id (direct {@code entityInput453} or upstream {@code Pursuit} node), or {@code -1}. */
+    public static int findBlueSourceId(NpcDialogueGraph graph, Node node) {
+        if (graph == null || node == null) return -1;
+        int direct = VarDataNode453.entityInput(graph, node);
+        if (direct >= 0) return direct;
+        if (graph.nodes != null) {
+            for (Node cand : graph.nodes.values()) {
+                if (PursuitGraphNode272.isPursuitNode(cand)
+                        && PursuitGraphNode272.consumers(cand).contains(node.id)) {
+                    return cand.id;
+                }
+            }
+        }
+        return -1;
     }
 
     // ---- Drawing upgraded VARIABLE (4) card face + orange pins ----
 
-    /**
-     * Replaces stock {@code VARIABLE (4)} card drawing so the author sees the selected math
-     * operation, range or orange-linked operand/target, scope badge, white exec ports at y=50,
-     * orange data input at y=74, and orange data output at y=74 (plus Pursuit's blue pin at y=92).
-     */
     public static void drawVariableCard(NpcDialogueGraphScreen screen, GuiGraphics graphics,
             Node node) {
         if (screen == null || graphics == null || node == null
@@ -169,14 +212,23 @@ public final class VarDataCard453 {
         int border = selected ? COL_BORDER_SELECTED : 0xFF46576B;
 
         Node orangeSrc = VarDataNode453.resolveOrangeSource(graph, node);
+        Node linkedTarget = (orangeSrc == null && (node.pointsName == null || node.pointsName.isBlank()))
+                ? VarDataNode453.findLinkedOrangeTarget(graph, node.id) : null;
         boolean hasOwnName = node.pointsName != null && !node.pointsName.isBlank();
-        String varTitle = hasOwnName
-                ? node.pointsName
-                : (orangeSrc != null
-                        ? (orangeSrc.pointsName != null && !orangeSrc.pointsName.isBlank()
-                                ? "\u2190 " + orangeSrc.pointsName
-                                : "\u2190 #" + orangeSrc.id)
-                        : Component.translatable("gui.settledlands.graph.no_var").getString());
+        String varTitle;
+        if (hasOwnName) {
+            varTitle = node.pointsName;
+        } else if (orangeSrc != null) {
+            varTitle = (orangeSrc.pointsName != null && !orangeSrc.pointsName.isBlank())
+                    ? "\u2190 " + orangeSrc.pointsName
+                    : "\u2190 #" + orangeSrc.id;
+        } else if (linkedTarget != null) {
+            varTitle = (linkedTarget.pointsName != null && !linkedTarget.pointsName.isBlank())
+                    ? "\u2192 " + linkedTarget.pointsName
+                    : "\u2192 #" + linkedTarget.id;
+        } else {
+            varTitle = Component.translatable("gui.settledlands.graph.no_var").getString();
+        }
 
         String valOverride = null;
         if (orangeSrc != null && hasOwnName) {
@@ -195,19 +247,16 @@ public final class VarDataCard453 {
         try {
             graphics.fill(-2, -2, CARD_W + 2, CARD_H + 2, border);
             graphics.fill(0, 0, CARD_W, CARD_H, 0xFF232833);
-            graphics.fill(0, 0, CARD_W, HEADER_H, -4046580); // stock VARIABLE warm amber header
+            graphics.fill(0, 0, CARD_W, HEADER_H, -4046580);
 
             String hdr = Component.translatable("gui.settledlands.graph.variable").getString()
                     + " #" + node.id;
             graphics.drawString(font, clip(font, hdr, CARD_W - 16), 8, 7, 0xFFFDF8F2, false);
 
-            // Scope badge on right of line 1 or line 3
-            String scopeLabel = orangeSrc != null && !hasOwnName
-                    ? Component.translatable(VarDataNode453.scopeBadgeKey(orangeSrc)).getString()
-                    : Component.translatable(VarDataNode453.scopeBadgeKey(node)).getString();
-            int scopeCol = orangeSrc != null && !hasOwnName
-                    ? VarDataNode453.scopeColor(orangeSrc)
-                    : VarDataNode453.scopeColor(node);
+            Node scopeNode = (orangeSrc != null && !hasOwnName) ? orangeSrc
+                    : (linkedTarget != null ? linkedTarget : node);
+            String scopeLabel = Component.translatable(VarDataNode453.scopeBadgeKey(scopeNode)).getString();
+            int scopeCol = VarDataNode453.scopeColor(scopeNode);
 
             graphics.drawString(font, clip(font, varTitle, CARD_W - 18), 8, 30, COL_ORANGE, false);
             graphics.drawString(font, clip(font, opLine, CARD_W - 18), 8, 46, 0xFFFFE4C4, false);
@@ -230,7 +279,7 @@ public final class VarDataCard453 {
             pose.popPose();
         }
 
-        // Right-edge orange data pin (screen space, y=74) so VARIABLE can also pass value onward
+        // Right-edge orange data pin (screen space, y=74)
         double px = Math.round(orangeOutScreenX(canvas, node));
         double py = Math.round(orangeOutScreenY(canvas, node));
         double r = Math.max(1.8D, 2.5D * canvas.zoom);
@@ -241,17 +290,12 @@ public final class VarDataCard453 {
         PursuitGraphNode272.drawValuePins(screen, graphics, node);
     }
 
-    /**
-     * Draws an extra highlight/ring around {@code IF}'s orange input socket when wired or hovered,
-     * and draws the orange pin dot on {@code VARIABLE} if stock drawNode ran.
-     */
     public static void drawIfOrangeOverlay(NpcDialogueGraphScreen screen, GuiGraphics graphics,
             Node node) {
         if (screen == null || graphics == null || node == null) return;
         if (node.type != NpcDialogueGraph.IF) return;
         NpcGraphCanvas canvas = screen.settledlands$canvas();
         if (canvas == null) return;
-        // Make sure IF's orange socket at y=65 stands out cleanly
         double px = Math.round(orangeInScreenX(canvas, node));
         double py = Math.round(orangeInScreenY(canvas, node));
         if (!Double.isFinite(px) || !Double.isFinite(py)) return;
@@ -276,7 +320,10 @@ public final class VarDataCard453 {
 
     public static double orangeInPinCardY(Node node) {
         if (node == null) return IF_ORANGE_Y;
-        return node.type == NpcDialogueGraph.VARIABLE ? VARIABLE_ORANGE_Y : IF_ORANGE_Y;
+        if (VarDataNode453.isVarDataNode(node) || node.type == NpcDialogueGraph.VARIABLE) {
+            return VARIABLE_ORANGE_Y;
+        }
+        return IF_ORANGE_Y;
     }
 
     public static double orangeOutScreenX(NpcGraphCanvas canvas, Node node) {

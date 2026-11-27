@@ -4,10 +4,13 @@ import dev.settledlands.npc.GraphRanges450;
 import dev.settledlands.npc.GuideDialogue;
 import dev.settledlands.npc.GuideNpc;
 import dev.settledlands.npc.NpcDialogueGraph;
+import dev.settledlands.npc.VarDataNode453;
 import dev.settledlands.npc.VarScopeStore453;
 import dev.settledlands.npc.VarScopeStore453.NpcResolveFrame;
+import dev.settledlands.npc.VarScopeStore453.NpcTriggerFrame;
 import java.util.ArrayDeque;
 import java.util.Deque;
+import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import net.minecraft.server.level.ServerPlayer;
@@ -18,20 +21,22 @@ import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Build 453/454: executes full math operations and dual orange/blue inputs for {@code VARIABLE (4)}
- * and {@code IF (3)} inside {@code GuideDialogue} ({@code resolveExecutionTarget},
- * {@code peekExecutionTarget}, and {@code evalIfNode}). Uses external {@link NpcResolveFrame} stack
- * (handles {@code session != null} and recursive {@code RADIUS} fan-outs cleanly), zero synthetic
- * lambdas, and zero invokedynamic.
+ * Build 453/454/456: executes {@link VarDataNode453} write-on-input, all 14 math operations,
+ * and dual orange/blue inputs for {@code VarDataNode453}, {@code VARIABLE (4)}, and {@code IF (3)}
+ * inside {@code GuideDialogue} ({@code resolveExecutionTarget}, {@code executeGraphTriggers},
+ * {@code peekExecutionTarget}, and {@code evalIfNode}). Uses external frame stacks, zero lambdas.
  */
 @Mixin(targets = "dev.settledlands.npc.GuideDialogue", remap = false)
 public abstract class VarExecutionNpcMixin453 {
 
     @Unique
     private static final ThreadLocal<Deque<NpcResolveFrame>> RESOLVE_STACK = new ThreadLocal<>();
+    @Unique
+    private static final ThreadLocal<Deque<NpcTriggerFrame>> TRIGGER_STACK = new ThreadLocal<>();
     @Unique
     private static final ThreadLocal<NpcDialogueGraph> PEEK_GRAPH = new ThreadLocal<>();
     @Unique
@@ -47,6 +52,12 @@ public abstract class VarExecutionNpcMixin453 {
     @Shadow
     private static boolean isIncomingIfSatisfied(ServerPlayer player, GuideNpc npc, int relation,
             NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+        throw new AssertionError();
+    }
+
+    @Shadow
+    private static void runNodeAction(ServerPlayer player, Entity contextEntity, GuideNpc npc,
+            int relation, String action) {
         throw new AssertionError();
     }
 
@@ -120,12 +131,94 @@ public abstract class VarExecutionNpcMixin453 {
     private static boolean settledlands$interceptIncomingAndVar453(ServerPlayer player, GuideNpc npc,
             int relation, NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
         boolean ok = isIncomingIfSatisfied(player, npc, relation, graph, node);
+        NpcResolveFrame f = settledlands$peekResolve454();
+        if (f != null) {
+            f.activeNode = ok ? node : null;
+        }
         if (ok && node != null && node.type == NpcDialogueGraph.VARIABLE) {
-            NpcResolveFrame f = settledlands$peekResolve454();
             Entity ctx = f == null ? null : f.contextEntity;
             VarScopeStore453.executeVariableForNpc(player, ctx, npc, graph, node, null);
+        } else if (ok && f != null && f.npc == null && VarDataNode453.isVarDataNode(node)) {
+            f.activeNode = null;
+            VarScopeStore453.executeVarDataNodeForNpc(player, f.contextEntity, null, graph, node, null);
         }
         return ok;
+    }
+
+    @Redirect(method = "resolveExecutionTarget(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/entity/Entity;Ldev/settledlands/npc/GuideNpc;Ldev/settledlands/npc/GuideDialogue$Session;Ldev/settledlands/npc/NpcDialogueGraph;ILjava/util/Set;)I",
+            at = @At(value = "INVOKE",
+                    target = "Ldev/settledlands/npc/GuideDialogue;runNodeAction(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/entity/Entity;Ldev/settledlands/npc/GuideNpc;ILjava/lang/String;)V"),
+            remap = false)
+    private static void settledlands$execVarDataOnRunAction456(ServerPlayer player,
+            Entity contextEntity, GuideNpc npc, int relation, String action) {
+        NpcResolveFrame f = settledlands$peekResolve454();
+        if (f != null && f.activeNode != null && VarDataNode453.isVarDataNode(f.activeNode)) {
+            NpcDialogueGraph.Node cur = f.activeNode;
+            f.activeNode = null;
+            VarScopeStore453.executeVarDataNodeForNpc(player, contextEntity, npc, f.graph, cur, null);
+        }
+        runNodeAction(player, contextEntity, npc, relation, action);
+    }
+
+    @Unique
+    private static Deque<NpcTriggerFrame> settledlands$triggerStack456(boolean create) {
+        Deque<NpcTriggerFrame> st = TRIGGER_STACK.get();
+        if (st == null && create) {
+            st = new ArrayDeque<>();
+            TRIGGER_STACK.set(st);
+        }
+        return st;
+    }
+
+    @Inject(method = "executeGraphTriggers(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/entity/Entity;Ldev/settledlands/npc/GuideNpc;ILdev/settledlands/npc/NpcDialogueGraph;Ljava/util/List;Ljava/util/Set;)V",
+            at = @At("HEAD"), remap = false)
+    private static void settledlands$pushTriggers456(ServerPlayer player, Entity contextEntity,
+            GuideNpc npc, int relation, NpcDialogueGraph graph, List triggerIds, Set visited,
+            CallbackInfo ci) {
+        settledlands$triggerStack456(true).push(
+                new NpcTriggerFrame(player, contextEntity, npc, graph));
+    }
+
+    @Inject(method = "executeGraphTriggers(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/entity/Entity;Ldev/settledlands/npc/GuideNpc;ILdev/settledlands/npc/NpcDialogueGraph;Ljava/util/List;Ljava/util/Set;)V",
+            at = @At("RETURN"), remap = false)
+    private static void settledlands$popTriggers456(ServerPlayer player, Entity contextEntity,
+            GuideNpc npc, int relation, NpcDialogueGraph graph, List triggerIds, Set visited,
+            CallbackInfo ci) {
+        Deque<NpcTriggerFrame> st = TRIGGER_STACK.get();
+        if (st == null) return;
+        if (!st.isEmpty()) st.pop();
+        if (st.isEmpty()) TRIGGER_STACK.remove();
+    }
+
+    @Redirect(method = "executeGraphTriggers(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/entity/Entity;Ldev/settledlands/npc/GuideNpc;ILdev/settledlands/npc/NpcDialogueGraph;Ljava/util/List;Ljava/util/Set;)V",
+            at = @At(value = "INVOKE",
+                    target = "Ldev/settledlands/npc/GuideDialogue;isIncomingIfSatisfied(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/GuideNpc;ILdev/settledlands/npc/NpcDialogueGraph;Ldev/settledlands/npc/NpcDialogueGraph$Node;)Z"),
+            remap = false)
+    private static boolean settledlands$trackTriggerNode456(ServerPlayer player, GuideNpc npc,
+            int relation, NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+        boolean ok = isIncomingIfSatisfied(player, npc, relation, graph, node);
+        Deque<NpcTriggerFrame> st = TRIGGER_STACK.get();
+        NpcTriggerFrame tf = st == null ? null : st.peek();
+        if (tf != null) {
+            tf.currentNode = ok ? node : null;
+        }
+        return ok;
+    }
+
+    @Redirect(method = "executeGraphTriggers(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/entity/Entity;Ldev/settledlands/npc/GuideNpc;ILdev/settledlands/npc/NpcDialogueGraph;Ljava/util/List;Ljava/util/Set;)V",
+            at = @At(value = "INVOKE",
+                    target = "Ldev/settledlands/npc/GuideDialogue;runNodeAction(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/entity/Entity;Ldev/settledlands/npc/GuideNpc;ILjava/lang/String;)V"),
+            remap = false)
+    private static void settledlands$execVarDataInTrigger456(ServerPlayer player,
+            Entity contextEntity, GuideNpc npc, int relation, String action) {
+        Deque<NpcTriggerFrame> st = TRIGGER_STACK.get();
+        NpcTriggerFrame tf = st == null ? null : st.peek();
+        if (tf != null && tf.currentNode != null && VarDataNode453.isVarDataNode(tf.currentNode)) {
+            NpcDialogueGraph.Node cur = tf.currentNode;
+            tf.currentNode = null;
+            VarScopeStore453.executeVarDataNodeForNpc(player, contextEntity, npc, tf.graph, cur, null);
+        }
+        runNodeAction(player, contextEntity, npc, relation, action);
     }
 
     @Redirect(method = "resolveExecutionTarget(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/entity/Entity;Ldev/settledlands/npc/GuideNpc;Ldev/settledlands/npc/GuideDialogue$Session;Ldev/settledlands/npc/NpcDialogueGraph;ILjava/util/Set;)I",

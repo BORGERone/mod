@@ -1,6 +1,8 @@
 package dev.settledlands.mixin;
 
 import dev.settledlands.npc.NpcDialogueGraph;
+import dev.settledlands.npc.RadiusPass354;
+import dev.settledlands.npc.RadiusZone456;
 import dev.settledlands.npc.VarDataNode453;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
@@ -12,10 +14,10 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Build 453: serializes {@code ValuePinInput} alongside {@code VarInputNode} on graph save/load,
- * migrates legacy blue inputs out of {@code varInputNode} on {@code IF}/{@code VARIABLE}, cleans up
- * blue input references on {@code remove}/{@code disconnect}, and routes orange connections from
- * {@link VarDataNode453} cleanly without polluting {@code next}/{@code triggers}. Zero synthetic lambdas.
+ * Build 453/456: serializes {@code ValuePinInput} alongside {@code VarInputNode} and
+ * {@code SquareZone456} on graph save/load, migrates legacy blue inputs, cleans up references on
+ * {@code remove}/{@code disconnect}, and routes execution + orange connections cleanly into/out of
+ * {@link VarDataNode453}. Zero synthetic lambdas.
  */
 @Mixin(value = NpcDialogueGraph.class, remap = false)
 public abstract class VarGraphIoMixin453 {
@@ -35,8 +37,12 @@ public abstract class VarGraphIoMixin453 {
             NpcDialogueGraph.Node n = get(nt.getInt("Id"));
             if (n == null) continue;
             int blue = VarDataNode453.entityInput(n);
-            if (blue >= 0 && (n.type == NpcDialogueGraph.IF || n.type == NpcDialogueGraph.VARIABLE)) {
+            if (blue >= 0 && (n.type == NpcDialogueGraph.IF || n.type == NpcDialogueGraph.VARIABLE
+                    || VarDataNode453.isVarDataNode(n))) {
                 nt.putInt(TAG_ENTITY_INPUT, blue);
+            }
+            if (RadiusPass354.isRadiusNode(n) && RadiusZone456.isSquare(n)) {
+                nt.putBoolean(RadiusZone456.NBT_SQUARE_ZONE, true);
             }
         }
     }
@@ -51,10 +57,15 @@ public abstract class VarGraphIoMixin453 {
             ListTag list = tag.getList("Nodes", 10);
             for (int i = 0; i < list.size(); i++) {
                 CompoundTag nt = list.getCompound(i);
-                if (!nt.contains(TAG_ENTITY_INPUT)) continue;
                 NpcDialogueGraph.Node n = graph.get(nt.getInt("Id"));
-                if (n != null && (n.type == NpcDialogueGraph.IF || n.type == NpcDialogueGraph.VARIABLE)) {
+                if (n == null) continue;
+                if (nt.contains(TAG_ENTITY_INPUT)
+                        && (n.type == NpcDialogueGraph.IF || n.type == NpcDialogueGraph.VARIABLE
+                                || VarDataNode453.isVarDataNode(n))) {
                     VarDataNode453.setEntityInput(n, nt.getInt(TAG_ENTITY_INPUT));
+                }
+                if (nt.contains(RadiusZone456.NBT_SQUARE_ZONE) && RadiusPass354.isRadiusNode(n)) {
+                    RadiusZone456.setSquare(n, nt.getBoolean(RadiusZone456.NBT_SQUARE_ZONE));
                 }
             }
         }
@@ -69,26 +80,45 @@ public abstract class VarGraphIoMixin453 {
         if (from == null || to == null) return;
         if (from.special != 0 || to.special != 0 || fromId == toId) return;
 
-        if (VarDataNode453.isVarDataNode(to)) {
-            // A pure UE5 data node never takes execution/incoming wires.
-            cir.setReturnValue(Boolean.FALSE);
+        // Explicit orange data connection
+        if (fromPort == -100 && VarDataNode453.isOrangeSourceNode(from)
+                && VarDataNode453.isOrangeInputNode(to)) {
+            to.varInputNode = fromId;
+            cir.setReturnValue(Boolean.TRUE);
             return;
         }
-        if (VarDataNode453.isVarDataNode(from)) {
+
+        // White execution wire going INTO a Variable Value node routes via linear flow (next / falseNext / randomBranches)
+        // just like stock VARIABLE (4), so execution enters the node, writes the variable, and continues via node.next.
+        if (VarDataNode453.isVarDataNode(to) && fromPort >= 0) {
+            if (from.type == NpcDialogueGraph.IF) {
+                if (fromPort == 1) {
+                    from.falseNext = toId;
+                } else {
+                    from.next = toId;
+                }
+            } else if (from.type == NpcDialogueGraph.RANDOM) {
+                while (from.randomBranches.size() <= fromPort) {
+                    from.randomBranches.add(-1);
+                }
+                from.randomBranches.set(fromPort, toId);
+            } else {
+                from.next = toId;
+            }
+            cir.setReturnValue(Boolean.TRUE);
+            return;
+        }
+
+        // White execution wire going OUT OF a Variable Value node (fromPort >= 0) continues the execution chain,
+        // unless pulling explicitly into an orange consumer without a normal connection? Wait: let white ports connect normally!
+        // Only handle legacy connect(-100) or stock connect for outgoing white wires:
+        if (VarDataNode453.isVarDataNode(from) && fromPort < 0) {
             if (VarDataNode453.isOrangeInputNode(to)) {
                 to.varInputNode = fromId;
                 cir.setReturnValue(Boolean.TRUE);
             } else {
                 cir.setReturnValue(Boolean.FALSE);
             }
-            return;
-        }
-        // When connecting VARIABLE -> IF via normal execution port, keep execution flow separate
-        // unless explicit orange port (-100) was requested, or preserve standard flow:
-        if (fromPort == -100 && VarDataNode453.isOrangeSourceNode(from)
-                && VarDataNode453.isOrangeInputNode(to)) {
-            to.varInputNode = fromId;
-            cir.setReturnValue(Boolean.TRUE);
         }
     }
 

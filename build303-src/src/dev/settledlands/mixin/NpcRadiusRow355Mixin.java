@@ -3,6 +3,8 @@ package dev.settledlands.mixin;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.RadiusPass354;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
+import dev.settledlands.npc.client.RadiusZoneUi456;
+import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Button;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
@@ -12,18 +14,11 @@ import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 
 /**
- * Build 355: the "Видимость" row of a radius node, and it takes effect on the click.
- *
- * <p>The row itself is build 354's: one named control in the inspector, next to the radius and the
- * cooldown, writing the same flag build 320's card box writes ({@code Node#timerRepeat}). What was
- * wrong is that the ring is drawn by the <b>server</b> from the graph it has stored, while the flag
- * lived only in the editor until the graph was saved - so a toggle that looked switched off kept the
- * ring where it was, and there was no way to tell the two apart. The row now saves the graph right
- * after flipping the flag: the click is what the server sees, not the click plus a save the author
- * has to remember.</p>
+ * Build 355/456: the "Видимость" and "Форма зоны (Круг / Квадрат)" inspector rows of a radius
+ * node, plus the compact zone-shape badge on {@code CHECK}/{@code RADIUS} canvas cards. Zero new lambdas.
  */
 @Mixin(targets = "dev.settledlands.npc.client.NpcDialogueGraphScreen", remap = false)
-public abstract class NpcRadiusRow355Mixin {
+public abstract class NpcRadiusRow355Mixin implements RadiusZoneUi456.Host {
 
     @Shadow
     private NpcDialogueGraph graph;
@@ -77,6 +72,39 @@ public abstract class NpcRadiusRow355Mixin {
         throw new AssertionError();
     }
 
+    @Override
+    public void settledlands$remember456() {
+        remember();
+    }
+
+    @Override
+    public void settledlands$changed456() {
+        changed();
+    }
+
+    @Override
+    public boolean settledlands$save456() {
+        return save();
+    }
+
+    @Override
+    public void settledlands$widgets456() {
+        widgets();
+    }
+
+    @Override
+    public Button settledlands$button456(String key, int x, int y, int width, int height,
+            Runnable action) {
+        return button(key, x, y, width, height, action);
+    }
+
+    @Inject(method = "drawNode(Lnet/minecraft/client/gui/GuiGraphics;Ldev/settledlands/npc/NpcDialogueGraph$Node;)V",
+            at = @At("TAIL"), remap = false)
+    private void settledlands$drawZoneShapeBadge456(GuiGraphics graphics, NpcDialogueGraph.Node node,
+            CallbackInfo ci) {
+        RadiusZoneUi456.drawCardBadge((NpcDialogueGraphScreen) (Object) this, graphics, node);
+    }
+
     @Inject(method = "widgets()V", at = @At("RETURN"), remap = false)
     private void settledlands$visibleRow(CallbackInfo ci) {
         if (graph == null || selected < 0) return;
@@ -101,9 +129,13 @@ public abstract class NpcRadiusRow355Mixin {
                     ? "gui.settledlands.block.visible_on" : "gui.settledlands.block.visible_off"));
             toggle.visible = y >= inspectorY + 22
                     && y + toggle.getHeight() <= inspectorY + inspectorH - 4;
+            sidebarHeight += 22;
+
+            int shapeY = inspectorY + 24 - sidebarScroll + sidebarHeight + 2;
+            sidebarHeight += RadiusZoneUi456.addShapeToggleRow(
+                    this, node, x, shapeY, width, inspectorY, inspectorH);
         } finally {
             buildingInspector = false;
         }
-        sidebarHeight += 22;
     }
 }

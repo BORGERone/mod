@@ -211,8 +211,8 @@ public final class WireHover453 {
             for (int to : node.triggers) {
                 found = scanStock(canvas, graph, node, 0, to, mouseX, mouseY, best, found);
             }
-            // Orange value wires to IF / VARIABLE are drawn in the orange pass regardless of node.next
-            if (node.type == NpcDialogueGraph.IF || node.type == NpcDialogueGraph.VARIABLE) {
+            // Orange value wires to VarDataNode453 / IF / VARIABLE are drawn in the orange pass regardless of node.next
+            if (VarDataNode453.isOrangeInputNode(node)) {
                 int vin = orangeInputId(node);
                 if (vin >= 0) {
                     Node src = graph.get(vin);

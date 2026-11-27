@@ -41,7 +41,8 @@ public abstract class VarValueSourceBridgeMixin453 {
             NpcDialogueGraph.Node consumer,
             CallbackInfoReturnable<NpcDialogueGraph.Node> cir) {
         if (npc == null || consumer == null) return;
-        if (consumer.type != NpcDialogueGraph.IF && consumer.type != NpcDialogueGraph.VARIABLE) {
+        if (consumer.type != NpcDialogueGraph.IF && consumer.type != NpcDialogueGraph.VARIABLE
+                && !VarDataNode453.isVarDataNode(consumer)) {
             return;
         }
         int blueId = VarDataNode453.entityInput(consumer);
@@ -69,7 +70,8 @@ public abstract class VarValueSourceBridgeMixin453 {
             if (g == null || g.nodes == null) continue;
             if (g.get(source.id) != source) continue;
             for (NpcDialogueGraph.Node n : g.nodes.values()) {
-                if (n != null && (n.type == NpcDialogueGraph.IF || n.type == NpcDialogueGraph.VARIABLE)
+                if (n != null && (n.type == NpcDialogueGraph.IF || n.type == NpcDialogueGraph.VARIABLE
+                        || VarDataNode453.isVarDataNode(n))
                         && VarDataNode453.entityInput(g, n) == source.id) {
                     cir.setReturnValue(Boolean.TRUE);
                     return;

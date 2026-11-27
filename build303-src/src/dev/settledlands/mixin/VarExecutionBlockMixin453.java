@@ -5,6 +5,7 @@ import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.GraphRanges450;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcPoints;
+import dev.settledlands.npc.VarDataNode453;
 import dev.settledlands.npc.VarScopeStore453;
 import dev.settledlands.npc.VarScopeStore453.BlockWalkFrame;
 import java.util.ArrayDeque;
@@ -23,10 +24,10 @@ import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Build 453/454: executes all 14 math operations, UE5 {@link dev.settledlands.npc.VarDataNode453}
- * orange inputs, object-local variables ({@link VarScopeStore453}), and blue entity/player inputs
- * across block/door/chest/trial graphs in {@link BlockTrigger351}. Uses external
- * {@link BlockWalkFrame} (no inner classes in mixin package), zero lambdas, and zero invokedynamic.
+ * Build 453/454/456: executes {@link VarDataNode453} write-on-input, all 14 math operations,
+ * object-local variables ({@link VarScopeStore453}), and blue entity/player inputs across
+ * block/door/chest/trial graphs in {@link BlockTrigger351}. Uses external {@link BlockWalkFrame}
+ * (no inner classes in mixin package), zero lambdas, and zero invokedynamic.
  */
 @Mixin(value = BlockTrigger351.class, remap = false)
 public abstract class VarExecutionBlockMixin453 {
@@ -106,8 +107,62 @@ public abstract class VarExecutionBlockMixin453 {
             if (f != null) {
                 VarScopeStore453.executeVariableForBlock(player, f.server, f.graph, node, f.where);
             }
+        } else if (VarDataNode453.isVarDataNode(node)) {
+            BlockWalkFrame f = settledlands$peekWalkFrame453();
+            if (f != null) {
+                VarScopeStore453.executeVarDataNodeForBlock(player, f.server, f.graph, node, f.where);
+            }
         }
         act(player, node);
+    }
+
+    @Inject(method = "fire(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph;Ldev/settledlands/npc/NpcDialogueGraph$Node;Ldev/settledlands/npc/BlockTalk358$Where;)Z",
+            at = @At("HEAD"), remap = false)
+    private static void settledlands$pushFireFrame456(ServerPlayer player, NpcDialogueGraph graph,
+            NpcDialogueGraph.Node node, BlockTalk358.Where where,
+            CallbackInfoReturnable<Boolean> cir) {
+        MinecraftServer srv = player != null ? player.getServer()
+                : (where != null && where.level() != null ? where.level().getServer() : null);
+        settledlands$stack453(true).push(new BlockWalkFrame(graph, where, srv));
+    }
+
+    @Inject(method = "fire(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph;Ldev/settledlands/npc/NpcDialogueGraph$Node;Ldev/settledlands/npc/BlockTalk358$Where;)Z",
+            at = @At("RETURN"), remap = false)
+    private static void settledlands$popFireFrame456(ServerPlayer player, NpcDialogueGraph graph,
+            NpcDialogueGraph.Node node, BlockTalk358.Where where,
+            CallbackInfoReturnable<Boolean> cir) {
+        settledlands$popFrame453();
+    }
+
+    @Redirect(method = "fireTriggers(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph;Ldev/settledlands/npc/NpcDialogueGraph$Node;Ljava/util/Set;)V",
+            at = @At(value = "INVOKE",
+                    target = "Ldev/settledlands/npc/BlockTrigger351;act(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph$Node;)V"),
+            remap = false)
+    private static void settledlands$executeBlockVarInFireTriggers456(ServerPlayer player,
+            NpcDialogueGraph.Node node) {
+        if (VarDataNode453.isVarDataNode(node)) {
+            BlockWalkFrame f = settledlands$peekWalkFrame453();
+            if (f != null) {
+                VarScopeStore453.executeVarDataNodeForBlock(player, f.server, f.graph, node, f.where);
+            }
+        }
+        act(player, node);
+    }
+
+    @Redirect(method = "fireTriggersServerOnly(Lnet/minecraft/server/MinecraftServer;Ldev/settledlands/npc/NpcDialogueGraph;Ldev/settledlands/npc/NpcDialogueGraph$Node;Ljava/util/Set;)V",
+            at = @At(value = "INVOKE",
+                    target = "Ldev/settledlands/npc/BlockTrigger351;actServerOnly(Lnet/minecraft/server/MinecraftServer;Ldev/settledlands/npc/NpcDialogueGraph$Node;)V"),
+            remap = false)
+    private static void settledlands$executeServerVarInFireTriggers456(MinecraftServer server,
+            NpcDialogueGraph.Node node) {
+        if (VarDataNode453.isVarDataNode(node)) {
+            BlockWalkFrame f = settledlands$peekWalkFrame453();
+            if (f != null) {
+                VarScopeStore453.executeVarDataNodeForBlock(null,
+                        server != null ? server : f.server, f.graph, node, f.where);
+            }
+        }
+        actServerOnly(server, node);
     }
 
     @Inject(method = "startServerOnly(Lnet/minecraft/server/level/ServerLevel;Ldev/settledlands/npc/NpcDialogueGraph;ILdev/settledlands/npc/BlockTalk358$Where;)I",
@@ -145,6 +200,12 @@ public abstract class VarExecutionBlockMixin453 {
             BlockWalkFrame f = settledlands$peekWalkFrame453();
             if (f != null) {
                 VarScopeStore453.executeVariableForBlock(null, server != null ? server : f.server,
+                        f.graph, node, f.where);
+            }
+        } else if (VarDataNode453.isVarDataNode(node)) {
+            BlockWalkFrame f = settledlands$peekWalkFrame453();
+            if (f != null) {
+                VarScopeStore453.executeVarDataNodeForBlock(null, server != null ? server : f.server,
                         f.graph, node, f.where);
             }
         }

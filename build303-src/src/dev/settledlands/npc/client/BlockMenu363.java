@@ -164,7 +164,7 @@ public final class BlockMenu363 {
         return rows().length + 3 + (chest ? 1 : 0) + (trial ? 2 : 0);
     }
 
-    /** True when {@code compact} is the Build 453 UE5 Variable data node row. */
+    /** True when {@code compact} is the Build 453/456 Variable Value data node row. */
     public static boolean isVarDataRow(int compact) {
         return compact == count() - 1;
     }

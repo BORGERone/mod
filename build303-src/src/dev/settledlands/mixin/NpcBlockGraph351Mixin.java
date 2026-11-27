@@ -135,7 +135,12 @@ public abstract class NpcBlockGraph351Mixin {
             NpcDialogueGraph.Node created = this.addAt(NpcDialogueGraph.TRIGGER, worldX, worldY);
             if (created != null) {
                 VarDataNode453.applyDefaults(created);
-                this.status = Component.translatable("gui.settledlands.var453.added").getString();
+                if (wireFrom >= 0 && this.graph != null
+                        && this.graph.connect(wireFrom, created.id, wirePort)) {
+                    this.status = Component.translatable("gui.settledlands.graph.connected").getString();
+                } else {
+                    this.status = Component.translatable("gui.settledlands.var453.added").getString();
+                }
                 this.widgets();
                 this.changed();
             }

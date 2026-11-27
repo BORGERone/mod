@@ -29,7 +29,7 @@ public final class TeleportNode424 {
     /** Row index in the NPC/common context menu (stock 0..15, Pursuit 16, Teleport 17). */
     public static final int TELEPORT_ROW = 17;
 
-    /** Total rows in the NPC/common context menu once Teleport (17), Trial Control (18), and UE5 Var (19) join. */
+    /** Total rows in the NPC/common context menu once Teleport (17), Trial Control (18), and Variable Value (19) join. */
     public static final int NPC_MENU_ITEMS = VarDataNode453.NPC_MENU_ITEMS;
 
     /** Visible rows in the NPC/common context menu window. */

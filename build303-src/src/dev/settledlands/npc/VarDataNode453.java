@@ -6,9 +6,9 @@ import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Build 453: UE5-style variable data node ({@code Get/Set} variable container) and complete math
+ * Build 453/456: Read/Write variable data node ({@code Variable Value}) and complete math
  * operations + dual left inputs (blue entity/target input + orange variable/number input) for
- * {@link NpcDialogueGraph#VARIABLE} and {@link NpcDialogueGraph#IF}.
+ * {@link VarDataNode453}, {@link NpcDialogueGraph#VARIABLE}, and {@link NpcDialogueGraph#IF}.
  *
  * <p>Stored inside the stock graph as {@link NpcDialogueGraph#TRIGGER} ({@code 2}, {@code special == 0})
  * with {@code action} carrying {@code "trigger:var453:..."} so NBT, packet sync, validation,
@@ -22,13 +22,13 @@ public final class VarDataNode453 {
     /** Form seen if {@link NpcActions} already stripped {@code "trigger:"}. */
     public static final String STRIPPED_PREFIX = "var453:";
 
-    /** Default action marker for a newly created UE5 variable node. */
+    /** Default action marker for a newly created Variable Value node. */
     public static final String DEFAULT_ACTION = ACTION_PREFIX + "0";
 
-    /** Row index in the NPC/common context menu (17 Teleport, 18 Trial Control, 19 UE5 Var). */
+    /** Row index in the NPC/common context menu (17 Teleport, 18 Trial Control, 19 Variable Value). */
     public static final int MENU_ROW = 19;
 
-    /** Total rows in the NPC/common context menu once UE5 Var (19) joins. */
+    /** Total rows in the NPC/common context menu once Variable Value (19) joins. */
     public static final int NPC_MENU_ITEMS = 20;
 
     /** Visible rows in the NPC/common context menu window. */
@@ -37,7 +37,7 @@ public final class VarDataNode453 {
     /** Maximum {@code scrollRow} in the NPC/common context menu ({@code 20 - 5 = 15}). */
     public static final int NPC_MAX_SCROLL = NPC_MENU_ITEMS - NPC_VISIBLE_ROWS;
 
-    /** Distinct warm orange UE5 variable accent. */
+    /** Distinct warm orange variable-value accent. */
     public static final int ACCENT_COLOR = -290244; // 0xFFFB923C
 
     /** Brighter orange used for card borders and active highlights. */
@@ -112,8 +112,8 @@ public final class VarDataNode453 {
 
     /** True if {@code node} accepts an orange variable/numeric wire on its left edge. */
     public static boolean isOrangeInputNode(NpcDialogueGraph.Node node) {
-        return node != null && node.special == 0
-                && (node.type == NpcDialogueGraph.VARIABLE || node.type == NpcDialogueGraph.IF);
+        return isVarDataNode(node) || (node != null && node.special == 0
+                && (node.type == NpcDialogueGraph.VARIABLE || node.type == NpcDialogueGraph.IF));
     }
 
     /** True if {@code node} is a blue body/entity source node (Check, Damage, Door, Chest, Trial, Pursuit). */
@@ -161,14 +161,15 @@ public final class VarDataNode453 {
     /**
      * Reads the blue entity/target input id for any value-input node.
      *
-     * <p>{@code LINE (0)} and {@code TRIGGER (2)} only have a blue input and keep using
-     * {@code node.varInputNode} for full compatibility with {@code NpcValueSource290}.
-     * {@code IF (3)} and {@code VARIABLE (4)} store their blue input in the dedicated
+     * <p>{@code LINE (0)} and ordinary {@code TRIGGER (2)} keep using {@code node.varInputNode}
+     * for full compatibility with {@code NpcValueSource290}. {@code IF (3)}, {@code VARIABLE (4)},
+     * and {@link #isVarDataNode(NpcDialogueGraph.Node)} store their blue input in the dedicated
      * {@code entityInput453} field so it can coexist with the orange {@code varInputNode}.</p>
      */
     public static int entityInput(NpcDialogueGraph.Node node) {
         if (node == null) return -1;
-        if (node.type == NpcDialogueGraph.IF || node.type == NpcDialogueGraph.VARIABLE) {
+        if (node.type == NpcDialogueGraph.IF || node.type == NpcDialogueGraph.VARIABLE
+                || isVarDataNode(node)) {
             Object raw = node;
             if (raw instanceof EntityInputHost host) {
                 int v = host.settledlands$getEntityInput453();
@@ -180,17 +181,17 @@ public final class VarDataNode453 {
             return -1;
         }
         if (node.type == NpcDialogueGraph.LINE || node.type == NpcDialogueGraph.TRIGGER) {
-            if (isVarDataNode(node)) return -1;
             return node.varInputNode;
         }
         return -1;
     }
 
-    /** Writes the blue entity/target input id without overwriting the orange {@code varInputNode} on IF/VARIABLE. */
+    /** Writes the blue entity/target input id without overwriting the orange {@code varInputNode}. */
     public static void setEntityInput(NpcDialogueGraph.Node node, int sourceId) {
         if (node == null) return;
         int clean = sourceId == node.id ? -1 : sourceId;
-        if (node.type == NpcDialogueGraph.IF || node.type == NpcDialogueGraph.VARIABLE) {
+        if (node.type == NpcDialogueGraph.IF || node.type == NpcDialogueGraph.VARIABLE
+                || isVarDataNode(node)) {
             Object raw = node;
             if (raw instanceof EntityInputHost host) {
                 host.settledlands$setEntityInput453(clean);
@@ -199,7 +200,7 @@ public final class VarDataNode453 {
             } else {
                 FALLBACK_ENTITY_INPUTS.put(node, clean);
             }
-        } else if (!isVarDataNode(node)) {
+        } else {
             node.varInputNode = clean;
         }
     }
@@ -209,7 +210,8 @@ public final class VarDataNode453 {
         if (node == null) return -1;
         int direct = entityInput(node);
         if (direct >= 0) return direct;
-        if ((node.type == NpcDialogueGraph.IF || node.type == NpcDialogueGraph.VARIABLE)
+        if ((node.type == NpcDialogueGraph.IF || node.type == NpcDialogueGraph.VARIABLE
+                || isVarDataNode(node))
                 && node.varInputNode >= 0 && graph != null) {
             NpcDialogueGraph.Node legacy = graph.get(node.varInputNode);
             if (isBlueSourceNode(legacy)) {
@@ -220,14 +222,17 @@ public final class VarDataNode453 {
     }
 
     /**
-     * Migrates a legacy {@code IF}/{@code VARIABLE} blue wire stored in {@code varInputNode}
+     * Migrates a legacy {@code IF}/{@code VARIABLE}/{@code VarData} blue wire stored in {@code varInputNode}
      * into the dedicated {@code entityInput} slot when loading an older graph.
      */
     public static void migrateLegacyInputs(NpcDialogueGraph graph) {
         if (graph == null || graph.nodes == null) return;
         for (NpcDialogueGraph.Node n : graph.nodes.values()) {
             if (n == null || n.special != 0) continue;
-            if (n.type != NpcDialogueGraph.IF && n.type != NpcDialogueGraph.VARIABLE) continue;
+            if (n.type != NpcDialogueGraph.IF && n.type != NpcDialogueGraph.VARIABLE
+                    && !isVarDataNode(n)) {
+                continue;
+            }
             if (entityInput(n) < 0 && n.varInputNode >= 0) {
                 NpcDialogueGraph.Node src = graph.get(n.varInputNode);
                 if (isBlueSourceNode(src)) {
@@ -236,6 +241,20 @@ public final class VarDataNode453 {
                 }
             }
         }
+    }
+
+    /**
+     * Finds the first {@link #isVarDataNode(NpcDialogueGraph.Node)} whose orange input is wired from
+     * {@code sourceId} (used when a math {@code VARIABLE} node with a blank name outputs into a variable value node).
+     */
+    public static NpcDialogueGraph.Node findLinkedOrangeTarget(NpcDialogueGraph graph, int sourceId) {
+        if (graph == null || graph.nodes == null || sourceId < 0) return null;
+        for (NpcDialogueGraph.Node n : graph.nodes.values()) {
+            if (isVarDataNode(n) && n.varInputNode == sourceId && n.id != sourceId) {
+                return n;
+            }
+        }
+        return null;
     }
 
     /** Returns the orange source node connected to {@code consumer}, or null. */

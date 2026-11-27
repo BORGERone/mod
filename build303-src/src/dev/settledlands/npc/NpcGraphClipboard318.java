@@ -166,7 +166,7 @@ public final class NpcGraphClipboard318 {
         Map<Integer, Integer> moved = new LinkedHashMap<>();
         for (Map<String, String> row : rows) {
             int type = number(row, "type", -1);
-            if (type < 0 || type > NpcDialogueGraph.CUTSCENE) {
+            if (type < 0 || type > NpcDialogueGraph.RADIUS) {
                 lastError = "bad type " + type;
                 rollback(graph, added);
                 return null;
@@ -266,6 +266,7 @@ public final class NpcGraphClipboard318 {
         flag(out, "timerRepeat", node.timerRepeat);
         num(out, "radius", node.radius);
         num(out, "radiusTarget", node.radiusTarget);
+        flag(out, "squareZone456", RadiusZone456.isSquare(node));
         text(out, "moveCoords", node.moveCoords);
         out.append(" moveSpeed=").append(String.format(Locale.ROOT, "%.3f", node.moveSpeed));
         flag(out, "moveEscort", node.moveEscort);
@@ -328,6 +329,7 @@ public final class NpcGraphClipboard318 {
         node.timerRepeat = flag(row, "timerRepeat", node.timerRepeat);
         node.radius = number(row, "radius", node.radius);
         node.radiusTarget = number(row, "radiusTarget", node.radiusTarget);
+        RadiusZone456.setSquare(node, flag(row, "squareZone456", false));
         node.moveCoords = string(row, "moveCoords", node.moveCoords);
         node.moveSpeed = decimal(row, "moveSpeed", node.moveSpeed);
         node.moveEscort = flag(row, "moveEscort", node.moveEscort);

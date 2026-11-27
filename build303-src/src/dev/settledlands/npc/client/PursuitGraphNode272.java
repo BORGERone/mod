@@ -868,15 +868,15 @@ public final class PursuitGraphNode272 {
     }
 
     /**
-     * True for a stock node that takes a body: реплика, триггер, условие, переменная.
-     * A pursuit node is a trigger node on disk, so it is excluded here - it has its own
+     * True for a node that takes a body on its blue pin: реплика, триггер, условие, переменная,
+     * значение переменной ({@link VarDataNode453}). A pursuit node is excluded here - it has its own
      * blue input further up the card.
      */
     public static boolean isValueInputNode(Node node) {
         if (node == null || isPursuitNode(node)) return false;
-        if (VarDataNode453.isVarDataNode(node)) return false;
         if (TrialModule447.isModuleNode(node) || TrialControlNode446.isControlNode(node)) return false;
-        return node.type == NpcDialogueGraph.LINE
+        return VarDataNode453.isVarDataNode(node)
+                || node.type == NpcDialogueGraph.LINE
                 || node.type == NpcDialogueGraph.TRIGGER
                 || node.type == NpcDialogueGraph.IF
                 || node.type == NpcDialogueGraph.VARIABLE;
@@ -1143,7 +1143,7 @@ public final class PursuitGraphNode272 {
     }
 
     public static double consumerAnchorY(NpcGraphCanvas canvas, Node consumer) {
-        return consumer != null && isPursuitNode(consumer)
+        return consumer != null && (isPursuitNode(consumer) || VarDataNode453.isVarDataNode(consumer))
                 ? targetPinScreenY(canvas, consumer)
                 : canvas.portScreenY(consumer, false, 0);
     }

@@ -13,9 +13,9 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 
 /**
- * Build 453: inspector panels for the new UE5 variable node ({@link VarDataNode453}) and enhanced
- * {@link NpcDialogueGraph#VARIABLE} / {@link NpcDialogueGraph#IF} nodes (all 14 math operations +
- * orange variable/numeric input status + blue entity/target input status).
+ * Build 453/456: inspector panels for the Variable Value node ({@link VarDataNode453}) and
+ * enhanced {@link NpcDialogueGraph#VARIABLE} / {@link NpcDialogueGraph#IF} nodes (all 14 math
+ * operations + orange variable/numeric input status + blue entity/target input status).
  */
 public final class VarDataInspector453 {
 
@@ -104,7 +104,55 @@ public final class VarDataInspector453 {
                     "gui.settledlands.var453.btn_local", x, y, width);
             y += 4;
 
-            // 4. Connection info & unlink/delete
+            // 4. Incoming orange & blue inputs + outgoing connections
+            Node orangeIn = VarDataNode453.resolveOrangeSource(graph, node);
+            if (orangeIn != null) {
+                String srcName = (orangeIn.pointsName != null && !orangeIn.pointsName.isBlank())
+                        ? orangeIn.pointsName : String.valueOf(orangeIn.varValue);
+                String txt = Component.translatable("gui.settledlands.var453.orange_linked_in",
+                        orangeIn.id, srcName).getString();
+                host.settledlands$label453(txt, x, y);
+                y += 12;
+                host.settledlands$button453("gui.settledlands.var453.btn_unlink_orange",
+                        x, y, width, 16, () -> {
+                            host.settledlands$remember453();
+                            node.varInputNode = -1;
+                            host.settledlands$changed453();
+                            host.settledlands$widgets453();
+                        });
+                y += 20;
+            } else {
+                host.settledlands$label453("gui.settledlands.var453.orange_none", x, y);
+                y += 14;
+            }
+
+            int blueInId = VarDataCard453.findBlueSourceId(graph, node);
+            if (blueInId >= 0) {
+                String txt = Component.translatable("gui.settledlands.var453.blue_linked",
+                        blueInId).getString();
+                host.settledlands$label453(txt, x, y);
+                y += 12;
+                host.settledlands$button453("gui.settledlands.var453.btn_unlink_blue",
+                        x, y, width, 16, () -> {
+                            host.settledlands$remember453();
+                            VarDataNode453.setEntityInput(node, -1);
+                            if (graph.nodes != null) {
+                                for (Node cand : graph.nodes.values()) {
+                                    if (PursuitGraphNode272.isPursuitNode(cand)
+                                            && PursuitGraphNode272.consumers(cand).contains(node.id)) {
+                                        PursuitGraphNode272.toggleConsumer(cand, node.id);
+                                    }
+                                }
+                            }
+                            host.settledlands$changed453();
+                            host.settledlands$widgets453();
+                        });
+                y += 20;
+            } else {
+                host.settledlands$label453("gui.settledlands.var453.blue_none", x, y);
+                y += 14;
+            }
+
             int wiredCount = VarDataNode453.wiredOrangeConsumers(graph, node.id);
             String linkLine = wiredCount > 0
                     ? Component.translatable("gui.settledlands.var453.wired_count", wiredCount).getString()
@@ -113,7 +161,7 @@ public final class VarDataInspector453 {
             y += 12;
 
             if (wiredCount > 0) {
-                Button unlinkBtn = host.settledlands$button453(
+                host.settledlands$button453(
                         "gui.settledlands.var453.btn_unlink", x, y, width, 16,
                         () -> {
                             host.settledlands$remember453();

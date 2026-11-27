@@ -1105,6 +1105,24 @@ public final class GraphTooltips448 {
             if ("gui.settledlands.graph.unlink_if".equals(k)) {
                 return tip("w:stk_uif", tr(k), tr("gui.settledlands.tip448.stk.unlink_if"), WARN_ACCENT);
             }
+            if ("gui.settledlands.block.visible".equals(k)) {
+                boolean vis = node != null && dev.settledlands.npc.RadiusPass354.visible(node);
+                return tip("w:rad_vis",
+                        tr(vis ? "gui.settledlands.block.visible_on"
+                                : "gui.settledlands.block.visible_off"),
+                        tr(vis ? "gui.settledlands.tip448.rad.visible_on"
+                                : "gui.settledlands.tip448.rad.visible_off"),
+                        vis ? 0xFF4ADE80 : DEFAULT_ACCENT);
+            }
+            if ("gui.settledlands.radius_shape_btn".equals(k)) {
+                boolean sq = node != null && dev.settledlands.npc.RadiusZone456.isSquare(node);
+                return tip("w:rad_shape",
+                        tr(sq ? "gui.settledlands.radius_shape_square"
+                                : "gui.settledlands.radius_shape_circle"),
+                        tr(sq ? "gui.settledlands.tip448.rad.shape_square"
+                                : "gui.settledlands.tip448.rad.shape_circle"),
+                        sq ? 0xFF4ADE80 : 0xFF60A5FA);
+            }
             return resolveCommonActionButtons(k, DEFAULT_ACCENT);
         }
 
@@ -1298,7 +1316,7 @@ public final class GraphTooltips448 {
                         tr("gui.settledlands.tip448.pin.var453_out"),
                         VarDataNode453.PIN_COLOR);
             }
-            if (n.type == NpcDialogueGraph.VARIABLE) {
+            if (n.type == NpcDialogueGraph.VARIABLE || VarDataNode453.isVarDataNode(n)) {
                 if (VarDataCard453.hitOrangeIn(canvas, n, mx, my)) {
                     return tip("pin:" + n.id + ":v_orange",
                             tr("gui.settledlands.tip448.pin.var_orange_title"),

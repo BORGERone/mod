@@ -255,6 +255,10 @@ public abstract class NpcPursuitValuePinMixin290 {
                         && PursuitGraphNode272.isValueSourceNode(over)) {
                     screen.settledlands$remember();
                     PursuitGraphNode272.setInputSource(receiver, over.id);
+                } else if (PursuitGraphNode272.isValueInputNode(receiver)
+                        && PursuitGraphNode272.isPursuitNode(over)) {
+                    screen.settledlands$remember();
+                    PursuitGraphNode272.toggleConsumer(over, receiver.id);
                 }
             }
         }

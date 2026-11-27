@@ -42,8 +42,8 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Build 453: client UI &amp; orange wiring for {@link VarDataNode453} (UE5 Variable node) and enhanced
- * {@link NpcDialogueGraph#VARIABLE} / {@link NpcDialogueGraph#IF} nodes. Zero synthetic lambdas.
+ * Build 453/456: client UI &amp; orange wiring for {@link VarDataNode453} (Variable Value node) and
+ * enhanced {@link NpcDialogueGraph#VARIABLE} / {@link NpcDialogueGraph#IF} nodes. Zero synthetic lambdas.
  */
 @Mixin(value = NpcDialogueGraphScreen.class, remap = false)
 public abstract class VarDataGraphUi453Mixin implements VarDataInspector453.Host {
@@ -326,11 +326,17 @@ public abstract class VarDataGraphUi453Mixin implements VarDataInspector453.Host
 
             double wx = contextMenu.worldX;
             double wy = contextMenu.worldY;
+            int wireFrom = contextMenu.pendingWireFrom;
+            int wirePort = contextMenu.pendingWirePort;
             contextMenu.close();
             Node created = addAt(NpcDialogueGraph.TRIGGER, wx, wy);
             if (created != null) {
                 VarDataNode453.applyDefaults(created);
-                status = Component.translatable("gui.settledlands.var453.added").getString();
+                if (wireFrom >= 0 && graph != null && graph.connect(wireFrom, created.id, wirePort)) {
+                    status = Component.translatable("gui.settledlands.graph.connected").getString();
+                } else {
+                    status = Component.translatable("gui.settledlands.var453.added").getString();
+                }
                 widgets();
                 changed();
             }
