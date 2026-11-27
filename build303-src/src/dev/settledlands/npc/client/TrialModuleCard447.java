@@ -144,10 +144,14 @@ public final class TrialModuleCard447 {
             }
             case TrialModule447.SLOT_MOBS -> {
                 List<TrialConfig446.SpawnEntry> mobs = TrialModule447.readMobs(node);
-                String l1 = safe("gui.settledlands.trial.mod.card_mob_count", String.valueOf(mobs.size()));
-                String l2 = mobs.isEmpty() ? "" : "1. " + TrialGraphClient446.shortId(mobs.get(0).entityId)
+                String pool = TrialModule447.mobPoolFile(node);
+                String l1 = pool.isEmpty()
+                        ? safe("gui.settledlands.trial.mod.card_mob_inline", String.valueOf(mobs.size()))
+                        : Component.translatable("gui.settledlands.trial.mod.card_pool_file",
+                                pool, String.valueOf(mobs.size())).getString();
+                String l2 = mobs.isEmpty() ? "" : "1. " + TrialMobPreview449.displayName(mobs.get(0).entityId)
                         + " (w:" + mobs.get(0).weight + ")";
-                String l3 = mobs.size() > 1 ? "2. " + TrialGraphClient446.shortId(mobs.get(1).entityId)
+                String l3 = mobs.size() > 1 ? "2. " + TrialMobPreview449.displayName(mobs.get(1).entityId)
                         + " (w:" + mobs.get(1).weight + ")"
                         + (mobs.size() > 2 ? " +" + (mobs.size() - 2) : "")
                         : "";
@@ -155,7 +159,11 @@ public final class TrialModuleCard447 {
             }
             case TrialModule447.SLOT_REWARDS -> {
                 List<TrialConfig446.RewardEntry> rewards = TrialModule447.readRewards(node);
-                String l1 = safe("gui.settledlands.trial.mod.card_rew_count", String.valueOf(rewards.size()));
+                String pool = TrialModule447.rewardPoolFile(node);
+                String l1 = pool.isEmpty()
+                        ? safe("gui.settledlands.trial.mod.card_rew_inline", String.valueOf(rewards.size()))
+                        : Component.translatable("gui.settledlands.trial.mod.card_pool_file",
+                                pool, String.valueOf(rewards.size())).getString();
                 String l2 = rewards.isEmpty() ? tr("gui.settledlands.trial.mod.card_rew_empty")
                         : formatRewardShort(1, rewards.get(0));
                 String l3 = rewards.size() > 1

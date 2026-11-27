@@ -14,6 +14,7 @@ import dev.settledlands.npc.TeleportNode424;
 import dev.settledlands.trial.TrialConfig446;
 import dev.settledlands.trial.TrialControlNode446;
 import dev.settledlands.trial.TrialGraph446;
+import dev.settledlands.trial.TrialMobPool449;
 import dev.settledlands.trial.TrialModule447;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -524,6 +525,18 @@ public final class GraphTooltips448 {
             return tip("drop:world:" + idx, entryText,
                     tr("gui.settledlands.tip448.world_item"), TeleportNode424.ACCENT_COLOR);
         }
+        if ("gui.settledlands.trial.mob_pool.file".equals(lk)) {
+            return tip("drop:mp:" + idx, entryText,
+                    tr(idx == 0 ? "gui.settledlands.tip448.mob_pool.create_item"
+                            : "gui.settledlands.tip448.mob_pool.pick_item"),
+                    TrialMobPool449.ACCENT_COLOR);
+        }
+        if ("gui.settledlands.trial.reward_pool.file".equals(lk)) {
+            return tip("drop:rp:" + idx, entryText,
+                    tr(idx == 0 ? "gui.settledlands.tip448.reward_pool.create_item"
+                            : "gui.settledlands.tip448.reward_pool.pick_item"),
+                    TrialModule447.color(TrialModule447.SLOT_REWARDS));
+        }
         return tip("drop:gen:" + lk + ":" + idx, entryText,
                 tr("gui.settledlands.tip448.dropdown_item"), DEFAULT_ACCENT);
     }
@@ -540,8 +553,18 @@ public final class GraphTooltips448 {
             return resolveTopBarTip(screen, tw);
         }
 
-        // Gear button on LootPool node
+        // Gear button on LootPool / Trial Mob Pool / Trial Reward Pool nodes
         if (tw.kind == 5) {
+            int mSlot = TrialModule447.slotOf(node);
+            if (mSlot == TrialModule447.SLOT_MOBS) {
+                return tip("w:mp_gear", tr(TrialModule447.titleKey(mSlot)),
+                        tr("gui.settledlands.tip448.w.mob_pool_gear"), TrialMobPool449.ACCENT_COLOR);
+            }
+            if (mSlot == TrialModule447.SLOT_REWARDS) {
+                return tip("w:rp_gear", tr(TrialModule447.titleKey(mSlot)),
+                        tr("gui.settledlands.tip448.w.reward_pool_gear"),
+                        TrialModule447.color(TrialModule447.SLOT_REWARDS));
+            }
             return tip("w:lp_gear", tr("gui.settledlands.loot_pool.title"),
                     tr("gui.settledlands.tip448.w.loot_pool_gear"), LootPool436.ACCENT_COLOR);
         }
@@ -904,6 +927,15 @@ public final class GraphTooltips448 {
         if ("gui.settledlands.loot_pool.file".equals(lk)) {
             return tip("w:drop_pool", tr(lk),
                     tr("gui.settledlands.tip448.drop.loot_pool"), LootPool436.ACCENT_COLOR);
+        }
+        if ("gui.settledlands.trial.mob_pool.file".equals(lk)) {
+            return tip("w:drop_mob_pool", tr(lk),
+                    tr("gui.settledlands.tip448.drop.mob_pool"), TrialMobPool449.ACCENT_COLOR);
+        }
+        if ("gui.settledlands.trial.reward_pool.file".equals(lk)) {
+            return tip("w:drop_rew_pool", tr(lk),
+                    tr("gui.settledlands.tip448.drop.reward_pool"),
+                    TrialModule447.color(TrialModule447.SLOT_REWARDS));
         }
         if ("gui.settledlands.graph.var_op".equals(lk) && node != null) {
             return tip("w:drop_varop", tr(lk),

@@ -1,10 +1,11 @@
 package dev.settledlands.mixin;
 
 import dev.settledlands.npc.NpcDialogueGraph;
+import dev.settledlands.npc.client.LootPoolCard436;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
+import dev.settledlands.npc.client.NpcUi;
 import dev.settledlands.npc.client.TrialGraphClient446;
 import dev.settledlands.npc.client.TrialModuleClient447;
-import dev.settledlands.trial.TrialConfig446;
 import dev.settledlands.trial.TrialGraph446;
 import dev.settledlands.trial.TrialModule447;
 import java.util.List;
@@ -207,84 +208,76 @@ public abstract class TrialModuleInspector447Mixin {
 
     private int settledlands$buildMobsRows447(NpcDialogueGraphScreen screen, NpcDialogueGraph.Node node,
             int x, int y, int width) {
-        button("gui.settledlands.trial.mod.add_mob_catalog", x, y, width, 18,
-                TrialModuleClient447.openAddMobPicker(screen, node));
-        y += 22;
-        button("gui.settledlands.trial.mod.open_mob_list", x, y, width, 16,
-                TrialModuleClient447.openMobPoolAction(screen, node));
-        y += 20;
+        LootPoolCard436.ensureClientListenersRegistered();
 
-        List<TrialConfig446.SpawnEntry> mobs = TrialModule447.readMobs(node);
-        int delW = 18;
-        int wgtW = 42;
-        int pickW = Math.max(48, width - delW - wgtW - 8);
-        for (int i = 0; i < mobs.size(); i++) {
-            TrialConfig446.SpawnEntry e = mobs.get(i);
-            label((i + 1) + ". " + TrialGraphClient446.shortId(e.entityId), x, y);
+        label("gui.settledlands.trial.mob_pool.file", x, y);
+        y += 11;
+
+        String currentFile = TrialModule447.mobPoolFile(node);
+        List<String> options = TrialModuleClient447.mobPoolOptions(currentFile);
+        int dropWidth = Math.max(60, width - 24);
+        Consumer<Runnable> commit = TrialModuleClient447.commitAction(screen);
+
+        NpcUi.NpcDropdown dropdown = NpcUi.dropdown(
+                x, y, dropWidth,
+                TrialModuleClient447.mobPoolDropdownEntries(options),
+                TrialModuleClient447.mobPoolDropdownIndex(options, currentFile),
+                TrialModuleClient447.mobPoolPicker(commit, screen, node, options));
+        LootPoolCard436.trackTrialMobDropdown(dropdown, options, screen, node, commit);
+        screen.addRenderableWidget(dropdown);
+        inspectorWidgets.add(dropdown);
+
+        AbstractWidget gearBtn = TrialModuleClient447.mobPoolGearButton(
+                x + width - 20, y, screen, node);
+        screen.addRenderableWidget(gearBtn);
+        inspectorWidgets.add(gearBtn);
+        y += 24;
+
+        List<String> summary = TrialModuleClient447.mobPoolSummaryLines(node);
+        for (int i = 0; i < summary.size(); i++) {
+            label(summary.get(i), x, y);
             y += 11;
-            button("gui.settledlands.trial.cfg.pick", x, y, pickW, 18,
-                    TrialModuleClient447.openPickMobRowAction(screen, node, i));
-            EditBox wgtBox = textBox(Integer.toString(e.weight), 8,
-                    x + pickW + 4, y, wgtW, 18,
-                    TrialModuleClient447.mobWeightSetter(graph, node, i));
-            wgtBox.setFilter(TrialModuleClient447.intFilter());
-            wgtBox.setHint(Component.literal("W"));
-            if (mobs.size() > 1) {
-                button("-", x + pickW + wgtW + 8, y, delW, 18,
-                        TrialModuleClient447.removeMobRowAction(screen, graph, node, i));
-            }
-            y += 22;
         }
-        return y;
+        y += 2;
+        label("gui.settledlands.trial.mob_pool.folder_hint", x, y);
+        return y + 12;
     }
 
     private int settledlands$buildRewardsRows447(NpcDialogueGraphScreen screen,
             NpcDialogueGraph.Node node, int x, int y, int width) {
-        button("gui.settledlands.trial.mod.add_reward_catalog", x, y, width, 18,
-                TrialModuleClient447.openAddRewardPicker(screen, node));
-        y += 22;
-        button("gui.settledlands.trial.mod.open_reward_list", x, y, width, 16,
-                TrialModuleClient447.openRewardPoolAction(screen, node));
-        y += 20;
+        LootPoolCard436.ensureClientListenersRegistered();
 
-        List<TrialConfig446.RewardEntry> rewards = TrialModule447.readRewards(node);
-        int delW = 18;
-        int wgtW = 44;
-        int pickW = Math.max(48, width - delW - wgtW - 8);
-        int thirdW = (width - 8) / 3;
-        for (int i = 0; i < rewards.size(); i++) {
-            TrialConfig446.RewardEntry r = rewards.get(i);
-            label((i + 1) + ". " + TrialGraphClient446.shortId(r.itemId), x, y);
+        label("gui.settledlands.trial.reward_pool.file", x, y);
+        y += 11;
+
+        String currentFile = TrialModule447.rewardPoolFile(node);
+        List<String> options = TrialModuleClient447.rewardPoolOptions(currentFile);
+        int dropWidth = Math.max(60, width - 24);
+        Consumer<Runnable> commit = TrialModuleClient447.commitAction(screen);
+
+        NpcUi.NpcDropdown dropdown = NpcUi.dropdown(
+                x, y, dropWidth,
+                TrialModuleClient447.rewardPoolDropdownEntries(options),
+                TrialModuleClient447.rewardPoolDropdownIndex(options, currentFile),
+                TrialModuleClient447.rewardPoolPicker(commit, screen, node, options));
+        LootPoolCard436.trackTrialRewardDropdown(dropdown, options, screen, node, commit);
+        screen.addRenderableWidget(dropdown);
+        inspectorWidgets.add(dropdown);
+
+        AbstractWidget gearBtn = TrialModuleClient447.rewardPoolGearButton(
+                x + width - 20, y, screen, node);
+        screen.addRenderableWidget(gearBtn);
+        inspectorWidgets.add(gearBtn);
+        y += 24;
+
+        List<String> summary = TrialModuleClient447.rewardPoolSummaryLines(node);
+        for (int i = 0; i < summary.size(); i++) {
+            label(summary.get(i), x, y);
             y += 11;
-            button("gui.settledlands.trial.cfg.pick", x, y, pickW, 18,
-                    TrialModuleClient447.openPickRewardRowAction(screen, node, i));
-            EditBox wgtBox = textBox(Integer.toString(r.weight), 8,
-                    x + pickW + 4, y, wgtW, 18,
-                    TrialModuleClient447.rewardFieldSetter(graph, node, i, 0));
-            wgtBox.setFilter(TrialModuleClient447.intFilter());
-            wgtBox.setHint(Component.literal("W"));
-            button("-", x + pickW + wgtW + 8, y, delW, 18,
-                    TrialModuleClient447.removeRewardRowAction(screen, graph, node, i));
-            y += 21;
-
-            EditBox minBox = textBox(Integer.toString(r.minCount), 4,
-                    x, y, thirdW, 18,
-                    TrialModuleClient447.rewardFieldSetter(graph, node, i, 1));
-            minBox.setFilter(TrialModuleClient447.intFilter());
-            minBox.setHint(Component.literal("Min"));
-            EditBox maxBox = textBox(Integer.toString(r.maxCount), 4,
-                    x + thirdW + 4, y, thirdW, 18,
-                    TrialModuleClient447.rewardFieldSetter(graph, node, i, 2));
-            maxBox.setFilter(TrialModuleClient447.intFilter());
-            maxBox.setHint(Component.literal("Max"));
-            EditBox pctBox = textBox(Integer.toString(r.chancePercent), 4,
-                    x + (thirdW + 4) * 2, y, width - (thirdW + 4) * 2, 18,
-                    TrialModuleClient447.rewardFieldSetter(graph, node, i, 3));
-            pctBox.setFilter(TrialModuleClient447.intFilter());
-            pctBox.setHint(Component.literal("%"));
-            y += 23;
         }
-        return y;
+        y += 2;
+        label("gui.settledlands.trial.reward_pool.folder_hint", x, y);
+        return y + 12;
     }
 
     private int settledlands$buildOminousRows447(NpcDialogueGraphScreen screen,

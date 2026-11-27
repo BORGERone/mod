@@ -6,8 +6,10 @@ import dev.settledlands.trial.TrialConfig446;
 import dev.settledlands.trial.TrialControlNode446;
 import dev.settledlands.trial.TrialGraph446;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
@@ -402,11 +404,15 @@ public final class TrialControlConfigScreen446 extends Screen {
 
             Button pickBtn = Button.builder(
                     Component.translatable("gui.settledlands.trial.cfg.pick"), b -> {
-                pickerRow = idx;
-                pickerQuery = "";
-                pickerScroll = 0;
-                viewMode = VIEW_MOB_PICKER;
-                rebuildView();
+                Set<String> present = new HashSet<>();
+                for (TrialConfig446.SpawnEntry m : cfg.mobs) {
+                    if (m != null && m.entityId != null) present.add(m.entityId);
+                }
+                Minecraft.getInstance().setScreen(new TrialMobCatalogScreen449(
+                        this, idx, present, chosen -> {
+                            entry.entityId = chosen;
+                            rebuildView();
+                        }));
             }).bounds(x + idW + 4, ry, pickW, 18).build();
             addDyn(pickBtn);
             addTip("cfg:m_pk_" + s, pickBtn, x + idW + 4, ry, pickW, 18, "mob_pick", "");

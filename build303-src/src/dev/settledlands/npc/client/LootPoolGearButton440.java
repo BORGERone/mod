@@ -14,10 +14,17 @@ import net.minecraft.network.chat.Component;
 public final class LootPoolGearButton440 extends AbstractWidget {
 
     private final Runnable onPress;
+    private final int accentColor;
 
     public LootPoolGearButton440(int x, int y, int width, int height,
             Component tooltip, Runnable onPress) {
+        this(x, y, width, height, tooltip, LootPool436.ACCENT_COLOR, onPress);
+    }
+
+    public LootPoolGearButton440(int x, int y, int width, int height,
+            Component tooltip, int accentColor, Runnable onPress) {
         super(x, y, width, height, Component.empty());
+        this.accentColor = accentColor;
         this.onPress = onPress;
         if (tooltip != null) {
             setTooltip(Tooltip.create(tooltip));
@@ -43,13 +50,13 @@ public final class LootPoolGearButton440 extends AbstractWidget {
         int w = getWidth();
         int h = getHeight();
         boolean hovered = active && isHoveredOrFocused();
-        int border = hovered ? (0xFF000000 | LootPool436.ACCENT_COLOR) : 0xFF424B5E;
+        int border = hovered ? (0xFF000000 | accentColor) : 0xFF424B5E;
         int bg = hovered ? 0xFF282218 : 0xFF171B24;
         graphics.fill(x, y, x + w, y + h, border);
         graphics.fill(x + 1, y + 1, x + w - 1, y + h - 1, bg);
         int gx = x + (w - 12) / 2;
         int gy = y + (h - 12) / 2;
-        drawGearIcon(graphics, gx, gy, hovered, bg);
+        drawGearIcon(graphics, gx, gy, hovered, bg, accentColor);
     }
 
     @Override
@@ -62,8 +69,13 @@ public final class LootPoolGearButton440 extends AbstractWidget {
      * {@code GuideDialogueScreen#drawGearButton}.
      */
     public static void drawGearIcon(GuiGraphics graphics, int x, int y, boolean hovered, int holeBg) {
+        drawGearIcon(graphics, x, y, hovered, holeBg, LootPool436.ACCENT_COLOR);
+    }
+
+    public static void drawGearIcon(GuiGraphics graphics, int x, int y, boolean hovered, int holeBg,
+            int accentColor) {
         if (graphics == null) return;
-        int fg = hovered ? (0xFF000000 | LootPool436.ACCENT_COLOR) : 0xFFD4DCE8;
+        int fg = hovered ? (0xFF000000 | accentColor) : 0xFFD4DCE8;
         // Cardinal teeth
         graphics.fill(x + 5, y + 1, x + 7, y + 11, fg);
         graphics.fill(x + 1, y + 5, x + 11, y + 7, fg);
@@ -79,11 +91,16 @@ public final class LootPoolGearButton440 extends AbstractWidget {
 
     /** Draws a framed 12x12 inline gear button (used on expanded dropdown selector rows). */
     public static void drawInlineGearFrame(GuiGraphics graphics, int x, int y, boolean hovered) {
+        drawInlineGearFrame(graphics, x, y, hovered, LootPool436.ACCENT_COLOR);
+    }
+
+    public static void drawInlineGearFrame(GuiGraphics graphics, int x, int y, boolean hovered,
+            int accentColor) {
         if (graphics == null) return;
-        int frame = hovered ? (0xFF000000 | LootPool436.ACCENT_COLOR) : 0xFF3E4656;
+        int frame = hovered ? (0xFF000000 | accentColor) : 0xFF3E4656;
         int bg = hovered ? 0xFF282218 : 0xFF141820;
         graphics.fill(x, y, x + 12, y + 12, frame);
         graphics.fill(x + 1, y + 1, x + 11, y + 11, bg);
-        drawGearIcon(graphics, x, y, hovered, bg);
+        drawGearIcon(graphics, x, y, hovered, bg, accentColor);
     }
 }

@@ -6,6 +6,8 @@ import dev.settledlands.chest.LootPool436;
 import dev.settledlands.chest.LootPoolManager436;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.trial.TrialMobPool449;
+import dev.settledlands.trial.TrialModule447;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
@@ -41,18 +43,26 @@ public final class LootPoolCard436 {
             new WeakHashMap<>();
     private static volatile boolean clientListenersRegistered;
 
+    private static final int MODE_LOOT = 0;
+    private static final int MODE_TRIAL_REWARDS = 1;
+    private static final int MODE_TRIAL_MOBS = 2;
+
     private static final class TrackedDropdown {
         final List<String> options;
         final NpcDialogueGraphScreen screen;
         final Node node;
         final Consumer<Runnable> commit;
+        final int mode;
+        final int accentColor;
 
         TrackedDropdown(List<String> options, NpcDialogueGraphScreen screen, Node node,
-                Consumer<Runnable> commit) {
+                Consumer<Runnable> commit, int mode, int accentColor) {
             this.options = options;
             this.screen = screen;
             this.node = node;
             this.commit = commit;
+            this.mode = mode;
+            this.accentColor = accentColor;
         }
     }
 
@@ -62,8 +72,14 @@ public final class LootPoolCard436 {
         if (!clientListenersRegistered) {
             clientListenersRegistered = true;
             LootPool436.setClientListeners(
-                    LootPoolEditorScreen440::onPoolsListUpdated,
-                    LootPoolEditorScreen440::handleServerData);
+                    () -> {
+                        LootPoolEditorScreen440.onPoolsListUpdated();
+                        TrialModuleClient447.onLootPoolsUpdated();
+                    },
+                    payload -> {
+                        LootPoolEditorScreen440.handleServerData(payload);
+                        TrialModuleClient447.onLootPoolData(payload);
+                    });
             CustomBook443.setClientListeners(
                     () -> {
                         LootPoolBookEditorScreen443.onBooksListUpdated();
@@ -71,13 +87,38 @@ public final class LootPoolCard436 {
                         LootPoolItemPickerScreen440.onBooksListUpdated();
                     },
                     LootPoolBookEditorScreen443::handleServerData);
+            TrialMobPool449.setClientListeners(
+                    () -> {
+                        TrialMobPoolEditorScreen449.onPoolsListUpdated();
+                        TrialModuleClient447.onMobPoolsUpdated();
+                    },
+                    payload -> {
+                        TrialMobPoolEditorScreen449.handleServerData(payload);
+                        TrialModuleClient447.onMobPoolData(payload);
+                    });
         }
     }
 
     public static void trackPoolDropdown(NpcUi.NpcDropdown dropdown, List<String> options,
             NpcDialogueGraphScreen screen, Node node, Consumer<Runnable> commit) {
         if (dropdown == null || options == null) return;
-        TRACKED_DROPDOWNS.put(dropdown, new TrackedDropdown(options, screen, node, commit));
+        TRACKED_DROPDOWNS.put(dropdown, new TrackedDropdown(
+                options, screen, node, commit, MODE_LOOT, LootPool436.ACCENT_COLOR));
+    }
+
+    public static void trackTrialRewardDropdown(NpcUi.NpcDropdown dropdown, List<String> options,
+            NpcDialogueGraphScreen screen, Node node, Consumer<Runnable> commit) {
+        if (dropdown == null || options == null) return;
+        TRACKED_DROPDOWNS.put(dropdown, new TrackedDropdown(
+                options, screen, node, commit, MODE_TRIAL_REWARDS,
+                TrialModule447.color(TrialModule447.SLOT_REWARDS)));
+    }
+
+    public static void trackTrialMobDropdown(NpcUi.NpcDropdown dropdown, List<String> options,
+            NpcDialogueGraphScreen screen, Node node, Consumer<Runnable> commit) {
+        if (dropdown == null || options == null) return;
+        TRACKED_DROPDOWNS.put(dropdown, new TrackedDropdown(
+                options, screen, node, commit, MODE_TRIAL_MOBS, TrialMobPool449.ACCENT_COLOR));
     }
 
     public static AbstractWidget gearButton(int x, int y, NpcDialogueGraphScreen screen, Node node) {
@@ -92,6 +133,11 @@ public final class LootPoolCard436 {
     public static void openPoolEditor(NpcDialogueGraphScreen screen, Node node, String poolFile) {
         ensureClientListenersRegistered();
         Minecraft.getInstance().setScreen(new LootPoolEditorScreen440(screen, node, poolFile));
+    }
+
+    public static void openMobPoolEditor(NpcDialogueGraphScreen screen, Node node, String poolFile) {
+        ensureClientListenersRegistered();
+        Minecraft.getInstance().setScreen(new TrialMobPoolEditorScreen449(screen, node, poolFile));
     }
 
     public static void renderDropdownRowGears(NpcUi.NpcDropdown dropdown, GuiGraphics graphics,
@@ -123,13 +169,19 @@ public final class LootPoolCard436 {
             // Cover trailing text cleanly before drawing the inline gear frame.
             graphics.fill(bgPadX, ry + 1, bgRight, ry + DROPDOWN_ROW_H - 1,
                     rowOver ? 0xF05C5C5C : 0xF0181818);
-            LootPoolGearButton440.drawInlineGearFrame(graphics, gearX, gy, gearOver);
+            LootPoolGearButton440.drawInlineGearFrame(graphics, gearX, gy, gearOver, tracked.accentColor);
 
             if (gearOver) {
                 String opt = idx < tracked.options.size() ? tracked.options.get(idx) : "";
-                hoveredTip = (opt == null || opt.isEmpty())
-                        ? tr("gui.settledlands.loot_pool.create_row_tip")
-                        : tr("gui.settledlands.loot_pool.edit_row_tip", opt);
+                if (opt == null || opt.isEmpty()) {
+                    hoveredTip = tracked.mode == MODE_TRIAL_MOBS
+                            ? tr("gui.settledlands.trial.mob_pool.create_row_tip")
+                            : tr("gui.settledlands.loot_pool.create_row_tip");
+                } else {
+                    hoveredTip = tr(tracked.mode == MODE_TRIAL_MOBS
+                            ? "gui.settledlands.trial.mob_pool.edit_row_tip"
+                            : "gui.settledlands.loot_pool.edit_row_tip", opt);
+                }
             }
         }
 
@@ -140,7 +192,7 @@ public final class LootPoolCard436 {
                 int tx = Math.max(4, Math.min(mouseX + 8, px + pw - tw + 40));
                 int ty = mouseY - 16;
                 if (ty < 4) ty = mouseY + 14;
-                graphics.fill(tx - 1, ty - 1, tx + tw + 1, ty + 13, 0xFF000000 | LootPool436.ACCENT_COLOR);
+                graphics.fill(tx - 1, ty - 1, tx + tw + 1, ty + 13, 0xFF000000 | tracked.accentColor);
                 graphics.fill(tx, ty, tx + tw, ty + 12, 0xEE141821);
                 graphics.drawString(font, hoveredTip, tx + 4, ty + 2, 0xFFF2F5FA, false);
             }
@@ -170,10 +222,25 @@ public final class LootPoolCard436 {
         if (idx < 0 || idx >= tracked.options.size()) return false;
 
         String chosen = tracked.options.get(idx);
-        if (chosen != null && !chosen.isEmpty() && tracked.commit != null && tracked.node != null) {
-            tracked.commit.accept(() -> LootPool436.setPoolFile(tracked.node, chosen));
+        String chosenSafe = chosen == null ? "" : chosen;
+        if (tracked.mode == MODE_TRIAL_MOBS) {
+            if (!chosenSafe.isEmpty() && tracked.commit != null && tracked.node != null) {
+                tracked.commit.accept(() -> TrialModule447.writeMobPool(
+                        tracked.node, chosenSafe, TrialModule447.readMobs(tracked.node)));
+            }
+            openMobPoolEditor(tracked.screen, tracked.node, chosenSafe);
+        } else if (tracked.mode == MODE_TRIAL_REWARDS) {
+            if (!chosenSafe.isEmpty() && tracked.commit != null && tracked.node != null) {
+                tracked.commit.accept(() -> TrialModule447.writeRewardPool(
+                        tracked.node, chosenSafe, TrialModule447.readRewards(tracked.node)));
+            }
+            openPoolEditor(tracked.screen, tracked.node, chosenSafe);
+        } else {
+            if (!chosenSafe.isEmpty() && tracked.commit != null && tracked.node != null) {
+                tracked.commit.accept(() -> LootPool436.setPoolFile(tracked.node, chosenSafe));
+            }
+            openPoolEditor(tracked.screen, tracked.node, chosenSafe);
         }
-        openPoolEditor(tracked.screen, tracked.node, chosen == null ? "" : chosen);
         return true;
     }
 

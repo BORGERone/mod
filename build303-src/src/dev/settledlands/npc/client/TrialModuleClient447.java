@@ -1,15 +1,24 @@
 package dev.settledlands.npc.client;
 
+import dev.settledlands.chest.ChestLootNet436;
+import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
 import dev.settledlands.trial.TrialConfig446;
 import dev.settledlands.trial.TrialGraph446;
+import dev.settledlands.trial.TrialMobPool449;
+import dev.settledlands.trial.TrialMobPoolNet449;
 import dev.settledlands.trial.TrialModule447;
 import java.util.ArrayList;
+import java.util.Collections;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
 import java.util.function.Consumer;
+import java.util.function.IntConsumer;
 import java.util.function.Predicate;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 
 /**
@@ -42,6 +51,10 @@ public final class TrialModuleClient447 {
     public static final int FIELD_PROTECT_CHANCE = 44;
 
     private static boolean pendingInspectorRebuild;
+    private static NpcDialogueGraphScreen pendingPoolSyncScreen;
+    private static int pendingPoolSyncNodeId = -1;
+    private static int pendingPoolSyncSlot = -1;
+    private static String pendingPoolSyncFile = "";
 
     private TrialModuleClient447() {}
 
@@ -318,6 +331,230 @@ public final class TrialModuleClient447 {
             }
             if (graph != null) TrialModule447.syncCardConfig(graph);
         };
+    }
+
+    // ---- Slot 4 & 5: Named Mob & Reward Pool Selectors (Build 449) --------
+
+    public static Consumer<Runnable> commitAction(NpcDialogueGraphScreen screen) {
+        return action -> {
+            if (screen == null || action == null) return;
+            screen.settledlands$remember();
+            action.run();
+            if (screen.settledlands$graph() != null) {
+                TrialModule447.syncCardConfig(screen.settledlands$graph());
+            }
+            requestInspectorRebuild();
+            screen.settledlands$changed();
+        };
+    }
+
+    public static List<String> mobPoolOptions(String currentFile) {
+        Set<String> unique = new LinkedHashSet<>(TrialMobPool449.getServerPools());
+        String cleanCurrent = TrialMobPool449.sanitizeFileName(currentFile);
+        if (!cleanCurrent.isEmpty()) unique.add(cleanCurrent);
+        List<String> sorted = new ArrayList<>(unique);
+        Collections.sort(sorted, String.CASE_INSENSITIVE_ORDER);
+        List<String> out = new ArrayList<>(sorted.size() + 1);
+        out.add("");
+        out.addAll(sorted);
+        return out;
+    }
+
+    public static List<Component> mobPoolDropdownEntries(List<String> options) {
+        List<Component> entries = new ArrayList<>(options.size());
+        for (String opt : options) {
+            if (opt == null || opt.isEmpty()) {
+                entries.add(Component.translatable("gui.settledlands.trial.mob_pool.create_new"));
+            } else {
+                entries.add(Component.literal(opt));
+            }
+        }
+        return entries;
+    }
+
+    public static int mobPoolDropdownIndex(List<String> options, String currentFile) {
+        String clean = TrialMobPool449.sanitizeFileName(currentFile);
+        if (clean.isEmpty()) return 0;
+        for (int i = 0; i < options.size(); i++) {
+            if (clean.equals(options.get(i))) return i;
+        }
+        return 0;
+    }
+
+    public static IntConsumer mobPoolPicker(Consumer<Runnable> commit,
+            NpcDialogueGraphScreen screen, Node node, List<String> options) {
+        return idx -> {
+            if (node == null || options == null || idx < 0 || idx >= options.size()) return;
+            String chosen = options.get(idx);
+            if (chosen == null || chosen.isEmpty()) {
+                LootPoolCard436.openMobPoolEditor(screen, node, "");
+                return;
+            }
+            if (commit != null) {
+                commit.accept(() -> TrialModule447.writeMobPool(
+                        node, chosen, TrialModule447.readMobs(node)));
+            }
+            pendingPoolSyncScreen = screen;
+            pendingPoolSyncNodeId = node.id;
+            pendingPoolSyncSlot = TrialModule447.SLOT_MOBS;
+            pendingPoolSyncFile = chosen;
+            TrialMobPoolNet449.sendPoolQuery(chosen);
+        };
+    }
+
+    public static AbstractWidget mobPoolGearButton(int x, int y, NpcDialogueGraphScreen screen,
+            Node node) {
+        String poolFile = TrialModule447.mobPoolFile(node);
+        AbstractWidget btn = new LootPoolGearButton440(
+                x, y, 20, 20,
+                Component.translatable("gui.settledlands.trial.mob_pool.edit_btn_tip"),
+                TrialMobPool449.ACCENT_COLOR,
+                () -> LootPoolCard436.openMobPoolEditor(screen, node, poolFile));
+        GraphTooltips448.recordGearButton(btn, x, y, 20, 20);
+        return btn;
+    }
+
+    public static List<String> mobPoolSummaryLines(Node node) {
+        List<String> lines = new ArrayList<>();
+        if (node == null) return lines;
+        String file = TrialModule447.mobPoolFile(node);
+        List<TrialConfig446.SpawnEntry> mobs = TrialModule447.readMobs(node);
+        String source = file.isEmpty()
+                ? Component.translatable("gui.settledlands.trial.mod.pool_inline").getString()
+                : file;
+        lines.add(Component.translatable("gui.settledlands.trial.mob_pool.inspector_status",
+                source, Integer.valueOf(mobs.size())).getString());
+        int shown = Math.min(4, mobs.size());
+        for (int i = 0; i < shown; i++) {
+            TrialConfig446.SpawnEntry e = mobs.get(i);
+            lines.add("• " + TrialMobPreview449.displayName(e.entityId) + " (w=" + e.weight + ")");
+        }
+        if (mobs.size() > shown) {
+            lines.add(Component.translatable("gui.settledlands.trial.mod.more_entries",
+                    Integer.valueOf(mobs.size() - shown)).getString());
+        }
+        return lines;
+    }
+
+    public static List<String> rewardPoolOptions(String currentFile) {
+        return LootPoolCard436.poolOptions(currentFile);
+    }
+
+    public static List<Component> rewardPoolDropdownEntries(List<String> options) {
+        return LootPoolCard436.poolDropdownEntries(options);
+    }
+
+    public static int rewardPoolDropdownIndex(List<String> options, String currentFile) {
+        return LootPoolCard436.poolDropdownIndex(options, currentFile);
+    }
+
+    public static IntConsumer rewardPoolPicker(Consumer<Runnable> commit,
+            NpcDialogueGraphScreen screen, Node node, List<String> options) {
+        return idx -> {
+            if (node == null || options == null || idx < 0 || idx >= options.size()) return;
+            String chosen = options.get(idx);
+            if (chosen == null || chosen.isEmpty()) {
+                LootPoolCard436.openPoolEditor(screen, node, "");
+                return;
+            }
+            if (commit != null) {
+                commit.accept(() -> TrialModule447.writeRewardPool(
+                        node, chosen, TrialModule447.readRewards(node)));
+            }
+            pendingPoolSyncScreen = screen;
+            pendingPoolSyncNodeId = node.id;
+            pendingPoolSyncSlot = TrialModule447.SLOT_REWARDS;
+            pendingPoolSyncFile = chosen;
+            ChestLootNet436.sendPoolQuery(chosen);
+        };
+    }
+
+    public static AbstractWidget rewardPoolGearButton(int x, int y, NpcDialogueGraphScreen screen,
+            Node node) {
+        String poolFile = TrialModule447.rewardPoolFile(node);
+        AbstractWidget btn = new LootPoolGearButton440(
+                x, y, 20, 20,
+                Component.translatable("gui.settledlands.trial.reward_pool.edit_btn_tip"),
+                TrialModule447.color(TrialModule447.SLOT_REWARDS),
+                () -> LootPoolCard436.openPoolEditor(screen, node, poolFile));
+        GraphTooltips448.recordGearButton(btn, x, y, 20, 20);
+        return btn;
+    }
+
+    public static List<String> rewardPoolSummaryLines(Node node) {
+        List<String> lines = new ArrayList<>();
+        if (node == null) return lines;
+        String file = TrialModule447.rewardPoolFile(node);
+        List<TrialConfig446.RewardEntry> rewards = TrialModule447.readRewards(node);
+        String source = file.isEmpty()
+                ? Component.translatable("gui.settledlands.trial.mod.pool_inline").getString()
+                : file;
+        lines.add(Component.translatable("gui.settledlands.trial.reward_pool.inspector_status",
+                source, Integer.valueOf(rewards.size())).getString());
+        int shown = Math.min(4, rewards.size());
+        for (int i = 0; i < shown; i++) {
+            TrialConfig446.RewardEntry r = rewards.get(i);
+            lines.add("• " + TrialGraphClient446.shortId(r.itemId)
+                    + " x" + r.minCount + "-" + r.maxCount + " (" + r.chancePercent + "%)");
+        }
+        if (rewards.size() > shown) {
+            lines.add(Component.translatable("gui.settledlands.trial.mod.more_entries",
+                    Integer.valueOf(rewards.size() - shown)).getString());
+        }
+        return lines;
+    }
+
+    public static void onMobPoolsUpdated() {
+        requestInspectorRebuild();
+    }
+
+    public static void onLootPoolsUpdated() {
+        requestInspectorRebuild();
+    }
+
+    public static void onMobPoolData(String rawPayload) {
+        if (rawPayload == null || pendingPoolSyncSlot != TrialModule447.SLOT_MOBS) return;
+        String[] lines = rawPayload.split("\n", -1);
+        String status = lines.length >= 1 ? lines[0].trim() : "";
+        String file = lines.length >= 2 ? lines[1].trim() : "";
+        if (!"OK".equals(status) || !file.equals(pendingPoolSyncFile)) return;
+        NpcDialogueGraphScreen screen = pendingPoolSyncScreen;
+        int nodeId = pendingPoolSyncNodeId;
+        pendingPoolSyncSlot = -1;
+        pendingPoolSyncScreen = null;
+        pendingPoolSyncFile = "";
+        if (screen == null || screen.settledlands$graph() == null) return;
+        Node node = screen.settledlands$graph().get(nodeId);
+        if (TrialModule447.slotOf(node) != TrialModule447.SLOT_MOBS) return;
+        List<TrialConfig446.SpawnEntry> entries = TrialMobPool449.decodeEntriesWire(lines, 2);
+        if (!entries.isEmpty()) {
+            TrialModule447.writeMobPool(node, file, entries);
+            TrialModule447.syncCardConfig(screen.settledlands$graph());
+            requestInspectorRebuild();
+            screen.settledlands$changed();
+        }
+    }
+
+    public static void onLootPoolData(String rawPayload) {
+        if (rawPayload == null || pendingPoolSyncSlot != TrialModule447.SLOT_REWARDS) return;
+        String[] lines = rawPayload.split("\n", -1);
+        String status = lines.length >= 1 ? lines[0].trim() : "";
+        String file = lines.length >= 2 ? lines[1].trim() : "";
+        if (!"OK".equals(status) || !file.equals(pendingPoolSyncFile)) return;
+        NpcDialogueGraphScreen screen = pendingPoolSyncScreen;
+        int nodeId = pendingPoolSyncNodeId;
+        pendingPoolSyncSlot = -1;
+        pendingPoolSyncScreen = null;
+        pendingPoolSyncFile = "";
+        if (screen == null || screen.settledlands$graph() == null) return;
+        Node node = screen.settledlands$graph().get(nodeId);
+        if (TrialModule447.slotOf(node) != TrialModule447.SLOT_REWARDS) return;
+        List<TrialConfig446.RewardEntry> rewards =
+                TrialModule447.fromLootEntries(LootPool436.decodeEntriesWire(lines, 2));
+        TrialModule447.writeRewardPool(node, file, rewards);
+        TrialModule447.syncCardConfig(screen.settledlands$graph());
+        requestInspectorRebuild();
+        screen.settledlands$changed();
     }
 
     // ---- Slot 4: Mobs -------------------------------------------------------

@@ -1,5 +1,7 @@
 package dev.settledlands.trial;
 
+import dev.settledlands.chest.LootPool436;
+import dev.settledlands.chest.LootPoolManager436;
 import dev.settledlands.npc.NpcDialogueGraph;
 import java.util.ArrayList;
 import java.util.List;
@@ -105,6 +107,8 @@ public final class TrialModule447 {
         String rest = action.substring(PREFIX.length());
         int colon = rest.indexOf(':');
         String kind = (colon >= 0 ? rest.substring(0, colon) : rest).trim();
+        if ("mobs_pool".equals(kind)) return SLOT_MOBS;
+        if ("rewards_pool".equals(kind)) return SLOT_REWARDS;
         for (int i = 0; i < KINDS.length; i++) {
             if (KINDS[i].equals(kind)) return i;
         }
@@ -284,8 +288,28 @@ public final class TrialModule447 {
         node.action = PREFIX + "timing:" + minD + "|" + maxD + "|" + cd;
     }
 
+    public static String mobPoolFile(NpcDialogueGraph.Node node) {
+        if (node == null || node.action == null) return "";
+        String prefix = PREFIX + "mobs_pool:";
+        if (!node.action.startsWith(prefix)) return "";
+        String rest = node.action.substring(prefix.length());
+        int bar = rest.indexOf('|');
+        String rawFile = bar >= 0 ? rest.substring(0, bar) : rest;
+        return TrialMobPool449.sanitizeFileName(rawFile);
+    }
+
     public static List<TrialConfig446.SpawnEntry> readMobs(NpcDialogueGraph.Node node) {
-        String raw = payloadOf(node, SLOT_MOBS);
+        String raw = "";
+        if (node != null && node.action != null) {
+            String poolPrefix = PREFIX + "mobs_pool:";
+            if (node.action.startsWith(poolPrefix)) {
+                String rest = node.action.substring(poolPrefix.length());
+                int bar = rest.indexOf('|');
+                raw = bar >= 0 ? rest.substring(bar + 1) : "";
+            } else {
+                raw = payloadOf(node, SLOT_MOBS);
+            }
+        }
         List<TrialConfig446.SpawnEntry> out = new ArrayList<>();
         if (!raw.isEmpty()) {
             String[] items = raw.split(";");
@@ -306,7 +330,13 @@ public final class TrialModule447 {
     }
 
     public static void writeMobs(NpcDialogueGraph.Node node, List<TrialConfig446.SpawnEntry> mobs) {
+        writeMobPool(node, mobPoolFile(node), mobs);
+    }
+
+    public static void writeMobPool(NpcDialogueGraph.Node node, String poolFile,
+            List<TrialConfig446.SpawnEntry> mobs) {
         if (node == null) return;
+        String cleanFile = TrialMobPool449.sanitizeFileName(poolFile);
         List<TrialConfig446.SpawnEntry> clean = new ArrayList<>();
         if (mobs != null) {
             for (int i = 0; i < mobs.size() && clean.size() < TrialConfig446.MAX_ENTRIES; i++) {
@@ -317,7 +347,12 @@ public final class TrialModule447 {
             }
         }
         if (clean.isEmpty()) clean = TrialConfig446.defaultMobs();
-        StringBuilder sb = new StringBuilder(PREFIX).append("mobs:");
+        StringBuilder sb = new StringBuilder(PREFIX);
+        if (!cleanFile.isEmpty()) {
+            sb.append("mobs_pool:").append(cleanFile).append('|');
+        } else {
+            sb.append("mobs:");
+        }
         for (int i = 0; i < clean.size(); i++) {
             if (i > 0) sb.append(';');
             TrialConfig446.SpawnEntry e = clean.get(i);
@@ -326,12 +361,32 @@ public final class TrialModule447 {
         node.action = sb.toString();
     }
 
+    public static String rewardPoolFile(NpcDialogueGraph.Node node) {
+        if (node == null || node.action == null) return "";
+        String prefix = PREFIX + "rewards_pool:";
+        if (!node.action.startsWith(prefix)) return "";
+        String rest = node.action.substring(prefix.length());
+        int bar = rest.indexOf('|');
+        String rawFile = bar >= 0 ? rest.substring(0, bar) : rest;
+        return LootPool436.sanitizeFileName(rawFile);
+    }
+
     public static List<TrialConfig446.RewardEntry> readRewards(NpcDialogueGraph.Node node) {
-        String prefix = PREFIX + "rewards:";
-        if (node == null || node.action == null || !node.action.startsWith(prefix)) {
+        if (node == null || node.action == null) {
             return TrialConfig446.defaultRewards();
         }
-        String raw = node.action.substring(prefix.length());
+        String raw;
+        String poolPrefix = PREFIX + "rewards_pool:";
+        String plainPrefix = PREFIX + "rewards:";
+        if (node.action.startsWith(poolPrefix)) {
+            String rest = node.action.substring(poolPrefix.length());
+            int bar = rest.indexOf('|');
+            raw = bar >= 0 ? rest.substring(bar + 1) : "";
+        } else if (node.action.startsWith(plainPrefix)) {
+            raw = node.action.substring(plainPrefix.length());
+        } else {
+            return TrialConfig446.defaultRewards();
+        }
         List<TrialConfig446.RewardEntry> out = new ArrayList<>();
         if (raw.isEmpty()) return out;
         String[] items = raw.split(";");
@@ -351,8 +406,19 @@ public final class TrialModule447 {
     }
 
     public static void writeRewards(NpcDialogueGraph.Node node, List<TrialConfig446.RewardEntry> rewards) {
+        writeRewardPool(node, rewardPoolFile(node), rewards);
+    }
+
+    public static void writeRewardPool(NpcDialogueGraph.Node node, String poolFile,
+            List<TrialConfig446.RewardEntry> rewards) {
         if (node == null) return;
-        StringBuilder sb = new StringBuilder(PREFIX).append("rewards:");
+        String cleanFile = LootPool436.sanitizeFileName(poolFile);
+        StringBuilder sb = new StringBuilder(PREFIX);
+        if (!cleanFile.isEmpty()) {
+            sb.append("rewards_pool:").append(cleanFile).append('|');
+        } else {
+            sb.append("rewards:");
+        }
         if (rewards != null) {
             int count = 0;
             for (int i = 0; i < rewards.size() && count < TrialConfig446.MAX_ENTRIES; i++) {
@@ -371,6 +437,74 @@ public final class TrialModule447 {
             }
         }
         node.action = sb.toString();
+    }
+
+    public static List<TrialConfig446.RewardEntry> fromLootEntries(List<LootPool436.PoolEntry> list) {
+        List<TrialConfig446.RewardEntry> out = new ArrayList<>();
+        if (list == null) return out;
+        for (int i = 0; i < list.size() && out.size() < TrialConfig446.MAX_ENTRIES; i++) {
+            LootPool436.PoolEntry e = list.get(i);
+            if (e == null) continue;
+            String id = TrialConfig446.normalizeId(e.itemId);
+            if (id == null) continue;
+            int w = clamp((int) Math.round(e.weight), 1, 100000);
+            int minC = clamp(e.minCount, 1, 64);
+            int maxC = clamp(e.maxCount, minC, 64);
+            int ch = clamp((int) Math.round(e.rarity), 0, 100);
+            out.add(new TrialConfig446.RewardEntry(id, w, minC, maxC, ch));
+        }
+        return out;
+    }
+
+    public static List<LootPool436.PoolEntry> toLootEntries(List<TrialConfig446.RewardEntry> list) {
+        List<LootPool436.PoolEntry> out = new ArrayList<>();
+        if (list == null) return out;
+        for (int i = 0; i < list.size() && out.size() < TrialConfig446.MAX_ENTRIES; i++) {
+            TrialConfig446.RewardEntry r = list.get(i);
+            if (r == null) continue;
+            String id = LootPool436.cleanItemId(r.itemId);
+            if (id.isEmpty()) continue;
+            int minC = clamp(r.minCount, 1, 64);
+            int maxC = clamp(r.maxCount, minC, 64);
+            double rar = r.chancePercent > 0 ? (double) clamp(r.chancePercent, 0, 100) : 50.0D;
+            double wgt = Math.max(1.0D, (double) r.weight);
+            out.add(new LootPool436.PoolEntry(id, rar, wgt, minC, maxC));
+        }
+        return out;
+    }
+
+    /**
+     * Server-side pass: refreshes cached entries inside any mob/reward pool modules from the
+     * matching {@code *.txt} files under {@code config/settledlands/}, then re-syncs the hub JSON.
+     */
+    public static boolean refreshPoolsFromServerDisk(NpcDialogueGraph graph) {
+        if (graph == null || graph.nodes == null) return false;
+        boolean updated = false;
+        try {
+            for (NpcDialogueGraph.Node node : graph.nodes.values()) {
+                int slot = slotOf(node);
+                if (slot == SLOT_MOBS) {
+                    String file = mobPoolFile(node);
+                    if (!file.isEmpty() && TrialMobPoolManager449.poolExists(file)) {
+                        List<TrialConfig446.SpawnEntry> loaded = TrialMobPoolManager449.loadPoolQuiet(file);
+                        if (!loaded.isEmpty()) {
+                            writeMobPool(node, file, loaded);
+                            updated = true;
+                        }
+                    }
+                } else if (slot == SLOT_REWARDS) {
+                    String file = rewardPoolFile(node);
+                    if (!file.isEmpty() && LootPoolManager436.poolExists(file)) {
+                        List<LootPool436.PoolEntry> loaded = LootPoolManager436.loadPoolQuiet(file);
+                        writeRewardPool(node, file, fromLootEntries(loaded));
+                        updated = true;
+                    }
+                }
+            }
+            if (updated) syncCardConfig(graph);
+        } catch (Throwable ignored) {
+        }
+        return updated;
     }
 
     public static OminousData readOminous(NpcDialogueGraph.Node node) {

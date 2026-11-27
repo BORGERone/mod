@@ -6,6 +6,7 @@ import dev.settledlands.chest.CustomBookManager443;
 import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcItems;
+import dev.settledlands.trial.TrialModule447;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -319,7 +320,7 @@ public final class LootPoolEditorScreen440 extends Screen {
                 .build();
         addRenderableWidget(newPoolBtn);
 
-        if (sourceNode != null) {
+        if (hasChestLimitsBar()) {
             nodeRowY = panelY + 60;
             String rarLbl = Component.translatable("gui.settledlands.loot_pool.editor.node_rar_lbl").getString();
             String wgtLbl = Component.translatable("gui.settledlands.loot_pool.editor.node_wgt_lbl").getString();
@@ -371,7 +372,7 @@ public final class LootPoolEditorScreen440 extends Screen {
             nodeRarBox = null;
             nodeWgtBox = null;
             nodeRollsBox = null;
-            listTop = panelY + 72;
+            listTop = isTrialRewardsNode() ? panelY + 84 : panelY + 72;
         }
 
         btnY = panelY + panelH - 24;
@@ -519,7 +520,10 @@ public final class LootPoolEditorScreen440 extends Screen {
         }
 
         if ("DELETED".equals(status)) {
-            if (sourceNode != null && file.equals(LootPool436.poolFileOf(sourceNode))) {
+            String boundFile = isTrialRewardsNode()
+                    ? TrialModule447.rewardPoolFile(sourceNode)
+                    : LootPool436.poolFileOf(sourceNode);
+            if (sourceNode != null && file.equals(boundFile)) {
                 updateNodePoolFile("");
             }
             loadedServerFile = "";
@@ -563,6 +567,7 @@ public final class LootPoolEditorScreen440 extends Screen {
         rowsData.clear();
         previewDrops.clear();
         rowScroll = 0;
+        boolean seededFromTrial = false;
         if ("OK".equals(status)) {
             List<LootPool436.PoolEntry> entries = LootPool436.decodeEntriesWire(lines, 2);
             for (LootPool436.PoolEntry e : entries) {
@@ -575,14 +580,30 @@ public final class LootPoolEditorScreen440 extends Screen {
         } else {
             loadedServerFile = "";
             fileExistsOnServer = false;
+            if (isTrialRewardsNode()) {
+                for (LootPool436.PoolEntry e : TrialModule447.toLootEntries(
+                        TrialModule447.readRewards(sourceNode))) {
+                    rowsData.add(new RowData(e.itemId, e.minCount, e.maxCount, e.rarity, e.weight));
+                }
+                seededFromTrial = !rowsData.isEmpty();
+            }
             statusColor = 0xFFF5B841;
             statusText = Component.translatable("gui.settledlands.loot_pool.editor.new_hint").getString();
         }
         setFileNameInput(file);
-        dirty = false;
+        dirty = seededFromTrial;
         deleteArmAt = 0L;
         refreshRowWidgets(true);
         updateActionButtons();
+    }
+
+    private boolean isTrialRewardsNode() {
+        return sourceNode != null
+                && TrialModule447.slotOf(sourceNode) == TrialModule447.SLOT_REWARDS;
+    }
+
+    private boolean hasChestLimitsBar() {
+        return sourceNode != null && !isTrialRewardsNode();
     }
 
     private void updateNodePoolFile(String poolFile) {
@@ -590,11 +611,25 @@ public final class LootPoolEditorScreen440 extends Screen {
         if (parentScreen != null) {
             parentScreen.settledlands$remember();
         }
-        sourceNode.action = LootPool436.formatAction(
-                poolFile,
-                LootPool436.rawRarity(sourceNode),
-                LootPool436.rawWeight(sourceNode),
-                LootPool436.rawRolls(sourceNode));
+        if (isTrialRewardsNode()) {
+            List<LootPool436.PoolEntry> valid = new ArrayList<>(rowsData.size());
+            for (RowData r : rowsData) {
+                LootPool436.PoolEntry e = r.toPoolEntry();
+                if (e != null) valid.add(e);
+            }
+            TrialModule447.writeRewardPool(
+                    sourceNode, poolFile, TrialModule447.fromLootEntries(valid));
+            if (parentScreen != null && parentScreen.settledlands$graph() != null) {
+                TrialModule447.syncCardConfig(parentScreen.settledlands$graph());
+                TrialModuleClient447.requestInspectorRebuild();
+            }
+        } else {
+            sourceNode.action = LootPool436.formatAction(
+                    poolFile,
+                    LootPool436.rawRarity(sourceNode),
+                    LootPool436.rawWeight(sourceNode),
+                    LootPool436.rawRolls(sourceNode));
+        }
         if (parentScreen != null) {
             parentScreen.settledlands$changed();
         }
@@ -891,7 +926,7 @@ public final class LootPoolEditorScreen440 extends Screen {
     }
 
     private LootPool436.Parsed currentNodeSpec() {
-        if (sourceNode != null) {
+        if (hasChestLimitsBar()) {
             LootPool436.Parsed p = LootPool436.parse(sourceNode.action);
             if (p != null) {
                 return new LootPool436.Parsed(fileNameText, p.rawRarity, p.rawWeight, p.rawRolls);
@@ -954,16 +989,23 @@ public final class LootPoolEditorScreen440 extends Screen {
         for (RowData r : rowsData) {
             rowEntries.add(r.toPoolEntry());
         }
-        int blockedCount = sourceNode == null ? 0 : LootPool436.countBlockedBySpec(rowEntries, nodeSpec);
+        int blockedCount = !hasChestLimitsBar() ? 0 : LootPool436.countBlockedBySpec(rowEntries, nodeSpec);
         double[] baseChances = LootPool436.computeEffectiveChancesPct(rowEntries, null);
-        double[] effChances = sourceNode == null
+        double[] effChances = !hasChestLimitsBar()
                 ? baseChances
                 : LootPool436.computeEffectiveChancesPct(rowEntries, nodeSpec);
 
         // Summary line + optional node inline controls row
         renderSummaryLine(graphics, blockedCount, rowsData.size());
-        if (sourceNode != null) {
+        if (hasChestLimitsBar()) {
             renderNodeLimitsBar(graphics);
+        } else if (isTrialRewardsNode()) {
+            graphics.drawString(font,
+                    clip(font,
+                            Component.translatable("gui.settledlands.trial.reward_pool.linked_banner",
+                                    Integer.valueOf(sourceNode.id)).getString(),
+                            panelW - 20),
+                    panelX + 10, panelY + 62, 0xFFF5B841, false);
         }
 
         // Column headers
@@ -994,7 +1036,7 @@ public final class LootPoolEditorScreen440 extends Screen {
         if (!poolPopupOpen && blockedCount > 0 && mouseY >= panelY + 45 && mouseY < panelY + 59
                 && mouseX >= panelX + panelW / 2 && mouseX <= panelX + panelW - 10) {
             extraTooltip = Component.translatable("gui.settledlands.loot_pool.editor.blocked_banner_tip");
-        } else if (!poolPopupOpen && sourceNode != null
+        } else if (!poolPopupOpen && hasChestLimitsBar()
                 && mouseY >= nodeRowY && mouseY < nodeRowY + 16) {
             if (mouseX >= nodeRarLblX && mouseX < nodeWgtLblX - 4) {
                 extraTooltip = Component.translatable("gui.settledlands.loot_pool.editor.tip_node_rar");
@@ -1114,7 +1156,7 @@ public final class LootPoolEditorScreen440 extends Screen {
                 } else {
                     double base = idx < baseChances.length ? baseChances[idx] : 0.0D;
                     double eff = idx < effChances.length ? effChances[idx] : base;
-                    int reason = sourceNode == null ? 0 : LootPool436.blockedReason(entry, nodeSpec);
+                    int reason = !hasChestLimitsBar() ? 0 : LootPool436.blockedReason(entry, nodeSpec);
                     if (reason != 0 || eff <= 0.0001D) {
                         pctStr = "0% !";
                         pctColor = 0xFFFF6B57;
@@ -1135,7 +1177,7 @@ public final class LootPoolEditorScreen440 extends Screen {
                         } else {
                             cellTip = Component.translatable("gui.settledlands.loot_pool.editor.filtered_tip");
                         }
-                    } else if (sourceNode != null && Math.abs(eff - base) >= 0.1D) {
+                    } else if (hasChestLimitsBar() && Math.abs(eff - base) >= 0.1D) {
                         pctStr = formatPct(eff) + "*";
                         pctColor = 0xFFFFCC55;
                         cellTip = Component.translatable(

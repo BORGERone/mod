@@ -1,5 +1,6 @@
 package dev.settledlands.chest;
 
+import dev.settledlands.trial.TrialMobPoolNet449;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.core.BlockPos;
@@ -154,6 +155,7 @@ public final class ChestLootNet436 {
             LOG.warn("loot_pool: failed to register settledlands:loot_pool_save: " + failure);
         }
         CustomBookNet443.register(registrar);
+        TrialMobPoolNet449.register(registrar);
     }
 
     public static void sendPools(ServerPlayer player) {

@@ -1,5 +1,7 @@
 package dev.settledlands.trial;
 
+import dev.settledlands.chest.ChestLootNet436;
+import dev.settledlands.chest.CustomBookNet443;
 import dev.settledlands.npc.BlockName359;
 import dev.settledlands.npc.BlockTalk358;
 import dev.settledlands.npc.BlockTrigger351;
@@ -434,7 +436,10 @@ public final class TrialGraph446 {
             }
             NpcDialogueGraph.Node card = trialNode(graph);
             if (card != null) {
-                if (liveJson != null && !liveJson.isBlank()) {
+                boolean diskSynced = TrialModule447.refreshPoolsFromServerDisk(graph);
+                if (diskSynced && card.action != null && !card.action.isBlank()) {
+                    TrialSpawnerBridge446.applyConfigJson(level, pos, card.action);
+                } else if (liveJson != null && !liveJson.isBlank()) {
                     TrialConfig446 liveCfg = TrialConfig446.fromJson(liveJson);
                     TrialConfig446 graphCfg = TrialModule447.compileConfig(graph);
                     if (!liveCfg.toJson().equals(graphCfg.toJson())) {
@@ -452,6 +457,9 @@ public final class TrialGraph446 {
             } else {
                 ensureBlockEntityGraph(level, pos, graph);
             }
+            ChestLootNet436.sendPools(player);
+            CustomBookNet443.sendBookSummaries(player);
+            TrialMobPoolNet449.sendPools(player);
             CompoundTag data = new CompoundTag();
             data.put("DialogueGraph", graph.save());
             NpcNet.sendRaw(player, new NpcNet.CfgView(idFor(key), data));
@@ -487,6 +495,7 @@ public final class TrialGraph446 {
                 return;
             }
             graph = withTrialNode(graph);
+            TrialModule447.refreshPoolsFromServerDisk(graph);
             stripCards(graph);
             NpcDialogueGraph.Node card = trialNode(graph);
             TrialGraph446Store store = TrialGraph446Store.get(player.getServer());
