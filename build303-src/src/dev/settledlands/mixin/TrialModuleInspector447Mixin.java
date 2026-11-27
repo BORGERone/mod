@@ -126,7 +126,13 @@ public abstract class TrialModuleInspector447Mixin {
             }
 
             y += 6;
-            boolean linked = node.next >= 0 && TrialGraph446.isTrialNode(graph.get(node.next));
+            if (TrialModule447.supportsConditionalInput(node)
+                    && TrialModule447.hasIncomingControl(graph, node)) {
+                button("gui.settledlands.trial.mod.btn_unlink_in", x, y, width, 16,
+                        TrialModuleClient447.disconnectIncomingAction(screen, graph, node));
+                y += 20;
+            }
+            boolean linked = node.next >= 0;
             String attachKey = linked
                     ? "gui.settledlands.trial.mod.btn_unlink"
                     : "gui.settledlands.trial.mod.btn_attach";

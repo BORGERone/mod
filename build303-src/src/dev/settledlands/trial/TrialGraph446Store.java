@@ -174,6 +174,19 @@ public final class TrialGraph446Store extends SavedData {
         return byKey.size();
     }
 
+    public Entry findByGraph(NpcDialogueGraph graph) {
+        if (graph == null) return null;
+        for (Entry entry : byKey.values()) {
+            if (entry != null && entry.graph == graph) return entry;
+        }
+        for (Entry entry : byKey.values()) {
+            if (entry != null && entry.graph != null && entry.graph.nodes == graph.nodes) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
     public List<Entry> ofDimension(String dimension) {
         if (dimension == null || dimension.isEmpty()) return Collections.emptyList();
         List<Entry> list = byDimension.get(dimension);

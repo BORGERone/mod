@@ -34,23 +34,28 @@ public abstract class TrialControlWiringMixin446 {
         boolean toTrialCard = TrialGraph446.isTrialNode(to);
         boolean fromMod = TrialModule447.isModuleNode(from);
         boolean toMod = TrialModule447.isModuleNode(to);
+        boolean toPoolMod = TrialModule447.supportsConditionalInput(to);
         if (fromMod) {
-            cir.setReturnValue(toTrialCard
-                    ? Boolean.valueOf(TrialModule447.connectModule(graph, fromId, toId))
-                    : Boolean.FALSE);
+            if (toTrialCard) {
+                cir.setReturnValue(Boolean.valueOf(TrialModule447.connectModule(graph, fromId, toId)));
+            } else if (TrialModule447.supportsConditionalInput(from) && (!toMod || toPoolMod)) {
+                cir.setReturnValue(Boolean.valueOf(TrialModule447.connectChain(graph, fromId, toId)));
+            } else {
+                cir.setReturnValue(Boolean.FALSE);
+            }
             return;
         }
-        if (toMod || toTrialCard) {
+        if (toTrialCard || (toMod && !toPoolMod)) {
             cir.setReturnValue(Boolean.FALSE);
             return;
         }
 
         boolean toControl = TrialControlNode446.isControlNode(to);
         boolean fromControl = TrialControlNode446.isControlNode(from);
-        if (!fromTrialCard && !toControl && !fromControl) return;
+        if (!fromTrialCard && !toControl && !fromControl && !toPoolMod) return;
 
-        // Avoid stepping on Teleport wiring when neither side is a Trial card/control-specific combo
-        if (!fromTrialCard && !fromControl && TeleportNode424.isTeleportNode(from)) return;
+        // Avoid stepping on Teleport wiring when neither side is a Trial card/control/pool combo
+        if (!fromTrialCard && !fromControl && !toPoolMod && TeleportNode424.isTeleportNode(from)) return;
 
         if (from.type == NpcDialogueGraph.IF || from.type == 40 || from.type == 50 || fromTrialCard) {
             if (port == 1) {
@@ -58,6 +63,7 @@ public abstract class TrialControlWiringMixin446 {
             } else {
                 from.next = toId;
             }
+            if (toPoolMod) TrialModule447.syncCardConfig(graph);
             cir.setReturnValue(Boolean.TRUE);
             return;
         }
@@ -71,10 +77,12 @@ public abstract class TrialControlWiringMixin446 {
                 from.randomBranches.add(-1);
             }
             from.randomBranches.set(branch, toId);
+            if (toPoolMod) TrialModule447.syncCardConfig(graph);
             cir.setReturnValue(Boolean.TRUE);
             return;
         }
         from.next = toId;
+        if (toPoolMod) TrialModule447.syncCardConfig(graph);
         cir.setReturnValue(Boolean.TRUE);
     }
 }

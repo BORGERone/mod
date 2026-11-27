@@ -73,6 +73,18 @@ public abstract class TrialModuleSocket447Mixin {
                 return;
             }
 
+            if (button == 1) {
+                Node inHit = TrialModuleCard447.moduleAtInputPin(graph, canvas, mouseX, mouseY);
+                if (inHit != null && TrialModule447.hasIncomingControl(graph, inHit)) {
+                    screen.settledlands$remember();
+                    TrialModule447.disconnectIncoming(graph, inHit.id);
+                    TrialModuleClient447.requestInspectorRebuild();
+                    screen.settledlands$changed();
+                    cir.setReturnValue(Boolean.TRUE);
+                    return;
+                }
+            }
+
             Node modHit = TrialModuleCard447.moduleAtPin(graph, canvas, mouseX, mouseY);
             if (modHit != null) {
                 if (button == 1) {
@@ -145,6 +157,23 @@ public abstract class TrialModuleSocket447Mixin {
                     TrialModule447.connectModule(graph, mod.id, over.id);
                     TrialModuleClient447.requestInspectorRebuild();
                     screen.settledlands$changed();
+                } else if (TrialModule447.supportsConditionalInput(mod)) {
+                    int portInId = canvas.hitPort(graph, mouseX, mouseY, false);
+                    Node target = portInId >= 0 ? graph.get(portInId) : over;
+                    if (target != null && target.id != mod.id) {
+                        if (TrialGraph446.isTrialNode(target)) {
+                            screen.settledlands$remember();
+                            TrialModule447.connectModule(graph, mod.id, target.id);
+                            TrialModuleClient447.requestInspectorRebuild();
+                            screen.settledlands$changed();
+                        } else if (!TrialModule447.isModuleNode(target)
+                                || TrialModule447.supportsConditionalInput(target)) {
+                            screen.settledlands$remember();
+                            TrialModule447.connectChain(graph, mod.id, target.id);
+                            TrialModuleClient447.requestInspectorRebuild();
+                            screen.settledlands$changed();
+                        }
+                    }
                 }
                 return;
             }

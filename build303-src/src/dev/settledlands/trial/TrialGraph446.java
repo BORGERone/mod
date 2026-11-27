@@ -507,7 +507,9 @@ public final class TrialGraph446 {
                 return;
             }
             if (targetLevel != null && savedPos != null) {
-                if (card != null && card.action != null && !card.action.isBlank()) {
+                boolean gateTriggered = TrialModule447.evaluateAutonomousIfGates(
+                        targetLevel, savedPos, graph, player);
+                if (!gateTriggered && card != null && card.action != null && !card.action.isBlank()) {
                     TrialSpawnerBridge446.applyConfigJson(targetLevel, savedPos, card.action);
                 }
                 writeBlockEntityGraph(targetLevel, savedPos, graph);
@@ -533,8 +535,18 @@ public final class TrialGraph446 {
             graph = withTrialNode(graph);
             NpcDialogueGraph.Node card = trialNode(graph);
             ServerPlayer best = TrialSpawnerBridge446.resolveBestPlayer(level, pos, participants, null);
+            String beforeJson = card != null && card.action != null ? card.action : "";
+            TrialModule447.syncCardConfig(graph);
+            boolean gateTriggered = TrialModule447.evaluateAutonomousIfGates(level, pos, graph, best);
+            if (!gateTriggered && card != null && card.action != null && !card.action.isBlank()
+                    && (!card.action.equals(beforeJson)
+                            || TrialConfig446.fromJson(card.action).hasRanges())) {
+                TrialSpawnerBridge446.applyConfigJson(level, pos, card.action);
+            }
             if (card != null && best != null) {
                 setLastPlayer(card, best.getName().getString());
+            }
+            if (card != null) {
                 store.put(key, graph);
             }
             NpcDialogueGraph.Node start = startWaveStart(graph);
@@ -557,13 +569,17 @@ public final class TrialGraph446 {
             graph = withTrialNode(graph);
             NpcDialogueGraph.Node card = trialNode(graph);
             ServerPlayer best = TrialSpawnerBridge446.resolveBestPlayer(level, pos, participants, null);
+            String beforeJson = card != null && card.action != null ? card.action : "";
+            TrialModule447.syncCardConfig(graph);
+            boolean gateTriggered = TrialModule447.evaluateAutonomousIfGates(level, pos, graph, best);
             if (card != null) {
                 setWaves(card, waves(card) + 1);
                 if (best != null) setLastPlayer(card, best.getName().getString());
                 store.put(key, graph);
-                ensureBlockEntityGraph(level, pos, graph);
-                if (card.action != null && !card.action.isBlank()
-                        && TrialConfig446.fromJson(card.action).hasRanges()) {
+                writeBlockEntityGraph(level, pos, graph);
+                if (!gateTriggered && card.action != null && !card.action.isBlank()
+                        && (!card.action.equals(beforeJson)
+                                || TrialConfig446.fromJson(card.action).hasRanges())) {
                     TrialSpawnerBridge446.applyConfigJson(level, pos, card.action);
                 }
             }

@@ -234,7 +234,6 @@ public final class TrialMobCatalogScreen449 extends Screen {
         graphics.fill(gridX - 2, gridY - 2, gridX + gridW + 2, gridY + gridH + 1, 0x990D1118);
         graphics.renderOutline(gridX - 2, gridY - 2, gridW + 4, gridH + 3, 0xFF272F40);
 
-        TrialMobPreview449.MobEntry hoveredEntry = null;
         int startIdx = scrollRow * cols;
         int previewH = PREVIEW_H;
         boolean insideGrid = mouseX >= gridX && mouseX < gridX + gridW
@@ -255,7 +254,6 @@ public final class TrialMobCatalogScreen449 extends Screen {
                             && mouseX >= cx && mouseX < cx + cellW
                             && mouseY >= cy && mouseY < cy + CELL_H;
                     boolean inPool = existingIds.contains(entry.id);
-                    if (over) hoveredEntry = entry;
 
                     int cardBg = over ? 0xFF242E3F : (inPool ? 0xFF17261E : 0xFF181D28);
                     int border = over ? accent : (inPool ? 0xFF4CA86B : 0xFF2B3445);
@@ -331,10 +329,6 @@ public final class TrialMobCatalogScreen449 extends Screen {
             graphics.renderOutline(tx, ty, tw, 13, statusColor);
             graphics.drawString(font, msg, tx + 6, ty + 3, statusColor, false);
         }
-
-        if (hoveredEntry != null) {
-            renderHoveredMobTip(graphics, hoveredEntry, mouseX, mouseY);
-        }
     }
 
     private void drawScaledText(GuiGraphics graphics, String text, int x, int y, int color, float scale) {
@@ -345,30 +339,6 @@ public final class TrialMobCatalogScreen449 extends Screen {
         pose.scale(scale, scale, 1.0F);
         graphics.drawString(font, text, 0, 0, color, false);
         pose.popPose();
-    }
-
-    private void renderHoveredMobTip(GuiGraphics graphics, TrialMobPreview449.MobEntry e,
-            int mouseX, int mouseY) {
-        String l1 = e.displayName;
-        String l2 = e.id + "  [" + e.modId + "]";
-        String l3 = Component.translatable(
-                TrialMobPreview449.categoryLabelKey(e.categoryName)).getString();
-        String l4 = Component.translatable("gui.settledlands.trial.mob_cat.tip_action").getString();
-        int tw = Math.max(Math.max(font.width(l1), font.width(l2)),
-                Math.max(font.width(l3), font.width(l4))) + 12;
-        int th = 46;
-        int tx = Math.min(mouseX + 10, width - tw - 6);
-        int ty = mouseY - th - 6;
-        if (ty < 4) ty = Math.min(height - th - 6, mouseY + 14);
-        int accent = 0xFF000000 | TrialMobPool449.ACCENT_COLOR;
-        graphics.fill(tx - 1, ty - 1, tx + tw + 1, ty + th + 1, 0xFF080A0F);
-        graphics.fill(tx, ty, tx + tw, ty + th, 0xF2121620);
-        graphics.renderOutline(tx, ty, tw, th, accent);
-        graphics.drawString(font, l1, tx + 6, ty + 5, 0xFFF2F5FA, false);
-        graphics.drawString(font, l2, tx + 6, ty + 15, 0xFF9AA5B8, false);
-        graphics.drawString(font, l3, tx + 6, ty + 25,
-                TrialMobPreview449.categoryBadgeColor(e.categoryName), false);
-        graphics.drawString(font, l4, tx + 6, ty + 35, 0xFF7BE088, false);
     }
 
     @Override

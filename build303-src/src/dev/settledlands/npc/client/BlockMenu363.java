@@ -4,6 +4,7 @@ import dev.settledlands.chest.LootPool436;
 import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.TeleportNode424;
 import dev.settledlands.trial.TrialControlNode446;
+import dev.settledlands.trial.TrialModule447;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
@@ -159,7 +160,7 @@ public final class BlockMenu363 {
      * slots cleanly.</p>
      */
     public static int count() {
-        return rows().length + (chest ? 3 : 2);
+        return rows().length + 2 + (chest ? 1 : 0) + (trial ? 2 : 0);
     }
 
     /** True when {@code compact} is the Teleport row appended after the stock block rows. */
@@ -177,8 +178,15 @@ public final class BlockMenu363 {
         return chest && compact == rows().length + 2;
     }
 
-    /** Build 448: modules were removed from the RMB create menu (use «Восстановить модули»). */
+    /**
+     * Build 452: exposes extra Mob Pool and Reward Pool module rows in the Trial Spawner editor
+     * so authors can add multiple conditional/branching pools wired to IF / chains.
+     */
     public static int trialModuleSlot(int compact) {
+        if (!trial) return -1;
+        int base = rows().length + 2 + (chest ? 1 : 0);
+        if (compact == base) return TrialModule447.SLOT_MOBS;
+        if (compact == base + 1) return TrialModule447.SLOT_REWARDS;
         return -1;
     }
 
@@ -209,6 +217,10 @@ public final class BlockMenu363 {
         if (isLootPoolRow(compact)) {
             return Component.translatable(LootPool436.MENU_LABEL_KEY).getString();
         }
+        int modSlot = trialModuleSlot(compact);
+        if (modSlot >= 0) {
+            return Component.translatable(TrialModule447.menuKey(modSlot)).getString();
+        }
         int stock = stockRow(compact);
         return stock < 0 ? "" : Component.translatable(LABEL_KEYS[stock]).getString();
     }
@@ -223,6 +235,10 @@ public final class BlockMenu363 {
         }
         if (isLootPoolRow(compact)) {
             return LootPool436.ACCENT_COLOR;
+        }
+        int modSlot = trialModuleSlot(compact);
+        if (modSlot >= 0) {
+            return TrialModule447.color(modSlot);
         }
         int stock = stockRow(compact);
         if (stock < 0) return LABEL;

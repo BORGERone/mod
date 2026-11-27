@@ -59,6 +59,16 @@ public final class TrialControlActions446 {
         }
     }
 
+    public static ServerLevel currentOriginLevel() {
+        Origin o = ORIGIN.get();
+        return o == null ? null : o.level;
+    }
+
+    public static BlockPos currentOriginPos() {
+        Origin o = ORIGIN.get();
+        return o == null ? null : o.pos;
+    }
+
     public static boolean execute(ServerPlayer player, GuideNpc npc, String action) {
         TrialControlNode446.Parsed parsed = TrialControlNode446.parse(action);
         if (parsed == null) return false;
@@ -103,7 +113,7 @@ public final class TrialControlActions446 {
                 yield syncConfigAndCard(targetLevel, targetPos, json);
             }
             case TrialControlNode446.OP_START -> {
-                rerollCardIfNeeded(targetLevel, targetPos);
+                rerollCardIfNeeded(targetLevel, targetPos, player);
                 yield TrialSpawnerBridge446.startWave(targetLevel, targetPos, player);
             }
             case TrialControlNode446.OP_CONFIG_START -> {
@@ -132,13 +142,16 @@ public final class TrialControlActions446 {
         return execute(null, npc, action);
     }
 
-    private static void rerollCardIfNeeded(ServerLevel level, BlockPos pos) {
+    private static void rerollCardIfNeeded(ServerLevel level, BlockPos pos, ServerPlayer player) {
         try {
             TrialGraph446Store store = TrialGraph446Store.get(level.getServer());
             if (store == null) return;
             var graph = store.graph(TrialGraph446Store.key(level, pos));
+            if (graph == null) return;
+            TrialModule447.syncCardConfig(graph);
+            boolean triggered = TrialModule447.evaluateAutonomousIfGates(level, pos, graph, player);
             var card = TrialGraph446.trialNode(graph);
-            if (card != null && card.action != null && !card.action.isBlank()
+            if (!triggered && card != null && card.action != null && !card.action.isBlank()
                     && TrialConfig446.fromJson(card.action).hasRanges()) {
                 TrialSpawnerBridge446.applyConfigJson(level, pos, card.action);
             }

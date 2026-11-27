@@ -41,6 +41,14 @@ public final class TrialModuleCard447 {
         return canvas == null || mod == null ? 0.0D : canvas.screenY(mod.y + OUTPUT_PIN_Y);
     }
 
+    public static double inputPinScreenX(NpcGraphCanvas canvas, Node mod) {
+        return canvas == null || mod == null ? 0.0D : canvas.screenX(mod.x);
+    }
+
+    public static double inputPinScreenY(NpcGraphCanvas canvas, Node mod) {
+        return canvas == null || mod == null ? 0.0D : canvas.screenY(mod.y + OUTPUT_PIN_Y);
+    }
+
     public static void draw(NpcDialogueGraphScreen screen, GuiGraphics graphics, Node node) {
         if (screen == null || graphics == null || node == null) return;
         int slot = TrialModule447.slotOf(node);
@@ -53,8 +61,11 @@ public final class TrialModuleCard447 {
 
         int accent = TrialModule447.color(slot);
         boolean selected = screen.settledlands$isSelected(node.id);
-        Node targetHub = (graph != null && node.next >= 0) ? graph.get(node.next) : null;
-        boolean connected = TrialGraph446.isTrialNode(targetHub);
+        Node nextTarget = (graph != null && node.next >= 0) ? graph.get(node.next) : null;
+        boolean connectedHub = TrialGraph446.isTrialNode(nextTarget);
+        boolean connectedChain = !connectedHub && nextTarget != null;
+        boolean supportsIn = TrialModule447.supportsConditionalInput(node);
+        boolean hasIn = supportsIn && TrialModule447.hasIncomingControl(graph, node);
         int textMax = CARD_W - 22;
 
         PoseStack pose = graphics.pose();
@@ -83,13 +94,40 @@ public final class TrialModuleCard447 {
             }
 
             graphics.fill(8, 75, CARD_W - 12, 76, 0xFF283444);
-            String linkText = connected
-                    ? "\u2192 " + tr(TrialGraph446.TITLE_KEY) + " #" + targetHub.id
-                    : tr("gui.settledlands.trial.mod.unlinked");
-            graphics.drawString(font, clip(font, linkText, textMax), 8, 82,
-                    connected ? accent : EDGE, false);
+            String linkText;
+            int linkCol;
+            if (hasIn) {
+                String srcTag = compactInLabel(graph, node);
+                if (connectedHub) {
+                    linkText = srcTag + " \u2192 " + tr(TrialGraph446.TITLE_KEY) + " #" + nextTarget.id;
+                } else if (connectedChain) {
+                    linkText = srcTag + " \u2192 #" + nextTarget.id;
+                } else {
+                    linkText = safe("gui.settledlands.trial.mod.sig_only", srcTag);
+                }
+                linkCol = 0xFF56D38C;
+            } else if (connectedHub) {
+                linkText = "\u2192 " + tr(TrialGraph446.TITLE_KEY) + " #" + nextTarget.id;
+                linkCol = accent;
+            } else if (connectedChain) {
+                linkText = safe("gui.settledlands.trial.mod.chain_to", "#" + nextTarget.id);
+                linkCol = accent;
+            } else {
+                linkText = tr("gui.settledlands.trial.mod.unlinked");
+                linkCol = EDGE;
+            }
+            graphics.drawString(font, clip(font, linkText, textMax), 8, 82, linkCol, false);
 
-            if (connected) {
+            if (supportsIn) {
+                if (hasIn) {
+                    DoorCard382.socket(graphics, 0, OUTPUT_PIN_Y, 0xFF56D38C);
+                } else {
+                    DoorCard382.socket(graphics, 0, OUTPUT_PIN_Y, TrialModule447.dimColor(slot));
+                    graphics.fill(-2, OUTPUT_PIN_Y - 2, 2, OUTPUT_PIN_Y + 2, BODY);
+                }
+            }
+
+            if (connectedHub || connectedChain) {
                 DoorCard382.diamond(graphics, CARD_W, OUTPUT_PIN_Y, 5, accent);
             } else {
                 DoorCard382.diamond(graphics, CARD_W, OUTPUT_PIN_Y, 5, TrialModule447.dimColor(slot));
@@ -98,6 +136,21 @@ public final class TrialModuleCard447 {
         } finally {
             pose.popPose();
         }
+    }
+
+    private static String compactInLabel(NpcDialogueGraph graph, Node node) {
+        List<TrialModule447.IncomingRef> refs = TrialModule447.incomingSources(graph, node);
+        if (refs.isEmpty()) return "";
+        TrialModule447.IncomingRef first = refs.get(0);
+        String base;
+        if (first.source.type == NpcDialogueGraph.IF) {
+            base = "IF #" + first.source.id;
+        } else if (TrialGraph446.isTrialNode(first.source)) {
+            base = tr("gui.settledlands.trial.mod.in_hub");
+        } else {
+            base = "#" + first.source.id;
+        }
+        return refs.size() > 1 ? base + " +" + (refs.size() - 1) : base;
     }
 
     public static String[] cardLines(Node node) {
@@ -228,6 +281,20 @@ public final class TrialModuleCard447 {
             if (!TrialModule447.isModuleNode(node)) continue;
             double dx = mouseX - outputPinScreenX(canvas, node);
             double dy = mouseY - outputPinScreenY(canvas, node);
+            if (dx * dx + dy * dy <= limit * limit) return node;
+        }
+        return null;
+    }
+
+    /** Hits the left conditional-input socket on {@code SLOT_MOBS} / {@code SLOT_REWARDS} cards. */
+    public static Node moduleAtInputPin(NpcDialogueGraph graph, NpcGraphCanvas canvas,
+            double mouseX, double mouseY) {
+        if (graph == null || canvas == null || graph.nodes == null) return null;
+        double limit = Math.max(HIT * 0.65D, HIT * canvas.zoom);
+        for (Node node : graph.nodes.values()) {
+            if (!TrialModule447.supportsConditionalInput(node)) continue;
+            double dx = mouseX - inputPinScreenX(canvas, node);
+            double dy = mouseY - inputPinScreenY(canvas, node);
             if (dx * dx + dy * dy <= limit * limit) return node;
         }
         return null;

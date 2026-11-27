@@ -8,6 +8,7 @@ import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphContextMenu;
 import dev.settledlands.trial.TrialControlNode446;
 import dev.settledlands.trial.TrialGraph446;
+import dev.settledlands.trial.TrialModule447;
 import net.minecraft.network.chat.Component;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
@@ -94,6 +95,24 @@ public abstract class NpcTrialPalette446Mixin {
                     this.status = Component.translatable("gui.settledlands.graph.connected").getString();
                 } else {
                     this.status = Component.translatable("gui.settledlands.trial_ctl.added").getString();
+                }
+                this.widgets();
+                this.changed();
+            }
+            return;
+        }
+
+        int modSlot = BlockMenu363.trialModuleSlot(row);
+        if (modSlot >= 0) {
+            NpcDialogueGraph.Node created = this.addAt(NpcDialogueGraph.TRIGGER, worldX, worldY);
+            if (created != null) {
+                TrialModule447.applyDefaults(created, modSlot);
+                if (wireFrom >= 0 && this.graph != null
+                        && this.graph.connect(wireFrom, created.id, wirePort)) {
+                    this.status = Component.translatable("gui.settledlands.graph.connected").getString();
+                } else {
+                    this.status = Component.translatable("gui.settledlands.trial.added_node",
+                            Component.literal(BlockMenu363.label(row))).getString();
                 }
                 this.widgets();
                 this.changed();

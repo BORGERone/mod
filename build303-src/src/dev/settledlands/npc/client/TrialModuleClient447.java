@@ -127,11 +127,23 @@ public final class TrialModuleClient447 {
         out.add(TrialGraphClient446.safe("gui.settledlands.trial.hub_modules",
                 connected + "/" + TrialModule447.MODULE_COUNT));
         for (int s = 0; s < TrialModule447.MODULE_COUNT; s++) {
-            Node mod = TrialModule447.connectedModule(graph, hub, s);
+            List<Node> mods = TrialModule447.connectedModules(graph, hub, s);
             String name = Component.translatable(TrialModule447.pinKey(s)).getString();
-            String state = mod != null
-                    ? "#" + mod.id
-                    : Component.translatable("gui.settledlands.trial.mod.slot_default").getString();
+            String state;
+            if (mods.isEmpty()) {
+                state = Component.translatable("gui.settledlands.trial.mod.slot_default").getString();
+            } else if (mods.size() == 1) {
+                Node mod = mods.get(0);
+                boolean sig = TrialModule447.hasIncomingControl(graph, mod);
+                state = "#" + mod.id + (sig ? " (IF)" : "");
+            } else {
+                StringBuilder sb = new StringBuilder();
+                for (int i = 0; i < mods.size(); i++) {
+                    if (i > 0) sb.append(',');
+                    sb.append('#').append(mods.get(i).id);
+                }
+                state = sb.toString();
+            }
             out.add(name + ": " + state);
         }
         return out.toArray(new String[0]);
@@ -170,14 +182,47 @@ public final class TrialModuleClient447 {
     // ---- Module lifecycle & linking -----------------------------------------
 
     public static String linkStatusText(NpcDialogueGraph graph, Node node) {
-        if (graph != null && node != null && node.next >= 0) {
-            Node hub = graph.get(node.next);
-            if (TrialGraph446.isTrialNode(hub)) {
+        if (graph != null && node != null) {
+            boolean supportsIn = TrialModule447.supportsConditionalInput(node);
+            List<TrialModule447.IncomingRef> ins = supportsIn
+                    ? TrialModule447.incomingSources(graph, node) : Collections.emptyList();
+            Node outTarget = node.next >= 0 ? graph.get(node.next) : null;
+            boolean outHub = TrialGraph446.isTrialNode(outTarget);
+            if (!ins.isEmpty()) {
+                TrialModule447.IncomingRef first = ins.get(0);
+                String src = (first.source.type == NpcDialogueGraph.IF ? "IF #" : "#") + first.source.id;
+                if (ins.size() > 1) src = src + " +" + (ins.size() - 1);
+                if (outHub) {
+                    return Component.translatable("gui.settledlands.trial.mod.sig_hub",
+                            src, "#" + outTarget.id).getString();
+                }
+                if (outTarget != null) {
+                    return Component.translatable("gui.settledlands.trial.mod.sig_chain",
+                            src, "#" + outTarget.id).getString();
+                }
+                return Component.translatable("gui.settledlands.trial.mod.sig_only", src).getString();
+            }
+            if (outHub) {
                 return TrialGraphClient446.safe("gui.settledlands.trial.mod.linked_to",
-                        "#" + hub.id);
+                        "#" + outTarget.id);
+            }
+            if (outTarget != null) {
+                return Component.translatable("gui.settledlands.trial.mod.chain_to",
+                        "#" + outTarget.id).getString();
             }
         }
         return Component.translatable("gui.settledlands.trial.mod.unlinked_short").getString();
+    }
+
+    public static Runnable disconnectIncomingAction(NpcDialogueGraphScreen screen,
+            NpcDialogueGraph graph, Node node) {
+        return () -> {
+            if (screen == null || graph == null || node == null) return;
+            screen.settledlands$remember();
+            TrialModule447.disconnectIncoming(graph, node.id);
+            requestInspectorRebuild();
+            screen.settledlands$changed();
+        };
     }
 
     public static Runnable toggleAttachHubAction(NpcDialogueGraphScreen screen, NpcDialogueGraph graph,
@@ -185,8 +230,7 @@ public final class TrialModuleClient447 {
         return () -> {
             if (screen == null || graph == null || node == null) return;
             screen.settledlands$remember();
-            Node curHub = node.next >= 0 ? graph.get(node.next) : null;
-            if (TrialGraph446.isTrialNode(curHub)) {
+            if (node.next >= 0) {
                 TrialModule447.disconnectModule(graph, node.id);
             } else {
                 Node hub = TrialGraph446.trialNode(graph);

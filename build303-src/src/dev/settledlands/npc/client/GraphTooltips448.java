@@ -479,6 +479,12 @@ public final class GraphTooltips448 {
                 return tip("ctx:blk_lp", BlockMenu363.label(row),
                         tr("gui.settledlands.tip448.menu.loot_pool"), LootPool436.ACCENT_COLOR);
             }
+            int modSlot = BlockMenu363.trialModuleSlot(row);
+            if (modSlot >= 0) {
+                return tip("ctx:tmod_" + modSlot, BlockMenu363.label(row),
+                        tr("gui.settledlands.tip448.menu.tmod_" + TrialModule447.kindOf(modSlot)),
+                        BlockMenu363.colour(row));
+            }
             int type = BlockMenu363.doorType(row);
             if (type >= 0) {
                 return tip("ctx:blk_" + type, BlockMenu363.label(row),
@@ -1182,18 +1188,31 @@ public final class GraphTooltips448 {
                 }
             }
 
-            // Trial Module right output pin
+            // Trial Module input socket (mobs / rewards) & right output pin
             if (TrialModule447.isModuleNode(n)) {
                 int slot = TrialModule447.slotOf(n);
+                if (TrialModule447.supportsConditionalInput(n)) {
+                    double ix = TrialModuleCard447.inputPinScreenX(canvas, n);
+                    double iy = TrialModuleCard447.inputPinScreenY(canvas, n);
+                    if (distSq(mx, my, ix, iy) <= rSq) {
+                        boolean hasIn = TrialModule447.hasIncomingControl(graph, n);
+                        return tip("pin:" + n.id + ":mod_in",
+                                tr("gui.settledlands.tip448.pin.mod_in_title"),
+                                tr(hasIn ? "gui.settledlands.tip448.pin.mod_in_wired"
+                                        : "gui.settledlands.tip448.pin.mod_in_free"),
+                                hasIn ? 0xFF56D38C : TrialModule447.color(slot));
+                    }
+                }
                 double ox = TrialModuleCard447.outputPinScreenX(canvas, n);
                 double oy = TrialModuleCard447.outputPinScreenY(canvas, n);
                 if (distSq(mx, my, ox, oy) <= rSq) {
-                    boolean wired = n.next >= 0 && TrialGraph446.isTrialNode(graph.get(n.next));
+                    boolean wiredHub = n.next >= 0 && TrialGraph446.isTrialNode(graph.get(n.next));
+                    boolean wiredChain = !wiredHub && n.next >= 0 && graph.get(n.next) != null;
+                    String key = wiredHub ? "gui.settledlands.tip448.pin.mod_out_wired"
+                            : (wiredChain ? "gui.settledlands.tip448.pin.mod_out_chain"
+                                    : "gui.settledlands.tip448.pin.mod_out_free");
                     return tip("pin:" + n.id + ":mod_out",
-                            tr(TrialModule447.titleKey(slot)),
-                            tr(wired ? "gui.settledlands.tip448.pin.mod_out_wired"
-                                    : "gui.settledlands.tip448.pin.mod_out_free"),
-                            TrialModule447.color(slot));
+                            tr(TrialModule447.titleKey(slot)), tr(key), TrialModule447.color(slot));
                 }
             }
 

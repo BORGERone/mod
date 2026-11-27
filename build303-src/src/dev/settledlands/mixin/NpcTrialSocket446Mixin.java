@@ -12,6 +12,7 @@ import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphCanvas;
 import dev.settledlands.npc.client.TrialCard446;
 import dev.settledlands.trial.TrialGraph446;
+import dev.settledlands.trial.TrialModule447;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.renderer.GameRenderer;
 import org.joml.Matrix4f;
@@ -91,12 +92,17 @@ public abstract class NpcTrialSocket446Mixin {
             Node card = graph.get(drag);
             if (!TrialGraph446.isTrialNode(card)) return;
 
-            int over = canvas.hit(graph, mouseX, mouseY);
+            int over = canvas.hitPort(graph, mouseX, mouseY, false);
+            if (over < 0) over = canvas.hit(graph, mouseX, mouseY);
             if (over < 0 || over == card.id) return;
             Node target = graph.get(over);
             if (target == null || TrialGraph446.isTrialNode(target)) return;
+            if (TrialModule447.isModuleNode(target) && !TrialModule447.supportsConditionalInput(target)) {
+                return;
+            }
             screen.settledlands$remember();
             TrialGraph446.setStartWaveTarget(card, over);
+            TrialModule447.syncCardConfig(graph);
             screen.settledlands$changed();
         } catch (Throwable ignored) {
         }

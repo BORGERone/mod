@@ -2,10 +2,22 @@ package dev.settledlands.trial;
 
 import dev.settledlands.chest.LootPool436;
 import dev.settledlands.chest.LootPoolManager436;
+import dev.settledlands.npc.BlockTalk358;
+import dev.settledlands.npc.BlockTrigger351;
 import dev.settledlands.npc.NpcDialogueGraph;
+import java.util.ArrayDeque;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Set;
+import net.minecraft.core.BlockPos;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.resources.ResourceKey;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
 
 /**
  * Build 447: modular configuration nodes for the {@code trialtuner:trial_spawner} blueprint graph.
@@ -817,6 +829,112 @@ public final class TrialModule447 {
 
     // ---- graph assembly & wiring --------------------------------------------
 
+    private static final ThreadLocal<int[]> SIGNAL_COUNTER = new ThreadLocal<>();
+
+    public static final class IncomingRef {
+        public final NpcDialogueGraph.Node source;
+        public final String tag;
+
+        public IncomingRef(NpcDialogueGraph.Node source, String tag) {
+            this.source = source;
+            this.tag = tag == null ? "" : tag;
+        }
+    }
+
+    /** Build 452: mob &amp; reward pools support an incoming control/IF wire on their left edge. */
+    public static boolean supportsConditionalInput(NpcDialogueGraph.Node node) {
+        int slot = slotOf(node);
+        return slot == SLOT_MOBS || slot == SLOT_REWARDS;
+    }
+
+    /** True if any node wire (IF, RANDOM, chain, trigger, or hub event) feeds {@code target}. */
+    public static boolean hasIncomingControl(NpcDialogueGraph graph, NpcDialogueGraph.Node target) {
+        if (graph == null || graph.nodes == null || target == null) return false;
+        int tid = target.id;
+        for (NpcDialogueGraph.Node u : graph.nodes.values()) {
+            if (u == null || u.id == tid) continue;
+            if (u.next == tid || u.falseNext == tid) return true;
+            if (u.triggers != null && u.triggers.contains(Integer.valueOf(tid))) return true;
+            if (u.randomBranches != null && u.randomBranches.contains(Integer.valueOf(tid))) return true;
+            if (TrialGraph446.isTrialNode(u) && TrialGraph446.startWaveTarget(u) == tid) return true;
+        }
+        return false;
+    }
+
+    /** Lists all incoming control/chain references targeting {@code target}. */
+    public static List<IncomingRef> incomingSources(NpcDialogueGraph graph, NpcDialogueGraph.Node target) {
+        List<IncomingRef> out = new ArrayList<>();
+        if (graph == null || graph.nodes == null || target == null) return out;
+        int tid = target.id;
+        for (NpcDialogueGraph.Node u : graph.nodes.values()) {
+            if (u == null || u.id == tid) continue;
+            if (TrialGraph446.isTrialNode(u)) {
+                if (TrialGraph446.startWaveTarget(u) == tid) out.add(new IncomingRef(u, "start"));
+                if (u.next == tid) out.add(new IncomingRef(u, "clear"));
+                if (u.falseNext == tid) out.add(new IncomingRef(u, "destroy"));
+                continue;
+            }
+            if (u.next == tid) {
+                out.add(new IncomingRef(u, u.type == NpcDialogueGraph.IF ? "if_true" : ""));
+            }
+            if (u.falseNext == tid) {
+                out.add(new IncomingRef(u, u.type == NpcDialogueGraph.IF ? "if_false" : "false"));
+            }
+            if (u.triggers != null && u.triggers.contains(Integer.valueOf(tid))) {
+                out.add(new IncomingRef(u, "trig"));
+            }
+            if (u.randomBranches != null) {
+                for (int i = 0; i < u.randomBranches.size(); i++) {
+                    Integer b = u.randomBranches.get(i);
+                    if (b != null && b.intValue() == tid) {
+                        out.add(new IncomingRef(u, "rnd_" + (i + 1)));
+                        break;
+                    }
+                }
+            }
+        }
+        return out;
+    }
+
+    /** Disconnects every incoming wire leading into {@code targetId} and re-syncs the hub card. */
+    public static boolean disconnectIncoming(NpcDialogueGraph graph, int targetId) {
+        if (graph == null || graph.nodes == null || targetId < 0) return false;
+        boolean changed = false;
+        for (NpcDialogueGraph.Node u : graph.nodes.values()) {
+            if (u == null || u.id == targetId) continue;
+            if (u.next == targetId) {
+                u.next = -1;
+                changed = true;
+            }
+            if (u.falseNext == targetId) {
+                u.falseNext = -1;
+                changed = true;
+            }
+            if (u.varInputNode == targetId) {
+                u.varInputNode = -1;
+                changed = true;
+            }
+            if (u.triggers != null && u.triggers.remove(Integer.valueOf(targetId))) {
+                changed = true;
+            }
+            if (u.randomBranches != null) {
+                for (int i = 0; i < u.randomBranches.size(); i++) {
+                    Integer b = u.randomBranches.get(i);
+                    if (b != null && b.intValue() == targetId) {
+                        u.randomBranches.set(i, Integer.valueOf(-1));
+                        changed = true;
+                    }
+                }
+            }
+            if (TrialGraph446.isTrialNode(u) && TrialGraph446.startWaveTarget(u) == targetId) {
+                TrialGraph446.setStartWaveTarget(u, -1);
+                changed = true;
+            }
+        }
+        if (changed) syncCardConfig(graph);
+        return changed;
+    }
+
     public static boolean hasAnyModule(NpcDialogueGraph graph) {
         if (graph == null || graph.nodes == null) return false;
         for (NpcDialogueGraph.Node n : graph.nodes.values()) {
@@ -830,21 +948,36 @@ public final class TrialModule447 {
         return graph != null && hub != null && isModuleNode(mod) && mod.next == hub.id;
     }
 
-    public static NpcDialogueGraph.Node connectedModule(NpcDialogueGraph graph,
+    /** Returns every module of {@code slot} currently wired directly to {@code hub}. */
+    public static List<NpcDialogueGraph.Node> connectedModules(NpcDialogueGraph graph,
             NpcDialogueGraph.Node hub, int slot) {
+        List<NpcDialogueGraph.Node> out = new ArrayList<>();
         if (graph == null || graph.nodes == null || hub == null || slot < 0 || slot >= MODULE_COUNT) {
-            return null;
+            return out;
         }
         for (NpcDialogueGraph.Node n : graph.nodes.values()) {
-            if (slotOf(n) == slot && n.next == hub.id) return n;
+            if (slotOf(n) == slot && n.next == hub.id) out.add(n);
         }
-        return null;
+        return out;
+    }
+
+    public static NpcDialogueGraph.Node connectedModule(NpcDialogueGraph graph,
+            NpcDialogueGraph.Node hub, int slot) {
+        List<NpcDialogueGraph.Node> all = connectedModules(graph, hub, slot);
+        if (all.isEmpty()) return null;
+        if (slot == SLOT_MOBS || slot == SLOT_REWARDS) {
+            for (int i = 0; i < all.size(); i++) {
+                NpcDialogueGraph.Node m = all.get(i);
+                if (!hasIncomingControl(graph, m)) return m;
+            }
+        }
+        return all.get(0);
     }
 
     public static int connectedCount(NpcDialogueGraph graph, NpcDialogueGraph.Node hub) {
         int count = 0;
         for (int s = 0; s < MODULE_COUNT; s++) {
-            if (connectedModule(graph, hub, s) != null) count++;
+            if (!connectedModules(graph, hub, s).isEmpty()) count++;
         }
         return count;
     }
@@ -854,20 +987,43 @@ public final class TrialModule447 {
         NpcDialogueGraph.Node hub = TrialGraph446.trialNode(graph);
         if (hub == null) return cfg;
 
-        // Preserve any legacy command strings attached to the hub if present.
+        // Preserve any legacy command strings and existing pool fallback attached to the hub.
+        TrialConfig446 legacy = null;
         if (hub.action != null && !hub.action.isBlank()) {
-            TrialConfig446 legacy = TrialConfig446.fromJson(hub.action);
+            legacy = TrialConfig446.fromJson(hub.action);
             cfg.onWaveClearCommands = legacy.onWaveClearCommands;
             cfg.onDestroyCommands = legacy.onDestroyCommands;
         }
-        if (hub.varOp == 0 && !hasAnyModule(graph) && hub.action != null && !hub.action.isBlank()) {
+        if (hub.varOp == 0 && !hasAnyModule(graph) && legacy != null) {
             // Un-migrated single-node Build 446 graph
-            return TrialConfig446.fromJson(hub.action);
+            return legacy;
         }
         for (int s = 0; s < MODULE_COUNT; s++) {
-            NpcDialogueGraph.Node mod = connectedModule(graph, hub, s);
-            if (mod != null) {
-                applyToConfig(mod, cfg);
+            if (s == SLOT_MOBS || s == SLOT_REWARDS) {
+                // Build 452: pool modules apply unconditionally ONLY when no control/IF wire is attached.
+                // Controlled pools stay silent until signaled by IF / chain; preserve hub's last active pool.
+                List<NpcDialogueGraph.Node> wired = connectedModules(graph, hub, s);
+                boolean appliedAutonomous = false;
+                for (int i = 0; i < wired.size(); i++) {
+                    NpcDialogueGraph.Node m = wired.get(i);
+                    if (!hasIncomingControl(graph, m)) {
+                        applyToConfig(m, cfg);
+                        appliedAutonomous = true;
+                        break;
+                    }
+                }
+                if (!appliedAutonomous && legacy != null) {
+                    if (s == SLOT_MOBS && legacy.mobs != null && !legacy.mobs.isEmpty()) {
+                        cfg.mobs = new ArrayList<>(legacy.mobs);
+                    } else if (s == SLOT_REWARDS && legacy.rewards != null) {
+                        cfg.rewards = new ArrayList<>(legacy.rewards);
+                    }
+                }
+            } else {
+                NpcDialogueGraph.Node mod = connectedModule(graph, hub, s);
+                if (mod != null) {
+                    applyToConfig(mod, cfg);
+                }
             }
         }
         return TrialConfig446.sanitize(cfg);
@@ -886,9 +1042,15 @@ public final class TrialModule447 {
         if (hub == null) return;
         TrialConfig446 clean = TrialConfig446.sanitize(cfg.copy());
         for (int s = 0; s < MODULE_COUNT; s++) {
-            NpcDialogueGraph.Node mod = connectedModule(graph, hub, s);
-            if (mod != null) {
-                writeFromConfig(mod, s, clean);
+            List<NpcDialogueGraph.Node> wired = connectedModules(graph, hub, s);
+            if (wired.isEmpty()) continue;
+            if (s == SLOT_MOBS || s == SLOT_REWARDS) {
+                // Do not clobber conditional/branching pools when syncing live spawner stats.
+                if (wired.size() == 1 && !hasIncomingControl(graph, wired.get(0))) {
+                    writeFromConfig(wired.get(0), s, clean);
+                }
+            } else {
+                writeFromConfig(wired.get(0), s, clean);
             }
         }
         hub.action = clean.toJson();
@@ -901,7 +1063,7 @@ public final class TrialModule447 {
         TrialConfig446 src = TrialConfig446.sanitize(cfg == null ? TrialConfig446.defaults() : cfg.copy());
         int created = 0;
         for (int s = 0; s < MODULE_COUNT; s++) {
-            if (connectedModule(graph, hub, s) != null) continue;
+            if (!connectedModules(graph, hub, s).isEmpty()) continue;
             int x = defaultXFor(hub, s);
             int y = defaultYFor(hub, s);
             NpcDialogueGraph.Node mod = graph.add(NpcDialogueGraph.TRIGGER, x, y);
@@ -916,20 +1078,35 @@ public final class TrialModule447 {
         return created;
     }
 
-    /** Connects module {@code modId} to {@code hubId}, replacing any existing module wired to the same slot. */
+    /** Connects module {@code modId} to {@code hubId}. Pool slots allow multiple conditional wires. */
     public static boolean connectModule(NpcDialogueGraph graph, int modId, int hubId) {
         if (graph == null || graph.nodes == null) return false;
         NpcDialogueGraph.Node mod = graph.get(modId);
         NpcDialogueGraph.Node hub = graph.get(hubId);
         int slot = slotOf(mod);
         if (slot < 0 || !TrialGraph446.isTrialNode(hub)) return false;
-        for (NpcDialogueGraph.Node other : graph.nodes.values()) {
-            if (other != null && other.id != mod.id && slotOf(other) == slot && other.next == hub.id) {
-                other.next = -1;
+        if (slot != SLOT_MOBS && slot != SLOT_REWARDS) {
+            for (NpcDialogueGraph.Node other : graph.nodes.values()) {
+                if (other != null && other.id != mod.id && slotOf(other) == slot && other.next == hub.id) {
+                    other.next = -1;
+                }
             }
         }
         mod.next = hub.id;
         hub.varOp = 1;
+        syncCardConfig(graph);
+        return true;
+    }
+
+    /** Connects a pool module output to the next sequential chain node (pool, IF, action, etc.). */
+    public static boolean connectChain(NpcDialogueGraph graph, int modId, int targetId) {
+        if (graph == null || graph.nodes == null || modId == targetId) return false;
+        NpcDialogueGraph.Node mod = graph.get(modId);
+        NpcDialogueGraph.Node target = graph.get(targetId);
+        if (!supportsConditionalInput(mod) || target == null || target.special != 0) return false;
+        if (TrialGraph446.isTrialNode(target)) return connectModule(graph, modId, targetId);
+        if (isModuleNode(target) && !supportsConditionalInput(target)) return false;
+        mod.next = target.id;
         syncCardConfig(graph);
         return true;
     }
@@ -956,6 +1133,236 @@ public final class TrialModule447 {
         }
         if (changed) syncCardConfig(graph);
         return changed;
+    }
+
+    // ---- Build 452: runtime signal activation & autonomous IF gates ---------
+
+    private static void refreshSinglePoolFromDisk(NpcDialogueGraph.Node node) {
+        try {
+            int slot = slotOf(node);
+            if (slot == SLOT_MOBS) {
+                String file = mobPoolFile(node);
+                if (!file.isEmpty() && TrialMobPoolManager449.poolExists(file)) {
+                    List<TrialConfig446.SpawnEntry> loaded = TrialMobPoolManager449.loadPoolQuiet(file);
+                    if (!loaded.isEmpty()) writeMobPool(node, file, loaded);
+                }
+            } else if (slot == SLOT_REWARDS) {
+                String file = rewardPoolFile(node);
+                if (!file.isEmpty() && LootPoolManager436.poolExists(file)) {
+                    List<LootPool436.PoolEntry> loaded = LootPoolManager436.loadPoolQuiet(file);
+                    writeRewardPool(node, file, fromLootEntries(loaded));
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+    }
+
+    /**
+     * Build 452: applies a triggered {@code SLOT_MOBS} or {@code SLOT_REWARDS} module onto its
+     * owning trial spawner when a signal arrives during graph chain traversal ({@link BlockTrigger351}).
+     */
+    public static boolean onSignalTriggered(ServerLevel fallbackLevel, NpcDialogueGraph graph,
+            NpcDialogueGraph.Node mod, ServerPlayer player) {
+        if (!supportsConditionalInput(mod)) return false;
+        int[] counter = SIGNAL_COUNTER.get();
+        if (counter != null) counter[0]++;
+
+        refreshSinglePoolFromDisk(mod);
+
+        ServerLevel targetLevel = TrialControlActions446.currentOriginLevel();
+        BlockPos targetPos = TrialControlActions446.currentOriginPos();
+
+        MinecraftServer server = null;
+        if (targetLevel != null) server = targetLevel.getServer();
+        else if (fallbackLevel != null) server = fallbackLevel.getServer();
+        else if (player != null) server = player.getServer();
+
+        TrialGraph446Store store = server == null ? null : TrialGraph446Store.get(server);
+        TrialGraph446Store.Entry matched = (store != null && graph != null)
+                ? store.findByGraph(graph) : null;
+        if ((targetLevel == null || targetPos == null) && matched != null && server != null) {
+            targetPos = new BlockPos(matched.x, matched.y, matched.z);
+            targetLevel = resolveDim(server, matched.dimension,
+                    fallbackLevel != null ? fallbackLevel : server.overworld());
+        }
+
+        NpcDialogueGraph.Node hub = graph == null ? null : TrialGraph446.trialNode(graph);
+        TrialConfig446 compiled = graph == null ? TrialConfig446.defaults() : compileConfig(graph);
+        TrialConfig446 active = (hub != null && hub.action != null && !hub.action.isBlank())
+                ? TrialConfig446.fromJson(hub.action)
+                : compiled.copy();
+
+        // Keep non-pool parameters synced from connected modules while preserving already-chosen other pool.
+        active.mode = compiled.mode;
+        active.scaleWithPlayers = compiled.scaleWithPlayers;
+        active.activationRange = compiled.activationRange;
+        active.spawnRange = compiled.spawnRange;
+        active.totalMobs = compiled.totalMobs;
+        active.totalMobsAddedPerPlayer = compiled.totalMobsAddedPerPlayer;
+        active.simultaneousMobs = compiled.simultaneousMobs;
+        active.simultaneousMobsAddedPerPlayer = compiled.simultaneousMobsAddedPerPlayer;
+        active.spawnBatchSize = compiled.spawnBatchSize;
+        active.minSpawnDelayTicks = compiled.minSpawnDelayTicks;
+        active.maxSpawnDelayTicks = compiled.maxSpawnDelayTicks;
+        active.cooldownTicks = compiled.cooldownTicks;
+        active.ominousMobMultiplier = compiled.ominousMobMultiplier;
+        active.ominousEquipment = compiled.ominousEquipment;
+        active.ominousHazards = compiled.ominousHazards;
+        active.ominousHazardIntervalTicks = compiled.ominousHazardIntervalTicks;
+        active.ominousKeyConversion = compiled.ominousKeyConversion;
+        active.noBreakEnabled = compiled.noBreakEnabled;
+        active.noBreakRadius = compiled.noBreakRadius;
+        active.noBreakSeconds = compiled.noBreakSeconds;
+        active.noBreakAmplifier = compiled.noBreakAmplifier;
+        active.selfDestruct = compiled.selfDestruct;
+        active.selfDestructAfterWaves = compiled.selfDestructAfterWaves;
+        active.selfDestructChancePercent = compiled.selfDestructChancePercent;
+        active.ranges.clear();
+        active.ranges.putAll(compiled.ranges);
+
+        applyToConfig(mod, active);
+        active = TrialConfig446.sanitize(active);
+        String json = active.toJson();
+        if (hub != null) {
+            hub.action = json;
+        }
+        if (store != null) {
+            store.setDirty();
+        }
+        if (targetLevel != null && targetPos != null && targetLevel.hasChunkAt(targetPos)) {
+            if (TrialSpawnerBridge446.isSpawnerAt(targetLevel, targetPos)) {
+                TrialSpawnerBridge446.applyConfigJson(targetLevel, targetPos, json);
+            }
+            if (graph != null) {
+                TrialGraph446.writeBlockEntityGraph(targetLevel, targetPos, graph);
+            }
+        }
+        return true;
+    }
+
+    private static ServerLevel resolveDim(MinecraftServer server, String dim, ServerLevel fallback) {
+        if (server != null && dim != null && !dim.isEmpty()) {
+            ResourceLocation rl = ResourceLocation.tryParse(dim);
+            if (rl != null) {
+                ServerLevel resolved = server.getLevel(ResourceKey.create(Registries.DIMENSION, rl));
+                if (resolved != null) return resolved;
+            }
+        }
+        return fallback;
+    }
+
+    private static boolean isValueOnlySourceForIf(NpcDialogueGraph graph, NpcDialogueGraph.Node src) {
+        return src != null
+                && src.type == 4
+                && src.varValue == 0
+                && !hasIncomingControl(graph, src);
+    }
+
+    private static boolean hasTriggerInputForGate(NpcDialogueGraph graph, NpcDialogueGraph.Node gate) {
+        if (graph == null || graph.nodes == null || gate == null) return false;
+        int gid = gate.id;
+        for (NpcDialogueGraph.Node u : graph.nodes.values()) {
+            if (u == null || u.id == gid) continue;
+            boolean links = u.next == gid
+                    || u.falseNext == gid
+                    || (u.triggers != null && u.triggers.contains(Integer.valueOf(gid)))
+                    || (u.randomBranches != null && u.randomBranches.contains(Integer.valueOf(gid)))
+                    || (TrialGraph446.isTrialNode(u) && TrialGraph446.startWaveTarget(u) == gid);
+            if (links && !isValueOnlySourceForIf(graph, u)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    private static boolean reachesConditionalPool(NpcDialogueGraph graph, NpcDialogueGraph.Node start) {
+        if (graph == null || graph.nodes == null || start == null) return false;
+        Set<Integer> seen = new HashSet<>();
+        ArrayDeque<NpcDialogueGraph.Node> queue = new ArrayDeque<>();
+        seen.add(Integer.valueOf(start.id));
+        queue.add(start);
+        int steps = 0;
+        while (!queue.isEmpty() && steps < 64) {
+            NpcDialogueGraph.Node cur = queue.poll();
+            steps++;
+            enqueueIfReachable(graph, cur.next, seen, queue);
+            enqueueIfReachable(graph, cur.falseNext, seen, queue);
+            if (cur.triggers != null) {
+                for (int i = 0; i < cur.triggers.size(); i++) {
+                    Integer id = cur.triggers.get(i);
+                    if (id != null) enqueueIfReachable(graph, id.intValue(), seen, queue);
+                }
+            }
+            if (cur.randomBranches != null) {
+                for (int i = 0; i < cur.randomBranches.size(); i++) {
+                    Integer id = cur.randomBranches.get(i);
+                    if (id != null) enqueueIfReachable(graph, id.intValue(), seen, queue);
+                }
+            }
+            for (Integer id : seen) {
+                if (id.intValue() == start.id) continue;
+                NpcDialogueGraph.Node n = graph.get(id.intValue());
+                if (supportsConditionalInput(n)) return true;
+            }
+        }
+        return false;
+    }
+
+    private static void enqueueIfReachable(NpcDialogueGraph graph, int nextId, Set<Integer> seen,
+            ArrayDeque<NpcDialogueGraph.Node> queue) {
+        if (nextId < 0 || seen.contains(Integer.valueOf(nextId))) return;
+        NpcDialogueGraph.Node target = graph.get(nextId);
+        if (target == null || TrialGraph446.isTrialNode(target)) return;
+        seen.add(Integer.valueOf(nextId));
+        queue.add(target);
+    }
+
+    /**
+     * Build 452: evaluates standalone {@code IF} / {@code RANDOM} gates that have no explicit event
+     * trigger feeding them (only optional variable provider inputs) and route into mob/reward pools.
+     *
+     * @return true if at least one pool node was signaled and applied.
+     */
+    public static boolean evaluateAutonomousIfGates(ServerLevel level, BlockPos pos,
+            NpcDialogueGraph graph, ServerPlayer player) {
+        if (level == null || level.isClientSide || graph == null || graph.nodes == null) {
+            return false;
+        }
+        List<NpcDialogueGraph.Node> gates = new ArrayList<>();
+        for (NpcDialogueGraph.Node u : graph.nodes.values()) {
+            if (u == null) continue;
+            if (u.type != NpcDialogueGraph.IF && u.type != NpcDialogueGraph.RANDOM) continue;
+            if (!hasTriggerInputForGate(graph, u) && reachesConditionalPool(graph, u)) {
+                gates.add(u);
+            }
+        }
+        if (gates.isEmpty()) return false;
+
+        int[] prev = SIGNAL_COUNTER.get();
+        int[] mine = new int[] { 0 };
+        SIGNAL_COUNTER.set(mine);
+        try {
+            String key = pos == null ? "" : TrialGraph446Store.key(level, pos);
+            BlockTalk358.Where where = pos == null
+                    ? null : new BlockTalk358.Where(level, key, pos.getX(), pos.getY(), pos.getZ());
+            TrialControlActions446.withOrigin(level, pos, () -> {
+                for (int i = 0; i < gates.size(); i++) {
+                    NpcDialogueGraph.Node gate = gates.get(i);
+                    if (player != null) {
+                        BlockTrigger351.start(player, graph, gate.id, where);
+                    } else {
+                        BlockTrigger351.startServerOnly(level, graph, gate.id, where);
+                    }
+                }
+            });
+            return mine[0] > 0;
+        } catch (Throwable failure) {
+            TrialGraph446.fail(failure);
+            return mine[0] > 0;
+        } finally {
+            if (prev == null) SIGNAL_COUNTER.remove();
+            else SIGNAL_COUNTER.set(prev);
+        }
     }
 
     // ---- helpers ------------------------------------------------------------
