@@ -1,16 +1,14 @@
 """Build 456:
 Built cleanly on top of Build 452 base JAR (incorporating all Build 453/454/455 features & fixes):
-1. Variable Value node (renamed from UE5 Variable -> "Значение переменной" / "Variable Value",
-   removing all UE5 branding across RU/EN localization and UI):
-   - Full execution flow support: white input port (y=50) and white output port (y=50), executing
-     when reached along node.next or node.triggers across both NPC and block/door/chest/trial graphs.
-   - Orange input pin (y=74) alongside orange output pin (y=74): reads dynamic input value when
-     wired (with cycle depth guard), or falls back to the node's own constant value when unwired;
-     writes into its named variable (Personal / Shared / Local); supports VARIABLE -> VarData orange link.
-   - Blue entity/target input pin (y=92): wired from CHECK, DAMAGE, Door, Chest, Trial, or Pursuit,
-     persisted via ValuePinInput NBT and rendered cleanly via PursuitGraphNode272.drawValuePins.
-   - pendingWireFrom auto-connects when creating Variable Value from any graph context menu,
-     WireHover453 scans VarDataNode453 orange inputs, and GraphTooltips448 covers every pin.
+1. Variable node ("Переменная" / "Variable", formerly "Значение переменной") & "Мат выражение"
+   (stock VARIABLE node 4 renamed to "Мат выражение" / "Math Expression", zero UE5 branding):
+   - Variable node (`VarDataNode453`) has NO white execution ports (`VarDataCard453` omits white
+     sockets, `GraphCardFooter448Mixin.hitPort` returns -1, `VarGraphIoMixin453.connect` rejects
+     white wires, and palette menus never auto-connect white wires).
+   - It passively receives all values pushed to it on its orange input (at y=50) from any
+     "Мат выражение" (`VARIABLE` 4) or another "Переменная" (supporting named scopes AND unnamed
+     node-keyed storage `__slvar_<id>` plus downstream cascade), and outputs its current stored
+     value from its orange output (at y=50) with optional blue entity target pin (at y=92).
 2. Square Zone shape toggle for "In Radius" (CHECK 5) and "Target" (RADIUS 15) nodes across NPC,
    block, door, chest, and trial graphs:
    - Exact Chebyshev box containment |dx| <= r && |dy| <= r && |dz| <= r matching the corners/edges
@@ -124,14 +122,12 @@ COMMON_MIXINS_456 = [
 ]
 
 MARKERS = {
-    "dev/settledlands/npc/VarDataNode453.class": ("applyMathOp", "isVarDataNode", "findLinkedOrangeTarget"),
+    "dev/settledlands/npc/VarDataNode453.class": ("applyMathOp", "isVarDataNode", "findLinkedOrangeTargets"),
     "dev/settledlands/npc/VarScopeStore453.class": (
         "executeVariableForNpc",
         "executeVariableForBlock",
-        "executeVarDataNodeForNpc",
-        "executeVarDataNodeForBlock",
+        "propagateToLinkedVarNodes",
     ),
-    "dev/settledlands/npc/VarScopeStore453$NpcTriggerFrame.class": ("currentNode",),
     "dev/settledlands/npc/RadiusZone456.class": ("drawSquareOutline", "isInsideBox", "isSquare"),
     "dev/settledlands/npc/RadiusZone456$ZoneShapeHost.class": ("settledlands$isSquareZone456",),
     "dev/settledlands/npc/client/RadiusZoneUi456.class": ("addShapeToggleRow", "drawCardBadge"),
@@ -141,21 +137,27 @@ MARKERS = {
     "dev/settledlands/mixin/RadiusZoneNpcCheckMixin456.class": ("settledlands$pushScanCtx456",),
     "dev/settledlands/mixin/RadiusZoneNpcDialogueMixin456.class": ("settledlands$expandPlayerDist456",),
     "dev/settledlands/npc/client/VarDataCard453.class": ("drawVarDataCard", "drawVariableCard", "findBlueSourceId"),
+    "dev/settledlands/mixin/GraphCardFooter448Mixin.class": ("settledlands$disableWhitePortsOnVarData456",),
     "dev/settledlands/mixin/NpcRadiusRow355Mixin.class": ("addShapeToggleRow", "drawCardBadge"),
 }
 
 LANG_SET_RU = {
     "gui.settledlands.desc453.footer_title": "Описание",
-    "gui.settledlands.desc448.card.node_4": "Выполняет математику над переменной (+, -, *, /, =, ^, %, mod, min/max) с поддержкой оранжевого и синего входов.",
-    "gui.settledlands.desc448.card.var453": "Контейнер числовой переменной (чтение/запись): хранит имя, число и область; поддерживает поток исполнения (белые порты), оранжевые пины значения и синий вход цели.",
-    "gui.settledlands.var453.menu": "+ Значение переменной",
-    "gui.settledlands.var453.title": "Значение переменной",
-    "gui.settledlands.var453.added": "Добавлен узел «Значение переменной»",
+    "gui.settledlands.graph.variable": "Мат выражение",
+    "gui.settledlands.graph.add_variable": "+ Мат выражение",
+    "gui.settledlands.block.palette": "У блока доступны: Реплика, Триггер, Условие If, Мат выражение, Случайность, В радиусе",
+    "gui.settledlands.tip448.menu.node_4": "Добавить узел «Мат выражение» для вычисления и изменения переменной (+, -, *, /, =, ^, %, mod, min/max).",
+    "gui.settledlands.tip448.node.n_4": "Подсказка: задайте имя переменной (или подключите оранжевую «Переменную» ко входу/выходу) и выберите операцию справа.",
+    "gui.settledlands.desc448.card.node_4": "Выполняет мат. выражение над переменной (+, -, *, /, =, ^, %, mod, min/max) с поддержкой оранжевого и синего входов.",
+    "gui.settledlands.desc448.card.var453": "Нода переменной (чтение и запись, без белых контактов): сама принимает значения с оранжевого входа (в т.ч. от «Мат выражения») и отдаёт записанное значение с оранжевого выхода; поддерживает синий пин цели.",
+    "gui.settledlands.var453.menu": "+ Переменная",
+    "gui.settledlands.var453.title": "Переменная",
+    "gui.settledlands.var453.added": "Добавлен узел «Переменная»",
     "gui.settledlands.var453.card_name": "Имя:",
-    "gui.settledlands.var453.const_mode": "Число-константа",
+    "gui.settledlands.var453.const_mode": "Без имени (локальное значение)",
     "gui.settledlands.var453.card_val": "Значение:",
     "gui.settledlands.var453.numbers_only": "Только целые числа · Чтение/Запись",
-    "gui.settledlands.var453.name": "Имя переменной (пусто = число-константа)",
+    "gui.settledlands.var453.name": "Имя переменной (пусто = внутренняя память узла)",
     "gui.settledlands.var453.value": "Числовое значение (начальное / константа)",
     "gui.settledlands.var453.scope": "Область видимости",
     "gui.settledlands.var453.scope_personal": "Персональная",
@@ -190,13 +192,13 @@ LANG_SET_RU = {
     "gui.settledlands.var453.blue_linked": "Синий вход (субъект): #%s",
     "gui.settledlands.var453.blue_none": "Синий вход: не подключён",
     "gui.settledlands.var453.btn_unlink_blue": "Отвязать синий вход",
-    "gui.settledlands.tip448.menu.var453": "Создать узел «Значение переменной» (имя, число, область) с белыми портами исполнения, оранжевыми пинами значения и синим входом цели.",
-    "gui.settledlands.tip448.node.var453": "Значение переменной: передаёт число/переменную по оранжевому проводу и записывает значение при входе потока исполнения.",
-    "gui.settledlands.tip448.var453_op": "Выберите математическую операцию для ноды «Переменная».",
+    "gui.settledlands.tip448.menu.var453": "Создать узел «Переменная» (имя, число, область) с оранжевыми портами данных и синим входом цели — без белых контактов.",
+    "gui.settledlands.tip448.node.var453": "Переменная: не требует белых проводов — сама принимает значения на левый оранжевый вход и отдаёт записанное значение с правого выхода.",
+    "gui.settledlands.tip448.var453_op": "Выберите математическую операцию для ноды «Мат выражение».",
     "gui.settledlands.tip448.pin.var453_out_title": "Оранжевый выход (число / переменная)",
-    "gui.settledlands.tip448.pin.var453_out": "Тяните провод в оранжевый вход «Значение переменной», «Переменная» или «Условие». ПКМ — отвязать провода.",
+    "gui.settledlands.tip448.pin.var453_out": "Тяните провод в оранжевый вход «Переменной», «Мат выражения» или «Условие If». ПКМ — отвязать провода.",
     "gui.settledlands.tip448.pin.var_orange_title": "Оранжевый вход (переменная / число)",
-    "gui.settledlands.tip448.pin.var_orange_in": "Принимает оранжевый провод от узла «Значение переменной» или другой «Переменной».",
+    "gui.settledlands.tip448.pin.var_orange_in": "Принимает оранжевый провод от узла «Переменная» или «Мат выражение».",
     "gui.settledlands.tip448.pin.var_blue_title": "Синий вход (цель / игрок)",
     "gui.settledlands.tip448.pin.var_blue_in": "Определяет игрока/сущность, над персональной переменной которого выполнится чтение или запись.",
     "gui.settledlands.radius_shape_btn": "Форма зоны",
@@ -212,16 +214,21 @@ LANG_SET_RU = {
 
 LANG_SET_EN = {
     "gui.settledlands.desc453.footer_title": "Description",
-    "gui.settledlands.desc448.card.node_4": "Applies math to a variable (+, -, *, /, =, ^, %, mod, min/max) with both orange data and blue entity inputs.",
-    "gui.settledlands.desc448.card.var453": "Numeric variable container (Read/Write): stores name, number, and scope; supports execution ports (white), orange data pins, and a blue entity target pin.",
-    "gui.settledlands.var453.menu": "+ Variable Value",
-    "gui.settledlands.var453.title": "Variable Value",
-    "gui.settledlands.var453.added": "Added Variable Value node",
+    "gui.settledlands.graph.variable": "Math Expression",
+    "gui.settledlands.graph.add_variable": "+ Math Expression",
+    "gui.settledlands.block.palette": "A block can run: Line, Trigger, If, Math Expression, Random, In radius",
+    "gui.settledlands.tip448.menu.node_4": "Create a Math Expression node to compute and modify a variable (+, -, *, /, =, ^, %, mod, min/max).",
+    "gui.settledlands.tip448.node.n_4": "Tip: set a variable name (or link a Variable node to its orange input/output) and pick the operation on the right.",
+    "gui.settledlands.desc448.card.node_4": "Applies a math expression to a variable (+, -, *, /, =, ^, %, mod, min/max) with both orange data and blue entity inputs.",
+    "gui.settledlands.desc448.card.var453": "Variable container (Read/Write, no white flow ports): passively receives values on its orange input (including from Math Expression) and outputs stored values on its orange pin; supports a blue target pin.",
+    "gui.settledlands.var453.menu": "+ Variable",
+    "gui.settledlands.var453.title": "Variable",
+    "gui.settledlands.var453.added": "Added Variable node",
     "gui.settledlands.var453.card_name": "Name:",
-    "gui.settledlands.var453.const_mode": "Numeric constant",
+    "gui.settledlands.var453.const_mode": "Unnamed (node memory)",
     "gui.settledlands.var453.card_val": "Value:",
     "gui.settledlands.var453.numbers_only": "Integers only · Read/Write",
-    "gui.settledlands.var453.name": "Variable name (blank = numeric constant)",
+    "gui.settledlands.var453.name": "Variable name (blank = node-local memory)",
     "gui.settledlands.var453.value": "Numeric value (initial / constant)",
     "gui.settledlands.var453.scope": "Variable scope",
     "gui.settledlands.var453.scope_personal": "Personal",
@@ -256,13 +263,13 @@ LANG_SET_EN = {
     "gui.settledlands.var453.blue_linked": "Blue input (subject): #%s",
     "gui.settledlands.var453.blue_none": "Blue input: not wired",
     "gui.settledlands.var453.btn_unlink_blue": "Unlink blue input",
-    "gui.settledlands.tip448.menu.var453": "Add a Variable Value node (name, integer value, scope) with white execution ports, orange data pins, and a blue entity input.",
-    "gui.settledlands.tip448.node.var453": "Variable Value: provides or writes a variable via orange data pins, white execution ports, and an optional blue target pin.",
-    "gui.settledlands.tip448.var453_op": "Choose the mathematical operation executed by this Variable node.",
+    "gui.settledlands.tip448.menu.var453": "Add a Variable node (name, integer value, scope) with orange data pins and a blue entity input — no white flow ports.",
+    "gui.settledlands.tip448.node.var453": "Variable: requires no white wires — passively receives values on its left orange input and outputs its stored value on the right orange pin.",
+    "gui.settledlands.tip448.var453_op": "Choose the mathematical operation executed by this Math Expression node.",
     "gui.settledlands.tip448.pin.var453_out_title": "Orange output (number / variable)",
-    "gui.settledlands.tip448.pin.var453_out": "Wire into Variable Value, Variable, or IF orange input pins. Right-click to unplug all.",
+    "gui.settledlands.tip448.pin.var453_out": "Wire into Variable, Math Expression, or IF orange input pins. Right-click to unplug all.",
     "gui.settledlands.tip448.pin.var_orange_title": "Orange input (variable / number)",
-    "gui.settledlands.tip448.pin.var_orange_in": "Receives an orange wire from a Variable Value node or another Variable node.",
+    "gui.settledlands.tip448.pin.var_orange_in": "Receives an orange wire from a Variable or Math Expression node.",
     "gui.settledlands.tip448.pin.var_blue_title": "Blue input (target / player)",
     "gui.settledlands.tip448.pin.var_blue_in": "Selects which player/entity's personal variable this node reads or modifies.",
     "gui.settledlands.radius_shape_btn": "Zone Shape",
@@ -277,16 +284,16 @@ LANG_SET_EN = {
 }
 
 CHANGELOG_EN = """\
-Build 456 - Variable Value Node Ports & Square Radius Zones
-- Renamed "Variable (UE5)" cleanly to "Variable Value" ("Значение переменной") across Russian and English UI/tooltips/descriptions.
-- Added full execution ports (white in/out at y=50), orange input/output pins (y=74), and blue entity/target input pin (y=92) to Variable Value nodes, executing both along main graph chains and triggers in NPC, block, door, chest, and trial graphs; auto-connects on creation from pendingWireFrom.
+Build 456 - Variable Node & Math Expression Rename, No White Ports on Variable, and Square Zones
+- Renamed stock VARIABLE (4) node to "Math Expression" ("Мат выражение") and renamed the variable container node to "Variable" ("Переменная") across RU/EN UI, menus, tooltips, and descriptions (zero UE5 branding).
+- Removed white execution flow ports from the "Variable" node (`VarDataNode453`): orange input/output sockets sit centered at y=50 alongside the blue target pin at y=92; passively accepts values from any Math Expression or upstream Variable (both named and unnamed node-scoped) and outputs stored values to any downstream Math Expression / IF / Variable.
 - Added Circle / Square zone mode toggle to "In Radius" (CHECK 5) and "Target" (RADIUS 15) nodes with exact Chebyshev box detection, square world particle border, inspector toggle + card badge, and NBT/clipboard persistence.
-- Includes all Build 453/454/455 runtime fixes, scrollable inspector description card, unified wire hover, and 14-op VARIABLE math."""
+- Includes all Build 453/454/455 runtime fixes, scrollable inspector description card, unified wire hover, and 14-op math."""
 
 PATCHINFO = """\
 Settled Lands 0.8.0 Build 456
-- Renamed UE5 Variable node to Variable Value ("Значение переменной" / "Variable Value")
-- Enabled white exec ports (in/out), orange value input/output, and blue entity input on Variable Value nodes + pendingWireFrom connect + runtime execution
+- Renamed stock VARIABLE (4) to "Math Expression" ("Мат выражение") and VarDataNode453 to "Variable" ("Переменная"), zero UE5 branding
+- Removed white flow ports on "Variable" node (orange in/out at y=50 + blue target at y=92); passively accepts & cascades pushed values (named or unnamed) and outputs stored values
 - Added Circle / Square zone mode to CHECK (5) and RADIUS (15) nodes with matching square particle outline, NBT/clipboard save, and UI badge/toggle
 - Includes all Build 453/454/455 fixes (scrollable inspector descriptions, wire hover, math ops)
 """

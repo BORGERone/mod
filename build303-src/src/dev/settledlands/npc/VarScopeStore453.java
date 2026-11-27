@@ -2,6 +2,8 @@ package dev.settledlands.npc;
 
 import dev.settledlands.trial.TrialGraph446;
 import dev.settledlands.trial.TrialSpawnerBridge446;
+import java.util.ArrayDeque;
+import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -565,54 +567,173 @@ public final class VarScopeStore453 extends SavedData {
         NpcDialogueGraph.Node orangeSrc = VarDataNode453.resolveOrangeSource(graph, node);
         boolean hasOwnName = node.pointsName != null && !node.pointsName.isBlank();
 
-        String targetName;
-        boolean targetShared;
-        boolean targetLocal;
-        boolean targetHasInit = false;
-        int targetInit = 0;
-        int operand;
-
         if (orangeSrc != null && !hasOwnName) {
-            // Pattern A (Set/Modify linked variable): node reads target variable from orange input
-            targetName = orangeSrc.pointsName;
-            targetShared = orangeSrc.pointsShared;
-            targetLocal = orangeSrc.varLocal;
-            targetHasInit = VarDataNode453.isVarDataNode(orangeSrc) && orangeSrc.varValue != 0;
-            targetInit = orangeSrc.varValue;
-            operand = node.varValue;
-        } else if (orangeSrc != null) {
-            // Pattern B (Operand from orange wire): modify node's own variable using value from orangeSrc
-            targetName = node.pointsName;
-            targetShared = node.pointsShared;
-            targetLocal = node.varLocal;
-            operand = readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, where, graph, orangeSrc, 0);
-        } else if (!hasOwnName) {
-            // Pattern C (Output wired into VarDataNode's orange input): modify the downstream VarDataNode directly
-            NpcDialogueGraph.Node outTarget = VarDataNode453.findLinkedOrangeTarget(graph, node.id);
-            if (outTarget == null) return;
-            targetName = outTarget.pointsName;
-            targetShared = outTarget.pointsShared;
-            targetLocal = outTarget.varLocal;
-            targetHasInit = outTarget.varValue != 0;
-            targetInit = outTarget.varValue;
-            operand = node.varValue;
-        } else {
-            // No orange wire: modify node's own variable using node.varValue
-            targetName = node.pointsName;
-            targetShared = node.pointsShared;
-            targetLocal = node.varLocal;
-            operand = node.varValue;
+            // Pattern A (Variable -> Math Expression without own name): modify orangeSrc directly,
+            // then forward the updated value to any VarData nodes wired to Math Expression's output.
+            String tName = effectiveVarName(orangeSrc);
+            if (tName.isBlank()) return;
+            ServerPlayer tPlayer = resolveNodePlayer(server, targetPlayer, targetNpc, where, graph, orangeSrc);
+            GuideNpc tNpc = resolveNodeNpc(targetNpc, graph, orangeSrc);
+            boolean hasInit = VarDataNode453.isVarDataNode(orangeSrc) && orangeSrc.varValue != 0;
+            int cur = readRaw(server, tPlayer, tNpc, npcLocals, where,
+                    tName, orangeSrc.pointsShared, orangeSrc.varLocal, hasInit, orangeSrc.varValue);
+            int next = VarDataNode453.applyMathOp(cur, node.varOp, node.varValue);
+            writeRaw(server, tPlayer, tNpc, npcLocals, where,
+                    tName, orangeSrc.pointsShared, orangeSrc.varLocal, next);
+            propagateToLinkedVarNodes(server, targetPlayer, targetNpc, npcLocals, where, graph, node.id, next);
+            return;
         }
 
-        if (targetName == null || targetName.isBlank()) return;
+        if (orangeSrc != null) {
+            // Pattern B (Operand from orange wire into named Math Expression): modify own variable,
+            // then forward the result to any VarData nodes wired to Math Expression's output.
+            int operand = readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, where, graph, orangeSrc, 0);
+            int cur = readRaw(server, targetPlayer, targetNpc, npcLocals, where,
+                    node.pointsName, node.pointsShared, node.varLocal, false, 0);
+            int next = VarDataNode453.applyMathOp(cur, node.varOp, operand);
+            writeRaw(server, targetPlayer, targetNpc, npcLocals, where,
+                    node.pointsName, node.pointsShared, node.varLocal, next);
+            propagateToLinkedVarNodes(server, targetPlayer, targetNpc, npcLocals, where, graph, node.id, next);
+            return;
+        }
+
+        if (!hasOwnName) {
+            // Pattern C (Math Expression without own name -> one or more Variable nodes on output):
+            // modify each connected Variable node using its own stored value, scope, and blue pin,
+            // then cascade to any downstream Variable chain.
+            List<NpcDialogueGraph.Node> targets = VarDataNode453.findLinkedOrangeTargets(graph, node.id);
+            if (targets.isEmpty()) return;
+            for (NpcDialogueGraph.Node outTarget : targets) {
+                String tName = effectiveVarName(outTarget);
+                if (tName.isBlank()) continue;
+                ServerPlayer tPlayer = resolveNodePlayer(server, targetPlayer, targetNpc, where, graph, outTarget);
+                GuideNpc tNpc = resolveNodeNpc(targetNpc, graph, outTarget);
+                int cur = readRaw(server, tPlayer, tNpc, npcLocals, where,
+                        tName, outTarget.pointsShared, outTarget.varLocal,
+                        outTarget.varValue != 0, outTarget.varValue);
+                int next = VarDataNode453.applyMathOp(cur, node.varOp, node.varValue);
+                writeRaw(server, tPlayer, tNpc, npcLocals, where,
+                        tName, outTarget.pointsShared, outTarget.varLocal, next);
+                propagateToLinkedVarNodes(server, targetPlayer, targetNpc, npcLocals, where, graph, outTarget.id, next);
+            }
+            return;
+        }
+
+        // Pattern D (Named Math Expression without orange input): modify own variable and forward
+        // the computed value to any Variable nodes wired to its orange output.
         int cur = readRaw(server, targetPlayer, targetNpc, npcLocals, where,
-                targetName, targetShared, targetLocal, targetHasInit, targetInit);
-        int next = VarDataNode453.applyMathOp(cur, node.varOp, operand);
+                node.pointsName, node.pointsShared, node.varLocal, false, 0);
+        int next = VarDataNode453.applyMathOp(cur, node.varOp, node.varValue);
         writeRaw(server, targetPlayer, targetNpc, npcLocals, where,
-                targetName, targetShared, targetLocal, next);
+                node.pointsName, node.pointsShared, node.varLocal, next);
+        propagateToLinkedVarNodes(server, targetPlayer, targetNpc, npcLocals, where, graph, node.id, next);
     }
 
-    /** Reads the numeric value supplied by an orange source node (Variable Value or VARIABLE). */
+    /** Returns {@code node.pointsName}, or a stable internal storage key for unnamed Variable nodes. */
+    private static String effectiveVarName(NpcDialogueGraph.Node node) {
+        if (node == null) return "";
+        if (node.pointsName != null && !node.pointsName.isBlank()) return node.pointsName;
+        if (VarDataNode453.isVarDataNode(node)) return "__slvar_" + node.id;
+        return "";
+    }
+
+    private static ServerPlayer resolveNodePlayer(
+            MinecraftServer server,
+            ServerPlayer fallbackPlayer,
+            GuideNpc hostNpc,
+            BlockTalk358.Where where,
+            NpcDialogueGraph graph,
+            NpcDialogueGraph.Node dataNode) {
+        if (graph == null || dataNode == null) return fallbackPlayer;
+        int blueId = VarDataNode453.entityInput(graph, dataNode);
+        if (blueId < 0) return fallbackPlayer;
+        if (hostNpc != null) {
+            Entity e = resolveNpcBlueEntity(hostNpc, graph, dataNode);
+            return e instanceof ServerPlayer sp ? sp : null;
+        }
+        ServerLevel lvl = where != null ? where.level()
+                : (fallbackPlayer != null ? fallbackPlayer.serverLevel()
+                        : (server != null ? server.overworld() : null));
+        return resolveBlockBluePlayer(lvl, fallbackPlayer, graph, dataNode, where);
+    }
+
+    private static GuideNpc resolveNodeNpc(
+            GuideNpc fallbackNpc,
+            NpcDialogueGraph graph,
+            NpcDialogueGraph.Node dataNode) {
+        if (fallbackNpc == null || graph == null || dataNode == null) return fallbackNpc;
+        int blueId = VarDataNode453.entityInput(graph, dataNode);
+        if (blueId < 0) return fallbackNpc;
+        Entity e = resolveNpcBlueEntity(fallbackNpc, graph, dataNode);
+        return e instanceof GuideNpc gn ? gn : fallbackNpc;
+    }
+
+    private static boolean hasStoredValue(
+            MinecraftServer server,
+            ServerPlayer player,
+            GuideNpc npc,
+            NpcLocalVarBridge npcLocals,
+            BlockTalk358.Where where,
+            String name,
+            boolean shared,
+            boolean local) {
+        String clean = cleanVarName(name);
+        if (clean.isEmpty()) return false;
+        VarScopeStore453 store = get(server);
+        if (local) {
+            if (npc != null) {
+                CompoundTag tag = npcLocals != null
+                        ? npcLocals.getOrCreate(npc, false)
+                        : getOrCreateNpcLocalTag(npc, false);
+                return tag != null && tag.contains(clean);
+            }
+            if (where != null && store != null) {
+                return store.hasScopedLocal(where.key(), clean)
+                        || store.isInitialized(initKey(clean, false, true, null, where.key()));
+            }
+            return false;
+        }
+        UUID pid = shared ? ZERO_UUID : (player == null ? null : player.getUUID());
+        if (!shared && pid == null) return false;
+        if (store != null && store.isInitialized(initKey(clean, shared, false, pid, null))) {
+            return true;
+        }
+        return server != null && NpcPoints.get(server).get(pid, clean, shared) != 0;
+    }
+
+    /** Writes {@code value} to every {@link VarDataNode453} wired downstream of {@code sourceId} (BFS, cycle-safe). */
+    private static void propagateToLinkedVarNodes(
+            MinecraftServer server,
+            ServerPlayer fallbackPlayer,
+            GuideNpc hostNpc,
+            NpcLocalVarBridge npcLocals,
+            BlockTalk358.Where where,
+            NpcDialogueGraph graph,
+            int sourceId,
+            int value) {
+        if (graph == null || graph.nodes == null || sourceId < 0) return;
+        Set<Integer> visited = new HashSet<>();
+        visited.add(sourceId);
+        Deque<Integer> queue = new ArrayDeque<>();
+        queue.add(sourceId);
+        while (!queue.isEmpty() && visited.size() < 64) {
+            int curId = queue.poll();
+            List<NpcDialogueGraph.Node> targets = VarDataNode453.findLinkedOrangeTargets(graph, curId);
+            for (NpcDialogueGraph.Node tgt : targets) {
+                if (!visited.add(tgt.id)) continue;
+                String tName = effectiveVarName(tgt);
+                if (!tName.isBlank()) {
+                    ServerPlayer tPlayer = resolveNodePlayer(server, fallbackPlayer, hostNpc, where, graph, tgt);
+                    GuideNpc tNpc = resolveNodeNpc(hostNpc, graph, tgt);
+                    writeRaw(server, tPlayer, tNpc, npcLocals, where,
+                            tName, tgt.pointsShared, tgt.varLocal, value);
+                }
+                queue.add(tgt.id);
+            }
+        }
+    }
+
+    /** Reads the numeric value supplied by an orange source node (Variable or Math Expression). */
     public static int readOrangeNodeValue(
             MinecraftServer server,
             ServerPlayer player,
@@ -633,10 +754,36 @@ public final class VarScopeStore453 extends SavedData {
             NpcDialogueGraph.Node src,
             int depth) {
         if (src == null) return 0;
+        ServerPlayer effPlayer = resolveNodePlayer(server, player, npc, where, graph, src);
+        GuideNpc effNpc = resolveNodeNpc(npc, graph, src);
+
+        if (VarDataNode453.isVarDataNode(src)) {
+            boolean hasExplicitName = src.pointsName != null && !src.pointsName.isBlank();
+            String effName = effectiveVarName(src);
+            if (!effName.isBlank()) {
+                boolean stored = hasStoredValue(server, effPlayer, effNpc, npcLocals, where,
+                        effName, src.pointsShared, src.varLocal);
+                if (stored) {
+                    return readRaw(server, effPlayer, effNpc, npcLocals, where,
+                            effName, src.pointsShared, src.varLocal, false, 0);
+                }
+                if (depth < 16 && graph != null) {
+                    NpcDialogueGraph.Node chained = VarDataNode453.resolveOrangeSource(graph, src);
+                    if (chained != null && chained != src) {
+                        return readOrangeNodeValue(server, player, npc, npcLocals, where, graph, chained, depth + 1);
+                    }
+                }
+                if (hasExplicitName) {
+                    return readRaw(server, effPlayer, effNpc, npcLocals, where,
+                            effName, src.pointsShared, src.varLocal, src.varValue != 0, src.varValue);
+                }
+            }
+            return src.varValue;
+        }
+
         if (src.pointsName != null && !src.pointsName.isBlank()) {
-            boolean hasInit = VarDataNode453.isVarDataNode(src) && src.varValue != 0;
-            return readRaw(server, player, npc, npcLocals, where,
-                    src.pointsName, src.pointsShared, src.varLocal, hasInit, src.varValue);
+            return readRaw(server, effPlayer, effNpc, npcLocals, where,
+                    src.pointsName, src.pointsShared, src.varLocal, false, 0);
         }
         if (depth < 16 && graph != null) {
             NpcDialogueGraph.Node chained = VarDataNode453.resolveOrangeSource(graph, src);

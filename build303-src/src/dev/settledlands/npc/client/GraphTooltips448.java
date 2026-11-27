@@ -1340,9 +1340,9 @@ public final class GraphTooltips448 {
                 }
             }
 
-            // Standard left input and right output pins (non-card, non-module, non-stats, non-name)
+            // Standard left input and right output pins (non-card, non-module, non-stats, non-name, non-VarData)
             if (n.type != 16 && n.type != BlockName359.TYPE && !TrialGraph446.isTrialNode(n)
-                    && !TrialModule447.isModuleNode(n)) {
+                    && !TrialModule447.isModuleNode(n) && !VarDataNode453.isVarDataNode(n)) {
                 double lx = canvas.screenX(n.x);
                 double ly = canvas.screenY(n.y + h / 2.0D);
                 if (distSq(mx, my, lx, ly) <= rSq) {

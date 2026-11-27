@@ -1,6 +1,7 @@
 package dev.settledlands.mixin;
 
 import dev.settledlands.npc.NpcDialogueGraph;
+import dev.settledlands.npc.VarDataNode453;
 import dev.settledlands.npc.client.GraphCardDesc448;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphCanvas;
@@ -39,5 +40,17 @@ public abstract class GraphCardFooter448Mixin {
             NpcDialogueGraph graph, double mouseX, double mouseY,
             CallbackInfoReturnable<Integer> cir) {
         // Build 453: canvas card hitbox covers the card itself.
+    }
+
+    @Inject(method = "hitPort(Ldev/settledlands/npc/client/NpcGraphCanvas;Ldev/settledlands/npc/NpcDialogueGraph;DDZ)I",
+            at = @At("RETURN"), cancellable = true, remap = false)
+    private static void settledlands$disableWhitePortsOnVarData456(NpcGraphCanvas canvas,
+            NpcDialogueGraph graph, double mouseX, double mouseY, boolean outgoing,
+            CallbackInfoReturnable<Integer> cir) {
+        Integer hitId = cir.getReturnValue();
+        if (hitId == null || hitId.intValue() < 0 || graph == null) return;
+        if (VarDataNode453.isVarDataNode(graph.get(hitId.intValue()))) {
+            cir.setReturnValue(-1);
+        }
     }
 }

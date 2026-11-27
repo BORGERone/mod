@@ -13,9 +13,9 @@ import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.network.chat.Component;
 
 /**
- * Build 453/456: inspector panels for the Variable Value node ({@link VarDataNode453}) and
- * enhanced {@link NpcDialogueGraph#VARIABLE} / {@link NpcDialogueGraph#IF} nodes (all 14 math
- * operations + orange variable/numeric input status + blue entity/target input status).
+ * Build 453/456: inspector panels for the Variable node ({@link VarDataNode453}, "Переменная")
+ * and enhanced {@link NpcDialogueGraph#VARIABLE} ("Мат выражение") / {@link NpcDialogueGraph#IF}
+ * nodes (all 14 math operations + orange variable/numeric input status + blue entity/target input status).
  */
 public final class VarDataInspector453 {
 
@@ -44,7 +44,7 @@ public final class VarDataInspector453 {
 
     private VarDataInspector453() {}
 
-    // ---- Inspector for the new UE5 Variable data node ----
+    // ---- Inspector for the Variable data node ("Переменная") ----
 
     public static int buildVarDataInspector(
             NpcDialogueGraph graph,

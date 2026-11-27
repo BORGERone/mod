@@ -88,32 +88,14 @@ public abstract class VarGraphIoMixin453 {
             return;
         }
 
-        // White execution wire going INTO a Variable Value node routes via linear flow (next / falseNext / randomBranches)
-        // just like stock VARIABLE (4), so execution enters the node, writes the variable, and continues via node.next.
-        if (VarDataNode453.isVarDataNode(to) && fromPort >= 0) {
-            if (from.type == NpcDialogueGraph.IF) {
-                if (fromPort == 1) {
-                    from.falseNext = toId;
-                } else {
-                    from.next = toId;
-                }
-            } else if (from.type == NpcDialogueGraph.RANDOM) {
-                while (from.randomBranches.size() <= fromPort) {
-                    from.randomBranches.add(-1);
-                }
-                from.randomBranches.set(fromPort, toId);
-            } else {
-                from.next = toId;
-            }
-            cir.setReturnValue(Boolean.TRUE);
+        // Variable nodes (VarDataNode453) have NO white flow ports: block all white execution connections
+        // into or out of them; allow only explicit orange (-100) data wires.
+        if (VarDataNode453.isVarDataNode(to)) {
+            cir.setReturnValue(Boolean.FALSE);
             return;
         }
-
-        // White execution wire going OUT OF a Variable Value node (fromPort >= 0) continues the execution chain,
-        // unless pulling explicitly into an orange consumer without a normal connection? Wait: let white ports connect normally!
-        // Only handle legacy connect(-100) or stock connect for outgoing white wires:
-        if (VarDataNode453.isVarDataNode(from) && fromPort < 0) {
-            if (VarDataNode453.isOrangeInputNode(to)) {
+        if (VarDataNode453.isVarDataNode(from)) {
+            if (fromPort < 0 && VarDataNode453.isOrangeInputNode(to)) {
                 to.varInputNode = fromId;
                 cir.setReturnValue(Boolean.TRUE);
             } else {

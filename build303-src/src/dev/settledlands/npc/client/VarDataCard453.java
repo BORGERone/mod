@@ -10,10 +10,10 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 
 /**
- * Build 453/456: renders the Variable Value card ({@link VarDataNode453}), draws the orange data
- * sockets and white execution ports on {@link VarDataNode453} and {@link NpcDialogueGraph#VARIABLE},
- * upgrades the {@code VARIABLE} card face with its real math operation and wired input indicators,
- * and handles orange pin geometry/hit-tests plus the NPC create-menu row.
+ * Build 453/456: renders the Variable card ({@link VarDataNode453}) with orange data sockets and
+ * blue target pin (without white flow ports), draws orange/white/blue sockets on
+ * {@link NpcDialogueGraph#VARIABLE} ("Мат выражение"), and handles orange pin geometry/hit-tests
+ * plus the NPC create-menu row.
  */
 public final class VarDataCard453 {
 
@@ -21,9 +21,9 @@ public final class VarDataCard453 {
     public static final int CARD_H = 100;
     private static final int HEADER_H = 22;
 
-    /** Y offset on the left/right edges of a Variable Value node's orange data pins (below white exec at 50, above blue pin at 92). */
-    public static final double VAR_DATA_PIN_Y = 74.0D;
-    /** Y offset on the left/right edges of a VARIABLE node's orange data pins (below white exec at 50, above blue pin at 92). */
+    /** Y offset on the left/right edges of a Variable node's orange data pins (centered vertically; no white flow ports). */
+    public static final double VAR_DATA_PIN_Y = 50.0D;
+    /** Y offset on the left/right edges of a Math Expression (VARIABLE) node's orange data pins (below white exec at 50, above blue pin at 92). */
     public static final double VARIABLE_ORANGE_Y = 74.0D;
     /** Y offset on the left edge of an IF node's orange input pin. */
     public static final double IF_ORANGE_Y = 65.0D;
@@ -66,7 +66,7 @@ public final class VarDataCard453 {
                 menu.left + 24, ry + 7, hover == row ? -1 : -1852043, false);
     }
 
-    // ---- Drawing the Variable Value node card ----
+    // ---- Drawing the Variable node card ("Переменная" / "Variable") ----
 
     public static void drawVarDataCard(NpcDialogueGraphScreen screen, GuiGraphics graphics,
             Node node) {
@@ -134,10 +134,11 @@ public final class VarDataCard453 {
 
             // Output hint near right edge
             int consumers = VarDataNode453.wiredOrangeConsumers(graph, node.id);
-            String outHint = consumers > 0 ? consumers + " \u2192" : "Set/Get";
-            int hintW = font.width(outHint);
-            graphics.drawString(font, outHint, CARD_W - 12 - hintW, 65,
-                    consumers > 0 ? COL_ORANGE : COL_MUTED, false);
+            if (consumers > 0) {
+                String outHint = consumers + " \u2192";
+                int hintW = font.width(outHint);
+                graphics.drawString(font, outHint, CARD_W - 12 - hintW, 65, COL_ORANGE, false);
+            }
 
             // Bottom line: blue target status or integer hint
             if (blueId >= 0) {
@@ -148,32 +149,24 @@ public final class VarDataCard453 {
                 String typeTag = Component.translatable("gui.settledlands.var453.numbers_only").getString();
                 graphics.drawString(font, clip(font, typeTag, CARD_W - 20), 10, 84, COL_MUTED, false);
             }
-
-            // Left white execution input port (y=50) & Right white execution output port (y=50)
-            graphics.fill(-5, 45, 5, 55, COL_WHITE_PORT);
-            graphics.fill(CARD_W - 5, 45, CARD_W + 5, 55, COL_WHITE_PORT);
-
-            // Left orange data input socket (y=74)
-            graphics.fill(-5, (int) VAR_DATA_PIN_Y - 5, 5, (int) VAR_DATA_PIN_Y + 5, COL_ORANGE);
-            graphics.fill(-3, (int) VAR_DATA_PIN_Y - 3, 3, (int) VAR_DATA_PIN_Y + 3, 0xFFFFEBD2);
         } finally {
             pose.popPose();
         }
 
-        // Right-edge orange output pin (y=74, screen space)
+        // Right-edge orange output pin (y=50, screen space)
         double px = Math.round(orangeOutScreenX(canvas, node));
         double py = Math.round(orangeOutScreenY(canvas, node));
-        double r = Math.max(2.0D, 3.0D * canvas.zoom);
-        PursuitGraphNode272.drawPin(graphics, px, py, r + 1.0D, 0xFF2B1605);
+        double r = Math.max(2.5D, 3.5D * canvas.zoom);
+        PursuitGraphNode272.drawPin(graphics, px, py, r + 1.2D, 0xFF2B1605);
         PursuitGraphNode272.drawPin(graphics, px, py, r, COL_ORANGE);
-        PursuitGraphNode272.drawPin(graphics, px, py, Math.max(1.0D, r * 0.4D), 0xFFFFF4E6);
+        PursuitGraphNode272.drawPin(graphics, px, py, Math.max(1.2D, r * 0.42D), 0xFFFFF4E6);
 
-        // Left-edge orange input pin dot (y=74, screen space)
+        // Left-edge orange input pin (y=50, screen space)
         double ix = Math.round(orangeInScreenX(canvas, node));
         double iy = Math.round(orangeInScreenY(canvas, node));
-        double ir = Math.max(1.8D, 2.5D * canvas.zoom);
-        PursuitGraphNode272.drawPin(graphics, ix, iy, ir + 1.0D, 0xFF2B1605);
-        PursuitGraphNode272.drawPin(graphics, ix, iy, ir, COL_ORANGE);
+        PursuitGraphNode272.drawPin(graphics, ix, iy, r + 1.2D, 0xFF2B1605);
+        PursuitGraphNode272.drawPin(graphics, ix, iy, r, COL_ORANGE);
+        PursuitGraphNode272.drawPin(graphics, ix, iy, Math.max(1.2D, r * 0.42D), 0xFFFFF4E6);
 
         // Left-edge blue entity input pin (y=92) - must be called explicitly because ci.cancel() skips drawNode @TAIL
         PursuitGraphNode272.drawValuePins(screen, graphics, node);
@@ -320,9 +313,8 @@ public final class VarDataCard453 {
 
     public static double orangeInPinCardY(Node node) {
         if (node == null) return IF_ORANGE_Y;
-        if (VarDataNode453.isVarDataNode(node) || node.type == NpcDialogueGraph.VARIABLE) {
-            return VARIABLE_ORANGE_Y;
-        }
+        if (VarDataNode453.isVarDataNode(node)) return VAR_DATA_PIN_Y;
+        if (node.type == NpcDialogueGraph.VARIABLE) return VARIABLE_ORANGE_Y;
         return IF_ORANGE_Y;
     }
 

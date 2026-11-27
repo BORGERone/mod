@@ -140,12 +140,7 @@ public abstract class NpcChestPalette396Mixin {
             NpcDialogueGraph.Node created = this.addAt(NpcDialogueGraph.TRIGGER, worldX, worldY);
             if (created != null) {
                 VarDataNode453.applyDefaults(created);
-                if (wireFrom >= 0 && this.graph != null
-                        && this.graph.connect(wireFrom, created.id, wirePort)) {
-                    this.status = Component.translatable("gui.settledlands.graph.connected").getString();
-                } else {
-                    this.status = Component.translatable("gui.settledlands.var453.added").getString();
-                }
+                this.status = Component.translatable("gui.settledlands.var453.added").getString();
                 this.widgets();
                 this.changed();
             }

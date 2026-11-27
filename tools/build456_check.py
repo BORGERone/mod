@@ -44,6 +44,7 @@ NEW_KEYS_456 = (
 )
 
 ZERO_LAMBDA_456 = build455_check.ZERO_LAMBDA_455 + (
+    "dev/settledlands/mixin/GraphCardFooter448Mixin",
     "dev/settledlands/mixin/RadiusZoneNodeMixin456",
     "dev/settledlands/mixin/RadiusZonePassMixin456",
     "dev/settledlands/mixin/RadiusZoneLegacy320Mixin456",
@@ -143,26 +144,30 @@ public class Probe456 {
         NpcDialogueGraph.Node chkNode = gVar.add(NpcDialogueGraph.CHECK, -260, 260);
         chkNode.checkRadius = 10;
 
-        // Build 456: VarDataNode453 supports orange input, orange output, blue input, and white execution ports
+        // Build 456: VarDataNode453 ("Variable" / "Переменная") has NO white execution ports;
+        // orange input/output sit centered at y=50 alongside the blue entity target pin at y=92
         check(VarDataNode453.isVarDataNode(vv2), "vv2 is VarDataNode453");
         check(VarDataNode453.isOrangeInputNode(vv2), "VarDataNode453 accepts orange input");
         check(VarDataNode453.isOrangeSourceNode(vv1), "VarDataNode453 provides orange output");
         check(PursuitGraphNode272.isValueInputNode(vv2), "VarDataNode453 exposes blue entity input pin");
-        check(Math.abs(VarDataCard453.orangeInPinCardY(vv2) - 74.0) < 0.01, "VarData orange input aligns at y=74");
-        check(Math.abs(VarDataCard453.orangeOutPinCardY(vv2) - 74.0) < 0.01, "VarData orange output aligns at y=74");
+        check(Math.abs(VarDataCard453.orangeInPinCardY(vv2) - 50.0) < 0.01, "VarData orange input aligns at y=50");
+        check(Math.abs(VarDataCard453.orangeOutPinCardY(vv2) - 50.0) < 0.01, "VarData orange output aligns at y=50");
+        check(Math.abs(VarDataCard453.orangeInPinCardY(vNode) - 74.0) < 0.01, "Math Expression orange input aligns at y=74");
         check(Math.abs(PursuitGraphNode272.consumerAnchorY(canvas, vv2) - canvas.screenY(vv2.y + 92.0)) < 0.01,
                 "VarData blue consumerAnchorY sits at y=92");
+        check(vv2.next == -1 && vv2.falseNext == -1 && vv2.triggers.isEmpty(),
+                "VarDataNode453.applyDefaults clears all white flow/trigger fields");
 
-        // White execution wire: VarDataNode453 -> LINE works directly via next; incoming LINE -> VarDataNode453
-        // is routed into next at runtime by VarGraphIoMixin453 (without Mixin transformer in standalone JVM, stock connect adds to triggers)
-        NpcDialogueGraph.Node lineAfter = gVar.add(NpcDialogueGraph.LINE, 520, 0);
-        check(gVar.connect(lineNode.id, vv2.id, 0), "White wire connects into VarDataNode453");
-        check(lineNode.next == vv2.id || lineNode.triggers.contains(vv2.id),
-                "Incoming white wire to VarDataNode453 registered in graph");
-        check(gVar.connect(vv2.id, lineAfter.id, 0) && vv2.next == lineAfter.id,
-                "White wire connects out of VarDataNode453 via next");
+        // Multi-target orange linking: Math Expression (vNode) -> both vv1 and vv2
+        vNode.varInputNode = -1;
+        vv1.varInputNode = vNode.id;
+        vv2.varInputNode = vNode.id;
+        List<NpcDialogueGraph.Node> fanOut = VarDataNode453.findLinkedOrangeTargets(gVar, vNode.id);
+        check(fanOut.size() == 2 && fanOut.contains(vv1) && fanOut.contains(vv2),
+                "findLinkedOrangeTargets resolves all downstream Variable nodes");
+        vv1.varInputNode = -1;
 
-        // Orange data wire: vv1 -> vv2 AND vNode -> vv2 (linked target)
+        // Orange data wire: vv1 -> vv2
         vv2.varInputNode = vv1.id;
         check(VarDataNode453.resolveOrangeSource(gVar, vv2) == vv1, "resolveOrangeSource works for VarDataNode453");
         check(VarDataNode453.wiredOrangeConsumers(gVar, vv1.id) == 1, "wiredOrangeConsumers counts VarDataNode453");
@@ -223,9 +228,7 @@ public class Probe456 {
         check(loaded != null, "NpcDialogueGraph.load(saved) succeeded");
         NpcDialogueGraph.Node loadedVv2 = loaded.get(vv2.id);
         check(loadedVv2 != null && loadedVv2.varInputNode == vv1.id, "VarData orange varInputNode survives NBT");
-        check(loadedVv2.next == lineAfter.id, "Outgoing white wire from VarDataNode453 survives NBT");
-        check(loaded.get(lineNode.id).next == vv2.id || loaded.get(lineNode.id).triggers.contains(vv2.id),
-                "Incoming white wire to VarDataNode453 survives NBT");
+        check(loadedVv2.next == -1 && loadedVv2.triggers.isEmpty(), "VarDataNode453 stays white-portless across NBT");
 
         // Clipboard copy/paste preserves SquareZone456 & VarDataNode453 dual pins
         String clipText = NpcGraphClipboard318.copy(gVar, List.of(vv1.id, vv2.id, chkNode.id, radNode.id));
@@ -435,10 +438,34 @@ def main(argv) -> int:
                   + NEW_KEYS_456):
             if not ru.get(k) or not en.get(k):
                 errors.append(f"missing lang key {k}")
+        allowed_var_phrase_keys = {
+            "gui.settledlands.tip448.varop.0",
+            "gui.settledlands.tip448.fld.var_delta",
+        }
         for lang_name, lang_map in (("ru_ru.json", ru), ("en_us.json", en)):
             for k, v in lang_map.items():
                 if isinstance(v, str) and "ue5" in v.lower():
                     errors.append(f"forbidden UE5 mention in {lang_name}[{k}]: {v!r}")
+                if k not in allowed_var_phrase_keys and isinstance(v, str) and (
+                    "значение переменной" in v.lower() or "variable value" in v.lower()
+                ):
+                    errors.append(f"obsolete 'Variable Value' text in {lang_name}[{k}]: {v!r}")
+        if ru.get("gui.settledlands.graph.variable") != "Мат выражение":
+            errors.append(f"bad RU variable title: {ru.get('gui.settledlands.graph.variable')!r}")
+        if en.get("gui.settledlands.graph.variable") != "Math Expression":
+            errors.append(f"bad EN variable title: {en.get('gui.settledlands.graph.variable')!r}")
+        if ru.get("gui.settledlands.graph.add_variable") != "+ Мат выражение":
+            errors.append(f"bad RU add_variable: {ru.get('gui.settledlands.graph.add_variable')!r}")
+        if en.get("gui.settledlands.graph.add_variable") != "+ Math Expression":
+            errors.append(f"bad EN add_variable: {en.get('gui.settledlands.graph.add_variable')!r}")
+        if ru.get("gui.settledlands.var453.title") != "Переменная":
+            errors.append(f"bad RU var453 title: {ru.get('gui.settledlands.var453.title')!r}")
+        if en.get("gui.settledlands.var453.title") != "Variable":
+            errors.append(f"bad EN var453 title: {en.get('gui.settledlands.var453.title')!r}")
+        if ru.get("gui.settledlands.var453.menu") != "+ Переменная":
+            errors.append(f"bad RU var453 menu: {ru.get('gui.settledlands.var453.menu')!r}")
+        if en.get("gui.settledlands.var453.menu") != "+ Variable":
+            errors.append(f"bad EN var453 menu: {en.get('gui.settledlands.var453.menu')!r}")
 
         classes = check_mixin_class.load_classes(zf, [n for n in names if n.endswith(".class")])
         for mname in ZERO_LAMBDA_456:

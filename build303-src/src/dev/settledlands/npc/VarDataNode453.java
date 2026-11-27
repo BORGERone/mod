@@ -1,18 +1,23 @@
 package dev.settledlands.npc;
 
+import java.util.ArrayList;
 import java.util.Collections;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.WeakHashMap;
 
 /**
- * Build 453/456: Read/Write variable data node ({@code Variable Value}) and complete math
- * operations + dual left inputs (blue entity/target input + orange variable/number input) for
- * {@link VarDataNode453}, {@link NpcDialogueGraph#VARIABLE}, and {@link NpcDialogueGraph#IF}.
+ * Build 453/456: Read/Write variable data node ({@code Переменная} / {@code Variable}, formerly
+ * "Значение переменной") and complete math operations + dual left inputs (blue entity/target input +
+ * orange variable/number input) for {@link VarDataNode453}, {@link NpcDialogueGraph#VARIABLE}
+ * ({@code Мат выражение} / {@code Math Expression}), and {@link NpcDialogueGraph#IF}.
  *
  * <p>Stored inside the stock graph as {@link NpcDialogueGraph#TRIGGER} ({@code 2}, {@code special == 0})
  * with {@code action} carrying {@code "trigger:var453:..."} so NBT, packet sync, validation,
- * clipboard copy/paste, and undo/redo all preserve it seamlessly across every graph editor.</p>
+ * clipboard copy/paste, and undo/redo all preserve it seamlessly across every graph editor.
+ * Has no white execution ports: it stores, receives, and outputs values passively through its
+ * orange data sockets and optional blue entity target pin.</p>
  */
 public final class VarDataNode453 {
 
@@ -22,13 +27,13 @@ public final class VarDataNode453 {
     /** Form seen if {@link NpcActions} already stripped {@code "trigger:"}. */
     public static final String STRIPPED_PREFIX = "var453:";
 
-    /** Default action marker for a newly created Variable Value node. */
+    /** Default action marker for a newly created Variable node. */
     public static final String DEFAULT_ACTION = ACTION_PREFIX + "0";
 
-    /** Row index in the NPC/common context menu (17 Teleport, 18 Trial Control, 19 Variable Value). */
+    /** Row index in the NPC/common context menu (17 Teleport, 18 Trial Control, 19 Variable). */
     public static final int MENU_ROW = 19;
 
-    /** Total rows in the NPC/common context menu once Variable Value (19) joins. */
+    /** Total rows in the NPC/common context menu once Variable (19) joins. */
     public static final int NPC_MENU_ITEMS = 20;
 
     /** Visible rows in the NPC/common context menu window. */
@@ -153,6 +158,9 @@ public final class VarDataNode453 {
         node.varInputNode = -1;
         node.next = -1;
         node.falseNext = -1;
+        if (node.triggers != null) node.triggers.clear();
+        if (node.choices != null) node.choices.clear();
+        if (node.randomBranches != null) node.randomBranches.clear();
         setEntityInput(node, -1);
     }
 
@@ -245,16 +253,27 @@ public final class VarDataNode453 {
 
     /**
      * Finds the first {@link #isVarDataNode(NpcDialogueGraph.Node)} whose orange input is wired from
-     * {@code sourceId} (used when a math {@code VARIABLE} node with a blank name outputs into a variable value node).
+     * {@code sourceId}.
      */
     public static NpcDialogueGraph.Node findLinkedOrangeTarget(NpcDialogueGraph graph, int sourceId) {
-        if (graph == null || graph.nodes == null || sourceId < 0) return null;
+        List<NpcDialogueGraph.Node> all = findLinkedOrangeTargets(graph, sourceId);
+        return all.isEmpty() ? null : all.get(0);
+    }
+
+    /**
+     * Finds all {@link #isVarDataNode(NpcDialogueGraph.Node)} whose orange input is wired directly
+     * from {@code sourceId}.
+     */
+    public static List<NpcDialogueGraph.Node> findLinkedOrangeTargets(NpcDialogueGraph graph, int sourceId) {
+        if (graph == null || graph.nodes == null || sourceId < 0) return Collections.emptyList();
+        List<NpcDialogueGraph.Node> out = null;
         for (NpcDialogueGraph.Node n : graph.nodes.values()) {
             if (isVarDataNode(n) && n.varInputNode == sourceId && n.id != sourceId) {
-                return n;
+                if (out == null) out = new ArrayList<>(2);
+                out.add(n);
             }
         }
-        return null;
+        return out == null ? Collections.emptyList() : out;
     }
 
     /** Returns the orange source node connected to {@code consumer}, or null. */
