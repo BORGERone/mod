@@ -3,33 +3,43 @@ package dev.settledlands.npc.client;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
 import dev.settledlands.npc.VarDataNode453;
+import java.lang.reflect.Field;
 import java.util.ArrayList;
 import java.util.List;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.network.chat.Component;
 
 /**
- * Build 453: renders the node description box inside the bottom-right corner of the inspector
- * sidebar whenever a node is selected (replacing the old canvas card footers).
+ * Build 453/455: renders the node description box as the bottom-most scrollable item inside the
+ * general inspector list whenever a node is selected (instead of docking over the bottom of the
+ * screen).
  */
 public final class GraphInspectorDesc453 {
 
-    /** Mixin bridge implemented by {@code GraphInspectorDescMixin453} so {@code widgets()} restores
-     *  the reserved footer height AFTER all custom inspectors and range adaptors finish. */
-    public interface FooterReserveHost {
-        void settledlands$popWidgetsReserve453();
+    /**
+     * Mixin bridge implemented by {@code GraphInspectorDescMixin453} and invoked at the end of
+     * {@code widgets()} (after all stock/custom inspectors and range adaptors finish) to place
+     * the description card below the last inspector item and extend {@code sidebarHeight}.
+     */
+    public interface ScrollDescHost {
+        void settledlands$layoutScrollDesc455();
     }
 
     private static final int LINE_H = 10;
     private static final int HEADER_H = 12;
-    private static final int PAD_TOP = 4;
-    private static final int PAD_BOTTOM = 5;
-    private static final int FOOTER_BG = 0xFF141820;
-    private static final int FOOTER_HEADER_BG = 0xFF1B212D;
-    private static final int BORDER_COL = -12890522; // matches stock inspector border
+    private static final int PAD_TOP = 5;
+    private static final int PAD_BOTTOM = 4;
+    private static final int MAX_LINES = 20;
+    private static final int CARD_BG = 0xFF141820;
+    private static final int CARD_HEADER_BG = 0xFF1B212D;
+    private static final int BORDER_COL = 0xFF283244;
     private static final int TITLE_COL = 0xFF9FB4D0;
     private static final int TEXT_COL = 0xFFC8D4E6;
+
+    private static Field fLabelY;
+    private static boolean labelFieldProbed;
 
     private GraphInspectorDesc453() {}
 
@@ -42,10 +52,10 @@ public final class GraphInspectorDesc453 {
         return GraphCardDesc448.footerKey(node);
     }
 
-    /** Exact height reserved at the bottom of the inspector for {@code node}, or 0 when closed. */
-    public static int reserveHeight(Font font, NpcDialogueGraph graph, int selected,
-            int inspectorW, int inspectorH) {
-        if (font == null || graph == null || selected < 0 || inspectorW < 60 || inspectorH < 80) {
+    /** Full natural height of the scrollable description block for {@code node}, or 0 if empty. */
+    public static int contentHeight(Font font, NpcDialogueGraph graph, int selected,
+            int inspectorW) {
+        if (font == null || graph == null || selected < 0 || inspectorW < 60) {
             return 0;
         }
         Node node = graph.get(selected);
@@ -54,47 +64,101 @@ public final class GraphInspectorDesc453 {
         String raw = tr(descriptionKey(node));
         if (raw.isEmpty()) return 0;
 
-        int textW = Math.max(40, inspectorW - 14);
-        List<String> lines = wrapLinesFull(font, raw, textW, 6);
-        int natural = PAD_TOP + HEADER_H + lines.size() * LINE_H + PAD_BOTTOM;
-        int cap = Math.max(40, Math.min(86, inspectorH / 3));
-        return Math.min(natural, cap);
+        int boxW = Math.max(40, inspectorW - 16);
+        int textW = Math.max(30, boxW - 12);
+        List<String> lines = wrapLinesFull(font, raw, textW, MAX_LINES);
+        if (lines.isEmpty()) return 0;
+        return 1 + HEADER_H + 1 + PAD_TOP + lines.size() * LINE_H + PAD_BOTTOM;
     }
 
-    /** Renders the docked description box in the bottom-right corner of the open inspector. */
-    public static void renderFooter(GuiGraphics g, Font font, NpcDialogueGraph graph, int selected,
-            int inspectorX, int inspectorY, int inspectorW, int fullInspectorH, int reservedH) {
-        if (g == null || font == null || graph == null || selected < 0 || reservedH <= 0) return;
+    /**
+     * Computes the scroll offset (relative to {@code inspectorY + 24}) right below the lowest
+     * inspector item so the description block appends cleanly at the bottom of any stock or custom
+     * inspector list (including {@code Pursuit}, which does not update {@code sidebarHeight}).
+     */
+    public static int computeContentEndOffset(
+            int inspectorY,
+            int sidebarScroll,
+            int sidebarHeight,
+            List<?> labels,
+            List<AbstractWidget> widgets) {
+        int base = Math.max(0, sidebarHeight);
+        int itemsMax = 0;
+
+        if (widgets != null) {
+            for (int i = 0; i < widgets.size(); i++) {
+                AbstractWidget w = widgets.get(i);
+                if (w == null) continue;
+                int wy = w.getY();
+                if (wy + sidebarScroll < inspectorY) continue;
+                int end = (wy + w.getHeight() + sidebarScroll) - (inspectorY + 24);
+                if (end > itemsMax) itemsMax = end;
+            }
+        }
+
+        if (labels != null) {
+            for (int i = 0; i < labels.size(); i++) {
+                int ly = labelY(labels.get(i));
+                if (ly == Integer.MIN_VALUE) continue;
+                if (ly + sidebarScroll < inspectorY) continue;
+                int end = (ly + 11 + sidebarScroll) - (inspectorY + 24);
+                if (end > itemsMax) itemsMax = end;
+            }
+        }
+
+        return Math.max(base + 4, itemsMax > 0 ? itemsMax + 6 : 0);
+    }
+
+    /**
+     * Renders the scrollable description card inside the inspector's active scissor clip at
+     * {@code boxTop}.
+     */
+    public static void renderInList(
+            GuiGraphics g,
+            Font font,
+            NpcDialogueGraph graph,
+            int selected,
+            int inspectorX,
+            int inspectorY,
+            int inspectorW,
+            int inspectorH,
+            int boxTop,
+            int boxH) {
+        if (g == null || font == null || graph == null || selected < 0 || boxH <= 0) return;
         Node node = graph.get(selected);
         if (node == null) return;
 
-        int boxTop = inspectorY + fullInspectorH - reservedH;
-        int boxBottom = inspectorY + fullInspectorH;
-        int boxLeft = inspectorX;
-        int boxRight = inspectorX + inspectorW;
+        int clipTop = inspectorY + 21;
+        int clipBottom = inspectorY + inspectorH - 1;
+        if (boxTop + boxH <= clipTop || boxTop >= clipBottom) {
+            return;
+        }
 
-        // Docked box sharing the inspector's border style
-        g.fill(boxLeft, boxTop, boxRight, boxBottom, FOOTER_BG);
+        int boxLeft = inspectorX + 8;
+        int boxW = Math.max(40, inspectorW - 16);
+        int boxRight = boxLeft + boxW;
+        int boxBottom = boxTop + boxH;
+
+        g.fill(boxLeft, boxTop, boxRight, boxBottom, CARD_BG);
         g.fill(boxLeft + 1, boxTop, boxRight - 1, boxTop + 1, BORDER_COL);
         g.fill(boxLeft, boxBottom - 1, boxRight, boxBottom, BORDER_COL);
         g.fill(boxLeft, boxTop, boxLeft + 1, boxBottom, BORDER_COL);
         g.fill(boxRight - 1, boxTop, boxRight, boxBottom, BORDER_COL);
 
-        g.fill(boxLeft + 1, boxTop + 1, boxRight - 1, boxTop + 1 + HEADER_H, FOOTER_HEADER_BG);
-        g.fill(boxLeft + 1, boxTop + 1 + HEADER_H, boxRight - 1, boxTop + 2 + HEADER_H, 0xFF283244);
+        g.fill(boxLeft + 1, boxTop + 1, boxRight - 1, boxTop + 1 + HEADER_H, CARD_HEADER_BG);
+        g.fill(boxLeft + 1, boxTop + 1 + HEADER_H, boxRight - 1, boxTop + 2 + HEADER_H, BORDER_COL);
 
         String title = tr("gui.settledlands.desc453.footer_title");
         if (title.isEmpty() || title.equals("gui.settledlands.desc453.footer_title")) {
             title = "Описание";
         }
-        g.drawString(font, title, boxLeft + 7, boxTop + 3, TITLE_COL, false);
+        g.drawString(font, title, boxLeft + 6, boxTop + 3, TITLE_COL, false);
 
-        int textW = Math.max(40, inspectorW - 14);
-        int maxTextRows = Math.max(1, (reservedH - PAD_TOP - HEADER_H - PAD_BOTTOM + 2) / LINE_H);
-        List<String> lines = wrapLinesFull(font, tr(descriptionKey(node)), textW, maxTextRows);
-        int y = boxTop + HEADER_H + PAD_TOP;
-        for (int i = 0; i < lines.size() && y + 8 <= boxBottom - 2; i++) {
-            g.drawString(font, lines.get(i), boxLeft + 7, y, TEXT_COL, false);
+        int textW = Math.max(30, boxW - 12);
+        List<String> lines = wrapLinesFull(font, tr(descriptionKey(node)), textW, MAX_LINES);
+        int y = boxTop + 1 + HEADER_H + 1 + PAD_TOP;
+        for (int i = 0; i < lines.size(); i++) {
+            g.drawString(font, lines.get(i), boxLeft + 6, y, TEXT_COL, false);
             y += LINE_H;
         }
     }
@@ -120,7 +184,6 @@ public final class GraphInspectorDesc453 {
                 idx++;
             } else {
                 if (out.size() == maxLines - 1) {
-                    // Last line: append remaining text and clip cleanly
                     StringBuilder rest = new StringBuilder(cur);
                     while (idx < words.length) {
                         rest.append(' ').append(words[idx++]);
@@ -137,6 +200,25 @@ public final class GraphInspectorDesc453 {
             out.add(clip(font, cur.toString(), maxW));
         }
         return out;
+    }
+
+    private static int labelY(Object lbl) {
+        if (lbl == null) return Integer.MIN_VALUE;
+        if (!labelFieldProbed) {
+            labelFieldProbed = true;
+            try {
+                Field f = lbl.getClass().getDeclaredField("y");
+                f.setAccessible(true);
+                fLabelY = f;
+            } catch (Throwable ignored) {
+            }
+        }
+        if (fLabelY == null) return Integer.MIN_VALUE;
+        try {
+            return fLabelY.getInt(lbl);
+        } catch (Throwable ignored) {
+            return Integer.MIN_VALUE;
+        }
     }
 
     private static String clip(Font font, String text, int maxW) {

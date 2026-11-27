@@ -198,10 +198,10 @@ public abstract class GraphClickDragMixin453 {
         graphics.pose().popPose();
     }
 
-    // ---- 4. Restore footer reserve AFTER all custom inspectors & range boxes finish ----
+    // ---- 4. Append scrollable description card AFTER all custom inspectors & range boxes finish ----
 
     @Inject(method = "widgets()V", at = @At("RETURN"), remap = false)
-    private void settledlands$popInspectorFooterReserve454(CallbackInfo ci) {
-        ((GraphInspectorDesc453.FooterReserveHost) (Object) this).settledlands$popWidgetsReserve453();
+    private void settledlands$appendScrollableInspectorDesc455(CallbackInfo ci) {
+        ((GraphInspectorDesc453.ScrollDescHost) (Object) this).settledlands$layoutScrollDesc455();
     }
 }
