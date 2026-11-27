@@ -15,6 +15,12 @@ import net.minecraft.network.chat.Component;
  */
 public final class GraphInspectorDesc453 {
 
+    /** Mixin bridge implemented by {@code GraphInspectorDescMixin453} so {@code widgets()} restores
+     *  the reserved footer height AFTER all custom inspectors and range adaptors finish. */
+    public interface FooterReserveHost {
+        void settledlands$popWidgetsReserve453();
+    }
+
     private static final int LINE_H = 10;
     private static final int HEADER_H = 12;
     private static final int PAD_TOP = 4;

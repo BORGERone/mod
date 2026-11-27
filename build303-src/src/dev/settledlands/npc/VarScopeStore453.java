@@ -45,6 +45,37 @@ public final class VarScopeStore453 extends SavedData {
         CompoundTag getOrCreate(GuideNpc npc, boolean create);
     }
 
+    /** Execution frame for {@link BlockTrigger351} walk / server-only loops (lives outside mixin pkg). */
+    public static final class BlockWalkFrame {
+        public final NpcDialogueGraph graph;
+        public final BlockTalk358.Where where;
+        public final MinecraftServer server;
+
+        public BlockWalkFrame(NpcDialogueGraph graph, BlockTalk358.Where where,
+                MinecraftServer server) {
+            this.graph = graph;
+            this.where = where;
+            this.server = server;
+        }
+    }
+
+    /** Execution frame for {@link GuideDialogue#resolveExecutionTarget} (lives outside mixin pkg). */
+    public static final class NpcResolveFrame {
+        public final ServerPlayer player;
+        public final Entity contextEntity;
+        public final GuideNpc npc;
+        public final NpcDialogueGraph graph;
+        public NpcDialogueGraph.Node activeIfNode;
+
+        public NpcResolveFrame(ServerPlayer player, Entity contextEntity,
+                GuideNpc npc, NpcDialogueGraph graph) {
+            this.player = player;
+            this.contextEntity = contextEntity;
+            this.npc = npc;
+            this.graph = graph;
+        }
+    }
+
     /** Direct PersistentData lookup matching {@code GuideDialogue.localVars(GuideNpc, boolean)}. */
     public static CompoundTag getOrCreateNpcLocalTag(GuideNpc npc, boolean create) {
         if (npc == null) return null;
@@ -486,8 +517,13 @@ public final class VarScopeStore453 extends SavedData {
             return readOrangeNodeValue(server, targetPlayer, targetNpc, npcLocals, null, orangeSrc);
         }
         if (node.pointsName != null && !node.pointsName.isBlank()) {
-            return readRaw(server, targetPlayer, targetNpc, npcLocals, null,
+            int cur = readRaw(server, targetPlayer, targetNpc, npcLocals, null,
                     node.pointsName, node.pointsShared, node.varLocal, false, 0);
+            if (cur == 0 && npc != null && blueId < 0 && !node.pointsShared && !node.varLocal) {
+                int vp = NpcValueSource290.variablePresence(npc, cleanVarName(node.pointsName));
+                if (vp >= 0) return vp;
+            }
+            return cur;
         }
         return fallback;
     }

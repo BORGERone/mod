@@ -2,6 +2,7 @@ package dev.settledlands.mixin;
 
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcDialogueGraph.Node;
+import dev.settledlands.npc.client.GraphInspectorDesc453;
 import dev.settledlands.npc.client.NpcDialogueGraphScreen;
 import dev.settledlands.npc.client.NpcGraphCanvas;
 import dev.settledlands.npc.client.NpcGraphContextMenu;
@@ -195,5 +196,12 @@ public abstract class GraphClickDragMixin453 {
                 + " #" + target.id;
         graphics.drawString(screen.settledlands$font(), title, left + 8, top + 6, -1852043, false);
         graphics.pose().popPose();
+    }
+
+    // ---- 4. Restore footer reserve AFTER all custom inspectors & range boxes finish ----
+
+    @Inject(method = "widgets()V", at = @At("RETURN"), remap = false)
+    private void settledlands$popInspectorFooterReserve454(CallbackInfo ci) {
+        ((GraphInspectorDesc453.FooterReserveHost) (Object) this).settledlands$popWidgetsReserve453();
     }
 }

@@ -1370,6 +1370,73 @@ def check_stub_retention(cf, entry):
     return None
 
 
+def check_mixin_packages(classes, mixin_packages, problems):
+    """Phase A2: enforce Sponge Mixin package invariants across ALL classes in the JAR.
+
+    Build 453 regression: placing an inner/helper class (VarExecutionBlockMixin453$Frame)
+    inside a mixin package caused IllegalClassLoadError whenever the target class loaded.
+    * Every class in a mixin package must carry @Mixin and must not contain '$'
+    * No class in a mixin package may reference another class in a mixin package unless
+      that target is an interface (@Accessor / @Invoker mixin interface)
+    * No non-mixin class may ever reference a class inside a mixin package
+    * Mixin classes with 453/454 in their name must not emit invokedynamic
+    """
+    if not mixin_packages:
+        return
+
+    def in_mixin_pkg(cls_name):
+        return any(cls_name.startswith(p) for p in mixin_packages)
+
+    for cls_name, cf in sorted(classes.items()):
+        entry = cls_name + ".class"
+        if in_mixin_pkg(cls_name):
+            if "$" in cls_name:
+                problems.append(
+                    "%s: inner/anonymous/synthetic '$' class inside mixin package "
+                    "(causes Sponge Mixin IllegalClassLoadError at target load time; "
+                    "move helper/frame types outside the mixin package)" % entry)
+            anns = [ann_desc(cf, a) for a in read_annotations(cf)]
+            if DESC_MIXIN not in anns:
+                problems.append(
+                    "%s: non-@Mixin class inside mixin package "
+                    "(Sponge Mixin forbids non-mixin classes inside a mixin config package)"
+                    % entry)
+            for k in cf.cp:
+                if not k:
+                    continue
+                if k[0] == 7:
+                    try:
+                        ref = cf.utf8(k[1])
+                    except ClassFormatError:
+                        continue
+                    if ref == cls_name or not in_mixin_pkg(ref):
+                        continue
+                    ref_cf = classes.get(ref)
+                    if ref_cf is not None and (ref_cf.access & 0x0200):
+                        continue
+                    problems.append(
+                        "%s: mixin class references %s inside mixin package "
+                        "(causes IllegalClassLoadError; move shared state outside mixin pkg)"
+                        % (entry, ref))
+                elif k[0] == 18 and cls_name in (
+                        "dev/settledlands/mixin/VarExecutionBlockMixin453",
+                        "dev/settledlands/mixin/VarExecutionNpcMixin453"):
+                    problems.append(
+                        "%s: contains invokedynamic (forbidden in execution-hot mixins)"
+                        % entry)
+        else:
+            for k in cf.cp:
+                if k and k[0] == 7:
+                    try:
+                        ref = cf.utf8(k[1])
+                    except ClassFormatError:
+                        continue
+                    if in_mixin_pkg(ref):
+                        problems.append(
+                            "%s: non-mixin class directly references mixin package class %s "
+                            "(causes IllegalClassLoadError)" % (entry, ref))
+
+
 def main(argv):
     ap = argparse.ArgumentParser()
     ap.add_argument("jar")
@@ -1385,6 +1452,7 @@ def main(argv):
     problems = []
     external = []
     listed_mixins = []
+    mixin_packages = set()
     checked = 0
     try:
         with zipfile.ZipFile(jar) as z:
@@ -1407,6 +1475,7 @@ def main(argv):
                 if not pkg:
                     problems.append("%s: no 'package'" % cfg)
                     continue
+                mixin_packages.add(pkg.replace(".", "/") + "/")
                 level = doc.get("compatibilityLevel")
                 if not level:
                     problems.append("%s: no compatibilityLevel (defaults to "
@@ -1445,6 +1514,8 @@ def main(argv):
                             continue
                         check_targets(cf, entry, classes, problems, external,
                                       args.verbose)
+
+            check_mixin_packages(classes, mixin_packages, problems)
 
             for owner, (hook, what) in DISPATCH_HOOKS.items():
                 if owner not in classes:

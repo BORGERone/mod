@@ -22,7 +22,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
  * Zero synthetic lambdas.
  */
 @Mixin(value = NpcDialogueGraphScreen.class, remap = false)
-public abstract class GraphInspectorDescMixin453 {
+public abstract class GraphInspectorDescMixin453 implements GraphInspectorDesc453.FooterReserveHost {
 
     @Shadow private NpcDialogueGraph graph;
     @Shadow private int selected;
@@ -67,8 +67,8 @@ public abstract class GraphInspectorDescMixin453 {
         settledlands$pushReserve453();
     }
 
-    @Inject(method = "widgets()V", at = @At("RETURN"), remap = false)
-    private void settledlands$restoreAfterWidgets453(CallbackInfo ci) {
+    @Override
+    public void settledlands$popWidgetsReserve453() {
         if (settledlands$reserveH453 > 0 && inspectorWidgets != null) {
             int topBound = inspectorY + 22;
             int bottomBound = inspectorY + Math.max(60, settledlands$fullH453 - settledlands$reserveH453) - 4;

@@ -2,9 +2,11 @@ package dev.settledlands.mixin;
 
 import dev.settledlands.npc.BlockTalk358;
 import dev.settledlands.npc.BlockTrigger351;
+import dev.settledlands.npc.GraphRanges450;
 import dev.settledlands.npc.NpcDialogueGraph;
 import dev.settledlands.npc.NpcPoints;
 import dev.settledlands.npc.VarScopeStore453;
+import dev.settledlands.npc.VarScopeStore453.BlockWalkFrame;
 import java.util.ArrayDeque;
 import java.util.Deque;
 import java.util.Set;
@@ -14,33 +16,23 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import org.spongepowered.asm.mixin.Mixin;
 import org.spongepowered.asm.mixin.Shadow;
+import org.spongepowered.asm.mixin.Unique;
 import org.spongepowered.asm.mixin.injection.At;
 import org.spongepowered.asm.mixin.injection.Inject;
 import org.spongepowered.asm.mixin.injection.Redirect;
 import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 
 /**
- * Build 453: executes all 14 math operations, UE5 {@link dev.settledlands.npc.VarDataNode453}
+ * Build 453/454: executes all 14 math operations, UE5 {@link dev.settledlands.npc.VarDataNode453}
  * orange inputs, object-local variables ({@link VarScopeStore453}), and blue entity/player inputs
- * across block/door/chest/trial graphs in {@link BlockTrigger351}. Zero synthetic lambdas.
+ * across block/door/chest/trial graphs in {@link BlockTrigger351}. Uses external
+ * {@link BlockWalkFrame} (no inner classes in mixin package), zero lambdas, and zero invokedynamic.
  */
 @Mixin(value = BlockTrigger351.class, remap = false)
 public abstract class VarExecutionBlockMixin453 {
 
-    private static final class Frame {
-        final NpcDialogueGraph graph;
-        final BlockTalk358.Where where;
-        final MinecraftServer server;
-
-        Frame(NpcDialogueGraph graph, BlockTalk358.Where where, MinecraftServer server) {
-            this.graph = graph;
-            this.where = where;
-            this.server = server;
-        }
-    }
-
-    private static final ThreadLocal<Deque<Frame>> WALK_STACK =
-            ThreadLocal.withInitial(ArrayDeque::new);
+    @Unique
+    private static final ThreadLocal<Deque<BlockWalkFrame>> WALK_STACK = new ThreadLocal<>();
 
     @Shadow
     private static void act(ServerPlayer player, NpcDialogueGraph.Node node) {
@@ -52,6 +44,30 @@ public abstract class VarExecutionBlockMixin453 {
         throw new AssertionError();
     }
 
+    @Unique
+    private static Deque<BlockWalkFrame> settledlands$stack453(boolean create) {
+        Deque<BlockWalkFrame> st = WALK_STACK.get();
+        if (st == null && create) {
+            st = new ArrayDeque<>();
+            WALK_STACK.set(st);
+        }
+        return st;
+    }
+
+    @Unique
+    private static BlockWalkFrame settledlands$peekWalkFrame453() {
+        Deque<BlockWalkFrame> st = WALK_STACK.get();
+        return st == null ? null : st.peek();
+    }
+
+    @Unique
+    private static void settledlands$popFrame453() {
+        Deque<BlockWalkFrame> st = WALK_STACK.get();
+        if (st == null) return;
+        if (!st.isEmpty()) st.pop();
+        if (st.isEmpty()) WALK_STACK.remove();
+    }
+
     @Inject(method = "walk(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph;ILjava/util/Set;Ldev/settledlands/npc/BlockTalk358$Where;[Z)I",
             at = @At("HEAD"), remap = false)
     private static void settledlands$pushWalkFrame453(ServerPlayer player, NpcDialogueGraph graph,
@@ -59,7 +75,7 @@ public abstract class VarExecutionBlockMixin453 {
             CallbackInfoReturnable<Integer> cir) {
         MinecraftServer srv = player != null ? player.getServer()
                 : (where != null && where.level() != null ? where.level().getServer() : null);
-        WALK_STACK.get().push(new Frame(graph, where, srv));
+        settledlands$stack453(true).push(new BlockWalkFrame(graph, where, srv));
     }
 
     @Inject(method = "walk(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph;ILjava/util/Set;Ldev/settledlands/npc/BlockTalk358$Where;[Z)I",
@@ -67,9 +83,7 @@ public abstract class VarExecutionBlockMixin453 {
     private static void settledlands$popWalkFrame453(ServerPlayer player, NpcDialogueGraph graph,
             int startId, Set visited, BlockTalk358.Where where, boolean[] stop,
             CallbackInfoReturnable<Integer> cir) {
-        Deque<Frame> st = WALK_STACK.get();
-        if (!st.isEmpty()) st.pop();
-        if (st.isEmpty()) WALK_STACK.remove();
+        settledlands$popFrame453();
     }
 
     @Redirect(method = "walk(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph;ILjava/util/Set;Ldev/settledlands/npc/BlockTalk358$Where;[Z)I",
@@ -88,7 +102,7 @@ public abstract class VarExecutionBlockMixin453 {
     private static void settledlands$executeBlockVarAndAct453(ServerPlayer player,
             NpcDialogueGraph.Node node) {
         if (node != null && node.type == NpcDialogueGraph.VARIABLE) {
-            Frame f = WALK_STACK.get().peek();
+            BlockWalkFrame f = settledlands$peekWalkFrame453();
             if (f != null) {
                 VarScopeStore453.executeVariableForBlock(player, f.server, f.graph, node, f.where);
             }
@@ -102,16 +116,14 @@ public abstract class VarExecutionBlockMixin453 {
             int startId, BlockTalk358.Where where, CallbackInfoReturnable<Integer> cir) {
         MinecraftServer srv = level != null ? level.getServer()
                 : (where != null && where.level() != null ? where.level().getServer() : null);
-        WALK_STACK.get().push(new Frame(graph, where, srv));
+        settledlands$stack453(true).push(new BlockWalkFrame(graph, where, srv));
     }
 
     @Inject(method = "startServerOnly(Lnet/minecraft/server/level/ServerLevel;Ldev/settledlands/npc/NpcDialogueGraph;ILdev/settledlands/npc/BlockTalk358$Where;)I",
             at = @At("RETURN"), remap = false)
     private static void settledlands$popServerFrame453(ServerLevel level, NpcDialogueGraph graph,
             int startId, BlockTalk358.Where where, CallbackInfoReturnable<Integer> cir) {
-        Deque<Frame> st = WALK_STACK.get();
-        if (!st.isEmpty()) st.pop();
-        if (st.isEmpty()) WALK_STACK.remove();
+        settledlands$popFrame453();
     }
 
     @Redirect(method = "startServerOnly(Lnet/minecraft/server/level/ServerLevel;Ldev/settledlands/npc/NpcDialogueGraph;ILdev/settledlands/npc/BlockTalk358$Where;)I",
@@ -130,7 +142,7 @@ public abstract class VarExecutionBlockMixin453 {
     private static void settledlands$executeServerVarAndAct453(MinecraftServer server,
             NpcDialogueGraph.Node node) {
         if (node != null && node.type == NpcDialogueGraph.VARIABLE) {
-            Frame f = WALK_STACK.get().peek();
+            BlockWalkFrame f = settledlands$peekWalkFrame453();
             if (f != null) {
                 VarScopeStore453.executeVariableForBlock(null, server != null ? server : f.server,
                         f.graph, node, f.where);
@@ -139,27 +151,41 @@ public abstract class VarExecutionBlockMixin453 {
         actServerOnly(server, node);
     }
 
-    @Inject(method = "value(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph;Ldev/settledlands/npc/NpcDialogueGraph$Node;)I",
-            at = @At("HEAD"), cancellable = true, remap = false)
-    private static void settledlands$valueFullPlayer453(ServerPlayer player,
-            NpcDialogueGraph graph, NpcDialogueGraph.Node node,
-            CallbackInfoReturnable<Integer> cir) {
-        Frame f = WALK_STACK.get().peek();
+    @Redirect(method = "walk(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph;ILjava/util/Set;Ldev/settledlands/npc/BlockTalk358$Where;[Z)I",
+            at = @At(value = "INVOKE",
+                    target = "Ldev/settledlands/npc/BlockTrigger351;value(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph;Ldev/settledlands/npc/NpcDialogueGraph$Node;)I"),
+            remap = false)
+    private static int settledlands$valueFullPlayer453(ServerPlayer player,
+            NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+        BlockWalkFrame f = settledlands$peekWalkFrame453();
         BlockTalk358.Where where = f == null ? null : f.where;
         MinecraftServer srv = player != null ? player.getServer() : (f == null ? null : f.server);
-        cir.setReturnValue(VarScopeStore453.readIfLeftValueForBlock(
-                player, srv, graph, node, where));
+        int val = VarScopeStore453.readIfLeftValueForBlock(player, srv, graph, node, where);
+        if (node != null && node.type == NpcDialogueGraph.IF
+                && (node.varOp == 0 || node.varOp == 1)
+                && GraphRanges450.hasRange(node, GraphRanges450.KEY_IF_COMPARE)) {
+            boolean in = GraphRanges450.inRange(node, GraphRanges450.KEY_IF_COMPARE, val);
+            val = in ? node.varCompare : (node.varCompare == Integer.MAX_VALUE ? 0 : node.varCompare + 1);
+        }
+        return val;
     }
 
-    @Inject(method = "valueServerOnly(Lnet/minecraft/server/MinecraftServer;Ldev/settledlands/npc/NpcDialogueGraph;Ldev/settledlands/npc/NpcDialogueGraph$Node;)I",
-            at = @At("HEAD"), cancellable = true, remap = false)
-    private static void settledlands$valueFullServer453(MinecraftServer server,
-            NpcDialogueGraph graph, NpcDialogueGraph.Node node,
-            CallbackInfoReturnable<Integer> cir) {
-        Frame f = WALK_STACK.get().peek();
+    @Redirect(method = "startServerOnly(Lnet/minecraft/server/level/ServerLevel;Ldev/settledlands/npc/NpcDialogueGraph;ILdev/settledlands/npc/BlockTalk358$Where;)I",
+            at = @At(value = "INVOKE",
+                    target = "Ldev/settledlands/npc/BlockTrigger351;valueServerOnly(Lnet/minecraft/server/MinecraftServer;Ldev/settledlands/npc/NpcDialogueGraph;Ldev/settledlands/npc/NpcDialogueGraph$Node;)I"),
+            remap = false)
+    private static int settledlands$valueFullServer453(MinecraftServer server,
+            NpcDialogueGraph graph, NpcDialogueGraph.Node node) {
+        BlockWalkFrame f = settledlands$peekWalkFrame453();
         BlockTalk358.Where where = f == null ? null : f.where;
         MinecraftServer srv = server != null ? server : (f == null ? null : f.server);
-        cir.setReturnValue(VarScopeStore453.readIfLeftValueForBlock(
-                null, srv, graph, node, where));
+        int val = VarScopeStore453.readIfLeftValueForBlock(null, srv, graph, node, where);
+        if (node != null && node.type == NpcDialogueGraph.IF
+                && (node.varOp == 0 || node.varOp == 1)
+                && GraphRanges450.hasRange(node, GraphRanges450.KEY_IF_COMPARE)) {
+            boolean in = GraphRanges450.inRange(node, GraphRanges450.KEY_IF_COMPARE, val);
+            val = in ? node.varCompare : (node.varCompare == Integer.MAX_VALUE ? 0 : node.varCompare + 1);
+        }
+        return val;
     }
 }
