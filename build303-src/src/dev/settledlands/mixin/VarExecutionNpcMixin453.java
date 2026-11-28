@@ -1,6 +1,7 @@
 package dev.settledlands.mixin;
 
 import dev.settledlands.npc.BlueLineTarget459;
+import dev.settledlands.npc.CutsceneCamera;
 import dev.settledlands.npc.GraphRanges450;
 import dev.settledlands.npc.GuideDialogue;
 import dev.settledlands.npc.GuideNpc;
@@ -124,7 +125,8 @@ public abstract class VarExecutionNpcMixin453 {
         if (node != null
                 && (node.type == NpcDialogueGraph.LINE || node.type == NpcDialogueGraph.CUTSCENE)
                 && BlueLineTarget459.isNoEventTarget()
-                && (f == null || !f.hasSession)) {
+                && (f == null || (!f.hasSession && !f.radiusTargetedInitiator
+                        && !f.nodeHasAttachedRadiusPlayerGate))) {
             ServerPlayer bluePlayer = BlueLineTarget459.resolveNpcLineBluePlayer(npc, graph, node);
             if (bluePlayer == null) {
                 return false;
@@ -133,7 +135,13 @@ public abstract class VarExecutionNpcMixin453 {
                 BlueLineTarget459.recordResolvedPlayer(bluePlayer);
             }
             int effRel = npc != null ? npc.relationTo(bluePlayer) : relation;
-            return isIncomingIfSatisfied(bluePlayer, npc, effRel, graph, node);
+            boolean ok = isIncomingIfSatisfied(bluePlayer, npc, effRel, graph, node);
+            if (ok && node.type == NpcDialogueGraph.CUTSCENE
+                    && player == null && (f == null || f.player == null)
+                    && node.cutsceneName != null && !node.cutsceneName.isBlank()) {
+                CutsceneCamera.play(bluePlayer, node.cutsceneName);
+            }
+            return ok;
         }
         boolean ok = isIncomingIfSatisfied(player, npc, relation, graph, node);
         if (ok && node != null && node.type == NpcDialogueGraph.VARIABLE) {
@@ -161,8 +169,13 @@ public abstract class VarExecutionNpcMixin453 {
         NpcResolveFrame f = settledlands$peekResolve454();
         if (f != null) {
             f.activeNode = n;
+            f.nodeHasAttachedRadiusPlayerGate = false;
             if (n != null && n.type == NpcDialogueGraph.IF) {
                 f.activeIfNode = n;
+            }
+            if (n != null && n.type == NpcDialogueGraph.RADIUS
+                    && (n.radiusTarget == 0 || n.radiusTarget == 3)) {
+                f.radiusTargetedInitiator = true;
             }
         }
         return n;

@@ -6,11 +6,11 @@ import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 
 /** Compile-time stub of the real mixin annotation (never packaged into the jar). */
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface Redirect {
     String[] method();
-    At[] at();
+    At at();
     int require() default -1;
     int expect() default 1;
     boolean remap() default true;

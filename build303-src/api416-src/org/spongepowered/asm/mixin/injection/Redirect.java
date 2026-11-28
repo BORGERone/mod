@@ -13,7 +13,7 @@ import java.lang.annotation.Target;
  * not array {@code 0x5b}). {@code stubs/Redirect.java} had {@code At[] at()}, which caused builds
  * 360-361's {@code @Redirect} to be silently ignored at runtime.</p>
  */
-@Retention(RetentionPolicy.CLASS)
+@Retention(RetentionPolicy.RUNTIME)
 @Target(ElementType.METHOD)
 public @interface Redirect {
     String[] method();

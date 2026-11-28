@@ -43,6 +43,7 @@ import build458_check
 import check_mixin_class
 
 ZERO_LAMBDA_459 = build458_check.ZERO_LAMBDA_457 + (
+    "dev/settledlands/mixin/NpcPursuitOutputMixin280",
     "dev/settledlands/mixin/BlueLineNpcMixin459",
     "dev/settledlands/mixin/BlueLinePassMixin459",
     "dev/settledlands/mixin/BlueLineBlockMixin459",
@@ -133,6 +134,10 @@ public class Probe459 {
         lPlain.varInputNode = pursuitSrc.id;
         check(BlueLineTarget459.hasBlueEntityWire(g, lPlain), "Pursuit -> LINE (varInputNode) is blue entity wire");
 
+        lCut.varInputNode = checkSrc.id;
+        check(VarDataNode453.entityInput(lCut) == checkSrc.id && VarDataNode453.entityInput(g, lCut) == checkSrc.id,
+                "VarDataNode453.entityInput supports CUTSCENE varInputNode");
+        check(BlueLineTarget459.hasBlueEntityWire(g, lCut), "CHECK -> CUTSCENE (varInputNode) is blue entity wire");
         lCut.varInputNode = -1;
         pursuitSrc.action = "trigger:pursuit:start:npc:guard|1.5|8.0|1.5|#" + checkSrc.id + "|@" + lCut.id;
         check(BlueLineTarget459.hasBlueEntityWire(g, lCut), "Pursuit -> CUTSCENE (|@id) is blue entity wire");
@@ -296,6 +301,43 @@ def verify_mixin_targets_and_redirects(jar_path: pathlib.Path, errors: list[str]
                 if d not in present:
                     errors.append(f"target {cls_name} missing method {d}")
 
+        # Verify every Build 453-459 mixin emits all Sponge Mixin member/injector annotations
+        # in RuntimeVisibleAnnotations (RetentionPolicy.RUNTIME) and @Mixin in RuntimeInvisibleAnnotations.
+        # Sponge Mixin 0.8.7 uses Annotations.getSingleVisible / getVisible for @Inject/@Redirect/@Unique;
+        # RetentionPolicy.CLASS silently disables the entire injector at runtime!
+        must_be_visible = {
+            "Lorg/spongepowered/asm/mixin/injection/Inject;",
+            "Lorg/spongepowered/asm/mixin/injection/Redirect;",
+            "Lorg/spongepowered/asm/mixin/injection/ModifyArg;",
+            "Lorg/spongepowered/asm/mixin/injection/ModifyArgs;",
+            "Lorg/spongepowered/asm/mixin/injection/ModifyConstant;",
+            "Lorg/spongepowered/asm/mixin/injection/ModifyVariable;",
+            "Lorg/spongepowered/asm/mixin/Unique;",
+            "Lorg/spongepowered/asm/mixin/Shadow;",
+            "Lorg/spongepowered/asm/mixin/Final;",
+            "Lorg/spongepowered/asm/mixin/Overwrite;",
+            "Lorg/spongepowered/asm/mixin/gen/Accessor;",
+            "Lorg/spongepowered/asm/mixin/gen/Invoker;",
+        }
+        for entry_name in sorted(zf.namelist()):
+            if not entry_name.startswith("dev/settledlands/mixin/") or not entry_name.endswith(".class"):
+                continue
+            stem = entry_name[:-6].rsplit("/", 1)[-1]
+            if stem != "NpcPursuitOutputMixin280" and not any(tag in stem for tag in ("453", "454", "455", "456", "457", "458", "459")):
+                continue
+            mcf = check_mixin_class.classfile.parse(zf.read(entry_name), entry_name)
+            for ann in check_mixin_class.read_annotations(mcf, ("RuntimeVisibleAnnotations",)):
+                if check_mixin_class.ann_desc(mcf, ann) in (check_mixin_class.DESC_MIXIN, "Lorg/spongepowered/asm/mixin/Pseudo;"):
+                    errors.append(f"{entry_name}: @Mixin/@Pseudo must use RuntimeInvisibleAnnotations (CLASS)")
+            for member in list(mcf.methods) + list(mcf.fields):
+                for ann in check_mixin_class.member_annotations(mcf, member, ("RuntimeInvisibleAnnotations",)):
+                    adesc = check_mixin_class.ann_desc(mcf, ann)
+                    if adesc in must_be_visible:
+                        errors.append(
+                            f"{entry_name}::{member.name}: {adesc} emitted in RuntimeInvisibleAnnotations "
+                            f"(RetentionPolicy.CLASS) - Sponge Mixin ignores it at runtime!"
+                        )
+
         # Verify zero @Redirect target collisions among Build 453-459 mixins on the 3 shared runtime targets
         redirect_seen: dict[tuple[str, str, str], str] = {}
         for src_rel in (
@@ -393,6 +435,8 @@ def main(argv) -> int:
         ):
             if cm not in common_list:
                 errors.append(f"settledlands.mixins.json missing {cm} in mixins[]")
+        if common_list.index("NpcProfileFillVarMixin457") > common_list.index("NpcPursuitOutputMixin280"):
+            errors.append("NpcProfileFillVarMixin457 must precede NpcPursuitOutputMixin280 in mixins[]")
         if common_list.index("VarActionsSubstituteMixin457") > common_list.index("TeleportActionsMixin424"):
             errors.append("VarActionsSubstituteMixin457 must precede TeleportActionsMixin424 in mixins[]")
         if common_list.index("VarExecutionNpcMixin453") > common_list.index("BlueLineNpcMixin459"):
@@ -405,6 +449,16 @@ def main(argv) -> int:
             errors.append("NpcDropdownFirst333 must stay first in client[]")
         if client_list[-1] != "GraphHover448Mixin":
             errors.append("GraphHover448Mixin must stay last in client[]")
+        if client_list.index("VarCatalogConfigMixin457") > client_list.index("NpcBlockOpen351Mixin"):
+            errors.append("VarCatalogConfigMixin457 must precede NpcBlockOpen351Mixin in client[]")
+
+        for cls_key, marker_str in (
+            ("dev/settledlands/npc/VarScopeStore453.class", "resolvePursuitActionTarget"),
+            ("dev/settledlands/mixin/VarExecutionNpcMixin453.class", "radiusTargetedInitiator"),
+            ("dev/settledlands/mixin/BlueLineNpcMixin459.class", "nodeHasAttachedRadiusPlayerGate"),
+        ):
+            if cls_key not in names or marker_str.encode("utf-8") not in zf.read(cls_key):
+                errors.append(f"{cls_key} missing marker {marker_str}")
 
         ru_raw = zf.read("assets/settledlands/lang/ru_ru.json").decode("utf-8")
         en_raw = zf.read("assets/settledlands/lang/en_us.json").decode("utf-8")
@@ -443,6 +497,7 @@ def main(argv) -> int:
             "dev/settledlands/mixin/VarExecutionNpcMixin453",
             "dev/settledlands/mixin/VarActionsSubstituteMixin457",
             "dev/settledlands/mixin/BlockTalkVarMixin457",
+            "dev/settledlands/mixin/NpcPursuitOutputMixin280",
             "dev/settledlands/mixin/NpcProfileFillVarMixin457",
             "dev/settledlands/mixin/NpcPointsCatalogMixin457",
             "dev/settledlands/mixin/VarCatalogViewMixin457",

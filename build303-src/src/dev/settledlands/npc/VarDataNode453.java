@@ -196,7 +196,8 @@ public final class VarDataNode453 {
         }
         if (node.type == NpcDialogueGraph.LINE
                 || node.type == NpcDialogueGraph.BUTTON
-                || node.type == NpcDialogueGraph.TRIGGER) {
+                || node.type == NpcDialogueGraph.TRIGGER
+                || node.type == NpcDialogueGraph.CUTSCENE) {
             return node.varInputNode;
         }
         return -1;

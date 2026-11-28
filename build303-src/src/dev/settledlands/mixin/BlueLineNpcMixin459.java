@@ -58,6 +58,12 @@ public abstract class BlueLineNpcMixin459 {
         throw new AssertionError();
     }
 
+    @Shadow
+    private static boolean initiatorExecutesWithRadiusGate(ServerPlayer player, GuideNpc npc,
+            List attachments) {
+        throw new AssertionError();
+    }
+
     @Unique
     private static int settledlands$dispatchResolvedChain459(ServerPlayer player, GuideNpc npc,
             GuideDialogue.Session session, NpcDialogueGraph graph, int startId, Set visited) {
@@ -199,6 +205,22 @@ public abstract class BlueLineNpcMixin459 {
         }
     }
 
+    @Redirect(method = "resolveExecutionTarget(Lnet/minecraft/server/level/ServerPlayer;Lnet/minecraft/world/entity/Entity;Ldev/settledlands/npc/GuideNpc;Ldev/settledlands/npc/GuideDialogue$Session;Ldev/settledlands/npc/NpcDialogueGraph;ILjava/util/Set;)I",
+            at = @At(value = "INVOKE",
+                    target = "Ldev/settledlands/npc/GuideDialogue;initiatorExecutesWithRadiusGate(Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/GuideNpc;Ljava/util/List;)Z"),
+            remap = false)
+    private static boolean settledlands$trackAttachedRadiusGate459(ServerPlayer player,
+            GuideNpc npc, List attachments) {
+        boolean ok = initiatorExecutesWithRadiusGate(player, npc, attachments);
+        if (ok && attachments != null && !attachments.isEmpty()) {
+            NpcResolveFrame f = VarScopeStore453.peekResolveFrame();
+            if (f != null) {
+                f.nodeHasAttachedRadiusPlayerGate = true;
+            }
+        }
+        return ok;
+    }
+
     // ---- Redirect startAtLine recipient in trigger*Chain when blue wire resolved a specific player ----
 
     @Redirect(method = "triggerTimerChain(Ldev/settledlands/npc/GuideNpc;Lnet/minecraft/server/level/ServerPlayer;Ldev/settledlands/npc/NpcDialogueGraph;Ldev/settledlands/npc/NpcDialogueGraph$Node;)V",
@@ -246,7 +268,8 @@ public abstract class BlueLineNpcMixin459 {
     private static boolean settledlands$gateCutsceneBlue459(ServerPlayer player, String name) {
         if (BlueLineTarget459.isNoEventTarget()) {
             NpcResolveFrame f = VarScopeStore453.peekResolveFrame();
-            if (f == null || !f.hasSession) {
+            if (f == null || (!f.hasSession && !f.radiusTargetedInitiator
+                    && !f.nodeHasAttachedRadiusPlayerGate)) {
                 if (f == null || f.activeNode == null || f.npc == null || f.graph == null) {
                     return false;
                 }

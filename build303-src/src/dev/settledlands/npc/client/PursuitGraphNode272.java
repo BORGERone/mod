@@ -881,7 +881,8 @@ public final class PursuitGraphNode272 {
                 || node.type == NpcDialogueGraph.BUTTON
                 || node.type == NpcDialogueGraph.TRIGGER
                 || node.type == NpcDialogueGraph.IF
-                || node.type == NpcDialogueGraph.VARIABLE;
+                || node.type == NpcDialogueGraph.VARIABLE
+                || node.type == NpcDialogueGraph.CUTSCENE;
     }
 
     public static double checkPinScreenX(NpcGraphCanvas canvas, Node node) {

@@ -11,7 +11,7 @@ import java.lang.annotation.Target;
  * <p>Build 338 hooks a closed-source mod, so its class has to be a target that may simply not be
  * there: with {@code @Pseudo} the mixin is skipped when the target is absent instead of failing.
  */
-@Retention(RetentionPolicy.RUNTIME)
+@Retention(RetentionPolicy.CLASS)
 @Target(ElementType.TYPE)
 public @interface Pseudo {
 }

@@ -1,6 +1,7 @@
 package dev.settledlands.mixin;
 
 import dev.settledlands.npc.NpcProfile;
+import dev.settledlands.npc.NpcPursuit269;
 import dev.settledlands.npc.VarScopeStore453;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.player.Player;
@@ -12,7 +13,7 @@ import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
 /**
  * Expands active variable tokens ({@code %<varName>%}, {@code %var%}, {@code %value%}) in
  * {@link NpcProfile#fill} whenever an NPC or block dialogue {@link VarScopeStore453.TextVarContext}
- * is active (such as choice button labels). Zero lambdas.
+ * is active (such as dialogue lines and choice button labels). Zero lambdas.
  */
 @Mixin(value = NpcProfile.class, remap = false)
 public abstract class NpcProfileFillVarMixin457 {
@@ -28,6 +29,11 @@ public abstract class NpcProfileFillVarMixin457 {
         ServerPlayer sp = player instanceof ServerPlayer s ? s : ctx.player;
         String sub = VarScopeStore453.substituteActiveTextVars(cur, sp, ctx.npc);
         if (!sub.equals(cur)) {
+            if (sub.indexOf("%pursuit") >= 0) {
+                Player pursuitPlayer = player != null ? player : sp;
+                String p = NpcPursuit269.fillPursuit(sub, pursuitPlayer);
+                if (p != null) sub = p;
+            }
             cir.setReturnValue(sub);
         }
     }

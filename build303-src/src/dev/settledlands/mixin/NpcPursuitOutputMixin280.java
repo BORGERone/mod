@@ -35,7 +35,9 @@ public abstract class NpcPursuitOutputMixin280 {
             at = @At("RETURN"), cancellable = true, remap = false)
     private static void settledlands$fillPursuitOutput(String text, Player player, int relation,
             CallbackInfoReturnable<String> callback) {
-        String value = NpcPursuit269.fillPursuit(callback.getReturnValue(), player);
-        if (value != null) callback.setReturnValue(value);
+        String cur = callback.getReturnValue();
+        if (cur == null || cur.indexOf("%pursuit") < 0) return;
+        String value = NpcPursuit269.fillPursuit(cur, player);
+        if (value != null && !value.equals(cur)) callback.setReturnValue(value);
     }
 }

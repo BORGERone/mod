@@ -142,6 +142,8 @@ public final class VarScopeStore453 extends SavedData {
         public final boolean hasSession;
         public NpcDialogueGraph.Node activeIfNode;
         public NpcDialogueGraph.Node activeNode;
+        public boolean radiusTargetedInitiator;
+        public boolean nodeHasAttachedRadiusPlayerGate;
 
         public NpcResolveFrame(ServerPlayer player, Entity contextEntity,
                 GuideNpc npc, NpcDialogueGraph graph) {
@@ -456,8 +458,94 @@ public final class VarScopeStore453 extends SavedData {
                     }
                 } catch (NumberFormatException ignored) {}
             }
+            Entity parsed = resolvePursuitActionTarget(npc, act);
+            if (parsed != null) return parsed;
         }
         return ((Mob) (Object) npc).getTarget();
+    }
+
+    private static Entity resolvePursuitActionTarget(GuideNpc npc, String rawAction) {
+        if (npc == null || rawAction == null) return null;
+        String body = rawAction.trim();
+        if (body.regionMatches(true, 0, "trigger:", 0, 8)) {
+            body = body.substring(8).trim();
+        }
+        if (!body.regionMatches(true, 0, "pursuit:", 0, 8)) return null;
+        String[] parts = body.split(":", 4);
+        if (parts.length < 4 || !"start".equalsIgnoreCase(parts[1].trim())) return null;
+        String kind = parts[2].trim();
+        String target = parts[3].trim();
+        int bar = target.indexOf('|');
+        if (bar >= 0) target = target.substring(0, bar).trim();
+        if (target.isEmpty() || !(npc.level() instanceof ServerLevel curLevel)) return null;
+        MinecraftServer server = curLevel.getServer();
+
+        if ("player".equalsIgnoreCase(kind)) {
+            Entity best = findMatchingPursuitPlayer(curLevel, npc, target);
+            if (best != null) return best;
+            if (server != null) {
+                for (ServerLevel lvl : server.getAllLevels()) {
+                    if (lvl == null || lvl == curLevel) continue;
+                    best = findMatchingPursuitPlayer(lvl, npc, target);
+                    if (best != null) return best;
+                }
+            }
+            return null;
+        }
+        if ("npc".equalsIgnoreCase(kind)) {
+            Entity best = findMatchingPursuitNpc(curLevel, npc, target);
+            if (best != null) return best;
+            if (server != null) {
+                for (ServerLevel lvl : server.getAllLevels()) {
+                    if (lvl == null || lvl == curLevel) continue;
+                    best = findMatchingPursuitNpc(lvl, npc, target);
+                    if (best != null) return best;
+                }
+            }
+            return null;
+        }
+        return null;
+    }
+
+    private static Entity findMatchingPursuitPlayer(ServerLevel level, GuideNpc npc, String target) {
+        List<ServerPlayer> players = level.players();
+        if (players == null) return null;
+        ServerPlayer best = null;
+        double bestD2 = Double.MAX_VALUE;
+        for (int i = 0; i < players.size(); i++) {
+            ServerPlayer sp = players.get(i);
+            if (sp == null || !sp.isAlive() || sp.isRemoved()) continue;
+            if (sp.getName() == null || !target.equalsIgnoreCase(sp.getName().getString())) continue;
+            double d2 = sp.distanceToSqr(npc);
+            if (d2 < bestD2) {
+                bestD2 = d2;
+                best = sp;
+            }
+        }
+        return best;
+    }
+
+    private static Entity findMatchingPursuitNpc(ServerLevel level, GuideNpc npc, String target) {
+        Iterable<Entity> entities = level.getAllEntities();
+        if (entities == null) return null;
+        GuideNpc best = null;
+        double bestD2 = Double.MAX_VALUE;
+        for (Entity ent : entities) {
+            if (!(ent instanceof GuideNpc gn) || gn == npc || gn instanceof GuideTriggerNpc) {
+                continue;
+            }
+            if (!gn.isAlive() || gn.isRemoved()) continue;
+            NpcProfile prof = gn.profile();
+            if (prof == null || prof.identifier == null || !target.equals(prof.identifier)) {
+                continue;
+            }
+            double d2 = gn.distanceToSqr(npc);
+            if (d2 < bestD2) {
+                bestD2 = d2;
+                best = gn;
+            }
+        }
+        return best;
     }
 
     private static boolean pursuitHasConsumer(String action, int nodeId) {

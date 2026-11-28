@@ -1,9 +1,9 @@
 # Settled Lands — Build 459 (`0.8.0-build459-blue-line-target-gating`)
 
-Строгая фильтрация и перенаправление адресата реплик, кнопок и катсцен через синий провод цели для автономных и неигроковых событийных цепочек (`Таймер`, `Время`, неигровой `Проверка в радиусе`, неигровой `Урон`) как в графах NPC (`GuideDialogue`), так и в графах блоков, дверей, сундуков и испытаний (`RadiusPass354`, `BlockTrigger351`). Собрано на чистой базе **Build 452**, со всеми проверками `build459_check` (`642 + 45 + 12 + 62 + 70 + 32 = 863` пробы, zero-lambda по `46` миксинам и `BlueLineTarget459`, проверка отсутствия конфликтующих `@Redirect`), `verify_jar`, `mixin_clash_check` (`520` хелперов, `0` конфликтов), `invoke_kind_check` (`7508` вызовов OK), `jvm_verify` (`822` класса OK) и `check_mixin_class` (`174` миксина / `0` новых внешних API / `0` висячих ссылок).
+Строгая фильтрация и перенаправление адресата реплик, кнопок и катсцен через синий провод цели для автономных и неигроковых событийных цепочек (`Таймер`, `Время`, неигровой `Проверка в радиусе`, неигровой `Урон`) как в графах NPC (`GuideDialogue`), так и в графах блоков, дверей, сундуков и испытаний (`RadiusPass354`, `BlockTrigger351`). Собрано на чистой базе **Build 452**, со всеми проверками `build459_check` (`642 + 45 + 12 + 62 + 70 + 34 = 865` пробы, zero-lambda по `47` миксинам и `BlueLineTarget459`, проверка отсутствия конфликтующих `@Redirect` и видимости аннотаций), `verify_jar`, `mixin_clash_check` (`521` хелпер, `0` конфликтов), `invoke_kind_check` (`7512` вызовов OK), `jvm_verify` (`822` класса OK), `check_mixin_class` (`174` миксина / `0` новых внешних API / `0` висячих ссылок), а также `38` сквозными поведенческими проверками после реального байткод-сплетения через SpongePowered Mixin `0.8.7`.
 
-- **Файл мода**: `settledlands-0.8.0-build459-blue-line-target-gating.jar` (`4 547 066` байт, `877` записей / `822` классов)
-- **SHA-256**: `7a3760f5f954707846ae251238325c894f1b6cfd3cc6cb50f9de7e8daa9b6f48`
+- **Файл мода**: `settledlands-0.8.0-build459-blue-line-target-gating.jar` (`4 549 689` байт, `877` записей / `822` классов)
+- **SHA-256**: `4d65242027740ef9764f28d66d066afb79eb0421cebabd49d40923e1f0068999`
 - **Архив исходников**: `SettledLands-Build459-BlueLineTargetGating-Source.zip`
 
 ---
@@ -23,6 +23,16 @@
 
 ### 3. Уточнённые подсказки на синем входе
 - Обновлены RU/EN подсказки `gui.settledlands.tip448.pin.blue_in` с пояснением, что для `Реплики`, `Кнопки` и `Катсцены` от `Таймера` / `Времени` / неигровых событий синий провод цели обязателен для показа диалога конкретному игроку.
+
+### 4. Исправление видимости `@Redirect` и `@Unique` для Sponge Mixin 0.8.7
+- **Коренная причина регрессии в первом выпуске Build 459**: компиляционные стабы `@Redirect` (`build303-src/api416-src/.../Redirect.java` и `stubs/.../Redirect.java`), `@Unique`, `@Invoker` и `@ModifyArg` имели `@Retention(RetentionPolicy.CLASS)`, из-за чего ECJ записывал аннотации в `RuntimeInvisibleAnnotations`, а Sponge Mixin 0.8.7 (`Annotations.getSingleVisible` / `getVisible`) полностью пропускал все `@Redirect` и `@Unique` при загрузке классов игры.
+- В стабах приведена реальная политика удержания Sponge Mixin 0.8.7 (`RetentionPolicy.RUNTIME` для `@Redirect`, `@Unique`, `@Invoker`, `@ModifyArg` и `RetentionPolicy.CLASS` для `@Pseudo`), добавлен статический контроль в `build459_check.py`, а все `@Redirect`/`@Unique` миксинов сборок 453–459 проверены полным прогоном через настоящий байткод-трансформер SpongePowered Mixin 0.8.7 и JVM-тестами сплетенных классов.
+
+### 5. Совместимость `%var%` + `%pursuit%`, синий вход `Катсцена`, `Преследование` и разветвление `Цель (RADIUS)`
+- **`NpcProfile.fill` (`NpcPursuitOutputMixin280` + `NpcProfileFillVarMixin457`)**: исправлен конфликт двух миксинов на `NpcProfile.fill`, из-за которого `NpcPursuitOutputMixin280` безусловно отменял вызов даже при отсутствии `%pursuit` и не давал подставлять `%<varName>%`/`%var%` в репликах и кнопках NPC; миксины упорядочены, добавлен ранний выход при отсутствии `%pursuit` и проброс `NpcPursuit269.fillPursuit` при совместном использовании `%pursuit%` и `%var%`.
+- **Синий вход на узле `Катсцена` (`VarDataNode453`, `PursuitGraphNode272`, `VarExecutionNpcMixin453`)**: узел `CUTSCENE` (`type=14`) теперь официально поддерживает синий вход цели (`varInputNode` / `entityInput453`) и напрямую запускает катсцену у разрешённого игрока в автономных цепочках даже при `player == null`.
+- **Разрешение цели из `Преследование` (`VarScopeStore453.resolvePursuitActionTarget`)**: поскольку `NpcPursuit269.start`/`tick` сбрасывают `Mob.setTarget(null)`, разрешение синего выхода узла `Преследование` теперь напрямую находит целевого игрока или NPC по действию `pursuit:start:<npc|player>:<target>` (в том числе в тот же тик).
+- **Разветвление `Цель (RADIUS)` и каталог переменных в редакторах блоков/дверей/сундуков/триалов**: игрок-инициатор внутри `RADIUS (PLAYER/ALL)` сохраняет адресность на последующих шагах цепочки (включая `CUTSCENE`), не снимая подавление для вне-радиусных и неигровых (`NPC/MONSTER`) режимов; миксин `VarCatalogConfigMixin457` переставлен до `NpcBlockOpen351Mixin`/`NpcDoorOpen382Mixin`/`NpcChestOpen396Mixin`/`NpcTrialOpen446Mixin` в `settledlands.mixins.json`, чтобы каталог переменных мира загружался и при открытии редакторов блоков, дверей, сундуков и испытаний.
 
 ---
 

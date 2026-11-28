@@ -96,6 +96,7 @@ SOURCE_FILES = [
     "dev/settledlands/mixin/VarCatalogEditMixin457.java",
     "dev/settledlands/mixin/VarActionsSubstituteMixin457.java",
     "dev/settledlands/mixin/BlockTalkVarMixin457.java",
+    "dev/settledlands/mixin/NpcPursuitOutputMixin280.java",
     "dev/settledlands/mixin/NpcProfileFillVarMixin457.java",
     "dev/settledlands/mixin/BlueLineNpcMixin459.java",
     "dev/settledlands/mixin/BlueLinePassMixin459.java",
@@ -189,7 +190,8 @@ MARKERS = {
     "dev/settledlands/mixin/VarCatalogEditMixin457.class": ("isCatalogOp", "settledlands457$handleCatalogEdit"),
     "dev/settledlands/mixin/VarActionsSubstituteMixin457.class": ("SUBST_GUARD", "settledlands457$substRunSingle"),
     "dev/settledlands/mixin/BlockTalkVarMixin457.class": ("settledlands457$blockWithBodyVars", "settledlands457$enterBlockChoices"),
-    "dev/settledlands/mixin/NpcProfileFillVarMixin457.class": ("settledlands457$fillProfileVars",),
+    "dev/settledlands/mixin/NpcPursuitOutputMixin280.class": ("settledlands$fillPursuitOutput", "%pursuit"),
+    "dev/settledlands/mixin/NpcProfileFillVarMixin457.class": ("settledlands457$fillProfileVars", "%pursuit"),
     "dev/settledlands/npc/BlueLineTarget459.class": ("resolveNpcLineBluePlayer", "resolveBlockLineBluePlayer", "resolveBlockCheckPlayer", "isNoEventTarget"),
     "dev/settledlands/mixin/BlueLineNpcMixin459.class": ("settledlands$dispatchResolvedChain459", "settledlands$enterTimer459", "settledlands$gateCutsceneBlue459"),
     "dev/settledlands/mixin/BlueLinePassMixin459.class": ("settledlands$fireTimerNoTarget459", "settledlands$fireTimeNoTarget459", "settledlands$fireCheckWithFlag459"),
@@ -466,7 +468,13 @@ LANG_SET_EN = {
 
 CHANGELOG_EN = """\
 Build 459 - Blue-Target Gating & Recipient Redirect for Dialogue Lines After Timers / Autonomous Events
+- Fixed Mixin compile-time annotation stubs (`@Redirect`, `@ModifyArg`, `@Unique`, `@Invoker` -> `RetentionPolicy.RUNTIME`; `@Pseudo` -> `RetentionPolicy.CLASS`) matching SpongePowered Mixin 0.8.7 so every `@Redirect` and `@Unique` in Builds 453-459 emits in `RuntimeVisibleAnnotations` and actually applies at runtime (previously silently ignored by `Annotations.getSingleVisible`).
+- Fixed `NpcPursuitOutputMixin280` unconditionally calling `CallbackInfoReturnable.setReturnValue` (and cancelling `NpcProfile.fill`) on texts without `%pursuit`, which blocked `NpcProfileFillVarMixin457` from expanding `%<varName>%`/`%var%` inside NPC dialogue lines & choice buttons; ordered `NpcProfileFillVarMixin457` ahead of `NpcPursuitOutputMixin280` with `%pursuit` pass-through so both placeholders work together.
 - Fixed `LINE` (dialogue window / chat fallback), `BUTTON`, and `CUTSCENE` nodes firing at the nearest arbitrary player when triggered without a player initiator (`TIMER`, `TIME`, non-player `CHECK`, or non-player `DAMAGE`) across both NPC (`GuideDialogue`) and block/door/chest/trial (`RadiusPass354`, `BlockTrigger351`) graphs.
+- Enabled `CUTSCENE` blue entity-input pin recognition (`VarDataNode453.entityInput`, `PursuitGraphNode272.isValueInputNode`) and direct blue-recipient cutscene playback in `VarExecutionNpcMixin453` when no initiator player is present.
+- Fixed `VarScopeStore453.resolvePursuitEntity` to parse `pursuit:start:<npc|player>:<target>` actions directly (since `NpcPursuit269.start`/`tick` explicitly clear `Mob.setTarget(null)`), so blue wires out of a `Pursuit` node resolve the pursued player/NPC immediately even on the same tick.
+- Preserved `RADIUS(15, PLAYER/ALL)` fan-out for BOTH fan-out players and the initiator player (`radiusTargetedInitiator` / `nodeHasAttachedRadiusPlayerGate`), while keeping unwired autonomous `LINE`/`CUTSCENE` suppression intact when outside radius or targeting non-players.
+- Ordered `VarCatalogConfigMixin457` ahead of `NpcBlockOpen351Mixin`/`NpcDoorOpen382Mixin`/`NpcChestOpen396Mixin`/`NpcTrialOpen446Mixin` in `settledlands.mixins.json` so opening Block/Door/Chest/Trial graph editors also ingests the server variable catalog.
 - In autonomous/no-target runs, dialogue/button/cutscene nodes now deliver only when wired to a blue entity source (`CHECK`, `DAMAGE`, `Door`, `Chest`, `Trial`, `Pursuit` — excluding variable-only `VarDataNode453` wires) that resolves to a live non-spectator `ServerPlayer`, redirecting the dialogue/cutscene directly to that player.
 - Enabled block/door/chest/trial `TIMER` and `TIME` events to fire even beyond 32 blocks when a blue-wired recipient resolves, respected `CHECK.checkTarget` filters and creative-mode players in `VarScopeStore453.resolveBlockBluePlayer`, and preserved `RADIUS(15)` fan-out and all player-initiated flows.
 
@@ -584,6 +592,9 @@ def patch_mixins_json(raw: bytes) -> bytes:
         while m in mixins:
             mixins.remove(m)
 
+    idx_pursuit_out = mixins.index("NpcPursuitOutputMixin280")
+    mixins.insert(idx_pursuit_out, "NpcProfileFillVarMixin457")
+
     idx_tp_actions = mixins.index("TeleportActionsMixin424")
     mixins.insert(idx_tp_actions, "VarActionsSubstituteMixin457")
 
@@ -592,7 +603,7 @@ def patch_mixins_json(raw: bytes) -> bytes:
     mixins.insert(idx_guide_range + 1, "BlueLineNpcMixin459")
 
     for m in COMMON_MIXINS_457:
-        if m not in ("VarExecutionNpcMixin453", "BlueLineNpcMixin459", "VarActionsSubstituteMixin457"):
+        if m not in ("NpcProfileFillVarMixin457", "VarExecutionNpcMixin453", "BlueLineNpcMixin459", "VarActionsSubstituteMixin457"):
             mixins.append(m)
     doc["mixins"] = mixins
 
@@ -613,9 +624,11 @@ def patch_mixins_json(raw: bytes) -> bytes:
     idx_tp_ui = client.index("TeleportGraphUiMixin424") + 1
     client.insert(idx_tp_ui, "TeleportValuePinMixin457")
 
+    idx_block_open = client.index("NpcBlockOpen351Mixin")
+    client.insert(idx_block_open, "VarCatalogConfigMixin457")
+
     idx_ranges = client.index("GraphRangeInputs450Mixin")
     client.insert(idx_ranges, "VarDataGraphUi453Mixin")
-    client.insert(client.index("GraphRangeInputs450Mixin"), "VarCatalogConfigMixin457")
 
     idx_dd_hover = client.index("GraphDropdownHover448Mixin")
     client.insert(idx_dd_hover, "VarDropdownOverlayMixin457")
